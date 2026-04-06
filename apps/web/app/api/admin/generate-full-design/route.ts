@@ -185,7 +185,7 @@ function buildStampsFields(ctx: {
       {
         key: "info",
         label: "Como funciona",
-        value: `Completa ${ctx.promoMaxVisits} visitas en ${ctx.businessName} y gana tu premio.`,
+        value: `Completa {{stamps.max}} visitas en ${ctx.businessName} y gana tu premio.`,
       },
     ],
   }

@@ -33,7 +33,8 @@ export function StampGridPreview({
   }, [])
 
   const { gridCols, stampSize, filledOpacity, emptyOpacity } = stampsConfig
-  const totalStamps = stampsConfig.gridCols * stampsConfig.gridRows
+  const gridTotal = stampsConfig.gridCols * stampsConfig.gridRows
+  const totalStamps = Math.min(gridTotal, stampsConfig.maxVisits)
   const rowOffsets = stampsConfig.rowOffsets ?? []
 
   // All coordinates are in @2x space, scaled by container ratio

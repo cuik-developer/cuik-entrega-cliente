@@ -58,13 +58,29 @@ export async function loadAssetBuffer(url: string): Promise<Buffer> {
     const base64Data = url.slice(commaIndex + 1)
     buffer = Buffer.from(base64Data, "base64")
   } else if (url.startsWith("/api/assets/")) {
-    // Relative path — read from local filesystem (dev mode without MinIO)
+    // Relative path — try local filesystem first, then HTTP fetch as fallback
     const key = url.replace("/api/assets/", "")
     const localPath = join(process.cwd(), ".local-storage", key)
     try {
       buffer = await readFile(localPath)
     } catch {
-      throw new Error(`[Wallet:AssetLoader] Local file not found: ${localPath}`)
+      // Fallback: fetch via HTTP using the app's base URL
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.BETTER_AUTH_URL
+      if (baseUrl) {
+        const fullUrl = `${baseUrl.replace(/\/$/, "")}${url}`
+        const response = await fetch(fullUrl)
+        if (!response.ok) {
+          throw new Error(
+            `[Wallet:AssetLoader] Failed to fetch asset ${fullUrl}: ${response.status} ${response.statusText}`,
+          )
+        }
+        const arrayBuffer = await response.arrayBuffer()
+        buffer = Buffer.from(arrayBuffer)
+      } else {
+        throw new Error(
+          `[Wallet:AssetLoader] Local file not found: ${localPath}. Set NEXT_PUBLIC_APP_URL or BETTER_AUTH_URL for HTTP fallback.`,
+        )
+      }
     }
   } else if (url.startsWith("/")) {
     // Relative path to public directory (e.g. /defaults/cuik-icon.png)
