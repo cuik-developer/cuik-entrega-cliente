@@ -30,22 +30,6 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 })
 
-export const metadata: Metadata = {
-  title: "Cuik — Fidelización Digital para Comercios",
-  description:
-    "Tarjetas de lealtad digitales en Apple y Google Wallet. Sin apps. Sin cartón. Listo en minutos.",
-  keywords: ["fidelización", "loyalty", "Apple Wallet", "Google Wallet", "comercios", "LATAM"],
-  icons: {
-    icon: "/favicon.ico",
-    apple: "/favicon.ico",
-  },
-  openGraph: {
-    title: "Cuik — Fidelización Digital para Comercios",
-    description: "Tarjetas de lealtad digitales en Apple y Google Wallet.",
-    type: "website",
-  },
-}
-
 export const viewport = {
   themeColor: "#0e70db",
   width: "device-width",
