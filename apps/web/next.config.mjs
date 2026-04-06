@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
-  serverExternalPackages: ["sharp"],
+  serverExternalPackages: ["sharp", "passkit-generator"],
   typescript: {
     ignoreBuildErrors: true,
   },

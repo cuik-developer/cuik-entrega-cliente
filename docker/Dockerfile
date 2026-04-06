@@ -26,6 +26,10 @@ RUN cd apps/web && TURBOPACK=0 npx next build
 
 # Stage 3: Production runner
 FROM node:22-alpine AS runner
+
+# System deps for native modules (sharp requires libvips on Alpine)
+RUN apk add --no-cache libc6-compat
+
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -39,8 +43,10 @@ COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder /app/apps/web/public ./apps/web/public
 
-# Install sharp native module for Apple Wallet strip image generation
-RUN npm install --no-save sharp
+# Install sharp for Alpine (musl) — needed for Apple Wallet strip images.
+# Also install passkit-generator so it resolves at runtime (serverExternalPackages).
+RUN npm install --no-save --platform=linux --arch=x64 sharp@0.34.0 passkit-generator@3.5.0
+ENV NEXT_SHARP_PATH=/app/node_modules/sharp
 
 # Copy DB migrations (needed for pnpm db:migrate)
 COPY --from=builder /app/packages/db/migrations ./packages/db/migrations

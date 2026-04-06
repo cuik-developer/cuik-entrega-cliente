@@ -66,16 +66,25 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ tenant: string; clientId: string; token: string }> },
 ) {
+  console.log("[Apple Wallet] Route handler invoked")
   try {
     const { tenant: slug, clientId, token } = await params
+    console.log(`[Apple Wallet] Generating pass for tenant=${slug} client=${clientId}`)
 
     // 1. Resolve tenant (public — no auth required)
     const tenant = await resolveTenant(slug)
-    if (!tenant) return errorResponse("Tenant not found", 404)
+    if (!tenant) {
+      console.error("[Apple Wallet] Tenant not found:", slug)
+      return errorResponse("Tenant not found", 404)
+    }
 
     // 2. Resolve tenant-specific Apple config (falls back to global env)
     const appleConfig = await getTenantAppleConfig(tenant.id)
-    if (!appleConfig) return errorResponse("Apple Wallet not configured", 503)
+    if (!appleConfig) {
+      console.error("[Apple Wallet] Apple config is null for tenant:", tenant.id)
+      return errorResponse("Apple Wallet not configured", 503)
+    }
+    console.log("[Apple Wallet] Config loaded, passTypeId:", appleConfig.passTypeId)
 
     // 3. Find client (verify tenant ownership)
     const clientRows = await db
@@ -165,6 +174,7 @@ export async function GET(
     const stampsInCycle = client.totalVisits % maxVisits
 
     // 7. Load assets and generate strip image
+    console.log("[Apple Wallet] Loading assets...")
     const authToken = token // Already verified — reuse for pass
     const stripBgUrl = assetMap.get("strip_bg")?.url
     const stampUrl = assetMap.get("stamp")?.url
@@ -337,6 +347,7 @@ export async function GET(
     }
 
     // 10. Create .pkpass
+    console.log("[Apple Wallet] Assets loaded, creating .pkpass...")
     const signerCert = decodePemOrDer(appleConfig.signerCertBase64, "CERTIFICATE")
     const signerKey = decodePemOrDer(appleConfig.signerKeyBase64, "RSA PRIVATE KEY")
     const wwdr = decodePemOrDer(appleConfig.wwdrBase64, "CERTIFICATE")
@@ -374,9 +385,10 @@ export async function GET(
     })
 
     if (!passResult.ok) {
-      console.error("[GET /api/[tenant]/wallet/apple/[clientId]/[token]]", passResult.error)
+      console.error("[Apple Wallet] Pass generation failed:", passResult.error)
       return errorResponse("Failed to generate Apple pass", 500)
     }
+    console.log("[Apple Wallet] Pass generated successfully, size:", passResult.buffer.length, "bytes")
 
     // 11. Update pass_instances
     const now = new Date()
