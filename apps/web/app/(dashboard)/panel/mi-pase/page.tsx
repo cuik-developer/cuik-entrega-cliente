@@ -16,7 +16,7 @@ import { assemblePassConfig, getActiveDesignForTenant } from "./queries"
  * Resolve template variables for admin preview display.
  * Replaces {{path.to.value}} with human-readable descriptions.
  */
-function resolvePreviewValue(template: string): string {
+function resolvePreviewValue(template: string, maxVisits = 8): string {
   const previewMap: Record<string, string> = {
     "{{client.name}}": "Nombre del cliente",
     "{{client.lastName}}": "Apellido",
@@ -24,8 +24,8 @@ function resolvePreviewValue(template: string): string {
     "{{client.totalVisits}}": "15",
     "{{client.pointsBalance}}": "325",
     "{{stamps.current}}": "5",
-    "{{stamps.max}}": "8",
-    "{{stamps.remaining}}": "3",
+    "{{stamps.max}}": String(maxVisits),
+    "{{stamps.remaining}}": String(maxVisits - 5),
     "{{stamps.total}}": "15",
     "{{points.balance}}": "325",
     "{{rewards.pending}}": "1",
@@ -66,6 +66,7 @@ function PassDetails({
 }) {
   const isPoints = promotion?.type === "points"
   const backFields = config.fields.backFields ?? []
+  const maxVisits = promotion?.maxVisits ?? config.stampsConfig.maxVisits
 
   const details = isPoints
     ? [
@@ -137,9 +138,9 @@ function PassDetails({
             {backFields.map((field) => (
               <div key={field.key || field.label} className="rounded-lg bg-slate-50 px-4 py-3">
                 <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  {resolvePreviewValue(field.label)}
+                  {resolvePreviewValue(field.label, maxVisits)}
                 </span>
-                <p className="mt-0.5 text-sm text-slate-700">{resolvePreviewValue(field.value)}</p>
+                <p className="mt-0.5 text-sm text-slate-700">{resolvePreviewValue(field.value, maxVisits)}</p>
               </div>
             ))}
           </div>

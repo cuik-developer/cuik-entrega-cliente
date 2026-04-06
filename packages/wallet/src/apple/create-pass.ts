@@ -28,7 +28,7 @@ export async function createApplePass(
         wwdr: params.wwdr,
         signerCert: params.signerCert,
         signerKey: params.signerKey,
-        signerKeyPassphrase: params.signerKeyPassphrase,
+        ...(params.signerKeyPassphrase ? { signerKeyPassphrase: params.signerKeyPassphrase } : {}),
       },
       {
         formatVersion: APPLE_PASS_FORMAT_VERSION,

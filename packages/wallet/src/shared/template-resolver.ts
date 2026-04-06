@@ -79,6 +79,19 @@ export type ResolvedPassFields = {
 }
 
 /**
+ * Normalize legacy hardcoded values to template variables.
+ * Converts patterns like "Completa 8 visitas" → "Completa {{stamps.max}} visitas"
+ * and "5 de 8" → "{{stamps.current}} de {{stamps.max}}" in backFields.
+ */
+function normalizeLegacyTemplates(value: string): string {
+  // "Completa 8 visitas en X y gana tu premio" → use {{stamps.max}}
+  let normalized = value.replace(/Completa \d+ visitas/g, "Completa {{stamps.max}} visitas")
+  // "N de M" pattern (e.g. "5 de 8") in stamp cycle fields → use templates
+  normalized = normalized.replace(/^\d+ de \d+$/, "{{stamps.current}} de {{stamps.max}}")
+  return normalized
+}
+
+/**
  * Resolve all template variables in a pass design's fields configuration.
  * Returns fields with {{variable}} placeholders replaced by actual values.
  *
@@ -95,7 +108,7 @@ export function resolvePassFields(
     (arr ?? []).map((field) => ({
       key: field.key,
       label: resolveTemplate(field.label, context),
-      value: resolveTemplate(field.value, context),
+      value: resolveTemplate(normalizeLegacyTemplates(field.value), context),
       ...(field.changeMessage ? { changeMessage: field.changeMessage } : {}),
     }))
 

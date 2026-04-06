@@ -4,7 +4,7 @@ import type { PassDesignConfigV2, PromotionType } from "../../types"
 import { StampGridPreview } from "./stamp-grid-preview"
 
 /** Resolve template variables like {{client.name}} to preview values */
-function resolvePreviewValue(value: string, promotionType: PromotionType): string {
+function resolvePreviewValue(value: string, promotionType: PromotionType, maxVisits: number): string {
   const previewValues: Record<string, string> = {
     "{{client.name}}": "Juan Perez",
     "{{client.lastName}}": "Perez",
@@ -12,8 +12,8 @@ function resolvePreviewValue(value: string, promotionType: PromotionType): strin
     "{{client.phone}}": "+51 999 888 777",
     "{{client.email}}": "cliente@email.com",
     "{{stamps.current}}": "5",
-    "{{stamps.max}}": "10",
-    "{{stamps.remaining}}": "5",
+    "{{stamps.max}}": String(maxVisits),
+    "{{stamps.remaining}}": String(maxVisits - 5),
     "{{stamps.total}}": promotionType === "points" ? "12" : "15",
     "{{points.balance}}": "325",
     "{{rewards.pending}}": "1",
@@ -83,7 +83,7 @@ export function WalletPreview({
               {headerField.label}
             </div>
             <div className="text-lg font-bold leading-tight" style={{ color: foregroundColor }}>
-              {resolvePreviewValue(headerField.value, promotionType)}
+              {resolvePreviewValue(headerField.value, promotionType, config.stampsConfig.maxVisits)}
             </div>
           </div>
         )}
@@ -125,7 +125,7 @@ export function WalletPreview({
                 {field.label}
               </div>
               <div className="text-sm" style={{ color: foregroundColor }}>
-                {resolvePreviewValue(field.value, promotionType)}
+                {resolvePreviewValue(field.value, promotionType, config.stampsConfig.maxVisits)}
               </div>
             </div>
           ))}

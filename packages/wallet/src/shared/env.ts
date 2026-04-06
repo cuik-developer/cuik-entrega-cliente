@@ -64,7 +64,7 @@ export function validateAppleEnv(): AppleWalletConfig | null {
     passTypeId: result.data.APPLE_PASS_TYPE_ID,
     signerKeyBase64: result.data.APPLE_SIGNER_KEY_BASE64,
     signerCertBase64: result.data.APPLE_SIGNER_CERT_BASE64,
-    signerKeyPassphrase: result.data.APPLE_SIGNER_KEY_PASSPHRASE,
+    signerKeyPassphrase: result.data.APPLE_SIGNER_KEY_PASSPHRASE || undefined,
     wwdrBase64: result.data.APPLE_WWDR_BASE64,
     authSecret: result.data.APPLE_AUTH_SECRET,
     webServiceUrl,
