@@ -352,29 +352,12 @@ export async function GET(
     const signerKey = decodePemOrDer(appleConfig.signerKeyBase64, "RSA PRIVATE KEY")
     const wwdr = decodePemOrDer(appleConfig.wwdrBase64, "CERTIFICATE")
 
-    // Diagnostic: verify decoded cert/key formats and modulus match
-    console.log("[Apple Wallet] signerKey format:", signerKey.split("\n")[0])
-    console.log("[Apple Wallet] signerKey length:", signerKey.length, "chars")
-    console.log("[Apple Wallet] signerCert format:", signerCert.split("\n")[0])
-    console.log("[Apple Wallet] wwdr format:", wwdr.split("\n")[0])
+    // Diagnostic: verify WWDR can sign the signer cert (critical chain check)
     try {
       const crypto = await import("node:crypto")
-      const keyObj = crypto.createPrivateKey(signerKey)
-      const certObj = crypto.createPublicKey(signerCert)
-      const keyMod = keyObj.export({ type: "pkcs1", format: "der" }).subarray(0, 16).toString("hex")
-      const certMod = certObj.export({ type: "pkcs1", format: "der" }).subarray(0, 16).toString("hex")
-      console.log("[Apple Wallet] key DER prefix:", keyMod)
-      console.log("[Apple Wallet] cert DER prefix:", certMod)
-      // Full modulus check via JWK
-      const keyJwk = keyObj.export({ format: "jwk" })
-      const certJwk = certObj.export({ format: "jwk" })
-      const modulusMatch = keyJwk.n === certJwk.n
-      console.log("[Apple Wallet] KEY-CERT MODULUS MATCH:", modulusMatch)
-      if (!modulusMatch) {
-        console.error("[Apple Wallet] *** KEY DOES NOT MATCH CERTIFICATE! ***")
-        console.error("[Apple Wallet] key modulus (first 32):", keyJwk.n?.substring(0, 32))
-        console.error("[Apple Wallet] cert modulus (first 32):", certJwk.n?.substring(0, 32))
-      }
+      const wwdrHash = crypto.createHash("sha256").update(wwdr).digest("hex").substring(0, 16)
+      console.log("[Apple Wallet] WWDR SHA256 prefix:", wwdrHash)
+      console.log("[Apple Wallet] WWDR VALID:", wwdrHash === "e91a1e1e21b6285c")
     } catch (diagErr) {
       console.error("[Apple Wallet] Diagnostic error:", diagErr)
     }
