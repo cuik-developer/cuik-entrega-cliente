@@ -22,8 +22,7 @@ COPY --from=deps /app/ ./
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_OPTIONS="--max-old-space-size=512"
-ENV TURBOPACK=0
-RUN cd apps/web && npx next build --webpack
+RUN cd apps/web && TURBOPACK=0 npx next build
 
 # Stage 3: Production runner
 FROM node:22-alpine AS runner
