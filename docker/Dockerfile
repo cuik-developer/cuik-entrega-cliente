@@ -45,7 +45,7 @@ COPY --from=builder /app/apps/web/public ./apps/web/public
 
 # Install sharp for Alpine (musl) — needed for Apple Wallet strip images.
 # Also install passkit-generator so it resolves at runtime (serverExternalPackages).
-RUN npm install --no-save --platform=linux --arch=x64 sharp@0.34.0 passkit-generator@3.5.0
+RUN npm install --no-save --platform=linux --arch=x64 sharp@0.34.0 passkit-generator@3.5.7
 ENV NEXT_SHARP_PATH=/app/node_modules/sharp
 
 # Copy DB migrations (needed for pnpm db:migrate)

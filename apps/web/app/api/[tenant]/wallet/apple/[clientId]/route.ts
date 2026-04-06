@@ -334,16 +334,37 @@ export async function GET(
     }
 
     // 10. Create the .pkpass
+    const signerCert = decodePemOrDer(appleConfig.signerCertBase64, "CERTIFICATE")
+    const signerKey = decodePemOrDer(appleConfig.signerKeyBase64, "RSA PRIVATE KEY")
+    const wwdr = decodePemOrDer(appleConfig.wwdrBase64, "CERTIFICATE")
+    console.log("[Apple Wallet] signerKey format:", signerKey.split("\n")[0])
+    console.log("[Apple Wallet] signerKey length:", signerKey.length, "chars")
+    console.log("[Apple Wallet] signerCert format:", signerCert.split("\n")[0])
+    console.log("[Apple Wallet] wwdr format:", wwdr.split("\n")[0])
+    try {
+      const crypto = await import("node:crypto")
+      const keyObj = crypto.createPrivateKey(signerKey)
+      const certObj = crypto.createPublicKey(signerCert)
+      const keyJwk = keyObj.export({ format: "jwk" })
+      const certJwk = certObj.export({ format: "jwk" })
+      console.log("[Apple Wallet] KEY-CERT MODULUS MATCH:", keyJwk.n === certJwk.n)
+      if (keyJwk.n !== certJwk.n) {
+        console.error("[Apple Wallet] *** KEY DOES NOT MATCH CERTIFICATE! ***")
+      }
+    } catch (diagErr) {
+      console.error("[Apple Wallet] Diagnostic error:", diagErr)
+    }
+
     const passResult = await createApplePass({
       teamId: appleConfig.teamId,
       passTypeId: appleConfig.passTypeId,
       serialNumber,
       authToken,
       webServiceUrl: appleConfig.webServiceUrl,
-      signerCert: decodePemOrDer(appleConfig.signerCertBase64, "CERTIFICATE"),
-      signerKey: decodePemOrDer(appleConfig.signerKeyBase64, "RSA PRIVATE KEY"),
+      signerCert,
+      signerKey,
       signerKeyPassphrase: appleConfig.signerKeyPassphrase,
-      wwdr: decodePemOrDer(appleConfig.wwdrBase64, "CERTIFICATE"),
+      wwdr,
       organizationName: tenant.name,
       description: APPLE_PASS_DEFAULT_DESCRIPTION,
       logoText: APPLE_PASS_LOGO_TEXT,
