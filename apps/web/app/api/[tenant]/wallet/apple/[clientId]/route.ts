@@ -436,8 +436,9 @@ export async function GET(
       headers: {
         "Content-Type": APPLE_PASS_CONTENT_TYPE,
         "Content-Disposition": `attachment; filename="${serialNumber}.pkpass"`,
+        "Content-Encoding": "identity",
         "Content-Length": String(body.byteLength),
-        "Cache-Control": "no-store",
+        "Cache-Control": "no-store, no-transform",
         "Last-Modified": now.toUTCString(),
         ETag: etag,
       },

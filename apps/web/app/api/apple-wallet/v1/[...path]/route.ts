@@ -470,8 +470,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
 
       const responseHeaders = new Headers(result.headers ?? {})
       responseHeaders.set("Content-Type", APPLE_PASS_CONTENT_TYPE)
+      responseHeaders.set("Content-Encoding", "identity")
       responseHeaders.set("Content-Length", String(body.byteLength))
-      responseHeaders.set("Cache-Control", "no-store")
+      responseHeaders.set("Cache-Control", "no-store, no-transform")
       responseHeaders.set("Last-Modified", freshLastUpdated.toUTCString())
       responseHeaders.set("ETag", freshEtag)
 

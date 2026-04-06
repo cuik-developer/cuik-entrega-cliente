@@ -439,13 +439,19 @@ export async function GET(
     // serialise it incorrectly; an explicit Uint8Array avoids that.
     const body = new Uint8Array(passResult.buffer)
 
+    // Log hash for transit integrity verification
+    const crypto2 = await import("node:crypto")
+    const bodyHash = crypto2.createHash("sha256").update(body).digest("hex").substring(0, 16)
+    console.log("[Apple Wallet] Response body SHA256 prefix:", bodyHash, "bytes:", body.byteLength)
+
     return new Response(body, {
       status: 200,
       headers: {
         "Content-Type": APPLE_PASS_CONTENT_TYPE,
         "Content-Disposition": `attachment; filename="${serialNumber}.pkpass"`,
+        "Content-Encoding": "identity",
         "Content-Length": String(body.byteLength),
-        "Cache-Control": "no-store",
+        "Cache-Control": "no-store, no-transform",
         "Last-Modified": now.toUTCString(),
         ETag: etag,
       },
