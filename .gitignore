@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Next.js
+.next/
+out/
+
+# Turborepo
+.turbo/
+
+# Build outputs
+dist/
+
+# Environment variables
+.env
+.env*.local
+
+# IDE
+.vscode/
+.idea/
+.windsurf/
+*.swp
+*.swo
+
+# AI agents
+.agent/
+.agents/
+skills-lock.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+docker/data/
+
+# Vercel
+.vercel/
+
+#build
+build/
+tsconfig.tsbuildinfo
+next-env.d.ts
+
+# DB backups
+scripts/backups/
+
+# AI generated images
+gen-*.png
+
+# Local storage fallback (dev without MinIO)
+.local-storage/
+
+# Internal docs (not for client delivery)
+TI/

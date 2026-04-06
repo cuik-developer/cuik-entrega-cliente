@@ -1,0 +1,34 @@
+{
+  "name": "@cuik/editor",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types-external.ts",
+    "./pass-editor": "./src/components/pass-editor.tsx"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@cuik/shared": "workspace:*",
+    "immer": "^10.1.1",
+    "nanoid": "^5.1.2",
+    "zustand": "^5.0.3"
+  },
+  "peerDependencies": {
+    "lucide-react": ">=0.400.0",
+    "react": ">=19.0.0",
+    "react-dom": ">=19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "5.7.3",
+    "vitest": "^3.1.0"
+  }
+}

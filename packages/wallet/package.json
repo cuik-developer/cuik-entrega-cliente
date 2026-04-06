@@ -1,0 +1,30 @@
+{
+  "name": "@cuik/wallet",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./apple": "./src/apple/index.ts",
+    "./google": "./src/google/index.ts",
+    "./shared": "./src/shared/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@cuik/shared": "workspace:*",
+    "jose": "^6.0.0",
+    "passkit-generator": "^3.5.0",
+    "sharp": "^0.34.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "typescript": "5.7.3",
+    "vitest": "^3.1.0"
+  }
+}

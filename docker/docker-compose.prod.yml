@@ -1,0 +1,24 @@
+# Production environment for Cuik
+# Usage: docker compose -f docker/docker-compose.prod.yml up -d
+# TODO: Configure for Dokploy deployment
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+    # TODO: Add healthcheck
+    # TODO: Add depends_on for managed database
+
+  # TODO: Add nginx/caddy reverse proxy if needed
+  # TODO: Add redis for session storage if needed

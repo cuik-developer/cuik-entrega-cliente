@@ -1,0 +1,3 @@
+ALTER TABLE "plans" ADD COLUMN IF NOT EXISTS "price" integer NOT NULL DEFAULT 0;
+ALTER TABLE "plans" ADD COLUMN IF NOT EXISTS "active" boolean NOT NULL DEFAULT true;
+ALTER TABLE "plans" ADD COLUMN IF NOT EXISTS "updated_at" timestamp DEFAULT now() NOT NULL;

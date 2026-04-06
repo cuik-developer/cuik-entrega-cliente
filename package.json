@@ -1,0 +1,22 @@
+{
+  "name": "@cuik/root",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "start": "pnpm --filter @cuik/web start",
+    "lint": "biome check .",
+    "lint:fix": "biome check --fix .",
+    "format": "biome format --write .",
+    "typecheck": "turbo typecheck"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.6",
+    "turbo": "^2.8.17",
+    "typescript": "5.7.3"
+  },
+  "packageManager": "pnpm@10.12.1",
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  }
+}

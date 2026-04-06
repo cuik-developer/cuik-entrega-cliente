@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1773385752248,
+      "tag": "0000_purple_puck",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1773631200000,
+      "tag": "0001_add_wallet_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773804000000,
+      "tag": "0005_clients_email_tenant_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1774000000000,
+      "tag": "0012_segmentation_config",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774400000000,
+      "tag": "0013_apple_config_per_tenant",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774500000000,
+      "tag": "0014_tenant_timezone",
+      "breakpoints": true
+    }
+  ]
+}

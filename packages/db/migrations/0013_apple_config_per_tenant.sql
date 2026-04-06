@@ -1,0 +1,1 @@
+ALTER TABLE "tenants" ADD COLUMN "apple_config" JSONB DEFAULT NULL;

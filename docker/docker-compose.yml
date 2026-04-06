@@ -1,0 +1,78 @@
+# Development environment for Cuik
+# Usage: docker compose -f docker/docker-compose.yml up -d
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cuik
+      POSTGRES_PASSWORD: cuik_dev
+      POSTGRES_DB: cuik_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cuik -d cuik_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO (S3-compatible object storage for pass assets)
+  # ⚠️ IMPORTANT: Override MINIO_ROOT_USER and MINIO_ROOT_PASSWORD in production!
+  # Default values are for development only. Use strong passwords in production.
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-cuik_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-cuik_minio_secret}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (caching, rate limiting, queues)
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # TODO: Add app service for local dev with hot-reload
+  # app:
+  #   build:
+  #     context: ..
+  #     dockerfile: docker/Dockerfile
+  #     target: deps
+  #   volumes:
+  #     - ..:/app
+  #     - /app/node_modules
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - DATABASE_URL=postgresql://cuik:cuik_dev@postgres:5432/cuik_dev
+  #   depends_on:
+  #     - postgres
+  #     - minio
+
+volumes:
+  postgres_data:
+  minio_data:
+  redis_data:
