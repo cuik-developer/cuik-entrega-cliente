@@ -18,8 +18,7 @@ RUN pnpm install --frozen-lockfile
 FROM node:22-alpine AS builder
 RUN corepack enable
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY --from=deps /app/ ./
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @cuik/web build
