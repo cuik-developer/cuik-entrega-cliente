@@ -21,6 +21,7 @@ WORKDIR /app
 COPY --from=deps /app/ ./
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_OPTIONS="--max-old-space-size=768"
 RUN pnpm --filter @cuik/web build
 
 # Stage 3: Production runner
