@@ -406,11 +406,16 @@ export async function GET(
     }
 
     // 12. Return .pkpass binary
-    return new Response(passResult.buffer, {
+    // Convert Node.js Buffer to Uint8Array so the Web Response API
+    // transmits raw bytes instead of a UTF-8-mangled string.
+    const body = new Uint8Array(passResult.buffer)
+
+    return new Response(body, {
       status: 200,
       headers: {
         "Content-Type": APPLE_PASS_CONTENT_TYPE,
         "Content-Disposition": `attachment; filename="${serialNumber}.pkpass"`,
+        "Content-Length": String(body.byteLength),
         "Cache-Control": "no-store",
         "Last-Modified": now.toUTCString(),
         ETag: etag,

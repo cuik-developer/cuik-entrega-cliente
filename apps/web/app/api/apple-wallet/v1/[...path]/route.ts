@@ -462,13 +462,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
       const freshEtag = updatedInstance[0]?.etag ?? generateETag(route.serialNumber, 0, new Date())
       const freshLastUpdated = updatedInstance[0]?.lastUpdatedAt ?? new Date()
 
+      // Convert Node.js Buffer to Uint8Array so the Web Response API
+      // transmits raw bytes instead of a UTF-8-mangled string.
+      const body = passBuffer instanceof Uint8Array && !(passBuffer instanceof Buffer)
+        ? passBuffer
+        : new Uint8Array(passBuffer)
+
       const responseHeaders = new Headers(result.headers ?? {})
       responseHeaders.set("Content-Type", APPLE_PASS_CONTENT_TYPE)
+      responseHeaders.set("Content-Length", String(body.byteLength))
       responseHeaders.set("Cache-Control", "no-store")
       responseHeaders.set("Last-Modified", freshLastUpdated.toUTCString())
       responseHeaders.set("ETag", freshEtag)
 
-      return new Response(passBuffer, {
+      return new Response(body, {
         status: 200,
         headers: responseHeaders,
       })
