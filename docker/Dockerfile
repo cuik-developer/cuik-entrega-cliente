@@ -39,6 +39,9 @@ COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder /app/apps/web/public ./apps/web/public
 
+# Install sharp native module for Apple Wallet strip image generation
+RUN npm install --no-save sharp
+
 # Copy DB migrations (needed for pnpm db:migrate)
 COPY --from=builder /app/packages/db/migrations ./packages/db/migrations
 COPY --from=builder /app/packages/db/drizzle.config.ts ./packages/db/drizzle.config.ts
