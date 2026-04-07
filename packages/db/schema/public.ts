@@ -23,6 +23,21 @@ export const tenantStatusEnum = pgEnum("tenant_status", [
 
 export const solicitudStatusEnum = pgEnum("solicitud_status", ["pending", "approved", "rejected"])
 
+export const designChangeRequestTypeEnum = pgEnum("design_change_request_type", [
+  "color",
+  "texto",
+  "imagen",
+  "reglas",
+  "otro",
+])
+
+export const designChangeRequestStatusEnum = pgEnum("design_change_request_status", [
+  "pending",
+  "in_progress",
+  "done",
+  "rejected",
+])
+
 // --- Tables ---
 
 export const plans = pgTable("plans", {
@@ -78,5 +93,23 @@ export const solicitudes = pgTable("solicitudes", {
 export const globalConfig = pgTable("global_config", {
   key: text("key").primaryKey(),
   value: jsonb("value"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+})
+
+export const designChangeRequests = pgTable("design_change_requests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  requestedByUserId: text("requested_by_user_id")
+    .notNull()
+    .references(() => user.id),
+  type: designChangeRequestTypeEnum("type").default("otro").notNull(),
+  message: text("message").notNull(),
+  status: designChangeRequestStatusEnum("status").default("pending").notNull(),
+  resolvedByUserId: text("resolved_by_user_id").references(() => user.id),
+  resolvedAt: timestamp("resolved_at"),
+  internalNotes: text("internal_notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })

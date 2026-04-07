@@ -59,10 +59,12 @@ function PassDetails({
   design,
   config,
   promotion,
+  tenantSlug,
 }: {
   design: { isActive: boolean; updatedAt: Date; type: string }
   config: PassDesignConfigV2
   promotion: { type: string; rewardValue: string | null; maxVisits: number | null } | null
+  tenantSlug: string
 }) {
   const isPoints = promotion?.type === "points"
   const backFields = config.fields.backFields ?? []
@@ -156,7 +158,7 @@ function PassDetails({
         </p>
       </div>
 
-      <SolicitarCambiosButton />
+      <SolicitarCambiosButton tenantSlug={tenantSlug} />
     </div>
   )
 }
@@ -399,7 +401,12 @@ export default async function MiPasePage() {
 
         {/* RIGHT — Pass details + share */}
         <div className="min-w-0 space-y-8">
-          <PassDetails design={result.design} config={config} promotion={result.promotion} />
+          <PassDetails
+            design={result.design}
+            config={config}
+            promotion={result.promotion}
+            tenantSlug={tenant.tenantSlug}
+          />
 
           {/* Promotion rules section */}
           {result.promotion && (

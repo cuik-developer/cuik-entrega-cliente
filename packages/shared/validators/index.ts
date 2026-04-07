@@ -34,6 +34,12 @@ export {
   updateCatalogItemSchema,
 } from "./catalog-schema"
 export {
+  type CreateDesignChangeRequestInput,
+  createDesignChangeRequestSchema,
+  type DesignChangeRequestType,
+  designChangeRequestTypeEnum,
+} from "./design-change-request-schema"
+export {
   buildRegistrationSchema,
   type DynamicRegisterClientInput,
   type RegisterClientInput,

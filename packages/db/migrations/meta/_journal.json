@@ -43,6 +43,13 @@
       "when": 1774500000000,
       "tag": "0014_tenant_timezone",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775404800000,
+      "tag": "0015_design_change_requests",
+      "breakpoints": true
     }
   ]
 }
