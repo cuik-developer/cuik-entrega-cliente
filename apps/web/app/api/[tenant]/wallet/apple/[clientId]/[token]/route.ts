@@ -352,12 +352,20 @@ export async function GET(
     const signerKey = decodePemOrDer(appleConfig.signerKeyBase64, "RSA PRIVATE KEY")
     const wwdr = decodePemOrDer(appleConfig.wwdrBase64, "CERTIFICATE")
 
-    // Diagnostic: verify WWDR can sign the signer cert (critical chain check)
+    // Diagnostic: verify WWDR and signer cert are intact (detect env var corruption)
     try {
       const crypto = await import("node:crypto")
       const wwdrHash = crypto.createHash("sha256").update(wwdr).digest("hex").substring(0, 16)
+      const certHash = crypto.createHash("sha256").update(signerCert).digest("hex").substring(0, 16)
       console.log("[Apple Wallet] WWDR SHA256 prefix:", wwdrHash)
       console.log("[Apple Wallet] WWDR VALID:", wwdrHash === "e91a1e1e21b6285c")
+      console.log("[Apple Wallet] SIGNER CERT SHA256 prefix:", certHash)
+      console.log("[Apple Wallet] SIGNER CERT VALID:", certHash === "e8f3d3acc7a9e5cd")
+      // Verify WWDR can verify signer cert using X509Certificate
+      const { X509Certificate } = crypto
+      const wwdrX509 = new X509Certificate(wwdr)
+      const signerX509 = new X509Certificate(signerCert)
+      console.log("[Apple Wallet] WWDR verifies signer:", signerX509.verify(wwdrX509.publicKey))
     } catch (diagErr) {
       console.error("[Apple Wallet] Diagnostic error:", diagErr)
     }
