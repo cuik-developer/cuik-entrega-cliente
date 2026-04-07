@@ -346,7 +346,7 @@ APPLE_SIGNER_CERT_BASE64="<base64 del certificado .pem>"
 APPLE_SIGNER_KEY_PASSPHRASE=""
 APPLE_WWDR_BASE64="<base64 del certificado WWDR G4>"
 APPLE_AUTH_SECRET="<openssl rand -hex 32>"
-APPLE_WEBSERVICE_URL="https://app.cuik.org/api/apple-wallet/v1"
+APPLE_WEBSERVICE_URL="https://app.cuik.org/api/apple-wallet"
 
 # ─── Apple Wallet — APNs ──────────────────────────────
 APPLE_APNS_KEY_ID="XXXXXXXXXX"
@@ -582,7 +582,7 @@ echo "APPLE_WWDR_BASE64=$APPLE_WWDR_BASE64"
 Esta URL es donde Apple envia las requests del Web Service Protocol (registrar/desregistrar dispositivos, obtener pases actualizados).
 
 ```
-APPLE_WEBSERVICE_URL="https://app.cuik.org/api/apple-wallet/v1"
+APPLE_WEBSERVICE_URL="https://app.cuik.org/api/apple-wallet"
 ```
 
 **Requisitos:**
@@ -918,7 +918,11 @@ Despues de hacer deploy, verificar en este orden:
 Despues de confirmar que el dominio funciona con SSL:
 
 ```bash
-APPLE_WEBSERVICE_URL="https://tu-dominio.com/api/apple-wallet/v1"
+# IMPORTANTE: NO incluir /v1 al final. Apple lo agrega automaticamente.
+# Si lo incluyes, Apple terminara enviando POST a /api/apple-wallet/v1/v1/devices/...
+# y la ruta devolvera 404, lo que impide que los dispositivos se registren
+# para recibir push notifications (y walletUpdate dejaria de funcionar).
+APPLE_WEBSERVICE_URL="https://tu-dominio.com/api/apple-wallet"
 ```
 
 Verificar que Apple puede alcanzar la URL:
@@ -958,8 +962,8 @@ brew install ngrok  # o descargarlo de ngrok.com
 ngrok http 3000
 
 # Copiar la URL HTTPS generada (ej: https://abc123.ngrok-free.app)
-# Usar como APPLE_WEBSERVICE_URL:
-APPLE_WEBSERVICE_URL="https://abc123.ngrok-free.app/api/apple-wallet/v1"
+# Usar como APPLE_WEBSERVICE_URL (sin /v1 al final — Apple lo agrega):
+APPLE_WEBSERVICE_URL="https://abc123.ngrok-free.app/api/apple-wallet"
 ```
 
 ---

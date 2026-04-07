@@ -164,6 +164,11 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
 
     // Process Apple push batches
     const appleClients = clientPassMap.filter((c) => c.appleDeviceTokens.length > 0)
+    const totalAppleTokens = appleClients.reduce((n, c) => n + c.appleDeviceTokens.length, 0)
+    const googleObjectCount = clientPassMap.filter((c) => c.googleObjectId !== null).length
+    console.info(
+      `[Campaign:Dispatch] clients=${clientPassMap.length} appleClients=${appleClients.length} appleTokens=${totalAppleTokens} googleObjects=${googleObjectCount}`,
+    )
     if (appleClients.length > 0) {
       const appleResult = await processAppleBatches(
         campaignId,

@@ -91,11 +91,17 @@ type ParsedRoute =
   | { type: "log" }
   | { type: "unknown" }
 
-function parsePath(segments: string[]): ParsedRoute {
+function parsePath(rawSegments: string[]): ParsedRoute {
   // Next.js catch-all segments may be partially percent-encoded (e.g. %3A for ':').
   // Apple Wallet double-encodes serial numbers in URLs, so after Next.js decodes once
   // we still need to decode the remaining layer.
   const decode = (s: string) => decodeURIComponent(s)
+
+  // Backward-compat: earlier builds shipped passes whose webServiceURL already ended
+  // in "/v1". Apple then appends its own "/v1/devices/..." so we receive
+  // [...path] = ["v1", "devices", ...]. Strip that redundant leading "v1" here so
+  // those old passes keep registering and updating after the env-var fix.
+  const segments = rawSegments[0] === "v1" ? rawSegments.slice(1) : rawSegments
 
   // POST/DELETE devices/{deviceLibId}/registrations/{passTypeId}/{serialNumber}
   // GET devices/{deviceLibId}/registrations/{passTypeId}
@@ -376,6 +382,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
   try {
     const { path: segments } = await params
     const route = parsePath(segments)
+    console.log(
+      `[Wallet:AppleWSP] GET segments=${JSON.stringify(segments)} routeType=${route.type}`,
+    )
 
     if (route.type === "serials") {
       // No auth required for serial listing (Apple spec)
@@ -493,6 +502,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ pat
   try {
     const { path: segments } = await params
     const route = parsePath(segments)
+    console.log(
+      `[Wallet:AppleWSP] POST segments=${JSON.stringify(segments)} routeType=${route.type}`,
+    )
 
     if (route.type === "registration") {
       let pushToken = ""
@@ -566,6 +578,9 @@ export async function DELETE(
   try {
     const { path: segments } = await params
     const route = parsePath(segments)
+    console.log(
+      `[Wallet:AppleWSP] DELETE segments=${JSON.stringify(segments)} routeType=${route.type}`,
+    )
 
     if (route.type === "registration") {
       const authHeader = request.headers.get("authorization") ?? ""
