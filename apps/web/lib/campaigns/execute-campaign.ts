@@ -300,10 +300,17 @@ async function processAppleBatches(
   let failed = 0
   const errors: string[] = []
 
-  // Load APNs credentials from env (P8 key, teamId, keyId stay global)
-  const p8KeyPem = process.env.APPLE_APNS_P8_BASE64
-    ? Buffer.from(process.env.APPLE_APNS_P8_BASE64, "base64").toString("utf-8")
-    : null
+  // Load APNs credentials from env (P8 key, teamId, keyId stay global).
+  // Tolerate either base64-encoded PEM (preferred) or raw PEM pasted directly
+  // into the env var. Normalize line endings for jose.
+  const rawP8 = process.env.APPLE_APNS_P8_BASE64 ?? ""
+  let p8KeyPem: string | null = null
+  if (rawP8) {
+    const candidate = rawP8.includes("-----BEGIN")
+      ? rawP8
+      : Buffer.from(rawP8, "base64").toString("utf-8")
+    p8KeyPem = candidate.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim()
+  }
   const teamId = process.env.APPLE_APNS_TEAM_ID
   const keyId = process.env.APPLE_APNS_KEY_ID
 

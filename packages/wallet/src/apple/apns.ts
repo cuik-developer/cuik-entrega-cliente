@@ -17,7 +17,34 @@ import type { ApnsPushParams, ApnsPushResult, ApnsPushTokenResult } from "../sha
  * eliminating the need for manual DER-to-JOSE signature conversion.
  */
 async function createApnsJwt(p8KeyPem: string, teamId: string, keyId: string): Promise<string> {
-  const privateKey = await importPKCS8(p8KeyPem, "ES256")
+  // Normalize line endings — Dokploy / copy-paste often introduces \r\n which
+  // jose tolerates but other parsers don't. Doing it here is harmless and
+  // surfaces consistent diagnostics below.
+  const normalized = p8KeyPem.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim()
+
+  let privateKey: Awaited<ReturnType<typeof importPKCS8>>
+  try {
+    privateKey = await importPKCS8(normalized, "ES256")
+  } catch (err) {
+    // Diagnostic: log shape of the supplied PEM (no secret content) so we can
+    // tell whether the env var was double-encoded, mis-pasted, or the wrong
+    // key format. This runs on every failed push so the operator sees it
+    // immediately without needing extra tooling.
+    const head = normalized.slice(0, 30).replace(/\n/g, "\\n")
+    const tail = normalized.slice(-30).replace(/\n/g, "\\n")
+    const hasBeginPrivate = normalized.includes("-----BEGIN PRIVATE KEY-----")
+    const hasBeginEc = normalized.includes("-----BEGIN EC PRIVATE KEY-----")
+    const hasBeginRsa = normalized.includes("-----BEGIN RSA PRIVATE KEY-----")
+    const hasEnd = normalized.includes("-----END")
+    console.error(
+      `[Wallet:APNs] importPKCS8 failed: ${err instanceof Error ? err.message : String(err)}`,
+      `len=${normalized.length} head="${head}" tail="${tail}"`,
+      `hasBeginPrivate=${hasBeginPrivate} hasBeginEc=${hasBeginEc} hasBeginRsa=${hasBeginRsa} hasEnd=${hasEnd}`,
+      `teamId=${teamId} keyId=${keyId}`,
+    )
+    throw err
+  }
+
   const now = Math.floor(Date.now() / 1000)
 
   return new SignJWT({ iss: teamId, iat: now })

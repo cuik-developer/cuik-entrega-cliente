@@ -204,10 +204,16 @@ async function triggerWalletUpdate(ctx: {
     const tokens = deviceRows.map((r) => r.pushToken).filter((t): t is string => !!t)
 
     if (tokens.length > 0) {
+      // Tolerate either base64 (preferred) or raw PEM in APPLE_APNS_P8_BASE64.
+      const rawP8 = apnsConfig.p8Base64
+      const candidate = rawP8.includes("-----BEGIN")
+        ? rawP8
+        : Buffer.from(rawP8, "base64").toString("utf-8")
+      const p8KeyPem = candidate.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim()
       appleParams = {
         deviceTokens: tokens,
         passTypeId: tenantAppleConfig?.passTypeId ?? apnsConfig.topic,
-        p8KeyPem: Buffer.from(apnsConfig.p8Base64, "base64").toString("utf-8"),
+        p8KeyPem,
         teamId: apnsConfig.teamId,
         keyId: apnsConfig.keyId,
       }
