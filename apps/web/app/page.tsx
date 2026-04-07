@@ -595,11 +595,12 @@ export default function HomePage() {
               >
                 {/* Left phone — MascotaVeloz (BEHIND, rotated in 3D) */}
                 <div
-                  className="absolute top-1/2 left-1/2 w-[76%]"
+                  className="absolute top-1/2 left-1/2 w-[76%] z-0"
                   style={{
-                    transform: "translate(-72%, -50%) rotateY(25deg) scale(0.85)",
+                    transform:
+                      "translate(-95%, -50%) translateZ(-80px) rotateY(25deg) scale(0.85)",
                     transformOrigin: "center center",
-                    opacity: 0.65,
+                    opacity: 0.6,
                     filter: "blur(1.5px)",
                   }}
                 >
@@ -615,7 +616,8 @@ export default function HomePage() {
                 <div
                   className="absolute top-1/2 left-1/2 w-[52%]"
                   style={{
-                    transform: "translate(-10%, -50%) rotateY(-25deg) scale(0.85)",
+                    transform:
+                      "translate(15%, -50%) translateZ(-40px) rotateY(-25deg) scale(0.85)",
                     transformOrigin: "center center",
                     opacity: 0.65,
                     filter: "blur(1.5px)",
@@ -791,7 +793,7 @@ export default function HomePage() {
             {/* Phone */}
             <div className="relative flex-shrink-0">
               <div className="absolute -inset-8 bg-[#0e70db]/[0.04] rounded-full blur-2xl" />
-              <div className="relative w-[220px]">
+              <div className="relative w-[320px]">
                 <Image
                   src="/landing/mockup-gradual.png"
                   alt="Pase de fidelización Gradual Café en Apple Wallet"
