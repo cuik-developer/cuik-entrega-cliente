@@ -595,9 +595,9 @@ export default function HomePage() {
               >
                 {/* Left phone — MascotaVeloz (BEHIND, rotated in 3D) */}
                 <div
-                  className="absolute top-1/2 left-1/2 w-[52%]"
+                  className="absolute top-1/2 left-1/2 w-[76%]"
                   style={{
-                    transform: "translate(-90%, -50%) rotateY(25deg) scale(0.85)",
+                    transform: "translate(-72%, -50%) rotateY(25deg) scale(0.85)",
                     transformOrigin: "center center",
                     opacity: 0.65,
                     filter: "blur(1.5px)",
@@ -631,7 +631,7 @@ export default function HomePage() {
                 </div>
                 {/* Center phone — Gradual (FRONT, no rotation) */}
                 <div
-                  className="absolute top-1/2 left-1/2 w-[55%] z-10"
+                  className="absolute top-1/2 left-1/2 w-[80%] z-10"
                   style={{
                     transform: "translate(-50%, -50%) rotateY(0deg) scale(1)",
                     transformOrigin: "center center",
@@ -1115,11 +1115,7 @@ export default function HomePage() {
           <div className="flex flex-wrap justify-center gap-8 mb-14">
             {[
               { initials: "MV", name: "Mascota Veloz", color: "bg-emerald-500" },
-              { initials: "CC", name: "Café Central", color: "bg-orange-500" },
-              { initials: "BD", name: "Barbería Don Carlos", color: "bg-blue-600" },
-              { initials: "GF", name: "Gym Fitness", color: "bg-purple-500" },
-              { initials: "NB", name: "Nail Bar Studio", color: "bg-pink-500" },
-              { initials: "PD", name: "Pastelería Dulce", color: "bg-amber-500" },
+              { initials: "GC", name: "Gradual Café", color: "bg-orange-500" },
             ].map((logo) => (
               <div key={logo.initials} className="flex flex-col items-center gap-2 group">
                 <div
@@ -1133,25 +1129,19 @@ export default function HomePage() {
           </div>
 
           <div
-            className={`grid md:grid-cols-3 gap-6 anim-stagger ${social.inView ? "is-visible" : ""}`}
+            className={`grid md:grid-cols-2 gap-6 max-w-3xl mx-auto anim-stagger ${social.inView ? "is-visible" : ""}`}
           >
             {[
               {
                 quote:
                   "Desde que usamos Cuik, nuestros clientes vuelven un 40% más. El pase en el wallet es un game changer.",
-                author: "María G.",
-                business: "Café Central",
-              },
-              {
-                quote:
-                  "Mis clientes ya no pierden las tarjetas de cartón. Todo digital, todo automático.",
-                author: "Carlos R.",
-                business: "Barbería Don Carlos",
+                author: "Reynaldo M.",
+                business: "Gradual Café",
               },
               {
                 quote:
                   "La demo con IA nos convenció al instante. En 24 horas teníamos nuestro pase funcionando.",
-                author: "Ana P.",
+                author: "David L.",
                 business: "Mascota Veloz",
               },
             ].map((t) => (
@@ -1330,7 +1320,7 @@ export default function HomePage() {
           <div className="flex items-center justify-center gap-2 pt-1">
             <span className="text-blue-200/70 text-sm">O escríbenos por</span>
             <a
-              href="https://wa.me/51999999999"
+              href="https://wa.me/51972213023"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-semibold text-sm transition-colors"
