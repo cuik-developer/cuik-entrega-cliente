@@ -26,7 +26,7 @@ export default async function ConfiguracionPage() {
   const initialLocations = locationsResult.success ? locationsResult.data : []
 
   return (
-    <div className="max-w-2xl min-h-[calc(100vh-4rem)] pb-8">
+    <div className="max-w-2xl">
       <div className="mb-6">
         <h1 className="text-2xl font-extrabold text-foreground">Configuración</h1>
         <p className="text-sm text-muted-foreground">Datos generales del comercio.</p>

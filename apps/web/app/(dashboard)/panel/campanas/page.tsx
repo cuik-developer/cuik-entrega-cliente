@@ -44,7 +44,7 @@ export default function CampanasPage() {
             <Megaphone className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-extrabold text-foreground">Campanas</h1>
+            <h1 className="text-2xl font-extrabold text-foreground">Campañas</h1>
             <p className="text-sm text-muted-foreground">
               Envia mensajes segmentados a tus clientes via Wallet.
             </p>
@@ -55,7 +55,7 @@ export default function CampanasPage() {
           onClick={() => setShowCreateDialog(true)}
         >
           <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Nueva campana</span>
+          <span className="hidden sm:inline">Nueva campaña</span>
           <span className="sm:hidden">Nueva</span>
         </Button>
       </div>
