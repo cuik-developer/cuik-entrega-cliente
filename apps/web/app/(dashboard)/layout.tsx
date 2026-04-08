@@ -172,7 +172,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <TenantProvider>
-      <div className="flex h-screen bg-[#f8fafc] dark:bg-background overflow-hidden">
+      <div className="fixed inset-0 flex bg-[#f8fafc] dark:bg-background overflow-hidden">
         {/* Sidebar */}
         <aside
           className={`
