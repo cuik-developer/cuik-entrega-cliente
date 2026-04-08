@@ -187,7 +187,7 @@ function MobileCampaignCard({
   )
 }
 
-export function CampaignList({ tenantSlug, refreshKey: _refreshKey }: CampaignListProps) {
+export function CampaignList({ tenantSlug, refreshKey }: CampaignListProps) {
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([])
   const [pagination, setPagination] = useState<PaginationData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -208,7 +208,7 @@ export function CampaignList({ tenantSlug, refreshKey: _refreshKey }: CampaignLi
       const json = await res.json()
 
       if (!res.ok) {
-        toast.error(json.error ?? "Error al cargar campanas")
+        toast.error(json.error ?? "Error al cargar campañas")
         return
       }
 
@@ -219,7 +219,7 @@ export function CampaignList({ tenantSlug, refreshKey: _refreshKey }: CampaignLi
     } finally {
       setIsLoading(false)
     }
-  }, [tenantSlug, page, statusFilter])
+  }, [tenantSlug, page, statusFilter, refreshKey])
 
   useEffect(() => {
     fetchCampaigns()
@@ -234,11 +234,11 @@ export function CampaignList({ tenantSlug, refreshKey: _refreshKey }: CampaignLi
       const json = await res.json()
 
       if (!res.ok) {
-        toast.error(json.error ?? "Error al enviar campana")
+        toast.error(json.error ?? "Error al enviar campaña")
         return
       }
 
-      toast.success("Campana enviada exitosamente")
+      toast.success("Campaña enviada exitosamente")
       fetchCampaigns()
     } catch {
       toast.error("Error de conexion")
@@ -262,7 +262,7 @@ export function CampaignList({ tenantSlug, refreshKey: _refreshKey }: CampaignLi
     <Card className="border border-border">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-bold text-foreground">Historial de campanas</CardTitle>
+          <CardTitle className="text-sm font-bold text-foreground">Historial de campañas</CardTitle>
           <Select
             value={statusFilter}
             onValueChange={(v) => {
@@ -291,9 +291,9 @@ export function CampaignList({ tenantSlug, refreshKey: _refreshKey }: CampaignLi
           </div>
         ) : campaigns.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-sm text-muted-foreground">No hay campanas todavia.</p>
+            <p className="text-sm text-muted-foreground">No hay campañas todavía.</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Crea tu primera campana para empezar.
+              Crea tu primera campaña para empezar.
             </p>
           </div>
         ) : (
@@ -395,7 +395,7 @@ export function CampaignList({ tenantSlug, refreshKey: _refreshKey }: CampaignLi
             {pagination && pagination.totalPages > 1 && (
               <div className="flex items-center justify-between pt-4">
                 <p className="text-xs text-muted-foreground">
-                  Pagina {pagination.page} de {pagination.totalPages} ({pagination.total} campanas)
+                  Página {pagination.page} de {pagination.totalPages} ({pagination.total} campañas)
                 </p>
                 <div className="flex items-center gap-1">
                   <Button

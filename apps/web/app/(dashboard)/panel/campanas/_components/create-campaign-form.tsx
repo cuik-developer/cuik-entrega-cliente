@@ -77,11 +77,11 @@ export function CreateCampaignForm({
       const json = await res.json()
 
       if (!res.ok) {
-        toast.error(json.error ?? "Error al crear la campana")
+        toast.error(json.error ?? "Error al crear la campaña")
         return
       }
 
-      toast.success("Campana creada exitosamente")
+      toast.success("Campaña creada exitosamente")
       form.reset()
       setIsScheduled(false)
       onOpenChange(false)
@@ -110,7 +110,7 @@ export function CreateCampaignForm({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Bell className="w-5 h-5 text-primary" />
-            Nueva campana
+            Nueva campaña
           </DialogTitle>
           <DialogDescription>
             Envia mensajes segmentados a tus clientes via Wallet.
@@ -125,7 +125,7 @@ export function CreateCampaignForm({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nombre de la campana</FormLabel>
+                  <FormLabel>Nombre de la campaña</FormLabel>
                   <FormControl>
                     <Input placeholder="Ej: Promo fin de semana" {...field} />
                   </FormControl>
@@ -140,7 +140,7 @@ export function CreateCampaignForm({
               name="type"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Tipo de campana</FormLabel>
+                  <FormLabel>Tipo de campaña</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger className="w-full">
@@ -281,7 +281,7 @@ export function CreateCampaignForm({
                 ) : (
                   <Send className="w-4 h-4" />
                 )}
-                {isScheduled ? "Programar" : "Crear campana"}
+                {isScheduled ? "Programar" : "Crear campaña"}
               </Button>
               <Button
                 type="button"

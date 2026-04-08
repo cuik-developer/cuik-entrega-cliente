@@ -76,13 +76,13 @@ export function ChurnPreventionCard({ tenantSlug, onCampaignSent }: ChurnPrevent
       const json = await res.json()
 
       if (!res.ok) {
-        toast.error(json.error ?? "Error al enviar la campana de recuperacion")
+        toast.error(json.error ?? "Error al enviar la campaña de recuperación")
         return
       }
 
       const result = json.data
       toast.success(
-        `Campana enviada: ${result.sentCount} notificaciones enviadas de ${result.targetCount} clientes`,
+        `Campaña enviada: ${result.sentCount} notificaciones enviadas de ${result.targetCount} clientes`,
       )
       setMessage("")
       onCampaignSent?.()
@@ -258,7 +258,7 @@ export function ChurnPreventionCard({ tenantSlug, onCampaignSent }: ChurnPrevent
               onClick={handleSend}
               className="bg-orange-600 hover:bg-orange-700 text-white"
             >
-              Enviar campana
+              Enviar campaña
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

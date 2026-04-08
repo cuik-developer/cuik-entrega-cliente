@@ -89,7 +89,7 @@ function downloadCsv(campaign: CampaignInfo, recipients: Recipient[]) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement("a")
   link.href = url
-  link.download = `campana-${campaign.name.replace(/\s+/g, "-").toLowerCase()}-detalle.csv`
+  link.download = `campaña-${campaign.name.replace(/\s+/g, "-").toLowerCase()}-detalle.csv`
   link.click()
   URL.revokeObjectURL(url)
 }
@@ -141,7 +141,7 @@ export function CampaignDetailDialog({
             <Eye className="w-4 h-4" />
             {campaign.name}
           </DialogTitle>
-          <DialogDescription>Detalle de campana y destinatarios</DialogDescription>
+          <DialogDescription>Detalle de campaña y destinatarios</DialogDescription>
         </DialogHeader>
 
         {/* Campaign info */}
@@ -206,7 +206,7 @@ export function CampaignDetailDialog({
             </div>
           ) : recipients.length === 0 ? (
             <div className="text-center py-12 text-sm text-muted-foreground">
-              No hay destinatarios registrados para esta campana.
+              No hay destinatarios registrados para esta campaña.
             </div>
           ) : (
             <Table>
