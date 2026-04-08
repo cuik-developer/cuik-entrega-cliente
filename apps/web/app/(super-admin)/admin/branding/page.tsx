@@ -636,21 +636,28 @@ export default function BrandingPage() {
     if (!selectedTenantId) return
 
     setSaving(true)
-    const result = await saveBranding(selectedTenantId, {
-      primaryColor: form.primaryColor,
-      accentColor: form.accentColor,
-      logoUrl: form.logoUrl,
-    })
+    try {
+      const result = await saveBranding(selectedTenantId, {
+        primaryColor: form.primaryColor,
+        accentColor: form.accentColor,
+        logoUrl: form.logoUrl,
+      })
 
-    if (result.success) {
-      toast.success("Branding guardado correctamente")
-      setOriginalForm({ ...form })
-      setSuggestions(null)
-    } else {
-      toast.error(result.error)
+      if (result.success) {
+        toast.success("Branding guardado correctamente")
+        setOriginalForm({ ...form })
+        setSuggestions(null)
+      } else {
+        toast.error(result.error)
+      }
+    } catch (err) {
+      console.error("[branding handleSave]", err)
+      toast.error(
+        err instanceof Error ? `Error al guardar: ${err.message}` : "Error de conexión al guardar branding",
+      )
+    } finally {
+      setSaving(false)
     }
-
-    setSaving(false)
   }
 
   // ── Derived values ──────────────────────────────────────────────
