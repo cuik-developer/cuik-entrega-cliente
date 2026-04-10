@@ -26,6 +26,16 @@ function isTemplateVariable(value: string): boolean {
   return value.startsWith("{{") && value.endsWith("}}")
 }
 
+/** Auto-generate a field key from the label (lowercase, accents stripped, spaces → _) */
+function toFieldKey(label: string): string {
+  return label
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "")
+}
+
 const inputClass =
   "w-full px-2 py-1 rounded-md bg-white border border-gray-200 text-gray-800 text-[11px] placeholder:text-gray-400 focus:outline-none focus:border-[#0e70db] focus:ring-1 focus:ring-[#0e70db]/20 transition-colors"
 
@@ -142,7 +152,15 @@ function FieldGroup({
                     <input
                       type="text"
                       value={field.label}
-                      onChange={(e) => updateField(section, index, { label: e.target.value })}
+                      onChange={(e) => {
+                        const newLabel = e.target.value
+                        const autoKey = toFieldKey(field.label)
+                        const update: { label: string; key?: string } = { label: newLabel }
+                        if (!field.key || field.key === autoKey) {
+                          update.key = toFieldKey(newLabel)
+                        }
+                        updateField(section, index, update)
+                      }}
                       placeholder="Titulo"
                       className={inputClass}
                     />
@@ -177,7 +195,15 @@ function FieldGroup({
                   <input
                     type="text"
                     value={field.label}
-                    onChange={(e) => updateField(section, index, { label: e.target.value })}
+                    onChange={(e) => {
+                      const newLabel = e.target.value
+                      const autoKey = toFieldKey(field.label)
+                      const update: { label: string; key?: string } = { label: newLabel }
+                      if (!field.key || field.key === autoKey) {
+                        update.key = toFieldKey(newLabel)
+                      }
+                      updateField(section, index, update)
+                    }}
                     placeholder="Label"
                     className={inputClass}
                   />

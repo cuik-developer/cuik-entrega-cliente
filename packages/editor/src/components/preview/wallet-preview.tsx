@@ -73,7 +73,7 @@ export function WalletPreview({
           )}
           {config.logoText && (
             <span className="text-sm font-semibold" style={{ color: foregroundColor }}>
-              {config.logoText}
+              {resolvePreviewValue(config.logoText, promotionType, config.stampsConfig.maxVisits)}
             </span>
           )}
         </div>
