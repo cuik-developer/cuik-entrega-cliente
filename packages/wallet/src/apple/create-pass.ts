@@ -195,20 +195,25 @@ export async function createApplePass(
     }
 
     // ─── Remove non-standard fields before signing ───────────────────
-    // passkit-generator v3.5.x adds "additionalInfoFields":[] to every
+    // passkit-generator v3.5.7 adds "additionalInfoFields":[] to every
     // pass type, but Apple rejects storeCard passes that include it.
+    // eventTicket legitimately uses this field — only strip it for other types.
     // Access the internal props via Symbol and delete the offending key.
-    const propsSymbol = Object.getOwnPropertySymbols(pass).find((s) =>
-      String(s).includes("props"),
-    )
-    if (propsSymbol) {
-      const passType = pass.type
-      const internalProps = (pass as unknown as Record<symbol, Record<string, unknown>>)[propsSymbol]
-      const typeData = passType
-        ? (internalProps[passType] as Record<string, unknown> | undefined)
-        : undefined
-      if (typeData && "additionalInfoFields" in typeData) {
-        delete typeData.additionalInfoFields
+    if ((pass.type as string) !== "eventTicket") {
+      const propsSymbol = Object.getOwnPropertySymbols(pass).find((s) =>
+        String(s).includes("props"),
+      )
+      if (propsSymbol) {
+        const passType = pass.type
+        const internalProps = (pass as unknown as Record<symbol, Record<string, unknown>>)[
+          propsSymbol
+        ]
+        const typeData = passType
+          ? (internalProps[passType] as Record<string, unknown> | undefined)
+          : undefined
+        if (typeData && "additionalInfoFields" in typeData) {
+          delete typeData.additionalInfoFields
+        }
       }
     }
 
