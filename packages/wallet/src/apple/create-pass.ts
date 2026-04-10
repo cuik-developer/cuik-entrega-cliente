@@ -22,6 +22,19 @@ export async function createApplePass(
   params: CreateApplePassParams,
 ): Promise<CreateApplePassResult> {
   try {
+    console.info(
+      `[Wallet:CreatePass] serial=${params.serialNumber}`,
+      `passTypeId=${params.passTypeId} teamId=${params.teamId}`,
+      `webServiceUrl=${params.webServiceUrl}`,
+      `colors=${JSON.stringify(params.colors)}`,
+      `signerCert=${params.signerCert.slice(0, 40)}...`,
+      `signerKey=${params.signerKey.slice(0, 40)}...`,
+      `wwdr=${params.wwdr.slice(0, 40)}...`,
+      `icon=${params.icon.byteLength}b strip2x=${params.stripImage2x.byteLength}b`,
+      `logo=${params.logo?.byteLength ?? 0}b`,
+      `hasDesignFields=${!!params.designFields}`,
+    )
+
     const pass = new PKPass(
       {},
       {
@@ -173,6 +186,14 @@ export async function createApplePass(
 
     // ─── Generate signed .pkpass ──────────────────────────────────────
     const buffer = pass.getAsBuffer()
+
+    console.info(
+      `[Wallet:CreatePass] serial=${params.serialNumber} OK size=${buffer.byteLength}`,
+      `passType=${pass.type}`,
+      `headerFields=${pass.headerFields.length}`,
+      `secondaryFields=${pass.secondaryFields.length}`,
+      `backFields=${pass.backFields.length}`,
+    )
 
     return { ok: true, buffer, serial: params.serialNumber }
   } catch (error) {
