@@ -416,6 +416,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
         passTypeId: route.passTypeId,
         updatedSince,
       })
+
+      console.info(
+        `[Wallet:Serials:Response] status=${result.status}`,
+        `body=${result.body ? JSON.stringify(result.body) : "none"}`,
+        `url=${url.pathname}`,
+      )
+
       return toResponse(result)
     }
 
@@ -456,7 +463,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
 
       // 304 or error — return directly
       if (result.status !== 200) {
-        console.info(`[Wallet:GetPass] serial=${route.serialNumber} status=${result.status} (cached/error)`)
+        console.info(
+          `[Wallet:GetPass] serial=${route.serialNumber} status=${result.status}`,
+          `headers=${JSON.stringify(result.headers ?? {})}`,
+          result.status === 304 ? "(304 Not Modified — iPhone has latest version)" : "(error)",
+        )
         return toResponse(result)
       }
 
@@ -467,12 +478,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
         }
       )?.passInstance
       if (!passData) {
+        console.error(`[Wallet:GetPass] serial=${route.serialNumber} status=500 (no passData in handleGetPass result)`)
         return new Response("Internal Server Error", { status: 500 })
       }
 
       // Resolve tenant-specific Apple config for pass regeneration
       const appleConfigForPass = await resolveAppleConfigForSerial(route.serialNumber)
       if (!appleConfigForPass) {
+        console.error(`[Wallet:GetPass] serial=${route.serialNumber} status=503 (apple config not resolved)`)
         return new Response("Apple Wallet not configured", { status: 503 })
       }
 
@@ -486,6 +499,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
       })
 
       if (!passBuffer) {
+        console.error(`[Wallet:GetPass] serial=${route.serialNumber} status=500 (regeneratePass returned null)`)
         return new Response("Failed to regenerate pass", { status: 500 })
       }
 
@@ -525,6 +539,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
       })
     }
 
+    console.warn(`[Wallet:AppleWSP] GET 404 unmatched route`, { segments, routeType: route.type })
     return new Response("Not Found", { status: 404 })
   } catch (err) {
     console.error("[Wallet:AppleWSP] GET error:", err)
