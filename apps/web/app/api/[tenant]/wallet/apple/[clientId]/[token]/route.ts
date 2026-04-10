@@ -168,6 +168,7 @@ export async function GET(
       gapY?: number
       filledOpacity?: number
       emptyOpacity?: number
+      fillOrder?: "row" | "interleaved"
       rowOffsets?: Array<{ x: number; y: number }>
     } | null
     const maxVisits = stampsConfig?.maxVisits ?? 8
@@ -207,6 +208,7 @@ export async function GET(
               gapY: stampsConfig.gapY ?? 73,
               filledOpacity: stampsConfig.filledOpacity ?? 1,
               emptyOpacity: stampsConfig.emptyOpacity ?? 0.35,
+              fillOrder: stampsConfig.fillOrder ?? "row",
               rowOffsets: stampsConfig.rowOffsets,
             }
           : undefined,

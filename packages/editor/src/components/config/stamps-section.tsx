@@ -24,6 +24,18 @@ export function StampsSection({ onUploadAsset, onGenerateAsset }: StampsSectionP
         onGenerate={() => onGenerateAsset("stamp")}
       />
 
+      {/* Grid mismatch warning */}
+      {stampsConfig.maxVisits % (stampsConfig.gridCols * stampsConfig.gridRows) !== 0 && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <span className="mt-0.5 shrink-0">&#9888;</span>
+          <span>
+            El maximo de visitas ({stampsConfig.maxVisits}) no llena la grilla completa (
+            {stampsConfig.gridCols}&times;{stampsConfig.gridRows} ={" "}
+            {stampsConfig.gridCols * stampsConfig.gridRows}). Algunos espacios quedaran vacios.
+          </span>
+        </div>
+      )}
+
       {/* Max visits */}
       <label className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-gray-600">Maximo de visitas</span>
@@ -65,6 +77,23 @@ export function StampsSection({ onUploadAsset, onGenerateAsset }: StampsSectionP
           </label>
         </div>
       </div>
+
+      {/* Fill order (only relevant for multi-row grids) */}
+      {stampsConfig.gridRows > 1 && (
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-gray-600">Orden de llenado</span>
+          <select
+            value={stampsConfig.fillOrder ?? "row"}
+            onChange={(e) =>
+              updateStampsConfig({ fillOrder: e.target.value as "row" | "interleaved" })
+            }
+            className="w-full px-3 py-1.5 rounded-md bg-white border border-gray-200 text-gray-800 text-sm focus:outline-none focus:border-[#0e70db] focus:ring-1 focus:ring-[#0e70db]/20 transition-colors"
+          >
+            <option value="row">Fila por fila</option>
+            <option value="interleaved">Intercalado (columna por columna)</option>
+          </select>
+        </label>
+      )}
 
       {/* Stamp size */}
       <label className="flex flex-col gap-1.5">

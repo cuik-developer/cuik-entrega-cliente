@@ -154,6 +154,7 @@ export function adaptV1ToV2(
       gapY: 73,
       filledOpacity: stampGrid.filledOpacity,
       emptyOpacity: stampGrid.emptyOpacity,
+      fillOrder: "row",
       rowOffsets: [],
     },
     fields,

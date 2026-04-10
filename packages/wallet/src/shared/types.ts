@@ -45,6 +45,7 @@ export type StampGridLayout = {
   gapY: number
   filledOpacity: number
   emptyOpacity: number
+  fillOrder?: "row" | "interleaved"
   rowOffsets?: Array<{ x: number; y: number }>
 }
 

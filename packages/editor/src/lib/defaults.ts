@@ -33,6 +33,7 @@ export function getDefaultConfigV2(businessName: string): PassDesignConfigV2 {
       gapY: 73,
       filledOpacity: 1,
       emptyOpacity: 0.35,
+      fillOrder: "row",
       rowOffsets: [],
     },
     fields: {

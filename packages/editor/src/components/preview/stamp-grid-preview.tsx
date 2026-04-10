@@ -32,10 +32,11 @@ export function StampGridPreview({
     return () => observer.disconnect()
   }, [])
 
-  const { gridCols, stampSize, filledOpacity, emptyOpacity } = stampsConfig
-  const gridTotal = stampsConfig.gridCols * stampsConfig.gridRows
+  const { gridCols, gridRows, stampSize, filledOpacity, emptyOpacity } = stampsConfig
+  const gridTotal = gridCols * gridRows
   const totalStamps = Math.min(gridTotal, stampsConfig.maxVisits)
   const rowOffsets = stampsConfig.rowOffsets ?? []
+  const fillOrder = stampsConfig.fillOrder ?? "row"
 
   // All coordinates are in @2x space, scaled by container ratio
   const oX = stampsConfig.offsetX ?? 197
@@ -46,8 +47,10 @@ export function StampGridPreview({
   return (
     <div ref={containerRef} className="absolute inset-0">
       {Array.from({ length: totalStamps }, (_, i) => {
-        const row = Math.floor(i / gridCols)
-        const col = i % gridCols
+        const row =
+          fillOrder === "interleaved" ? i % gridRows : Math.floor(i / gridCols)
+        const col =
+          fillOrder === "interleaved" ? Math.floor(i / gridRows) : i % gridCols
         const rowOff = rowOffsets[row] ?? { x: 0, y: 0 }
         const x2 = oX + col * gX + rowOff.x
         const y2 = oY + row * gY + rowOff.y

@@ -102,6 +102,8 @@ export const passDesignColorsSchema = z.object({
 })
 
 // ── Stamps config ────────────────────────────────────────────────────
+export const fillOrderSchema = z.enum(["row", "interleaved"]).default("row")
+
 export const stampsConfigSchema = z.object({
   maxVisits: z.number().int(),
   gridCols: z.number().int(),
@@ -113,6 +115,7 @@ export const stampsConfigSchema = z.object({
   gapY: z.number().min(0).max(246).optional().default(73),
   filledOpacity: z.number().min(0).max(1).optional().default(1),
   emptyOpacity: z.number().min(0).max(1).optional().default(0.35),
+  fillOrder: fillOrderSchema.optional().default("row"),
   rowOffsets: z
     .array(z.object({ x: z.number().min(-300).max(300), y: z.number().min(-200).max(200) }))
     .optional()
@@ -147,6 +150,7 @@ export const passDesignConfigV2Schema = z.object({
     gapY: z.number().min(0).max(246).default(73),
     filledOpacity: z.number().min(0).max(1).default(1),
     emptyOpacity: z.number().min(0).max(1).default(0.35),
+    fillOrder: fillOrderSchema.default("row"),
     rowOffsets: z.array(z.object({ x: z.number(), y: z.number() })).default([]),
   }),
   fields: z.object({

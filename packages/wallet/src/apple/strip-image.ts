@@ -35,11 +35,13 @@ function buildStripSvg(params: StripImageParams): string {
   const filledOpacity = gridLayout?.filledOpacity ?? STAMP_OPACITY_FILLED
   const emptyOpacity = gridLayout?.emptyOpacity ?? STAMP_OPACITY_EMPTY
 
+  const fillOrder = gridLayout?.fillOrder ?? "row"
+  const rows = gridLayout?.rows ?? Math.ceil(maxVisits / cols)
   const rowOffsets = gridLayout?.rowOffsets ?? []
 
   const stampElements = Array.from({ length: maxVisits }, (_, i) => {
-    const row = Math.floor(i / cols)
-    const col = i % cols
+    const row = fillOrder === "interleaved" ? i % rows : Math.floor(i / cols)
+    const col = fillOrder === "interleaved" ? Math.floor(i / rows) : i % cols
     const rowOff = rowOffsets[row] ?? { x: 0, y: 0 }
     const x = offsetX + col * gapX + rowOff.x
     const y = offsetY + row * gapY + rowOff.y
