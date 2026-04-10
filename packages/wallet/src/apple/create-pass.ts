@@ -7,6 +7,16 @@ import {
 } from "../shared/constants"
 import type { CreateApplePassParams, CreateApplePassResult } from "../shared/types"
 
+/** Convert hex color (#RRGGBB) to Apple's required rgb(r,g,b) format. Passes through rgb() strings unchanged. */
+function toAppleRgb(color: string): string {
+  const hex = color.match(/^#([0-9a-fA-F]{6})$/)
+  if (!hex) return color
+  const r = Number.parseInt(hex[1].slice(0, 2), 16)
+  const g = Number.parseInt(hex[1].slice(2, 4), 16)
+  const b = Number.parseInt(hex[1].slice(4, 6), 16)
+  return `rgb(${r},${g},${b})`
+}
+
 /**
  * Create a signed .pkpass buffer for Apple Wallet.
  *
@@ -52,10 +62,10 @@ export async function createApplePass(
         description: params.description,
         logoText: params.logoText,
 
-        // Colors
-        backgroundColor: params.colors.background,
-        foregroundColor: params.colors.foreground,
-        labelColor: params.colors.label,
+        // Colors — Apple requires rgb(r,g,b), convert hex if needed
+        backgroundColor: toAppleRgb(params.colors.background),
+        foregroundColor: toAppleRgb(params.colors.foreground),
+        labelColor: toAppleRgb(params.colors.label),
 
         // Web Service Protocol (auto-updates)
         webServiceURL: params.webServiceUrl,
