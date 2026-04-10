@@ -194,6 +194,24 @@ export async function createApplePass(
       pass.setRelevantDate(params.relevantDate)
     }
 
+    // ─── Remove non-standard fields before signing ───────────────────
+    // passkit-generator v3.5.x adds "additionalInfoFields":[] to every
+    // pass type, but Apple rejects storeCard passes that include it.
+    // Access the internal props via Symbol and delete the offending key.
+    const propsSymbol = Object.getOwnPropertySymbols(pass).find((s) =>
+      String(s).includes("props"),
+    )
+    if (propsSymbol) {
+      const passType = pass.type
+      const internalProps = (pass as unknown as Record<symbol, Record<string, unknown>>)[propsSymbol]
+      const typeData = passType
+        ? (internalProps[passType] as Record<string, unknown> | undefined)
+        : undefined
+      if (typeData && "additionalInfoFields" in typeData) {
+        delete typeData.additionalInfoFields
+      }
+    }
+
     // ─── Generate signed .pkpass ──────────────────────────────────────
     const buffer = pass.getAsBuffer()
 
