@@ -325,7 +325,7 @@ export default function EscanearPage() {
       if (processingRef.current) return
       processingRef.current = true
 
-      if (!qrCode.startsWith("cuik:")) {
+      if (!qrCode.startsWith("cuik:") && !qrCode.startsWith("MV_")) {
         setErrorMsg("QR no valido — formato incorrecto")
         setStep("error")
         return
