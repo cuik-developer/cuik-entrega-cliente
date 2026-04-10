@@ -270,11 +270,23 @@ function buildDeps(): WebServiceDeps {
           and(eq(appleDevices.deviceLibId, deviceLibId), eq(appleDevices.passTypeId, passTypeId)),
         )
 
+      console.info(
+        `[Wallet:Serials] query deviceLibId=${deviceLibId.slice(0, 8)}... passTypeId=${passTypeId}`,
+        `updatedSince=${_updatedSince ?? "none"}`,
+        `rowsFound=${rows.length}`,
+        `serials=${JSON.stringify(rows.map((r) => ({ s: r.serialNumber, updAt: r.lastUpdatedAt?.toISOString() ?? "NULL" })))}`,
+      )
+
       let filtered = rows
       if (_updatedSince) {
         const sinceDate = new Date(_updatedSince)
         if (!Number.isNaN(sinceDate.getTime())) {
           filtered = rows.filter((r) => r.lastUpdatedAt && r.lastUpdatedAt > sinceDate)
+          console.info(
+            `[Wallet:Serials] filter sinceDate=${sinceDate.toISOString()}`,
+            `beforeFilter=${rows.length} afterFilter=${filtered.length}`,
+            `nullLastUpdated=${rows.filter((r) => !r.lastUpdatedAt).length}`,
+          )
         }
       }
 
@@ -286,10 +298,17 @@ function buildDeps(): WebServiceDeps {
         return r.lastUpdatedAt > max ? r.lastUpdatedAt : max
       }, null)
 
-      return {
+      const result = {
         serialNumbers,
         lastUpdated: maxDate?.toISOString() ?? new Date().toISOString(),
       }
+
+      console.info(
+        `[Wallet:Serials] result status=${serialNumbers.length > 0 ? 200 : 204}`,
+        `returnCount=${serialNumbers.length} lastUpdated=${result.lastUpdated}`,
+      )
+
+      return result
     },
 
     getPassInstance: async (serialNumber: string) => {
@@ -405,14 +424,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
       const ifNoneMatch = request.headers.get("if-none-match") ?? undefined
       const ifModifiedSince = request.headers.get("if-modified-since") ?? undefined
 
+      console.info(
+        `[Wallet:GetPass] serial=${route.serialNumber} passTypeId=${route.passTypeId}`,
+        `ifNoneMatch=${ifNoneMatch ?? "none"} ifModifiedSince=${ifModifiedSince ?? "none"}`,
+        `hasAuth=${authHeader ? "yes" : "no"}`,
+      )
+
       // Dual auth verification: try tenant secret first, then global fallback
       const token = extractAuthToken(authHeader)
       if (!token) {
+        console.warn(`[Wallet:GetPass] 401 no token serial=${route.serialNumber}`)
         return new Response(null, { status: 401, headers: { "Cache-Control": "no-store" } })
       }
 
       const isAuthed = await verifyAuthForSerial(route.serialNumber, token)
       if (!isAuthed) {
+        console.warn(`[Wallet:GetPass] 401 bad token serial=${route.serialNumber} token=${token.slice(0, 8)}...`)
         return new Response(null, { status: 401, headers: { "Cache-Control": "no-store" } })
       }
 
@@ -429,6 +456,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
 
       // 304 or error — return directly
       if (result.status !== 200) {
+        console.info(`[Wallet:GetPass] serial=${route.serialNumber} status=${result.status} (cached/error)`)
         return toResponse(result)
       }
 
@@ -484,6 +512,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
       responseHeaders.set("Cache-Control", "no-store, no-transform")
       responseHeaders.set("Last-Modified", freshLastUpdated.toUTCString())
       responseHeaders.set("ETag", freshEtag)
+
+      console.info(
+        `[Wallet:GetPass] serial=${route.serialNumber} status=200`,
+        `size=${body.byteLength} etag=${freshEtag}`,
+        `lastModified=${freshLastUpdated.toUTCString()}`,
+      )
 
       return new Response(body, {
         status: 200,
