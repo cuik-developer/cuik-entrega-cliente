@@ -227,9 +227,19 @@ async function sendTurn(sessionId: string, prompt: string, skills: string): Prom
     }
   } finally {
     console.log("[orchestrator] releasing stream reader, gotIdle:", gotIdle)
-    reader.cancel().catch(() => {})
-    reader.releaseLock()
+    try {
+      await reader.cancel()
+    } catch (cancelErr) {
+      console.warn("[orchestrator] reader.cancel() error (ignored):", cancelErr)
+    }
+    try {
+      reader.releaseLock()
+    } catch (releaseErr) {
+      console.warn("[orchestrator] reader.releaseLock() error (ignored):", releaseErr)
+    }
   }
+
+  console.log("[orchestrator] >>> EXITED STREAM LOOP, building result. textBlocks:", textBlocks.length, "totalChars:", textBlocks.join("").length)
 
   const result: TurnResponse = {
     id: sessionId,
@@ -250,6 +260,7 @@ async function sendTurn(sessionId: string, prompt: string, skills: string): Prom
       totalText.length > 0 ? totalText.slice(0, 200) : "(EMPTY — no text collected from SSE)",
   })
 
+  console.log("[orchestrator] >>> RETURNING from sendTurn")
   return result
 }
 
@@ -321,11 +332,13 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
 
     // Send prompt with skills injected as first user message
     const skills = getSkillsForAgent(primaryAgent)
+    console.log("[orchestrator] >>> CALLING sendTurn...")
     const turn = await sendTurn(sessionId, fullPrompt, skills)
+    console.log("[orchestrator] >>> sendTurn RETURNED, extracting text...")
     const outputText = extractTextFromTurn(turn)
 
     console.log(
-      `[orchestrator] extracted output: length=${outputText.length}, preview=${outputText.slice(0, 100)}`,
+      `[orchestrator] extracted output: length=${outputText.length}, empty=${outputText.length === 0}, preview=${outputText.slice(0, 200)}`,
     )
 
     agentLogs.push({
