@@ -362,7 +362,7 @@ importers:
         specifier: ^6.0.0
         version: 6.2.1
       passkit-generator:
-        specifier: ^3.5.0
+        specifier: 3.5.7
         version: 3.5.7
       sharp:
         specifier: ^0.34.0
