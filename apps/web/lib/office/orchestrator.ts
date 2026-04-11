@@ -1,5 +1,12 @@
 import { db, eq, executions, tasks } from "@cuik/db"
-import { type AgentId, ANTHROPIC_BASE_URL, getAgentConfig, getAnthropicHeaders } from "./agents"
+import {
+  type AgentId,
+  ANTHROPIC_BASE_URL,
+  ENVIRONMENT_ID,
+  getAgentApiId,
+  getAnthropicHeaders,
+  getSkillsForAgent,
+} from "./agents"
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -26,22 +33,23 @@ interface ExecutionResult {
 // ─── Anthropic Session Helpers ────────────────────────────────────────
 
 /**
- * Create a session with inline managed agent config.
- * System prompt and tools are defined inline — no agent_reference needed.
+ * Create a session using agent_reference.
+ * The agent's system prompt and tools are defined in the Anthropic console.
  */
 async function createSession(agentId: AgentId): Promise<string> {
-  const agentConfig = getAgentConfig(agentId)
+  const agentApiId = getAgentApiId(agentId)
+  if (!agentApiId) throw new Error(`No API ID configured for agent: ${agentId}`)
 
   const payload = {
-    agent: agentConfig,
+    environment: ENVIRONMENT_ID,
+    agent: { type: "agent_reference", id: agentApiId },
   }
 
   console.log("[orchestrator] createSession request:", {
     url: `${ANTHROPIC_BASE_URL}/sessions`,
     agentId,
-    model: agentConfig.model,
-    systemPromptLength: agentConfig.system.length,
-    tools: agentConfig.tools,
+    agentApiId,
+    environment: ENVIRONMENT_ID,
   })
 
   const res = await fetch(`${ANTHROPIC_BASE_URL}/sessions`, {
@@ -57,7 +65,7 @@ async function createSession(agentId: AgentId): Promise<string> {
       statusText: res.statusText,
       body,
       agentId,
-      payload: JSON.stringify(payload).slice(0, 500),
+      agentApiId,
     })
     throw new Error(`Failed to create session (${res.status}): ${body}`)
   }
@@ -69,21 +77,29 @@ async function createSession(agentId: AgentId): Promise<string> {
 
 /**
  * Send user prompt and read SSE stream until session.status_idle.
- * Skills are already in the session's system prompt — only send the task prompt.
+ * Skills are injected as first user message before the task prompt.
  */
-async function sendTurn(sessionId: string, prompt: string): Promise<TurnResponse> {
-  const events = [
-    {
+async function sendTurn(sessionId: string, prompt: string, skills: string): Promise<TurnResponse> {
+  const events: Array<{ type: string; content: Array<{ type: string; text: string }> }> = []
+
+  if (skills) {
+    events.push({
       type: "user",
-      content: [{ type: "text", text: prompt }],
-    },
-  ]
+      content: [{ type: "text", text: `[CONTEXT]\n${skills}` }],
+    })
+  }
+  events.push({
+    type: "user",
+    content: [{ type: "text", text: prompt }],
+  })
 
   const eventsPayload = { events }
   const eventsUrl = `${ANTHROPIC_BASE_URL}/sessions/${sessionId}/events`
 
   console.log("[orchestrator] sendEvents request:", {
     url: eventsUrl,
+    eventCount: events.length,
+    skillsLength: skills.length,
     promptLength: prompt.length,
   })
 
@@ -279,12 +295,13 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
     .returning({ id: executions.id })
 
   try {
-    // Create session with inline agent config (system prompt + tools baked in)
+    // Create session with agent_reference
     const sessionId = await createSession(primaryAgent)
     agentLogs.push({ agent: primaryAgent, event: "session_created", sessionId })
 
-    // Send prompt — skills are already in the session's system prompt
-    const turn = await sendTurn(sessionId, task.prompt)
+    // Send prompt with skills injected as first user message
+    const skills = getSkillsForAgent(primaryAgent)
+    const turn = await sendTurn(sessionId, task.prompt, skills)
     const outputText = extractTextFromTurn(turn)
 
     console.log(
@@ -391,11 +408,12 @@ export async function executeCollaborativeTask(taskId: string): Promise<Executio
       const sessionId = await createSession(agentId)
       agentLogs.push({ agent: agentId, event: "session_created", sessionId })
 
+      const skills = getSkillsForAgent(agentId)
       const prompt = accumulatedContext
         ? `${task.prompt}\n\n--- Previous agent output ---\n${accumulatedContext}`
         : task.prompt
 
-      const turn = await sendTurn(sessionId, prompt)
+      const turn = await sendTurn(sessionId, prompt, skills)
       const output = extractTextFromTurn(turn)
       accumulatedContext = output
 
