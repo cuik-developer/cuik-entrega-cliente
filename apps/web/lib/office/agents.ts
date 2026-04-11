@@ -89,6 +89,7 @@ export function detectAgent(message: string): AgentMeta {
 // ─── Inline Agent Configs (for session creation) ──────────────────────
 
 interface AgentApiConfig {
+  type: "managed"
   model: string
   system: string
   tools: Array<{ type: string; mcp_server_name?: string }>
@@ -97,6 +98,7 @@ interface AgentApiConfig {
 
 const AGENT_CONFIGS: Record<AgentId, AgentApiConfig> = {
   luna: {
+    type: "managed",
     model: "claude-sonnet-4-6",
     system: `Eres Luna, la especialista en marketing y contenido de Cuik.
 
@@ -120,6 +122,7 @@ Reglas:
     tools: [{ type: "agent_toolset_20260401" }],
   },
   pixel: {
+    type: "managed",
     model: "claude-sonnet-4-6",
     system: `Eres Pixel, el disenador grafico de Cuik.
 
@@ -139,6 +142,7 @@ Reglas:
     tools: [{ type: "agent_toolset_20260401" }],
   },
   dev: {
+    type: "managed",
     model: "claude-sonnet-4-6",
     system: `Eres Dev, el desarrollador frontend de Cuik.
 
@@ -158,6 +162,7 @@ Reglas:
     tools: [{ type: "agent_toolset_20260401" }],
   },
   data: {
+    type: "managed",
     model: "claude-sonnet-4-6",
     system: `Eres Data, el analista de datos de Cuik.
 
