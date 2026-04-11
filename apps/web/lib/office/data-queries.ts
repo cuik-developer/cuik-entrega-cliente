@@ -1,4 +1,17 @@
-import { and, clients, count, db, desc, eq, gte, locations, rewards, sql, visits } from "@cuik/db"
+import {
+  and,
+  clients,
+  count,
+  db,
+  desc,
+  eq,
+  gte,
+  locations,
+  passInstances,
+  rewards,
+  sql,
+  visits,
+} from "@cuik/db"
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -56,6 +69,36 @@ export interface InactiveClient {
   daysSinceLastVisit: number
 }
 
+export interface MonthlyRetention {
+  month: string
+  registered: number
+  visited: number
+  retentionPct: number
+}
+
+export interface LocationWeeklyTrend {
+  week: string
+  locationName: string
+  visits: number
+}
+
+export interface WalletAdoption {
+  apple: number
+  google: number
+  none: number
+  totalClients: number
+}
+
+export interface WeeklyNewClients {
+  week: string
+  count: number
+}
+
+export interface SegmentAvgInterval {
+  segment: string
+  avgDays: number
+}
+
 export interface ReportData {
   summary: TenantSummary
   weekly: WeeklyComparison
@@ -65,6 +108,11 @@ export interface ReportData {
   byLocation: LocationVisits[]
   segmentation: ClientSegment[]
   inactiveClients: InactiveClient[]
+  retentionByMonth: MonthlyRetention[]
+  visitsByLocationByWeek: LocationWeeklyTrend[]
+  walletAdoption: WalletAdoption
+  newClientsByWeek: WeeklyNewClients[]
+  avgTimeBetweenVisits: SegmentAvgInterval[]
 }
 
 // ─── Query Functions ──────────────────────────────────────────────────
@@ -275,6 +323,138 @@ export async function getInactiveClients(tenantId: string, days = 30): Promise<I
   }))
 }
 
+export async function getRetentionByMonth(tenantId: string): Promise<MonthlyRetention[]> {
+  const rows = await db
+    .select({
+      month: sql<string>`TO_CHAR(${clients.createdAt}, 'YYYY-MM')`,
+      registered: count(),
+      visited: count(sql`CASE WHEN ${clients.totalVisits} > 1 THEN 1 END`),
+    })
+    .from(clients)
+    .where(eq(clients.tenantId, tenantId))
+    .groupBy(sql`TO_CHAR(${clients.createdAt}, 'YYYY-MM')`)
+    .orderBy(sql`TO_CHAR(${clients.createdAt}, 'YYYY-MM')`)
+
+  return rows.map((r) => ({
+    month: r.month,
+    registered: r.registered,
+    visited: r.visited,
+    retentionPct: r.registered > 0 ? Math.round((r.visited / r.registered) * 100) : 0,
+  }))
+}
+
+export async function getVisitsByLocationByWeek(tenantId: string): Promise<LocationWeeklyTrend[]> {
+  const rows = await db
+    .select({
+      week: sql<string>`TO_CHAR(DATE_TRUNC('week', ${visits.createdAt}), 'YYYY-MM-DD')`,
+      locationName: sql<string>`COALESCE(${locations.name}, 'Sin local')`,
+      total: count(),
+    })
+    .from(visits)
+    .leftJoin(locations, eq(visits.locationId, locations.id))
+    .where(eq(visits.tenantId, tenantId))
+    .groupBy(sql`DATE_TRUNC('week', ${visits.createdAt})`, locations.name)
+    .orderBy(sql`DATE_TRUNC('week', ${visits.createdAt})`)
+    .limit(100)
+
+  return rows.map((r) => ({ week: r.week, locationName: r.locationName, visits: r.total }))
+}
+
+export async function getWalletAdoption(tenantId: string): Promise<WalletAdoption> {
+  const [totalRow] = await db
+    .select({ total: count() })
+    .from(clients)
+    .where(eq(clients.tenantId, tenantId))
+
+  const totalClients = totalRow?.total ?? 0
+
+  const rows = await db
+    .select({
+      hasApple: sql<boolean>`${passInstances.applePassUrl} IS NOT NULL`,
+      hasGoogle: sql<boolean>`${passInstances.googleSaveUrl} IS NOT NULL`,
+    })
+    .from(passInstances)
+    .innerJoin(clients, eq(passInstances.clientId, clients.id))
+    .where(eq(clients.tenantId, tenantId))
+
+  let apple = 0
+  let google = 0
+  const clientsWithWallet = new Set<string>()
+
+  for (const r of rows) {
+    if (r.hasApple) apple++
+    if (r.hasGoogle) google++
+  }
+
+  return {
+    apple,
+    google,
+    none: Math.max(0, totalClients - rows.length),
+    totalClients,
+  }
+}
+
+export async function getNewClientsByWeek(tenantId: string): Promise<WeeklyNewClients[]> {
+  const rows = await db
+    .select({
+      week: sql<string>`TO_CHAR(DATE_TRUNC('week', ${clients.createdAt}), 'YYYY-MM-DD')`,
+      total: count(),
+    })
+    .from(clients)
+    .where(eq(clients.tenantId, tenantId))
+    .groupBy(sql`DATE_TRUNC('week', ${clients.createdAt})`)
+    .orderBy(sql`DATE_TRUNC('week', ${clients.createdAt})`)
+    .limit(52)
+
+  return rows.map((r) => ({ week: r.week, count: r.total }))
+}
+
+export async function getAverageTimeBetweenVisits(tenantId: string): Promise<SegmentAvgInterval[]> {
+  const rows = await db.execute(sql`
+    WITH visit_gaps AS (
+      SELECT
+        v.client_id,
+        c.total_visits,
+        EXTRACT(EPOCH FROM (v.created_at - LAG(v.created_at) OVER (
+          PARTITION BY v.client_id ORDER BY v.created_at
+        ))) / 86400.0 AS gap_days
+      FROM loyalty.visits v
+      JOIN loyalty.clients c ON c.id = v.client_id
+      WHERE v.tenant_id = ${tenantId}
+    ),
+    client_avgs AS (
+      SELECT
+        client_id,
+        total_visits,
+        AVG(gap_days) AS avg_gap
+      FROM visit_gaps
+      WHERE gap_days IS NOT NULL
+      GROUP BY client_id, total_visits
+    )
+    SELECT
+      CASE
+        WHEN total_visits BETWEEN 2 AND 3 THEN '2-3 visitas'
+        WHEN total_visits BETWEEN 4 AND 5 THEN '4-5 visitas'
+        ELSE '6+ visitas'
+      END AS segment,
+      ROUND(AVG(avg_gap)::numeric, 1) AS avg_days
+    FROM client_avgs
+    WHERE total_visits >= 2
+    GROUP BY
+      CASE
+        WHEN total_visits BETWEEN 2 AND 3 THEN '2-3 visitas'
+        WHEN total_visits BETWEEN 4 AND 5 THEN '4-5 visitas'
+        ELSE '6+ visitas'
+      END
+    ORDER BY MIN(total_visits)
+  `)
+
+  return (rows.rows as Array<{ segment: string; avg_days: string }>).map((r) => ({
+    segment: r.segment,
+    avgDays: Number.parseFloat(r.avg_days),
+  }))
+}
+
 // ─── Aggregated Context Builder ───────────────────────────────────────
 
 export async function buildReportData(tenantId: string): Promise<ReportData> {
@@ -287,6 +467,11 @@ export async function buildReportData(tenantId: string): Promise<ReportData> {
     byLocation,
     segmentation,
     inactiveClients,
+    retentionByMonth,
+    visitsByLocationByWeek,
+    walletAdoption,
+    newClientsByWeek,
+    avgTimeBetweenVisits,
   ] = await Promise.all([
     getTenantSummary(tenantId),
     getWeeklyComparison(tenantId),
@@ -296,6 +481,11 @@ export async function buildReportData(tenantId: string): Promise<ReportData> {
     getVisitsByLocation(tenantId),
     getClientSegmentation(tenantId),
     getInactiveClients(tenantId, 30),
+    getRetentionByMonth(tenantId),
+    getVisitsByLocationByWeek(tenantId),
+    getWalletAdoption(tenantId),
+    getNewClientsByWeek(tenantId),
+    getAverageTimeBetweenVisits(tenantId),
   ])
 
   return {
@@ -307,6 +497,11 @@ export async function buildReportData(tenantId: string): Promise<ReportData> {
     byLocation,
     segmentation,
     inactiveClients,
+    retentionByMonth,
+    visitsByLocationByWeek,
+    walletAdoption,
+    newClientsByWeek,
+    avgTimeBetweenVisits,
   }
 }
 
@@ -366,6 +561,27 @@ export function formatDataContext(data: ReportData, tenantName: string): string 
   }
   if (data.recentVisits.length > 20) {
     lines.push(`  ... y ${data.recentVisits.length - 20} visitas mas`)
+  }
+
+  lines.push("", "## Retencion Mensual")
+  for (const r of data.retentionByMonth) {
+    lines.push(`- ${r.month}: ${r.visited}/${r.registered} retornaron (${r.retentionPct}%)`)
+  }
+
+  lines.push("", "## Adopcion de Wallet")
+  lines.push(`- Apple Wallet: ${data.walletAdoption.apple} pases`)
+  lines.push(`- Google Wallet: ${data.walletAdoption.google} pases`)
+  lines.push(`- Sin wallet: ${data.walletAdoption.none} clientes`)
+  lines.push(`- Total clientes: ${data.walletAdoption.totalClients}`)
+
+  lines.push("", "## Clientes Nuevos por Semana")
+  for (const w of data.newClientsByWeek.slice(-12)) {
+    lines.push(`- Semana ${w.week}: ${w.count} nuevos`)
+  }
+
+  lines.push("", "## Tiempo Promedio entre Visitas (dias)")
+  for (const s of data.avgTimeBetweenVisits) {
+    lines.push(`- ${s.segment}: ${s.avgDays} dias promedio`)
   }
 
   return lines.join("\n")

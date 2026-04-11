@@ -134,6 +134,50 @@ export async function generateReport(tenantName: string, data: ReportData): Prom
   }
   styleDataRows(segSheet, 2)
 
+  // ─── Sheet 6: Retencion ────────────────────────────────────────────
+  const retSheet = wb.addWorksheet("Retencion")
+  retSheet.columns = [{ width: 15 }, { width: 15 }, { width: 15 }, { width: 15 }]
+
+  retSheet.addRow(["Retencion Mensual"]).font = { bold: true, size: 12 }
+  addHeaders(retSheet, ["Mes", "Registrados", "Retornaron", "Retencion %"])
+  for (const r of data.retentionByMonth) {
+    retSheet.addRow([r.month, r.registered, r.visited, `${r.retentionPct}%`])
+  }
+  retSheet.addRow([])
+
+  retSheet.addRow(["Adopcion de Wallet"]).font = { bold: true, size: 12 }
+  addHeaders(retSheet, ["Canal", "Cantidad"])
+  retSheet.addRow(["Apple Wallet", data.walletAdoption.apple])
+  retSheet.addRow(["Google Wallet", data.walletAdoption.google])
+  retSheet.addRow(["Sin wallet", data.walletAdoption.none])
+  retSheet.addRow(["Total clientes", data.walletAdoption.totalClients])
+
+  retSheet.addRow([])
+  retSheet.addRow(["Tiempo Promedio entre Visitas"]).font = { bold: true, size: 12 }
+  addHeaders(retSheet, ["Segmento", "Dias promedio"])
+  for (const s of data.avgTimeBetweenVisits) {
+    retSheet.addRow([s.segment, s.avgDays])
+  }
+  styleDataRows(retSheet, 3)
+
+  // ─── Sheet 7: Tendencias ──────────────────────────────────────────
+  const trendSheet = wb.addWorksheet("Tendencias")
+  trendSheet.columns = [{ width: 15 }, { width: 25 }, { width: 12 }]
+
+  trendSheet.addRow(["Visitas por Local por Semana"]).font = { bold: true, size: 12 }
+  addHeaders(trendSheet, ["Semana", "Local", "Visitas"])
+  for (const r of data.visitsByLocationByWeek) {
+    trendSheet.addRow([r.week, r.locationName, r.visits])
+  }
+  trendSheet.addRow([])
+
+  trendSheet.addRow(["Clientes Nuevos por Semana"]).font = { bold: true, size: 12 }
+  addHeaders(trendSheet, ["Semana", "Nuevos"])
+  for (const w of data.newClientsByWeek) {
+    trendSheet.addRow([w.week, w.count])
+  }
+  styleDataRows(trendSheet, 3)
+
   // ─── Generate Buffer ──────────────────────────────────────────────
   const arrayBuffer = await wb.xlsx.writeBuffer()
   return Buffer.from(arrayBuffer)
