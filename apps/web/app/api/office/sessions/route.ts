@@ -27,10 +27,18 @@ export async function POST(request: Request) {
   if (!agentId) return errorResponse("agentId is required", 400)
 
   const agentApiId = getAgentApiId(agentId as AgentId)
-  if (!agentApiId) return errorResponse("Agent not found or not configured", 400)
+  if (!agentApiId) {
+    console.error("[Office:Sessions] Agent not found:", agentId, "— check OFFICE_*_AGENT_ID env vars")
+    return errorResponse("Agent not found or not configured", 400)
+  }
 
   const envId = getEnvironmentId()
-  if (!envId) return errorResponse("Office environment not configured", 503)
+  if (!envId) {
+    console.error("[Office:Sessions] OFFICE_ENV_ID not set")
+    return errorResponse("Office environment not configured", 503)
+  }
+
+  console.info("[Office:Sessions] Creating session:", { agentId, agentApiId, envId })
 
   // 1. Create Anthropic session
   const anthropicRes = await fetch(`${ANTHROPIC_BASE_URL}/sessions`, {

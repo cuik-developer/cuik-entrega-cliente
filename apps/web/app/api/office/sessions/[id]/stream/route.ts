@@ -10,23 +10,39 @@ export const dynamic = "force-dynamic"
  * Proxy SSE stream from Anthropic Managed Agents to the frontend.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { session, error: authError } = await requireAuth(request)
-  if (authError) return authError
-  const roleError = requireRole(session, "super_admin")
-  if (roleError) return roleError
-
   const { id: conversationId } = await params
+
+  // Auth: EventSource can't send headers, so we also accept session cookie.
+  // requireAuth reads the cookie from the request headers automatically.
+  const { session, error: authError } = await requireAuth(request)
+  if (authError) {
+    console.error("[Office:Stream] Auth failed for conversation:", conversationId)
+    return authError
+  }
+  const roleError = requireRole(session, "super_admin")
+  if (roleError) {
+    console.error("[Office:Stream] Role check failed for user:", session.user.id)
+    return roleError
+  }
 
   // Look up conversation to get Anthropic session ID
   const [conversation] = await db
-    .select({ sessionId: conversations.sessionId })
+    .select({ sessionId: conversations.sessionId, userId: conversations.userId })
     .from(conversations)
     .where(eq(conversations.id, conversationId))
     .limit(1)
 
   if (!conversation?.sessionId) {
+    console.error("[Office:Stream] Conversation not found:", conversationId)
     return errorResponse("Conversation not found", 404)
   }
+
+  // Verify ownership
+  if (conversation.userId !== session.user.id) {
+    return errorResponse("Forbidden", 403)
+  }
+
+  console.info("[Office:Stream] Opening stream for session:", conversation.sessionId)
 
   // Proxy the SSE stream from Anthropic
   const headers = getAnthropicHeaders()

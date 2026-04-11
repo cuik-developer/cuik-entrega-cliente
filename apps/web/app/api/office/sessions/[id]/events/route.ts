@@ -29,8 +29,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .limit(1)
 
   if (!conversation?.sessionId) {
+    console.error("[Office:Events] Conversation not found:", conversationId)
     return errorResponse("Conversation not found", 404)
   }
+
+  console.info("[Office:Events] Sending message to session:", conversation.sessionId, "message:", message.trim().slice(0, 50))
 
   // Save user message locally
   await db.insert(messages).values({

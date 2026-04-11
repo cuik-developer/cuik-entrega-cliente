@@ -22,7 +22,6 @@ export function ChatMessages({ conversationId, agentId, refreshKey }: ChatMessag
   const [messages, setMessages] = useState<Message[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const eventSourceRef = useRef<EventSource | null>(null)
   const agent = AGENTS_META.find((a) => a.id === agentId) ?? AGENTS_META[0]
 
   // Auto-scroll to bottom
@@ -55,68 +54,101 @@ export function ChatMessages({ conversationId, agentId, refreshKey }: ChatMessag
       .catch(console.error)
   }, [conversationId, refreshKey, scrollToBottom])
 
-  // SSE stream
+  // SSE stream via fetch (supports cookies, unlike EventSource)
   useEffect(() => {
     if (!conversationId) return
 
-    // Close previous stream
-    eventSourceRef.current?.close()
-
-    const es = new EventSource(`/api/office/sessions/${conversationId}/stream`)
-    eventSourceRef.current = es
+    const abortController = new AbortController()
     setIsStreaming(true)
 
-    es.onmessage = (event) => {
+    async function readStream() {
       try {
-        const data = JSON.parse(event.data) as Record<string, unknown>
+        const res = await fetch(`/api/office/sessions/${conversationId}/stream`, {
+          credentials: "include",
+          signal: abortController.signal,
+        })
 
-        if (data.type === "agent.message") {
-          const content = (data.content as Array<{ type: string; text?: string }>)
-            ?.filter((c) => c.type === "text")
-            .map((c) => c.text)
-            .join("")
+        if (!res.ok || !res.body) {
+          console.error("[Office:Stream] Failed:", res.status)
+          setIsStreaming(false)
+          return
+        }
 
-          if (content) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: crypto.randomUUID(),
-                role: "agent",
-                agentId,
-                content,
-                createdAt: new Date(),
-              },
-            ])
-            requestAnimationFrame(scrollToBottom)
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ""
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+
+          // Parse SSE lines from buffer
+          const lines = buffer.split("\n")
+          buffer = lines.pop() ?? ""
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue
+            const jsonStr = line.slice(6).trim()
+            if (!jsonStr || jsonStr === "[DONE]") continue
+
+            try {
+              const data = JSON.parse(jsonStr) as Record<string, unknown>
+
+              if (data.type === "agent.message") {
+                const content = (data.content as Array<{ type: string; text?: string }>)
+                  ?.filter((c) => c.type === "text")
+                  .map((c) => c.text)
+                  .join("")
+
+                if (content) {
+                  setMessages((prev) => [
+                    ...prev,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "agent",
+                      agentId,
+                      content,
+                      createdAt: new Date(),
+                    },
+                  ])
+                  requestAnimationFrame(scrollToBottom)
+                }
+              }
+
+              if (data.type === "agent.tool_use") {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: crypto.randomUUID(),
+                    role: "tool",
+                    content: `Usando herramienta: ${data.name as string}`,
+                    createdAt: new Date(),
+                  },
+                ])
+              }
+
+              if (data.type === "session.status_idle") {
+                setIsStreaming(false)
+              }
+            } catch {
+              // Ignore parse errors on individual SSE events
+            }
           }
         }
 
-        if (data.type === "agent.tool_use") {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: crypto.randomUUID(),
-              role: "tool",
-              content: `Usando herramienta: ${data.name as string}`,
-              createdAt: new Date(),
-            },
-          ])
+        setIsStreaming(false)
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
+          console.error("[Office:Stream] Error:", err)
         }
-
-        if (data.type === "session.status_idle") {
-          setIsStreaming(false)
-        }
-      } catch {
-        // Ignore parse errors on SSE
+        setIsStreaming(false)
       }
     }
 
-    es.onerror = () => {
-      setIsStreaming(false)
-      es.close()
-    }
-
-    return () => es.close()
+    readStream()
+    return () => abortController.abort()
   }, [conversationId, agentId, scrollToBottom])
 
   return {
