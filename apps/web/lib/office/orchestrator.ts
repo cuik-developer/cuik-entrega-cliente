@@ -164,7 +164,9 @@ async function readStream(sessionId: string): Promise<StreamResult> {
           if (event.stop_reason) stopReason = event.stop_reason
         }
 
-        if (event.type === "session.status_idle") {
+        console.log("[orchestrator] checking idle:", JSON.stringify(event.type), event.type === "status_idle", event.type === "session.status_idle")
+
+        if (event.type === "session.status_idle" || event.type === "status_idle") {
           console.log(
             "[orchestrator] status_idle -> returning immediately, text length:",
             text.length,
