@@ -15,14 +15,6 @@ interface SessionResponse {
   id: string
 }
 
-interface TurnResponse {
-  id: string
-  role: string
-  model: string
-  content: Array<{ type: string; text?: string }>
-  stop_reason: string
-}
-
 interface ExecutionResult {
   executionId: string
   status: "pending_approval" | "approved" | "failed"
@@ -33,10 +25,6 @@ interface ExecutionResult {
 
 // ─── Anthropic Session Helpers ────────────────────────────────────────
 
-/**
- * Create a session using agent_reference.
- * The agent's system prompt and tools are defined in the Anthropic console.
- */
 async function createSession(agentId: AgentId): Promise<string> {
   const agentApiId = getAgentApiId(agentId)
   if (!agentApiId) throw new Error(`No API ID configured for agent: ${agentId}`)
@@ -76,11 +64,7 @@ async function createSession(agentId: AgentId): Promise<string> {
   return data.id
 }
 
-/**
- * Send user prompt and read SSE stream until session.status_idle.
- * Skills are injected as first user message before the task prompt.
- */
-async function sendTurn(sessionId: string, prompt: string, skills: string): Promise<TurnResponse> {
+async function sendEvents(sessionId: string, prompt: string, skills: string): Promise<void> {
   const events: Array<{ type: string; content: Array<{ type: string; text: string }> }> = []
 
   if (skills) {
@@ -104,7 +88,6 @@ async function sendTurn(sessionId: string, prompt: string, skills: string): Prom
     promptLength: prompt.length,
   })
 
-  // 1. POST /v1/sessions/{id}/events — send user message
   const eventsRes = await fetch(eventsUrl, {
     method: "POST",
     headers: getAnthropicHeaders(),
@@ -122,9 +105,17 @@ async function sendTurn(sessionId: string, prompt: string, skills: string): Prom
     throw new Error(`Failed to send events (${eventsRes.status}): ${body}`)
   }
 
-  console.log("[orchestrator] sendEvents OK, opening SSE stream...")
+  console.log("[orchestrator] sendEvents OK")
+}
 
-  // 2. GET /v1/sessions/{id}/stream — read SSE until session.status_idle
+/**
+ * Read SSE stream, collect text, and call onIdle callback IMMEDIATELY
+ * when status_idle is detected — before attempting any more reads.
+ */
+async function readStreamUntilIdle(
+  sessionId: string,
+  onIdle: (collectedText: string, model: string, stopReason: string) => Promise<void>,
+): Promise<void> {
   const streamUrl = `${ANTHROPIC_BASE_URL}/sessions/${sessionId}/stream`
   const streamHeaders = {
     ...getAnthropicHeaders(),
@@ -151,32 +142,30 @@ async function sendTurn(sessionId: string, prompt: string, skills: string): Prom
     throw new Error("Stream response has no body")
   }
 
-  // Parse SSE events from the stream
+  console.log("[orchestrator] SSE stream opened")
+
   const textBlocks: string[] = []
   let model = ""
   let stopReason = ""
-  let gotIdle = false
 
   const reader = streamRes.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ""
 
   try {
-    while (!gotIdle) {
+    while (true) {
       const { done, value } = await reader.read()
       if (done) {
-        console.log("[orchestrator] stream ended (done=true), gotIdle:", gotIdle)
+        console.log("[orchestrator] stream ended (done=true)")
         break
       }
 
       buffer += decoder.decode(value, { stream: true })
 
-      // Process complete SSE lines
       const lines = buffer.split("\n")
-      buffer = lines.pop() ?? "" // keep incomplete line in buffer
+      buffer = lines.pop() ?? ""
 
       for (const line of lines) {
-        if (gotIdle) break // stop processing lines after idle
         if (!line.startsWith("data: ")) continue
         const jsonStr = line.slice(6).trim()
         if (!jsonStr || jsonStr === "[DONE]") continue
@@ -184,7 +173,6 @@ async function sendTurn(sessionId: string, prompt: string, skills: string): Prom
         try {
           const event = JSON.parse(jsonStr)
 
-          // Log errors fully, log text-bearing events fully, others just type
           if (event.type === "error") {
             console.error("[orchestrator] SSE error event:", JSON.stringify(event))
           } else if (
@@ -198,7 +186,7 @@ async function sendTurn(sessionId: string, prompt: string, skills: string): Prom
             console.log("[orchestrator] SSE event:", { type: event.type })
           }
 
-          // Collect text content from agent messages
+          // Collect text
           if (event.type === "agent.message" || event.type === "content_block_delta") {
             if (event.content) {
               for (const block of event.content) {
@@ -214,76 +202,73 @@ async function sendTurn(sessionId: string, prompt: string, skills: string): Prom
             if (event.stop_reason) stopReason = event.stop_reason
           }
 
-          // Session idle = agent is done responding — stop immediately
+          // STATUS_IDLE: save immediately, then kill stream
           if (event.type === "session.status_idle") {
-            console.log("[orchestrator] session idle — breaking out of stream loop")
-            gotIdle = true
-            break // break inner for-loop; while(!gotIdle) exits outer
+            const collectedText = textBlocks.join("")
+            console.log("[orchestrator] status_idle detected — saving IMMEDIATELY.", {
+              textBlocks: textBlocks.length,
+              totalChars: collectedText.length,
+              preview: collectedText.slice(0, 200) || "(EMPTY)",
+            })
+
+            // Save to DB before touching the stream
+            await onIdle(collectedText, model, stopReason)
+
+            console.log("[orchestrator] onIdle callback done, cancelling reader")
+            try {
+              await reader.cancel()
+            } catch {
+              /* ignore */
+            }
+            try {
+              reader.releaseLock()
+            } catch {
+              /* ignore */
+            }
+            return // exit completely
           }
         } catch {
           // Not valid JSON, skip
         }
       }
     }
-  } finally {
-    console.log("[orchestrator] releasing stream reader, gotIdle:", gotIdle)
+  } catch (streamErr) {
+    console.error("[orchestrator] stream read error:", streamErr)
     try {
       await reader.cancel()
-    } catch (cancelErr) {
-      console.warn("[orchestrator] reader.cancel() error (ignored):", cancelErr)
+    } catch {
+      /* ignore */
     }
     try {
       reader.releaseLock()
-    } catch (releaseErr) {
-      console.warn("[orchestrator] reader.releaseLock() error (ignored):", releaseErr)
+    } catch {
+      /* ignore */
     }
+    throw streamErr
   }
 
-  console.log("[orchestrator] >>> EXITED STREAM LOOP, building result. textBlocks:", textBlocks.length, "totalChars:", textBlocks.join("").length)
-
-  const result: TurnResponse = {
-    id: sessionId,
-    role: "agent",
-    model,
-    content: textBlocks.map((text) => ({ type: "text", text })),
-    stop_reason: stopReason,
+  // If we got here, stream ended without status_idle
+  try {
+    reader.releaseLock()
+  } catch {
+    /* ignore */
   }
-
-  const totalText = textBlocks.join("")
-  console.log("[orchestrator] sendTurn completed:", {
-    model: result.model || "(no model in events)",
-    stopReason: result.stop_reason || "(no stop_reason in events)",
-    contentBlocks: result.content.length,
-    totalTextLength: totalText.length,
-    hasText: totalText.length > 0,
-    textPreview:
-      totalText.length > 0 ? totalText.slice(0, 200) : "(EMPTY — no text collected from SSE)",
+  const collectedText = textBlocks.join("")
+  console.warn("[orchestrator] stream ended WITHOUT status_idle, saving anyway.", {
+    textBlocks: textBlocks.length,
+    totalChars: collectedText.length,
   })
-
-  console.log("[orchestrator] >>> RETURNING from sendTurn")
-  return result
-}
-
-function extractTextFromTurn(turn: TurnResponse): string {
-  return turn.content
-    .filter((block) => block.type === "text" && block.text)
-    .map((block) => block.text)
-    .join("\n\n")
+  await onIdle(collectedText, model, stopReason)
 }
 
 // ─── Task Execution ───────────────────────────────────────────────────
 
-/**
- * Execute a single-agent task.
- * Creates a session with inline config, sends the prompt, stores output.
- */
 export async function executeTask(taskId: string): Promise<ExecutionResult> {
   const start = Date.now()
   const agentLogs: Record<string, unknown>[] = []
 
   console.log(`[orchestrator] executeTask started: ${taskId}`)
 
-  // Load task
   const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
   if (!task) throw new Error(`Task ${taskId} not found`)
 
@@ -296,25 +281,18 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
     requiresApproval: task.requiresApproval,
   })
 
-  // Create execution record
   const [execution] = await db
     .insert(executions)
-    .values({
-      taskId,
-      status: "running",
-      agentsUsed: [primaryAgent],
-    })
+    .values({ taskId, status: "running", agentsUsed: [primaryAgent] })
     .returning({ id: executions.id })
 
   try {
-    // Create session with agent_reference
     const sessionId = await createSession(primaryAgent)
     agentLogs.push({ agent: primaryAgent, event: "session_created", sessionId })
 
-    // Build prompt — for data agent, prepend DB context
+    // Build prompt
     let fullPrompt = task.prompt
     if (primaryAgent === "data") {
-      // Find the default tenant (Mascota Veloz) for data queries
       const [tenant] = await db
         .select({ id: tenants.id, name: tenants.name })
         .from(tenants)
@@ -330,54 +308,61 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
       }
     }
 
-    // Send prompt with skills injected as first user message
+    // Send events
     const skills = getSkillsForAgent(primaryAgent)
-    console.log("[orchestrator] >>> CALLING sendTurn...")
-    const turn = await sendTurn(sessionId, fullPrompt, skills)
-    console.log("[orchestrator] >>> sendTurn RETURNED, extracting text...")
-    const outputText = extractTextFromTurn(turn)
+    await sendEvents(sessionId, fullPrompt, skills)
 
-    console.log(
-      `[orchestrator] extracted output: length=${outputText.length}, empty=${outputText.length === 0}, preview=${outputText.slice(0, 200)}`,
-    )
+    // Read stream — DB save happens inside onIdle, BEFORE stream cleanup
+    let savedResult: ExecutionResult | null = null
 
-    agentLogs.push({
-      agent: primaryAgent,
-      event: "turn_completed",
-      model: turn.model,
-      stopReason: turn.stop_reason,
-      outputLength: outputText.length,
+    await readStreamUntilIdle(sessionId, async (collectedText, model, stopReason) => {
+      agentLogs.push({
+        agent: primaryAgent,
+        event: "turn_completed",
+        model,
+        stopReason,
+        outputLength: collectedText.length,
+      })
+
+      const durationMs = Date.now() - start
+      const finalStatus = task.requiresApproval
+        ? ("pending_approval" as const)
+        : ("approved" as const)
+
+      console.log(
+        `[orchestrator] saving execution ${execution.id}: status=${finalStatus}, chars=${collectedText.length}`,
+      )
+
+      await db
+        .update(executions)
+        .set({ status: finalStatus, output: { text: collectedText }, agentLogs, durationMs })
+        .where(eq(executions.id, execution.id))
+
+      await db
+        .update(tasks)
+        .set({ lastRun: new Date(), updatedAt: new Date() })
+        .where(eq(tasks.id, taskId))
+
+      console.log(`[orchestrator] execution ${execution.id} saved to DB OK`)
+
+      savedResult = {
+        executionId: execution.id,
+        status: finalStatus,
+        output: { text: collectedText },
+        agentLogs,
+        durationMs,
+      }
     })
 
-    const durationMs = Date.now() - start
-    const finalStatus = task.requiresApproval
-      ? ("pending_approval" as const)
-      : ("approved" as const)
+    if (savedResult) return savedResult
 
-    console.log(
-      `[orchestrator] about to save execution ${execution.id}: status=${finalStatus}, outputLength=${outputText.length}`,
-    )
-
-    // Update execution — output as JSON object so jsonb column stores it properly
-    await db
-      .update(executions)
-      .set({ status: finalStatus, output: { text: outputText }, agentLogs, durationMs })
-      .where(eq(executions.id, execution.id))
-
-    console.log(`[orchestrator] execution ${execution.id} saved to DB OK`)
-
-    // Update task last_run
-    await db
-      .update(tasks)
-      .set({ lastRun: new Date(), updatedAt: new Date() })
-      .where(eq(tasks.id, taskId))
-
+    // Fallback — should not happen
     return {
       executionId: execution.id,
-      status: finalStatus,
-      output: { text: outputText },
+      status: "failed",
+      output: { error: "No result from stream" },
       agentLogs,
-      durationMs,
+      durationMs: Date.now() - start,
     }
   } catch (error) {
     const durationMs = Date.now() - start
@@ -406,10 +391,6 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
   }
 }
 
-/**
- * Execute a collaborative (multi-agent) task.
- * Runs agents in sequence, passing each output as context to the next.
- */
 export async function executeCollaborativeTask(taskId: string): Promise<ExecutionResult> {
   console.log(`[orchestrator] executeCollaborativeTask started: ${taskId}`)
   const start = Date.now()
@@ -427,11 +408,7 @@ export async function executeCollaborativeTask(taskId: string): Promise<Executio
 
   const [execution] = await db
     .insert(executions)
-    .values({
-      taskId,
-      status: "running",
-      agentsUsed: agentIds,
-    })
+    .values({ taskId, status: "running", agentsUsed: agentIds })
     .returning({ id: executions.id })
 
   try {
@@ -446,7 +423,6 @@ export async function executeCollaborativeTask(taskId: string): Promise<Executio
         ? `${task.prompt}\n\n--- Previous agent output ---\n${accumulatedContext}`
         : task.prompt
 
-      // For data agent, prepend DB context
       if (agentId === "data") {
         const [tenant] = await db
           .select({ id: tenants.id, name: tenants.name })
@@ -461,17 +437,21 @@ export async function executeCollaborativeTask(taskId: string): Promise<Executio
         }
       }
 
-      const turn = await sendTurn(sessionId, prompt, skills)
-      const output = extractTextFromTurn(turn)
-      accumulatedContext = output
+      await sendEvents(sessionId, prompt, skills)
 
-      agentLogs.push({
-        agent: agentId,
-        event: "turn_completed",
-        model: turn.model,
-        stopReason: turn.stop_reason,
-        outputLength: output.length,
+      let turnText = ""
+      await readStreamUntilIdle(sessionId, async (collectedText, model, stopReason) => {
+        turnText = collectedText
+        agentLogs.push({
+          agent: agentId,
+          event: "turn_completed",
+          model,
+          stopReason,
+          outputLength: collectedText.length,
+        })
       })
+
+      accumulatedContext = turnText
     }
 
     const durationMs = Date.now() - start
@@ -492,6 +472,8 @@ export async function executeCollaborativeTask(taskId: string): Promise<Executio
       .update(tasks)
       .set({ lastRun: new Date(), updatedAt: new Date() })
       .where(eq(tasks.id, taskId))
+
+    console.log(`[orchestrator] collaborative execution ${execution.id} saved to DB OK`)
 
     return {
       executionId: execution.id,
