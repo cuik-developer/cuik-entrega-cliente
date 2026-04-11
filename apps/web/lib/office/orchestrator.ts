@@ -154,15 +154,19 @@ async function sendTurn(sessionId: string, prompt: string, skills: string): Prom
   const textBlocks: string[] = []
   let model = ""
   let stopReason = ""
+  let gotIdle = false
 
   const reader = streamRes.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ""
 
   try {
-    while (true) {
+    while (!gotIdle) {
       const { done, value } = await reader.read()
-      if (done) break
+      if (done) {
+        console.log("[orchestrator] stream ended (done=true), gotIdle:", gotIdle)
+        break
+      }
 
       buffer += decoder.decode(value, { stream: true })
 
@@ -171,6 +175,7 @@ async function sendTurn(sessionId: string, prompt: string, skills: string): Prom
       buffer = lines.pop() ?? "" // keep incomplete line in buffer
 
       for (const line of lines) {
+        if (gotIdle) break // stop processing lines after idle
         if (!line.startsWith("data: ")) continue
         const jsonStr = line.slice(6).trim()
         if (!jsonStr || jsonStr === "[DONE]") continue
@@ -208,11 +213,11 @@ async function sendTurn(sessionId: string, prompt: string, skills: string): Prom
             if (event.stop_reason) stopReason = event.stop_reason
           }
 
-          // Session idle = agent is done responding
+          // Session idle = agent is done responding — stop immediately
           if (event.type === "session.status_idle") {
-            console.log("[orchestrator] session idle, closing stream")
-            reader.cancel()
-            break
+            console.log("[orchestrator] session idle — breaking out of stream loop")
+            gotIdle = true
+            break // break inner for-loop; while(!gotIdle) exits outer
           }
         } catch {
           // Not valid JSON, skip
@@ -220,6 +225,8 @@ async function sendTurn(sessionId: string, prompt: string, skills: string): Prom
       }
     }
   } finally {
+    console.log("[orchestrator] releasing stream reader, gotIdle:", gotIdle)
+    reader.cancel().catch(() => {})
     reader.releaseLock()
   }
 
@@ -314,13 +321,15 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
       ? ("pending_approval" as const)
       : ("approved" as const)
 
-    console.log(`[orchestrator] saving execution ${execution.id}: status=${finalStatus}`)
+    console.log(`[orchestrator] about to save execution ${execution.id}: status=${finalStatus}, outputLength=${outputText.length}`)
 
     // Update execution — output as JSON object so jsonb column stores it properly
     await db
       .update(executions)
       .set({ status: finalStatus, output: { text: outputText }, agentLogs, durationMs })
       .where(eq(executions.id, execution.id))
+
+    console.log(`[orchestrator] execution ${execution.id} saved to DB OK`)
 
     // Update task last_run
     await db
