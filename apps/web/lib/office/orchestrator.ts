@@ -297,13 +297,16 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
     // Send prompt with skills
     const skills = getSkillsForAgent(primaryAgent)
     const turn = await sendTurn(sessionId, task.prompt, skills)
-    const output = extractTextFromTurn(turn)
+    const outputText = extractTextFromTurn(turn)
+
+    console.log(`[orchestrator] extracted output: length=${outputText.length}, preview=${outputText.slice(0, 100)}`)
 
     agentLogs.push({
       agent: primaryAgent,
       event: "turn_completed",
       model: turn.model,
       stopReason: turn.stop_reason,
+      outputLength: outputText.length,
     })
 
     const durationMs = Date.now() - start
@@ -311,10 +314,12 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
       ? ("pending_approval" as const)
       : ("approved" as const)
 
-    // Update execution
+    console.log(`[orchestrator] saving execution ${execution.id}: status=${finalStatus}`)
+
+    // Update execution — output as JSON object so jsonb column stores it properly
     await db
       .update(executions)
-      .set({ status: finalStatus, output, agentLogs, durationMs })
+      .set({ status: finalStatus, output: { text: outputText }, agentLogs, durationMs })
       .where(eq(executions.id, execution.id))
 
     // Update task last_run
@@ -326,7 +331,7 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
     return {
       executionId: execution.id,
       status: finalStatus,
-      output,
+      output: { text: outputText },
       agentLogs,
       durationMs,
     }
@@ -418,9 +423,11 @@ export async function executeCollaborativeTask(taskId: string): Promise<Executio
       ? ("pending_approval" as const)
       : ("approved" as const)
 
+    console.log(`[orchestrator] saving collaborative execution ${execution.id}: status=${finalStatus}`)
+
     await db
       .update(executions)
-      .set({ status: finalStatus, output: accumulatedContext, agentLogs, durationMs })
+      .set({ status: finalStatus, output: { text: accumulatedContext }, agentLogs, durationMs })
       .where(eq(executions.id, execution.id))
 
     await db
@@ -431,7 +438,7 @@ export async function executeCollaborativeTask(taskId: string): Promise<Executio
     return {
       executionId: execution.id,
       status: finalStatus,
-      output: accumulatedContext,
+      output: { text: accumulatedContext },
       agentLogs,
       durationMs,
     }

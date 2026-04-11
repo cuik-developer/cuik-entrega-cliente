@@ -75,16 +75,6 @@ export default function ApprovalDetailPage() {
     }
   }
 
-  function copyOutput() {
-    const text =
-      typeof execution?.output === "string"
-        ? execution.output
-        : JSON.stringify(execution?.output, null, 2)
-    navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -97,10 +87,19 @@ export default function ApprovalDetailPage() {
     return <div className="text-center py-12 text-slate-400">Ejecucion no encontrada</div>
   }
 
+  const rawOutput = execution.output as Record<string, unknown> | string | null
   const outputText =
-    typeof execution.output === "string"
-      ? execution.output
-      : JSON.stringify(execution.output, null, 2)
+    typeof rawOutput === "string"
+      ? rawOutput
+      : rawOutput && typeof rawOutput === "object" && "text" in rawOutput
+        ? String(rawOutput.text)
+        : JSON.stringify(rawOutput, null, 2)
+
+  function copyOutput() {
+    navigator.clipboard.writeText(outputText)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   return (
     <div className="space-y-6">
