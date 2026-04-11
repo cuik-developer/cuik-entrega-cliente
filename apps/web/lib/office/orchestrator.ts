@@ -1,4 +1,4 @@
-import { db, eq, executions, tasks } from "@cuik/db"
+import { db, eq, executions, tasks, tenants } from "@cuik/db"
 import {
   type AgentId,
   ANTHROPIC_BASE_URL,
@@ -7,6 +7,7 @@ import {
   getAnthropicHeaders,
   getSkillsForAgent,
 } from "./agents"
+import { buildDataContext } from "./data-queries"
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -299,9 +300,28 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
     const sessionId = await createSession(primaryAgent)
     agentLogs.push({ agent: primaryAgent, event: "session_created", sessionId })
 
+    // Build prompt — for data agent, prepend DB context
+    let fullPrompt = task.prompt
+    if (primaryAgent === "data") {
+      // Find the default tenant (Mascota Veloz) for data queries
+      const [tenant] = await db
+        .select({ id: tenants.id, name: tenants.name })
+        .from(tenants)
+        .where(eq(tenants.slug, "mascota-veloz"))
+        .limit(1)
+
+      if (tenant) {
+        const dbContext = await buildDataContext(tenant.id, tenant.name)
+        fullPrompt = `[DB_CONTEXT]\n${dbContext}\n[/DB_CONTEXT]\n\n${task.prompt}`
+        agentLogs.push({ agent: primaryAgent, event: "db_context_built", tenantName: tenant.name })
+      } else {
+        console.warn("[orchestrator] Tenant mascota-veloz not found, skipping DB context")
+      }
+    }
+
     // Send prompt with skills injected as first user message
     const skills = getSkillsForAgent(primaryAgent)
-    const turn = await sendTurn(sessionId, task.prompt, skills)
+    const turn = await sendTurn(sessionId, fullPrompt, skills)
     const outputText = extractTextFromTurn(turn)
 
     console.log(
@@ -409,9 +429,24 @@ export async function executeCollaborativeTask(taskId: string): Promise<Executio
       agentLogs.push({ agent: agentId, event: "session_created", sessionId })
 
       const skills = getSkillsForAgent(agentId)
-      const prompt = accumulatedContext
+      let prompt = accumulatedContext
         ? `${task.prompt}\n\n--- Previous agent output ---\n${accumulatedContext}`
         : task.prompt
+
+      // For data agent, prepend DB context
+      if (agentId === "data") {
+        const [tenant] = await db
+          .select({ id: tenants.id, name: tenants.name })
+          .from(tenants)
+          .where(eq(tenants.slug, "mascota-veloz"))
+          .limit(1)
+
+        if (tenant) {
+          const dbContext = await buildDataContext(tenant.id, tenant.name)
+          prompt = `[DB_CONTEXT]\n${dbContext}\n[/DB_CONTEXT]\n\n${prompt}`
+          agentLogs.push({ agent: agentId, event: "db_context_built", tenantName: tenant.name })
+        }
+      }
 
       const turn = await sendTurn(sessionId, prompt, skills)
       const output = extractTextFromTurn(turn)
