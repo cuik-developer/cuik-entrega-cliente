@@ -153,7 +153,7 @@ async function readStream(sessionId: string): Promise<StreamResult> {
           console.error("[orchestrator] SSE error:", JSON.stringify(event))
         }
 
-        if (event.type === "agent.message" || event.type === "content_block_delta") {
+        if (event.type === "agent" || event.type === "agent.message" || event.type === "content_block_delta") {
           if (event.content) {
             for (const block of event.content) {
               if (block.type === "text" && block.text) text += block.text
