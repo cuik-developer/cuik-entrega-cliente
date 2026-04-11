@@ -94,42 +94,44 @@ async function sendEvents(sessionId: string, prompt: string, skills: string): Pr
 }
 
 /**
- * Read the entire SSE stream as text (with 120s timeout), then parse events.
- * No streaming reader — just fetch().text() to avoid hanging on reader.read().
+ * Read SSE stream chunk by chunk. On status_idle, return immediately
+ * without closing the reader — let GC clean it up.
  */
 async function readStream(sessionId: string): Promise<StreamResult> {
   const streamUrl = `${ANTHROPIC_BASE_URL}/sessions/${sessionId}/stream`
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 120_000)
+  console.log("[orchestrator] opening stream...")
 
-  console.log("[orchestrator] opening stream (120s timeout)...")
+  const res = await fetch(streamUrl, {
+    method: "GET",
+    headers: { ...getAnthropicHeaders(), Accept: "text/event-stream" },
+  })
 
-  try {
-    const res = await fetch(streamUrl, {
-      method: "GET",
-      headers: { ...getAnthropicHeaders(), Accept: "text/event-stream" },
-      signal: controller.signal,
-    })
+  if (!res.ok) {
+    const body = await res.text()
+    console.error("[orchestrator] stream FAILED:", res.status, body)
+    throw new Error(`Failed to open stream (${res.status}): ${body}`)
+  }
 
-    if (!res.ok) {
-      const body = await res.text()
-      console.error("[orchestrator] stream FAILED:", res.status, body)
-      throw new Error(`Failed to open stream (${res.status}): ${body}`)
-    }
+  if (!res.body) throw new Error("Stream response has no body")
 
-    const rawText = await res.text()
-    clearTimeout(timeout)
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let text = ""
+  let model = ""
+  let stopReason = ""
+  let buffer = ""
 
-    console.log("[orchestrator] stream body received:", rawText.length, "chars")
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
 
-    // Parse SSE lines
-    const dataLines = rawText.split("\n").filter((l) => l.startsWith("data: "))
-    const textBlocks: string[] = []
-    let model = ""
-    let stopReason = ""
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split("\n")
+    buffer = lines.pop() ?? ""
 
-    for (const line of dataLines) {
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue
       const jsonStr = line.slice(6).trim()
       if (!jsonStr || jsonStr === "[DONE]") continue
 
@@ -140,47 +142,32 @@ async function readStream(sessionId: string): Promise<StreamResult> {
           console.error("[orchestrator] SSE error:", JSON.stringify(event))
         }
 
-        // Collect text from agent messages
         if (event.type === "agent.message" || event.type === "content_block_delta") {
           if (event.content) {
             for (const block of event.content) {
-              if (block.type === "text" && block.text) {
-                textBlocks.push(block.text)
-              }
+              if (block.type === "text" && block.text) text += block.text
             }
           }
-          if (event.delta?.text) {
-            textBlocks.push(event.delta.text)
-          }
+          if (event.delta?.text) text += event.delta.text
           if (event.model) model = event.model
           if (event.stop_reason) stopReason = event.stop_reason
         }
 
         if (event.type === "session.status_idle") {
-          console.log("[orchestrator] status_idle found in stream data")
+          console.log(
+            "[orchestrator] status_idle -> returning immediately, text length:",
+            text.length,
+          )
+          return { text, model, stopReason }
         }
       } catch {
         // Not valid JSON, skip
       }
     }
-
-    const text = textBlocks.join("")
-    console.log("[orchestrator] parsed stream:", {
-      dataLines: dataLines.length,
-      textBlocks: textBlocks.length,
-      totalChars: text.length,
-      model: model || "(none)",
-      preview: text.slice(0, 200) || "(EMPTY)",
-    })
-
-    return { text, model, stopReason }
-  } catch (err) {
-    clearTimeout(timeout)
-    if (err instanceof Error && err.name === "AbortError") {
-      throw new Error("Stream timed out after 120 seconds")
-    }
-    throw err
   }
+
+  console.log("[orchestrator] stream ended without status_idle, text length:", text.length)
+  return { text, model, stopReason }
 }
 
 // ─── Task Execution ───────────────────────────────────────────────────
