@@ -1,4 +1,5 @@
 import { db, eq, executions, tasks, tenants } from "@cuik/db"
+import { uploadAsset } from "@/lib/storage"
 import {
   type AgentId,
   ANTHROPIC_BASE_URL,
@@ -7,7 +8,8 @@ import {
   getAnthropicHeaders,
   getSkillsForAgent,
 } from "./agents"
-import { buildDataContext } from "./data-queries"
+import { buildReportData, formatDataContext } from "./data-queries"
+import { generateReport } from "./excel-generator"
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -153,7 +155,11 @@ async function readStream(sessionId: string): Promise<StreamResult> {
           console.error("[orchestrator] SSE error:", JSON.stringify(event))
         }
 
-        if (event.type === "agent" || event.type === "agent.message" || event.type === "content_block_delta") {
+        if (
+          event.type === "agent" ||
+          event.type === "agent.message" ||
+          event.type === "content_block_delta"
+        ) {
           if (event.content) {
             for (const block of event.content) {
               if (block.type === "text" && block.text) text += block.text
@@ -164,7 +170,12 @@ async function readStream(sessionId: string): Promise<StreamResult> {
           if (event.stop_reason) stopReason = event.stop_reason
         }
 
-        console.log("[orchestrator] checking idle:", JSON.stringify(event.type), event.type === "status_idle", event.type === "session.status_idle")
+        console.log(
+          "[orchestrator] checking idle:",
+          JSON.stringify(event.type),
+          event.type === "status_idle",
+          event.type === "session.status_idle",
+        )
 
         if (event.type === "session.status_idle" || event.type === "status_idle") {
           console.log(
@@ -207,8 +218,11 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
     const sessionId = await createSession(primaryAgent)
     agentLogs.push({ agent: primaryAgent, event: "session_created", sessionId })
 
-    // 2. Build prompt
+    // 2. Build prompt — for data agent, query DB and build context
     let fullPrompt = task.prompt
+    let reportData: Awaited<ReturnType<typeof buildReportData>> | null = null
+    let tenantName = ""
+
     if (primaryAgent === "data") {
       const [tenant] = await db
         .select({ id: tenants.id, name: tenants.name })
@@ -217,7 +231,9 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
         .limit(1)
 
       if (tenant) {
-        const dbContext = await buildDataContext(tenant.id, tenant.name)
+        tenantName = tenant.name
+        reportData = await buildReportData(tenant.id)
+        const dbContext = formatDataContext(reportData, tenant.name)
         fullPrompt = `[DB_CONTEXT]\n${dbContext}\n[/DB_CONTEXT]\n\n${task.prompt}`
         agentLogs.push({ agent: primaryAgent, event: "db_context_built", tenantName: tenant.name })
       }
@@ -227,7 +243,7 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
     const skills = getSkillsForAgent(primaryAgent)
     await sendEvents(sessionId, fullPrompt, skills)
 
-    // 4. Read entire stream as text (no streaming reader)
+    // 4. Read stream
     const stream = await readStream(sessionId)
 
     agentLogs.push({
@@ -238,19 +254,45 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
       outputLength: stream.text.length,
     })
 
-    // 5. Save to DB
+    // 5. Generate Excel and upload to MinIO (data agent only)
+    const attachments: Array<{ name: string; url: string }> = []
+
+    if (primaryAgent === "data" && reportData) {
+      try {
+        console.log("[orchestrator] generating Excel report...")
+        const excelBuffer = await generateReport(tenantName, reportData)
+        const key = `office/reports/${execution.id}.xlsx`
+        const url = await uploadAsset(
+          key,
+          excelBuffer,
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        attachments.push({
+          name: `reporte-${tenantName.toLowerCase().replace(/\s+/g, "-")}.xlsx`,
+          url,
+        })
+        console.log("[orchestrator] Excel uploaded:", url)
+      } catch (excelErr) {
+        console.error("[orchestrator] Excel generation failed (non-fatal):", excelErr)
+      }
+    }
+
+    // 6. Save to DB
     const durationMs = Date.now() - start
     const finalStatus = task.requiresApproval
       ? ("pending_approval" as const)
       : ("approved" as const)
 
+    const output =
+      attachments.length > 0 ? { text: stream.text, attachments } : { text: stream.text }
+
     console.log(
-      `[orchestrator] saving execution ${execution.id}: status=${finalStatus}, chars=${stream.text.length}`,
+      `[orchestrator] saving execution ${execution.id}: status=${finalStatus}, chars=${stream.text.length}, attachments=${attachments.length}`,
     )
 
     await db
       .update(executions)
-      .set({ status: finalStatus, output: { text: stream.text }, agentLogs, durationMs })
+      .set({ status: finalStatus, output, agentLogs, durationMs })
       .where(eq(executions.id, execution.id))
 
     await db
@@ -263,7 +305,7 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
     return {
       executionId: execution.id,
       status: finalStatus,
-      output: { text: stream.text },
+      output,
       agentLogs,
       durationMs,
     }
@@ -323,7 +365,8 @@ export async function executeCollaborativeTask(taskId: string): Promise<Executio
           .limit(1)
 
         if (tenant) {
-          const dbContext = await buildDataContext(tenant.id, tenant.name)
+          const rd = await buildReportData(tenant.id)
+          const dbContext = formatDataContext(rd, tenant.name)
           prompt = `[DB_CONTEXT]\n${dbContext}\n[/DB_CONTEXT]\n\n${prompt}`
           agentLogs.push({ agent: agentId, event: "db_context_built", tenantName: tenant.name })
         }

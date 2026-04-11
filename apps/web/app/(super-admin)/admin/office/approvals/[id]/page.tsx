@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowLeft, CheckCircle2, Clock, Copy, Loader2, XCircle } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Clock, Copy, Download, Loader2, XCircle } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
@@ -94,6 +94,11 @@ export default function ApprovalDetailPage() {
       : rawOutput && typeof rawOutput === "object" && "text" in rawOutput
         ? String(rawOutput.text)
         : JSON.stringify(rawOutput, null, 2)
+
+  const attachments =
+    rawOutput && typeof rawOutput === "object" && "attachments" in rawOutput
+      ? (rawOutput.attachments as Array<{ name: string; url: string }>)
+      : []
 
   function copyOutput() {
     navigator.clipboard.writeText(outputText)
@@ -197,6 +202,27 @@ export default function ApprovalDetailPage() {
       </Card>
 
       {/* Agent Logs */}
+      {/* Attachments */}
+      {attachments.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Archivos adjuntos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-3">
+              {attachments.map((att) => (
+                <a key={att.url} href={att.url} download={att.name}>
+                  <Button variant="outline" size="sm">
+                    <Download className="w-4 h-4 mr-2" />
+                    {att.name}
+                  </Button>
+                </a>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {execution.agentLogs && execution.agentLogs.length > 0 && (
         <Card>
           <CardHeader>
