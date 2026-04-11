@@ -86,12 +86,12 @@ async function sendTurn(sessionId: string, prompt: string, skills: string): Prom
 
   if (skills) {
     events.push({
-      type: "user.message",
+      type: "user",
       content: [{ type: "text", text: `[SYSTEM SKILLS]\n${skills}` }],
     })
   }
   events.push({
-    type: "user.message",
+    type: "user",
     content: [{ type: "text", text: prompt }],
   })
 
