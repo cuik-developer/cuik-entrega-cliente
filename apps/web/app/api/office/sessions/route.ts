@@ -40,12 +40,12 @@ export async function POST(request: Request) {
 
   console.info("[Office:Sessions] Creating session:", { agentId, agentApiId, envId })
 
-  // 1. Create Anthropic session with agent_reference
+  // 1. Create Anthropic session (agent is a plain string ID per docs)
   const anthropicRes = await fetch(`${ANTHROPIC_BASE_URL}/sessions`, {
     method: "POST",
     headers: getAnthropicHeaders(),
     body: JSON.stringify({
-      agent: { type: "agent_reference", agent_id: agentApiId },
+      agent: agentApiId,
       environment_id: envId,
     }),
   })
