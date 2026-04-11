@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     method: "POST",
     headers: getAnthropicHeaders(),
     body: JSON.stringify({
-      agent: { type: "agent_reference", agent_id: agentApiId },
+      agent: { type: "agent_reference", id: agentApiId },
       environment_id: envId,
     }),
   })
