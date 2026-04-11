@@ -178,7 +178,19 @@ async function sendTurn(sessionId: string, prompt: string, skills: string): Prom
         try {
           const event = JSON.parse(jsonStr)
 
-          console.log("[orchestrator] SSE event:", { type: event.type })
+          // Log errors fully, log text-bearing events fully, others just type
+          if (event.type === "error") {
+            console.error("[orchestrator] SSE error event:", JSON.stringify(event))
+          } else if (
+            event.type === "agent.message" ||
+            event.type === "content_block_delta" ||
+            event.content ||
+            event.delta
+          ) {
+            console.log("[orchestrator] SSE text event:", JSON.stringify(event))
+          } else {
+            console.log("[orchestrator] SSE event:", { type: event.type })
+          }
 
           // Collect text content from agent messages
           if (event.type === "agent.message" || event.type === "content_block_delta") {
@@ -219,11 +231,14 @@ async function sendTurn(sessionId: string, prompt: string, skills: string): Prom
     stop_reason: stopReason,
   }
 
+  const totalText = textBlocks.join("")
   console.log("[orchestrator] sendTurn completed:", {
-    model: result.model,
-    stopReason: result.stop_reason,
+    model: result.model || "(no model in events)",
+    stopReason: result.stop_reason || "(no stop_reason in events)",
     contentBlocks: result.content.length,
-    totalTextLength: textBlocks.join("").length,
+    totalTextLength: totalText.length,
+    hasText: totalText.length > 0,
+    textPreview: totalText.length > 0 ? totalText.slice(0, 200) : "(EMPTY — no text collected from SSE)",
   })
 
   return result
