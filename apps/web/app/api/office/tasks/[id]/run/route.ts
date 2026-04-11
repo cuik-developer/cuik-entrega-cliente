@@ -8,40 +8,55 @@ type Params = { params: Promise<{ id: string }> }
 
 /** POST /api/office/tasks/[id]/run — manually trigger execution */
 export async function POST(request: Request, { params }: Params) {
-  const { session, error: authError } = await requireAuth(request)
-  if (authError) return authError
-  const roleError = requireRole(session, "super_admin")
-  if (roleError) return roleError
+  console.log("[office/run] POST received")
 
-  const { id } = await params
-  const [task] = await db.select().from(tasks).where(eq(tasks.id, id)).limit(1)
-  if (!task) return errorResponse("Task not found", 404)
-  if (task.status === "archived") return errorResponse("Cannot run archived task", 400)
+  try {
+    const { session, error: authError } = await requireAuth(request)
+    if (authError) {
+      console.log("[office/run] Auth failed")
+      return authError
+    }
+    const roleError = requireRole(session, "super_admin")
+    if (roleError) {
+      console.log("[office/run] Role check failed")
+      return roleError
+    }
 
-  const agentIds = task.agents as string[]
-  const execute =
-    task.type === "collaborative" && agentIds.length > 1 ? executeCollaborativeTask : executeTask
+    const { id } = await params
+    console.log(`[office/run] Running task ${id}`)
 
-  // Run async — don't block the response
-  const resultPromise = execute(id).catch((err) => {
-    console.error(`[office] Task ${id} execution failed:`, err)
-  })
+    const [task] = await db.select().from(tasks).where(eq(tasks.id, id)).limit(1)
+    if (!task) {
+      console.log(`[office/run] Task ${id} not found`)
+      return errorResponse("Task not found", 404)
+    }
+    if (task.status === "archived") return errorResponse("Cannot run archived task", 400)
 
-  // Wait briefly to get the execution ID
-  const result = await Promise.race([
-    resultPromise,
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), 500)),
-  ])
+    const agentIds = task.agents as string[]
+    const execute =
+      task.type === "collaborative" && agentIds.length > 1 ? executeCollaborativeTask : executeTask
 
-  if (result && typeof result === "object" && "executionId" in result) {
+    console.log(`[office/run] Executing task ${id} with agents: ${agentIds.join(", ")}`)
+
+    // Run synchronously — wait for the full result so the execution record is complete
+    const result = await execute(id)
+
+    console.log(`[office/run] Task ${id} finished: status=${result.status}, executionId=${result.executionId}`)
+
     return successResponse(
       {
-        executionId: (result as { executionId: string }).executionId,
-        message: "Execution started",
+        executionId: result.executionId,
+        status: result.status,
+        message: "Execution completed",
       },
-      202,
+      201,
+    )
+  } catch (error) {
+    console.error("[office/run] Unhandled error:", error)
+    return errorResponse(
+      "Execution failed",
+      500,
+      error instanceof Error ? error.message : String(error),
     )
   }
-
-  return successResponse({ message: "Execution started" }, 202)
 }
