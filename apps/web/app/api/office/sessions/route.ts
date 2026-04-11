@@ -2,7 +2,7 @@ import { conversations, db } from "@cuik/db"
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
 import {
   ANTHROPIC_BASE_URL,
-  getAgentConfig,
+  getAgentApiId,
   getAnthropicHeaders,
   getEnvironmentId,
   type AgentId,
@@ -26,10 +26,10 @@ export async function POST(request: Request) {
 
   if (!agentId) return errorResponse("agentId is required", 400)
 
-  const agentConfig = getAgentConfig(agentId as AgentId)
-  if (!agentConfig) {
-    console.error("[Office:Sessions] Agent config not found:", agentId)
-    return errorResponse("Agent not found", 400)
+  const agentApiId = getAgentApiId(agentId as AgentId)
+  if (!agentApiId) {
+    console.error("[Office:Sessions] Agent not found:", agentId, "— check OFFICE_*_AGENT_ID env vars")
+    return errorResponse("Agent not found or not configured", 400)
   }
 
   const envId = getEnvironmentId()
@@ -38,14 +38,14 @@ export async function POST(request: Request) {
     return errorResponse("Office environment not configured", 503)
   }
 
-  console.info("[Office:Sessions] Creating session:", { agentId, envId })
+  console.info("[Office:Sessions] Creating session:", { agentId, agentApiId, envId })
 
-  // 1. Create Anthropic session with inline agent config
+  // 1. Create Anthropic session with agent_reference
   const anthropicRes = await fetch(`${ANTHROPIC_BASE_URL}/sessions`, {
     method: "POST",
     headers: getAnthropicHeaders(),
     body: JSON.stringify({
-      agent: agentConfig,
+      agent: { type: "agent_reference", agent_id: agentApiId },
       environment_id: envId,
     }),
   })

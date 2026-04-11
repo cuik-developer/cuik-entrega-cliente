@@ -51,7 +51,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       body: JSON.stringify({
         events: [
           {
-            type: "user.message",
+            type: "user",
             content: [{ type: "text", text: message.trim() }],
           },
         ],
