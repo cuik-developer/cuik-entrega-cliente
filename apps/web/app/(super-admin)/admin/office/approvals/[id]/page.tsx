@@ -42,7 +42,7 @@ export default function ApprovalDetailPage() {
 
   const fetchExecution = useCallback(async () => {
     try {
-      const res = await fetch(`/api/office/executions/${id}`)
+      const res = await fetch(`/api/office/executions/${id}`, { cache: "no-store" })
       const data = await res.json()
       if (data.success) setExecution(data.data)
     } catch (error) {

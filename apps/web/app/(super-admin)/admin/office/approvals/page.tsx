@@ -45,7 +45,7 @@ export default function ApprovalsPage() {
   const fetchExecutions = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/office/executions?status=${filter}`)
+      const res = await fetch(`/api/office/executions?status=${filter}`, { cache: "no-store" })
       const data = await res.json()
       if (data.success) setExecutions(data.data)
     } catch (error) {
@@ -55,8 +55,16 @@ export default function ApprovalsPage() {
     }
   }, [filter])
 
+  // Refetch on mount (handles back-navigation) and on filter change
   useEffect(() => {
     fetchExecutions()
+  }, [fetchExecutions])
+
+  // Also refetch when the tab regains focus (user comes back from detail page)
+  useEffect(() => {
+    const onFocus = () => fetchExecutions()
+    window.addEventListener("focus", onFocus)
+    return () => window.removeEventListener("focus", onFocus)
   }, [fetchExecutions])
 
   return (
