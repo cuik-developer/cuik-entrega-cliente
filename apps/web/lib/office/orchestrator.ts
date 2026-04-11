@@ -1,12 +1,5 @@
 import { db, eq, executions, tasks } from "@cuik/db"
-import {
-  type AgentId,
-  ANTHROPIC_BASE_URL,
-  getAgentApiId,
-  getAnthropicHeaders,
-  getEnvironmentId,
-} from "./agents"
-import { LUNA_MARKETING_SKILLS } from "./skills/marketing"
+import { type AgentId, ANTHROPIC_BASE_URL, getAgentConfig, getAnthropicHeaders } from "./agents"
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -30,31 +23,25 @@ interface ExecutionResult {
   durationMs: number
 }
 
-// ─── Skill Injection ──────────────────────────────────────────────────
-
-function getSkillsForAgent(agentId: string): string {
-  switch (agentId) {
-    case "luna":
-      return LUNA_MARKETING_SKILLS
-    default:
-      return ""
-  }
-}
-
 // ─── Anthropic Session Helpers ────────────────────────────────────────
 
-async function createSession(agentApiId: string): Promise<string> {
-  const envId = getEnvironmentId()
-  if (!envId) throw new Error("OFFICE_ENV_ID is not set")
+/**
+ * Create a session with inline managed agent config.
+ * System prompt and tools are defined inline — no agent_reference needed.
+ */
+async function createSession(agentId: AgentId): Promise<string> {
+  const agentConfig = getAgentConfig(agentId)
 
   const payload = {
-    environment: envId,
-    agent: { type: "agent_reference", id: agentApiId },
+    agent: agentConfig,
   }
 
   console.log("[orchestrator] createSession request:", {
     url: `${ANTHROPIC_BASE_URL}/sessions`,
-    body: JSON.stringify(payload),
+    agentId,
+    model: agentConfig.model,
+    systemPromptLength: agentConfig.system.length,
+    tools: agentConfig.tools,
   })
 
   const res = await fetch(`${ANTHROPIC_BASE_URL}/sessions`, {
@@ -69,8 +56,8 @@ async function createSession(agentApiId: string): Promise<string> {
       status: res.status,
       statusText: res.statusText,
       body,
-      agentApiId,
-      envId,
+      agentId,
+      payload: JSON.stringify(payload).slice(0, 500),
     })
     throw new Error(`Failed to create session (${res.status}): ${body}`)
   }
@@ -80,30 +67,27 @@ async function createSession(agentApiId: string): Promise<string> {
   return data.id
 }
 
-async function sendTurn(sessionId: string, prompt: string, skills: string): Promise<TurnResponse> {
-  // Build user events — skills as a separate message, then the actual prompt
-  const events: Array<{ type: string; content: Array<{ type: string; text: string }> }> = []
-
-  if (skills) {
-    events.push({
+/**
+ * Send user prompt and read SSE stream until session.status_idle.
+ * Skills are already in the session's system prompt — only send the task prompt.
+ */
+async function sendTurn(sessionId: string, prompt: string): Promise<TurnResponse> {
+  const events = [
+    {
       type: "user",
-      content: [{ type: "text", text: `[SYSTEM SKILLS]\n${skills}` }],
-    })
-  }
-  events.push({
-    type: "user",
-    content: [{ type: "text", text: prompt }],
-  })
+      content: [{ type: "text", text: prompt }],
+    },
+  ]
 
   const eventsPayload = { events }
   const eventsUrl = `${ANTHROPIC_BASE_URL}/sessions/${sessionId}/events`
 
   console.log("[orchestrator] sendEvents request:", {
     url: eventsUrl,
-    body: JSON.stringify(eventsPayload),
+    promptLength: prompt.length,
   })
 
-  // 1. POST /v1/sessions/{id}/events — send user message(s)
+  // 1. POST /v1/sessions/{id}/events — send user message
   const eventsRes = await fetch(eventsUrl, {
     method: "POST",
     headers: getAnthropicHeaders(),
@@ -245,7 +229,8 @@ async function sendTurn(sessionId: string, prompt: string, skills: string): Prom
     contentBlocks: result.content.length,
     totalTextLength: totalText.length,
     hasText: totalText.length > 0,
-    textPreview: totalText.length > 0 ? totalText.slice(0, 200) : "(EMPTY — no text collected from SSE)",
+    textPreview:
+      totalText.length > 0 ? totalText.slice(0, 200) : "(EMPTY — no text collected from SSE)",
   })
 
   return result
@@ -262,7 +247,7 @@ function extractTextFromTurn(turn: TurnResponse): string {
 
 /**
  * Execute a single-agent task.
- * Creates a session, sends the prompt, stores output as pending_approval.
+ * Creates a session with inline config, sends the prompt, stores output.
  */
 export async function executeTask(taskId: string): Promise<ExecutionResult> {
   const start = Date.now()
@@ -294,19 +279,17 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
     .returning({ id: executions.id })
 
   try {
-    const agentApiId = getAgentApiId(primaryAgent)
-    if (!agentApiId) throw new Error(`No API ID for agent: ${primaryAgent}`)
-
-    // Create session
-    const sessionId = await createSession(agentApiId)
+    // Create session with inline agent config (system prompt + tools baked in)
+    const sessionId = await createSession(primaryAgent)
     agentLogs.push({ agent: primaryAgent, event: "session_created", sessionId })
 
-    // Send prompt with skills
-    const skills = getSkillsForAgent(primaryAgent)
-    const turn = await sendTurn(sessionId, task.prompt, skills)
+    // Send prompt — skills are already in the session's system prompt
+    const turn = await sendTurn(sessionId, task.prompt)
     const outputText = extractTextFromTurn(turn)
 
-    console.log(`[orchestrator] extracted output: length=${outputText.length}, preview=${outputText.slice(0, 100)}`)
+    console.log(
+      `[orchestrator] extracted output: length=${outputText.length}, preview=${outputText.slice(0, 100)}`,
+    )
 
     agentLogs.push({
       agent: primaryAgent,
@@ -321,7 +304,9 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
       ? ("pending_approval" as const)
       : ("approved" as const)
 
-    console.log(`[orchestrator] about to save execution ${execution.id}: status=${finalStatus}, outputLength=${outputText.length}`)
+    console.log(
+      `[orchestrator] about to save execution ${execution.id}: status=${finalStatus}, outputLength=${outputText.length}`,
+    )
 
     // Update execution — output as JSON object so jsonb column stores it properly
     await db
@@ -403,18 +388,14 @@ export async function executeCollaborativeTask(taskId: string): Promise<Executio
     let accumulatedContext = ""
 
     for (const agentId of agentIds) {
-      const agentApiId = getAgentApiId(agentId)
-      if (!agentApiId) throw new Error(`No API ID for agent: ${agentId}`)
-
-      const sessionId = await createSession(agentApiId)
+      const sessionId = await createSession(agentId)
       agentLogs.push({ agent: agentId, event: "session_created", sessionId })
 
-      const skills = getSkillsForAgent(agentId)
       const prompt = accumulatedContext
         ? `${task.prompt}\n\n--- Previous agent output ---\n${accumulatedContext}`
         : task.prompt
 
-      const turn = await sendTurn(sessionId, prompt, skills)
+      const turn = await sendTurn(sessionId, prompt)
       const output = extractTextFromTurn(turn)
       accumulatedContext = output
 
@@ -432,7 +413,9 @@ export async function executeCollaborativeTask(taskId: string): Promise<Executio
       ? ("pending_approval" as const)
       : ("approved" as const)
 
-    console.log(`[orchestrator] saving collaborative execution ${execution.id}: status=${finalStatus}`)
+    console.log(
+      `[orchestrator] saving collaborative execution ${execution.id}: status=${finalStatus}`,
+    )
 
     await db
       .update(executions)
