@@ -10,7 +10,7 @@ const BASE_URL = "https://api.anthropic.com/v1"
 const HEADERS = {
   "x-api-key": API_KEY,
   "anthropic-version": "2023-06-01",
-  "anthropic-beta": "managed-agents-2026-04-01",
+  "anthropic-beta": "agent-api-2026-03-01",
   "content-type": "application/json",
 }
 
