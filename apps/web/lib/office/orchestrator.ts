@@ -81,42 +81,152 @@ async function createSession(agentApiId: string): Promise<string> {
 }
 
 async function sendTurn(sessionId: string, prompt: string, skills: string): Promise<TurnResponse> {
-  const messages = [
-    ...(skills ? [{ role: "user" as const, content: `[SYSTEM SKILLS]\n${skills}` }] : []),
-    { role: "user" as const, content: prompt },
-  ]
+  // Build user events — skills as a separate message, then the actual prompt
+  const events: Array<{ type: string; content: Array<{ type: string; text: string }> }> = []
 
-  const turnPayload = { messages }
-
-  console.log("[orchestrator] sendTurn request:", {
-    url: `${ANTHROPIC_BASE_URL}/sessions/${sessionId}/turns`,
-    body: JSON.stringify(turnPayload),
+  if (skills) {
+    events.push({
+      type: "user.message",
+      content: [{ type: "text", text: `[SYSTEM SKILLS]\n${skills}` }],
+    })
+  }
+  events.push({
+    type: "user.message",
+    content: [{ type: "text", text: prompt }],
   })
 
-  const res = await fetch(`${ANTHROPIC_BASE_URL}/sessions/${sessionId}/turns`, {
+  const eventsPayload = { events }
+  const eventsUrl = `${ANTHROPIC_BASE_URL}/sessions/${sessionId}/events`
+
+  console.log("[orchestrator] sendEvents request:", {
+    url: eventsUrl,
+    body: JSON.stringify(eventsPayload),
+  })
+
+  // 1. POST /v1/sessions/{id}/events — send user message(s)
+  const eventsRes = await fetch(eventsUrl, {
     method: "POST",
     headers: getAnthropicHeaders(),
-    body: JSON.stringify(turnPayload),
+    body: JSON.stringify(eventsPayload),
   })
 
-  if (!res.ok) {
-    const body = await res.text()
-    console.error("[orchestrator] sendTurn FAILED:", {
-      status: res.status,
-      statusText: res.statusText,
+  if (!eventsRes.ok) {
+    const body = await eventsRes.text()
+    console.error("[orchestrator] sendEvents FAILED:", {
+      status: eventsRes.status,
+      statusText: eventsRes.statusText,
       body,
       sessionId,
     })
-    throw new Error(`Failed to send turn (${res.status}): ${body}`)
+    throw new Error(`Failed to send events (${eventsRes.status}): ${body}`)
   }
 
-  const data = (await res.json()) as TurnResponse
-  console.log("[orchestrator] sendTurn OK:", {
-    model: data.model,
-    stopReason: data.stop_reason,
-    contentBlocks: data.content.length,
+  console.log("[orchestrator] sendEvents OK, opening SSE stream...")
+
+  // 2. GET /v1/sessions/{id}/stream — read SSE until session.status_idle
+  const streamUrl = `${ANTHROPIC_BASE_URL}/sessions/${sessionId}/stream`
+  const streamHeaders = {
+    ...getAnthropicHeaders(),
+    Accept: "text/event-stream",
+  }
+
+  const streamRes = await fetch(streamUrl, {
+    method: "GET",
+    headers: streamHeaders,
   })
-  return data
+
+  if (!streamRes.ok) {
+    const body = await streamRes.text()
+    console.error("[orchestrator] stream FAILED:", {
+      status: streamRes.status,
+      statusText: streamRes.statusText,
+      body,
+      sessionId,
+    })
+    throw new Error(`Failed to open stream (${streamRes.status}): ${body}`)
+  }
+
+  if (!streamRes.body) {
+    throw new Error("Stream response has no body")
+  }
+
+  // Parse SSE events from the stream
+  const textBlocks: string[] = []
+  let model = ""
+  let stopReason = ""
+
+  const reader = streamRes.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+
+      // Process complete SSE lines
+      const lines = buffer.split("\n")
+      buffer = lines.pop() ?? "" // keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue
+        const jsonStr = line.slice(6).trim()
+        if (!jsonStr || jsonStr === "[DONE]") continue
+
+        try {
+          const event = JSON.parse(jsonStr)
+
+          console.log("[orchestrator] SSE event:", { type: event.type })
+
+          // Collect text content from agent messages
+          if (event.type === "agent.message" || event.type === "content_block_delta") {
+            if (event.content) {
+              for (const block of event.content) {
+                if (block.type === "text" && block.text) {
+                  textBlocks.push(block.text)
+                }
+              }
+            }
+            if (event.delta?.text) {
+              textBlocks.push(event.delta.text)
+            }
+            if (event.model) model = event.model
+            if (event.stop_reason) stopReason = event.stop_reason
+          }
+
+          // Session idle = agent is done responding
+          if (event.type === "session.status_idle") {
+            console.log("[orchestrator] session idle, closing stream")
+            reader.cancel()
+            break
+          }
+        } catch {
+          // Not valid JSON, skip
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  const result: TurnResponse = {
+    id: sessionId,
+    role: "agent",
+    model,
+    content: textBlocks.map((text) => ({ type: "text", text })),
+    stop_reason: stopReason,
+  }
+
+  console.log("[orchestrator] sendTurn completed:", {
+    model: result.model,
+    stopReason: result.stop_reason,
+    contentBlocks: result.content.length,
+    totalTextLength: textBlocks.join("").length,
+  })
+
+  return result
 }
 
 function extractTextFromTurn(turn: TurnResponse): string {
