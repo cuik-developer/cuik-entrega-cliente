@@ -107,6 +107,8 @@ async function readStream(sessionId: string): Promise<StreamResult> {
     headers: { ...getAnthropicHeaders(), Accept: "text/event-stream" },
   })
 
+  console.log("[orchestrator] stream response:", res.status)
+
   if (!res.ok) {
     const body = await res.text()
     console.error("[orchestrator] stream FAILED:", res.status, body)
@@ -121,10 +123,17 @@ async function readStream(sessionId: string): Promise<StreamResult> {
   let model = ""
   let stopReason = ""
   let buffer = ""
+  let chunkCount = 0
 
   while (true) {
     const { done, value } = await reader.read()
-    if (done) break
+    if (done) {
+      console.log("[orchestrator] stream ended (done=true), chunks received:", chunkCount)
+      break
+    }
+
+    chunkCount++
+    console.log("[orchestrator] chunk received, bytes:", value.byteLength, "chunk#:", chunkCount)
 
     buffer += decoder.decode(value, { stream: true })
     const lines = buffer.split("\n")
@@ -137,6 +146,8 @@ async function readStream(sessionId: string): Promise<StreamResult> {
 
       try {
         const event = JSON.parse(jsonStr)
+
+        console.log("[orchestrator] SSE event:", event.type)
 
         if (event.type === "error") {
           console.error("[orchestrator] SSE error:", JSON.stringify(event))
