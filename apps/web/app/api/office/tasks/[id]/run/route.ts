@@ -19,9 +19,8 @@ export async function POST(request: Request, { params }: Params) {
   if (task.status === "archived") return errorResponse("Cannot run archived task", 400)
 
   const agentIds = task.agents as string[]
-  const execute = task.type === "collaborative" && agentIds.length > 1
-    ? executeCollaborativeTask
-    : executeTask
+  const execute =
+    task.type === "collaborative" && agentIds.length > 1 ? executeCollaborativeTask : executeTask
 
   // Run async — don't block the response
   const resultPromise = execute(id).catch((err) => {
@@ -35,7 +34,13 @@ export async function POST(request: Request, { params }: Params) {
   ])
 
   if (result && typeof result === "object" && "executionId" in result) {
-    return successResponse({ executionId: (result as { executionId: string }).executionId, message: "Execution started" }, 202)
+    return successResponse(
+      {
+        executionId: (result as { executionId: string }).executionId,
+        message: "Execution started",
+      },
+      202,
+    )
   }
 
   return successResponse({ message: "Execution started" }, 202)

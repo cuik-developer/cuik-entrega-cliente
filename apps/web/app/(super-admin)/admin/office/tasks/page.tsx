@@ -1,16 +1,8 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { Archive, ArrowLeft, Loader2, MoreHorizontal, Pause, Play, Plus } from "lucide-react"
 import Link from "next/link"
-import {
-  Archive,
-  ArrowLeft,
-  Loader2,
-  MoreHorizontal,
-  Pause,
-  Play,
-  Plus,
-} from "lucide-react"
+import { useCallback, useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -147,7 +139,8 @@ export default function TasksListPage() {
       ) : tasks.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-slate-400">
-            No hay tareas {filter === "active" ? "activas" : filter === "paused" ? "pausadas" : "archivadas"}
+            No hay tareas{" "}
+            {filter === "active" ? "activas" : filter === "paused" ? "pausadas" : "archivadas"}
           </CardContent>
         </Card>
       ) : (
@@ -219,7 +212,10 @@ export default function TasksListPage() {
                           </DropdownMenuItem>
                         )}
                         {task.status !== "archived" && (
-                          <DropdownMenuItem onClick={() => archiveTask(task.id)} className="text-red-600">
+                          <DropdownMenuItem
+                            onClick={() => archiveTask(task.id)}
+                            className="text-red-600"
+                          >
                             <Archive className="w-4 h-4 mr-2" /> Archivar
                           </DropdownMenuItem>
                         )}

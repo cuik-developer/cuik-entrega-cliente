@@ -1,5 +1,5 @@
 import { conversations, db, desc, eq } from "@cuik/db"
-import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
+import { requireAuth, requireRole, successResponse } from "@/lib/api-utils"
 
 export const runtime = "nodejs"
 

@@ -1,5 +1,5 @@
 import { db, desc, eq, executions, tasks } from "@cuik/db"
-import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
+import { requireAuth, requireRole, successResponse } from "@/lib/api-utils"
 
 export const runtime = "nodejs"
 
@@ -25,7 +25,12 @@ export async function GET(request: Request) {
     })
     .from(executions)
     .innerJoin(tasks, eq(executions.taskId, tasks.id))
-    .where(eq(executions.status, status as "running" | "pending_approval" | "approved" | "rejected" | "failed"))
+    .where(
+      eq(
+        executions.status,
+        status as "running" | "pending_approval" | "approved" | "rejected" | "failed",
+      ),
+    )
     .orderBy(desc(executions.createdAt))
     .limit(50)
 

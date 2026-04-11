@@ -62,6 +62,10 @@ export async function POST(request: Request) {
 
     return successResponse(task, 201)
   } catch (error) {
-    return errorResponse("Failed to create task", 500, error instanceof Error ? error.message : undefined)
+    return errorResponse(
+      "Failed to create task",
+      500,
+      error instanceof Error ? error.message : undefined,
+    )
   }
 }

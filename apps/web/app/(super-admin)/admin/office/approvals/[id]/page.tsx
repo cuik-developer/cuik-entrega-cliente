@@ -1,16 +1,9 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { ArrowLeft, CheckCircle2, Clock, Copy, Loader2, XCircle } from "lucide-react"
 import Link from "next/link"
-import {
-  ArrowLeft,
-  CheckCircle2,
-  Clock,
-  Copy,
-  Loader2,
-  XCircle,
-} from "lucide-react"
+import { useParams, useRouter } from "next/navigation"
+import { useCallback, useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -41,7 +34,7 @@ function agentName(id: string) {
 
 export default function ApprovalDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const router = useRouter()
+  const _router = useRouter()
   const [execution, setExecution] = useState<ExecutionDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState(false)
@@ -83,9 +76,10 @@ export default function ApprovalDetailPage() {
   }
 
   function copyOutput() {
-    const text = typeof execution?.output === "string"
-      ? execution.output
-      : JSON.stringify(execution?.output, null, 2)
+    const text =
+      typeof execution?.output === "string"
+        ? execution.output
+        : JSON.stringify(execution?.output, null, 2)
     navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -100,16 +94,13 @@ export default function ApprovalDetailPage() {
   }
 
   if (!execution) {
-    return (
-      <div className="text-center py-12 text-slate-400">
-        Ejecucion no encontrada
-      </div>
-    )
+    return <div className="text-center py-12 text-slate-400">Ejecucion no encontrada</div>
   }
 
-  const outputText = typeof execution.output === "string"
-    ? execution.output
-    : JSON.stringify(execution.output, null, 2)
+  const outputText =
+    typeof execution.output === "string"
+      ? execution.output
+      : JSON.stringify(execution.output, null, 2)
 
   return (
     <div className="space-y-6">
@@ -125,7 +116,9 @@ export default function ApprovalDetailPage() {
             <h1 className="text-2xl font-bold text-slate-900">{execution.taskTitle}</h1>
             <div className="flex items-center gap-2 mt-1">
               <span className="text-sm text-slate-500">
-                {(execution.agentsUsed as string[]).map((a) => `${agentEmoji(a)} ${agentName(a)}`).join(" \u2192 ")}
+                {(execution.agentsUsed as string[])
+                  .map((a) => `${agentEmoji(a)} ${agentName(a)}`)
+                  .join(" \u2192 ")}
               </span>
               <span className="text-slate-300">|</span>
               <span className="text-sm text-slate-500 flex items-center gap-1">
@@ -213,11 +206,18 @@ export default function ApprovalDetailPage() {
           <CardContent>
             <div className="space-y-2">
               {execution.agentLogs.map((log, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs font-mono bg-slate-50 p-2 rounded">
-                  {log.agent && <span>{agentEmoji(log.agent as string)}</span>}
-                  <span className="text-slate-500">{log.event as string}</span>
-                  {log.model && <Badge variant="outline" className="text-xs">{log.model as string}</Badge>}
-                  {log.error && <span className="text-red-600">{log.error as string}</span>}
+                <div
+                  key={i}
+                  className="flex items-center gap-2 text-xs font-mono bg-slate-50 p-2 rounded"
+                >
+                  {"agent" in log && <span>{agentEmoji(String(log.agent))}</span>}
+                  <span className="text-slate-500">{String(log.event)}</span>
+                  {"model" in log && (
+                    <Badge variant="outline" className="text-xs">
+                      {String(log.model)}
+                    </Badge>
+                  )}
+                  {"error" in log && <span className="text-red-600">{String(log.error)}</span>}
                 </div>
               ))}
             </div>

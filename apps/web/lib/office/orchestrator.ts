@@ -1,7 +1,7 @@
 import { db, eq, executions, tasks } from "@cuik/db"
 import {
-  ANTHROPIC_BASE_URL,
   type AgentId,
+  ANTHROPIC_BASE_URL,
   getAgentApiId,
   getAnthropicHeaders,
   getEnvironmentId,
@@ -140,7 +140,9 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
     })
 
     const durationMs = Date.now() - start
-    const finalStatus = task.requiresApproval ? "pending_approval" as const : "approved" as const
+    const finalStatus = task.requiresApproval
+      ? ("pending_approval" as const)
+      : ("approved" as const)
 
     // Update execution
     await db
@@ -232,7 +234,9 @@ export async function executeCollaborativeTask(taskId: string): Promise<Executio
     }
 
     const durationMs = Date.now() - start
-    const finalStatus = task.requiresApproval ? "pending_approval" as const : "approved" as const
+    const finalStatus = task.requiresApproval
+      ? ("pending_approval" as const)
+      : ("approved" as const)
 
     await db
       .update(executions)

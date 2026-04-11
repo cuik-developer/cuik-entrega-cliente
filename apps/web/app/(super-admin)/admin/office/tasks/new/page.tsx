@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { ArrowLeft, Loader2, Save } from "lucide-react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -51,7 +51,10 @@ export default function NewTaskPage() {
           type: selectedAgents.length > 1 ? type : "single",
           cronExpression: cronExpression.trim() || null,
           recipients: recipients.trim()
-            ? recipients.split(",").map((r) => r.trim()).filter(Boolean)
+            ? recipients
+                .split(",")
+                .map((r) => r.trim())
+                .filter(Boolean)
             : null,
           requiresApproval,
         }),
@@ -209,9 +212,7 @@ export default function NewTaskPage() {
         </Card>
 
         {/* Error */}
-        {error && (
-          <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</p>
-        )}
+        {error && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</p>}
 
         {/* Submit */}
         <div className="flex justify-end gap-3">

@@ -29,7 +29,16 @@ export async function PATCH(request: Request, { params }: Params) {
   const { id } = await params
   const body = await request.json()
 
-  const allowedFields = ["title", "agents", "prompt", "type", "cronExpression", "recipients", "requiresApproval", "status"] as const
+  const allowedFields = [
+    "title",
+    "agents",
+    "prompt",
+    "type",
+    "cronExpression",
+    "recipients",
+    "requiresApproval",
+    "status",
+  ] as const
   const updates: Record<string, unknown> = { updatedAt: new Date() }
   for (const field of allowedFields) {
     if (body[field] !== undefined) {
@@ -37,11 +46,7 @@ export async function PATCH(request: Request, { params }: Params) {
     }
   }
 
-  const [updated] = await db
-    .update(tasks)
-    .set(updates)
-    .where(eq(tasks.id, id))
-    .returning()
+  const [updated] = await db.update(tasks).set(updates).where(eq(tasks.id, id)).returning()
 
   if (!updated) return errorResponse("Task not found", 404)
   return successResponse(updated)
