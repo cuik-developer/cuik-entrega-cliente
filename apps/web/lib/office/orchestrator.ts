@@ -49,13 +49,12 @@ async function createSession(agentApiId: string): Promise<string> {
 
   const payload = {
     environment: envId,
-    agent_reference: { type: "agent", id: agentApiId },
+    agent: { type: "agent_reference", id: agentApiId },
   }
 
   console.log("[orchestrator] createSession request:", {
     url: `${ANTHROPIC_BASE_URL}/sessions`,
-    agentApiId,
-    envId,
+    body: JSON.stringify(payload),
   })
 
   const res = await fetch(`${ANTHROPIC_BASE_URL}/sessions`, {
@@ -87,18 +86,17 @@ async function sendTurn(sessionId: string, prompt: string, skills: string): Prom
     { role: "user" as const, content: prompt },
   ]
 
+  const turnPayload = { messages }
+
   console.log("[orchestrator] sendTurn request:", {
     url: `${ANTHROPIC_BASE_URL}/sessions/${sessionId}/turns`,
-    sessionId,
-    messageCount: messages.length,
-    skillsLength: skills.length,
-    promptLength: prompt.length,
+    body: JSON.stringify(turnPayload),
   })
 
   const res = await fetch(`${ANTHROPIC_BASE_URL}/sessions/${sessionId}/turns`, {
     method: "POST",
     headers: getAnthropicHeaders(),
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify(turnPayload),
   })
 
   if (!res.ok) {
