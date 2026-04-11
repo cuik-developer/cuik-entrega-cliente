@@ -47,21 +47,37 @@ async function createSession(agentApiId: string): Promise<string> {
   const envId = getEnvironmentId()
   if (!envId) throw new Error("OFFICE_ENV_ID is not set")
 
+  const payload = {
+    environment: envId,
+    agent_reference: { type: "agent", id: agentApiId },
+  }
+
+  console.log("[orchestrator] createSession request:", {
+    url: `${ANTHROPIC_BASE_URL}/sessions`,
+    agentApiId,
+    envId,
+  })
+
   const res = await fetch(`${ANTHROPIC_BASE_URL}/sessions`, {
     method: "POST",
     headers: getAnthropicHeaders(),
-    body: JSON.stringify({
-      environment: envId,
-      agent_reference: { type: "agent", id: agentApiId },
-    }),
+    body: JSON.stringify(payload),
   })
 
   if (!res.ok) {
     const body = await res.text()
+    console.error("[orchestrator] createSession FAILED:", {
+      status: res.status,
+      statusText: res.statusText,
+      body,
+      agentApiId,
+      envId,
+    })
     throw new Error(`Failed to create session (${res.status}): ${body}`)
   }
 
   const data = (await res.json()) as SessionResponse
+  console.log("[orchestrator] createSession OK:", { sessionId: data.id })
   return data.id
 }
 
@@ -71,6 +87,14 @@ async function sendTurn(sessionId: string, prompt: string, skills: string): Prom
     { role: "user" as const, content: prompt },
   ]
 
+  console.log("[orchestrator] sendTurn request:", {
+    url: `${ANTHROPIC_BASE_URL}/sessions/${sessionId}/turns`,
+    sessionId,
+    messageCount: messages.length,
+    skillsLength: skills.length,
+    promptLength: prompt.length,
+  })
+
   const res = await fetch(`${ANTHROPIC_BASE_URL}/sessions/${sessionId}/turns`, {
     method: "POST",
     headers: getAnthropicHeaders(),
@@ -79,10 +103,22 @@ async function sendTurn(sessionId: string, prompt: string, skills: string): Prom
 
   if (!res.ok) {
     const body = await res.text()
+    console.error("[orchestrator] sendTurn FAILED:", {
+      status: res.status,
+      statusText: res.statusText,
+      body,
+      sessionId,
+    })
     throw new Error(`Failed to send turn (${res.status}): ${body}`)
   }
 
-  return (await res.json()) as TurnResponse
+  const data = (await res.json()) as TurnResponse
+  console.log("[orchestrator] sendTurn OK:", {
+    model: data.model,
+    stopReason: data.stop_reason,
+    contentBlocks: data.content.length,
+  })
+  return data
 }
 
 function extractTextFromTurn(turn: TurnResponse): string {
@@ -102,12 +138,20 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
   const start = Date.now()
   const agentLogs: Record<string, unknown>[] = []
 
+  console.log(`[orchestrator] executeTask started: ${taskId}`)
+
   // Load task
   const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
   if (!task) throw new Error(`Task ${taskId} not found`)
 
   const agentIds = task.agents as string[]
   const primaryAgent = agentIds[0] as AgentId
+
+  console.log(`[orchestrator] task loaded:`, {
+    title: task.title,
+    primaryAgent,
+    requiresApproval: task.requiresApproval,
+  })
 
   // Create execution record
   const [execution] = await db
@@ -166,6 +210,13 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
   } catch (error) {
     const durationMs = Date.now() - start
     const errorMsg = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
+    console.error(`[orchestrator] executeTask FAILED for ${taskId}:`, {
+      error: errorMsg,
+      stack: errorStack,
+      durationMs,
+      agentLogs,
+    })
     agentLogs.push({ event: "error", error: errorMsg })
 
     await db
@@ -188,6 +239,7 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
  * Runs agents in sequence, passing each output as context to the next.
  */
 export async function executeCollaborativeTask(taskId: string): Promise<ExecutionResult> {
+  console.log(`[orchestrator] executeCollaborativeTask started: ${taskId}`)
   const start = Date.now()
   const agentLogs: Record<string, unknown>[] = []
 
@@ -195,6 +247,11 @@ export async function executeCollaborativeTask(taskId: string): Promise<Executio
   if (!task) throw new Error(`Task ${taskId} not found`)
 
   const agentIds = task.agents as AgentId[]
+  console.log(`[orchestrator] collaborative task loaded:`, {
+    title: task.title,
+    agents: agentIds,
+    requiresApproval: task.requiresApproval,
+  })
 
   const [execution] = await db
     .insert(executions)
@@ -258,6 +315,13 @@ export async function executeCollaborativeTask(taskId: string): Promise<Executio
   } catch (error) {
     const durationMs = Date.now() - start
     const errorMsg = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
+    console.error(`[orchestrator] executeCollaborativeTask FAILED for ${taskId}:`, {
+      error: errorMsg,
+      stack: errorStack,
+      durationMs,
+      agentLogs,
+    })
     agentLogs.push({ event: "error", error: errorMsg })
 
     await db
