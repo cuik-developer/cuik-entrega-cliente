@@ -1,5 +1,6 @@
 import { db, desc, eq, tasks } from "@cuik/db"
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
+import { getNextRun } from "@/lib/office/cron-utils"
 
 export const runtime = "nodejs"
 
@@ -46,6 +47,8 @@ export async function POST(request: Request) {
       return errorResponse("title, agents, and prompt are required", 400)
     }
 
+    const nextRun = cronExpression ? getNextRun(cronExpression) : null
+
     const [task] = await db
       .insert(tasks)
       .values({
@@ -54,6 +57,7 @@ export async function POST(request: Request) {
         agents,
         prompt,
         cronExpression: cronExpression ?? null,
+        nextRun,
         recipients: recipients ?? null,
         requiresApproval: requiresApproval ?? true,
         createdBy: session.user.id,

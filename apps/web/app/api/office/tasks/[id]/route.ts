@@ -1,5 +1,6 @@
 import { and, db, eq, tasks } from "@cuik/db"
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
+import { getNextRun } from "@/lib/office/cron-utils"
 
 export const runtime = "nodejs"
 
@@ -43,6 +44,25 @@ export async function PATCH(request: Request, { params }: Params) {
   for (const field of allowedFields) {
     if (body[field] !== undefined) {
       updates[field] = body[field]
+    }
+  }
+
+  // Recalculate next_run when cronExpression changes
+  if (body.cronExpression !== undefined) {
+    updates.nextRun = body.cronExpression ? getNextRun(body.cronExpression) : null
+  }
+
+  // Clear next_run when task is paused
+  if (body.status === "paused") {
+    updates.nextRun = null
+  }
+
+  // Recalculate next_run when reactivating a task with a cron expression
+  if (body.status === "active" && !updates.nextRun) {
+    const [existing] = await db.select().from(tasks).where(eq(tasks.id, id)).limit(1)
+    const cron = (updates.cronExpression as string | undefined) ?? existing?.cronExpression
+    if (cron) {
+      updates.nextRun = getNextRun(cron)
     }
   }
 
