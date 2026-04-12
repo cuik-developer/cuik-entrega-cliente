@@ -370,8 +370,9 @@ export async function getWalletAdoption(tenantId: string): Promise<WalletAdoptio
 
   const rows = await db
     .select({
-      hasApple: sql<boolean>`${passInstances.applePassUrl} IS NOT NULL`,
-      hasGoogle: sql<boolean>`${passInstances.googleSaveUrl} IS NOT NULL`,
+      clientId: passInstances.clientId,
+      hasApple: sql<boolean>`${passInstances.applePassUrl} IS NOT NULL AND ${passInstances.applePassUrl} != ''`,
+      hasGoogle: sql<boolean>`${passInstances.googleSaveUrl} IS NOT NULL AND ${passInstances.googleSaveUrl} != ''`,
     })
     .from(passInstances)
     .innerJoin(clients, eq(passInstances.clientId, clients.id))
@@ -382,8 +383,13 @@ export async function getWalletAdoption(tenantId: string): Promise<WalletAdoptio
   const clientsWithWallet = new Set<string>()
 
   for (const r of rows) {
-    if (r.hasApple) apple++
-    if (r.hasGoogle) google++
+    if (r.hasApple) {
+      apple++
+      clientsWithWallet.add(String(r.clientId))
+    } else if (r.hasGoogle) {
+      google++
+      clientsWithWallet.add(String(r.clientId))
+    }
   }
 
   return {
