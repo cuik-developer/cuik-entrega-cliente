@@ -260,7 +260,7 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
     if (primaryAgent === "data" && reportData) {
       try {
         console.log("[orchestrator] generating Excel report...")
-        const excelBuffer = await generateReport(tenantName, reportData)
+        const excelBuffer = await generateReport(tenantName, reportData, stream.text)
         const key = `office/reports/${execution.id}.xlsx`
         const url = await uploadAsset(
           key,

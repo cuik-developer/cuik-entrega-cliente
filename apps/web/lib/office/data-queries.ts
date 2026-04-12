@@ -66,7 +66,7 @@ export interface InactiveClient {
   email: string | null
   totalVisits: number
   lastVisitAt: Date
-  daysSinceLastVisit: number
+  daysSinceLastVisit: number | null
 }
 
 export interface MonthlyRetention {
