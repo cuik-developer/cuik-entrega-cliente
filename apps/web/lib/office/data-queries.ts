@@ -304,6 +304,7 @@ export async function getInactiveClients(tenantId: string, days = 30): Promise<I
       and(
         eq(clients.tenantId, tenantId),
         eq(clients.status, "active"),
+        sql`(SELECT MAX(v.created_at) FROM loyalty.visits v WHERE v.client_id = ${clients.id}) IS NOT NULL`,
         sql`(SELECT MAX(v.created_at) FROM loyalty.visits v WHERE v.client_id = ${clients.id}) < ${cutoff}`,
       ),
     )
@@ -319,7 +320,7 @@ export async function getInactiveClients(tenantId: string, days = 30): Promise<I
     email: r.email,
     totalVisits: r.totalVisits,
     lastVisitAt: r.lastVisitAt,
-    daysSinceLastVisit: Math.floor((now - new Date(r.lastVisitAt).getTime()) / 86_400_000),
+    daysSinceLastVisit: r.lastVisitAt ? Math.floor((now - new Date(r.lastVisitAt).getTime()) / 86_400_000) : null,
   }))
 }
 
