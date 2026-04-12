@@ -153,9 +153,7 @@ async function readStream(sessionId: string): Promise<StreamResult> {
 
         if (event.type === "error") {
           console.error("[orchestrator] SSE error:", JSON.stringify(event))
-        }
-
-        if (
+        } else if (
           event.type === "agent" ||
           event.type === "agent.message" ||
           event.type === "content_block_delta"
@@ -168,21 +166,20 @@ async function readStream(sessionId: string): Promise<StreamResult> {
           if (event.delta?.text) text += event.delta.text
           if (event.model) model = event.model
           if (event.stop_reason) stopReason = event.stop_reason
-        }
-
-        console.log(
-          "[orchestrator] checking idle:",
-          JSON.stringify(event.type),
-          event.type === "status_idle",
-          event.type === "session.status_idle",
-        )
-
-        if (event.type === "session.status_idle" || event.type === "status_idle") {
+        } else if (event.type === "session.status_idle" || event.type === "status_idle") {
           console.log(
             "[orchestrator] status_idle -> returning immediately, text length:",
             text.length,
           )
           return { text, model, stopReason }
+        } else if (event.type === "terminated") {
+          console.log("[orchestrator] terminated event received, text length:", text.length)
+          if (text.length > 0) {
+            return { text, model, stopReason: "terminated" }
+          }
+          throw new Error("Session terminated by server before response was complete")
+        } else {
+          console.log("[orchestrator] unhandled event type:", event.type)
         }
       } catch {
         // Not valid JSON, skip
