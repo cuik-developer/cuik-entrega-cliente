@@ -26,7 +26,7 @@ const navItems = [
   { href: "/admin/planes", label: "Planes", icon: CreditCard },
   { href: "/admin/metricas", label: "Métricas", icon: TrendingUp },
   { href: "/admin/configuracion", label: "Configuración", icon: Settings },
-  { href: "/admin/office", label: "Office", icon: Bot },
+  // { href: "/admin/office", label: "Office", icon: Bot },
 ]
 
 export default function SuperAdminLayout({ children }: { children: React.ReactNode }) {

@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic"
 
 import { getDailyVisits, getPlanDistribution, getPlatformSummary, getTopTenants } from "./actions"
 import { DateRangeSelector } from "./components/date-range-selector"
+import { ExportButton } from "./components/export-button"
 import { KpiCards } from "./components/kpi-cards"
 import { PlanDistribution } from "./components/plan-distribution"
 import { TopTenants } from "./components/top-tenants"
@@ -28,9 +29,12 @@ export default async function MetricasPage({ searchParams }: { searchParams: Sea
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
           Métricas de plataforma
         </h1>
-        <Suspense>
-          <DateRangeSelector />
-        </Suspense>
+        <div className="flex items-center gap-2">
+          <ExportButton />
+          <Suspense>
+            <DateRangeSelector />
+          </Suspense>
+        </div>
       </div>
 
       {summaryResult.success && <KpiCards data={summaryResult.data} />}
