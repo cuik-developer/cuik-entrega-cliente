@@ -1,8 +1,30 @@
 import ExcelJS from "exceljs"
-import { clients, db, desc, eq, locations, passInstances, tenants, visits } from "@cuik/db"
+import {
+  appleDevices,
+  clients,
+  db,
+  desc,
+  eq,
+  isNotNull,
+  locations,
+  passInstances,
+  promotions,
+  tenants,
+  visits,
+  sql,
+} from "@cuik/db"
 import { requireAuth, requireRole } from "@/lib/api-utils"
 
 export const dynamic = "force-dynamic"
+
+function formatDate(d: Date | null | undefined): string {
+  if (!d) return ""
+  return d.toLocaleDateString("es-MX", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  })
+}
 
 export async function GET(request: Request) {
   const { session, error: authError } = await requireAuth(request)
@@ -22,20 +44,38 @@ export async function GET(request: Request) {
   wb.created = new Date()
 
   for (const tenant of activeTenants) {
+    // Check if this tenant has minimumPurchaseAmount configured in any promotion
+    const promoRows = await db
+      .select({ config: promotions.config })
+      .from(promotions)
+      .where(eq(promotions.tenantId, tenant.id))
+
+    const showAmount = promoRows.some((p) => {
+      const cfg = p.config as Record<string, unknown> | null
+      const acc = cfg?.accumulation as Record<string, unknown> | undefined
+      const min = acc?.minimumPurchaseAmount as number | null | undefined
+      return min != null && min > 0
+    })
+
     const sheetName = tenant.name.replace(/[*?:/\\[\]]/g, "").slice(0, 31) || "Sin nombre"
     const ws = wb.addWorksheet(sheetName)
 
-    ws.columns = [
+    // Build columns — Monto is conditional
+    const cols: Partial<ExcelJS.Column>[] = [
       { header: "Nombre", key: "name", width: 22 },
       { header: "Email", key: "email", width: 28 },
       { header: "Teléfono", key: "phone", width: 16 },
-      { header: "Fecha Registro", key: "createdAt", width: 18 },
-      { header: "Total Visitas", key: "totalVisits", width: 14 },
-      { header: "Última Visita", key: "lastVisit", width: 18 },
+      { header: "DNI", key: "dni", width: 14 },
+      { header: "Fecha Registro", key: "createdAt", width: 16 },
+      { header: "Fecha Visita", key: "visitDate", width: 16 },
+      { header: "Local", key: "location", width: 22 },
       { header: "Puntos", key: "points", width: 10 },
-      { header: "Local de Última Visita", key: "lastLocation", width: 24 },
       { header: "Plataforma Wallet", key: "walletPlatform", width: 18 },
     ]
+    if (showAmount) {
+      cols.push({ header: "Monto", key: "amount", width: 12 })
+    }
+    ws.columns = cols
 
     // Style header row
     const headerRow = ws.getRow(1)
@@ -48,102 +88,84 @@ export async function GET(request: Request) {
     headerRow.alignment = { vertical: "middle", horizontal: "center" }
     headerRow.height = 28
 
-    // Query all clients for this tenant
-    const tenantClients = await db
+    // Query clients with their visits (LEFT JOIN so 0-visit clients appear)
+    const rows = await db
       .select({
-        name: clients.name,
-        lastName: clients.lastName,
+        clientName: clients.name,
+        clientLastName: clients.lastName,
         email: clients.email,
         phone: clients.phone,
-        createdAt: clients.createdAt,
-        totalVisits: clients.totalVisits,
+        dni: clients.dni,
+        clientCreatedAt: clients.createdAt,
         pointsBalance: clients.pointsBalance,
         clientId: clients.id,
+        visitCreatedAt: visits.createdAt,
+        visitLocationId: visits.locationId,
+        visitAmount: visits.amount,
       })
       .from(clients)
+      .leftJoin(visits, eq(visits.clientId, clients.id))
       .where(eq(clients.tenantId, tenant.id))
-      .orderBy(clients.name)
+      .orderBy(clients.lastName, clients.name, desc(visits.createdAt))
 
-    for (const client of tenantClients) {
-      // Get last visit with location
-      const lastVisitRows = await db
-        .select({
-          createdAt: visits.createdAt,
-          locationId: visits.locationId,
-        })
-        .from(visits)
-        .where(eq(visits.clientId, client.clientId))
-        .orderBy(desc(visits.createdAt))
-        .limit(1)
+    // Pre-fetch all locations for this tenant
+    const tenantLocations = await db
+      .select({ id: locations.id, name: locations.name })
+      .from(locations)
+      .where(eq(locations.tenantId, tenant.id))
+    const locationMap = new Map(tenantLocations.map((l) => [l.id, l.name]))
 
-      const lastVisit = lastVisitRows[0]
-
-      // Get location name if available
-      let locationName = ""
-      if (lastVisit?.locationId) {
-        const locRows = await db
-          .select({ name: locations.name })
-          .from(locations)
-          .where(eq(locations.id, lastVisit.locationId))
-          .limit(1)
-        locationName = locRows[0]?.name ?? ""
-      }
-
-      // Determine wallet platform from pass instances
-      const passRows = await db
-        .select({
-          applePassUrl: passInstances.applePassUrl,
-          googleSaveUrl: passInstances.googleSaveUrl,
-        })
-        .from(passInstances)
-        .where(eq(passInstances.clientId, client.clientId))
-        .limit(1)
-
-      let walletPlatform = "Sin pase"
-      if (passRows[0]) {
-        const hasApple = !!passRows[0].applePassUrl
-        const hasGoogle = !!passRows[0].googleSaveUrl
-        if (hasApple && hasGoogle) walletPlatform = "Apple + Google"
-        else if (hasApple) walletPlatform = "Apple Wallet"
-        else if (hasGoogle) walletPlatform = "Google Wallet"
-        else walletPlatform = "Pendiente"
-      }
-
-      const fullName = [client.name, client.lastName].filter(Boolean).join(" ")
-
-      ws.addRow({
-        name: fullName,
-        email: client.email ?? "",
-        phone: client.phone ?? "",
-        createdAt: client.createdAt
-          ? client.createdAt.toLocaleDateString("es-MX", {
-              year: "numeric",
-              month: "2-digit",
-              day: "2-digit",
-            })
-          : "",
-        totalVisits: client.totalVisits ?? 0,
-        lastVisit: lastVisit?.createdAt
-          ? lastVisit.createdAt.toLocaleDateString("es-MX", {
-              year: "numeric",
-              month: "2-digit",
-              day: "2-digit",
-            })
-          : "Sin visitas",
-        points: client.pointsBalance ?? 0,
-        lastLocation: locationName,
-        walletPlatform,
+    // Pre-fetch wallet platform per client using a single query
+    // Apple: join passInstances → appleDevices on serialNumber
+    // Google: passInstances.googleObjectId IS NOT NULL
+    const passRows = await db
+      .selectDistinctOn([passInstances.clientId], {
+        clientId: passInstances.clientId,
+        hasApple: sql<boolean>`EXISTS (
+          SELECT 1 FROM passes.apple_devices ad
+          WHERE ad.serial_number = ${passInstances.serialNumber}
+        )`,
+        hasGoogle: sql<boolean>`${passInstances.googleObjectId} IS NOT NULL`,
       })
+      .from(passInstances)
+      .innerJoin(clients, eq(clients.id, passInstances.clientId))
+      .where(eq(clients.tenantId, tenant.id))
+
+    const walletMap = new Map<string, string>()
+    for (const p of passRows) {
+      if (p.hasApple) walletMap.set(p.clientId, "Apple Wallet")
+      else if (p.hasGoogle) walletMap.set(p.clientId, "Google Wallet")
+      else walletMap.set(p.clientId, "Sin Wallet")
     }
 
-    // Auto-filter on header row
+    for (const row of rows) {
+      const fullName = [row.clientName, row.clientLastName].filter(Boolean).join(" ")
+      const walletPlatform = walletMap.get(row.clientId) ?? "Sin Wallet"
+
+      const rowData: Record<string, unknown> = {
+        name: fullName,
+        email: row.email ?? "",
+        phone: row.phone ?? "",
+        dni: row.dni ?? "",
+        createdAt: formatDate(row.clientCreatedAt),
+        visitDate: row.visitCreatedAt ? formatDate(row.visitCreatedAt) : "Sin visitas",
+        location: row.visitLocationId ? (locationMap.get(row.visitLocationId) ?? "") : "",
+        points: row.pointsBalance ?? 0,
+        walletPlatform,
+      }
+      if (showAmount) {
+        rowData.amount = row.visitAmount != null ? Number(row.visitAmount) : ""
+      }
+      ws.addRow(rowData)
+    }
+
+    // Auto-filter
     ws.autoFilter = {
       from: { row: 1, column: 1 },
-      to: { row: 1, column: 9 },
+      to: { row: 1, column: cols.length },
     }
   }
 
-  // If no tenants, add an empty sheet
   if (activeTenants.length === 0) {
     wb.addWorksheet("Sin tenants activos")
   }
