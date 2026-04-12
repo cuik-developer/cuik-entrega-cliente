@@ -236,11 +236,146 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
       }
     }
 
-    // 3. Send events
+    // ── Data agent: 2-session flow ───────────────────────────────────
+    if (primaryAgent === "data" && reportData) {
+      const reportFile = `/tmp/cuik_reporte_${taskId}.md`
+      const excelFile = `/tmp/cuik_reporte_${taskId}.xlsx`
+
+      // SESSION 1 — Analysis & report generation
+      const prompt1 = `${fullPrompt}\n\nIMPORTANTE: Al terminar el análisis, guarda el reporte completo en ${reportFile} usando bash. Confirma cuando esté guardado.`
+      const skills = getSkillsForAgent(primaryAgent)
+      await sendEvents(sessionId, prompt1, skills)
+
+      console.log("[orchestrator] session 1 (analysis) started...")
+      const stream1 = await readStream(sessionId)
+
+      agentLogs.push({
+        agent: primaryAgent,
+        event: "session1_analysis_completed",
+        model: stream1.model,
+        stopReason: stream1.stopReason,
+        outputLength: stream1.text.length,
+      })
+
+      console.log(`[orchestrator] session 1 done, text length: ${stream1.text.length}`)
+
+      // SESSION 2 — Excel generation (same session, new turn)
+      const attachments: Array<{ name: string; url: string }> = []
+      let analysisText = stream1.text
+
+      try {
+        const prompt2 = `Lee el archivo ${reportFile} y genera un Excel profesional con openpyxl en ${excelFile} con estas 9 hojas: Dashboard Ejecutivo, Patrones Temporales, Segmentación Clientes, Retención, Performance por Local, Digital & Rewards, Crecimiento, Plan de Acción, Anomalías. Usa headers en negrita con color #4A90D9, bordes en todas las celdas, y colores alternos en filas. Cuando termines, imprime el resultado de: base64 ${excelFile}`
+
+        await sendEvents(sessionId, prompt2, "")
+
+        console.log("[orchestrator] session 2 (Excel generation) started...")
+        const stream2 = await readStream(sessionId)
+
+        agentLogs.push({
+          agent: primaryAgent,
+          event: "session2_excel_completed",
+          model: stream2.model,
+          stopReason: stream2.stopReason,
+          outputLength: stream2.text.length,
+        })
+
+        console.log(`[orchestrator] session 2 done, text length: ${stream2.text.length}`)
+
+        // Extract base64-encoded Excel from stream2 text
+        const base64Match = stream2.text.match(
+          /(?:```[^\n]*\n)?((?:[A-Za-z0-9+/]{4}){10,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4}))(?:\n```)?/,
+        )
+
+        if (base64Match?.[1]) {
+          console.log("[orchestrator] found base64 Excel data, decoding...")
+          const excelBuffer = Buffer.from(base64Match[1], "base64")
+          const key = `office/reports/${execution.id}.xlsx`
+          const url = await uploadAsset(
+            key,
+            excelBuffer,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          )
+          attachments.push({
+            name: `reporte-${tenantName.toLowerCase().replace(/\s+/g, "-")}.xlsx`,
+            url,
+          })
+          console.log("[orchestrator] agent-generated Excel uploaded:", url)
+        } else {
+          console.warn("[orchestrator] no base64 Excel found in session 2 output, falling back to ExcelJS...")
+          const excelBuffer = await generateReport(tenantName, reportData, analysisText)
+          const key = `office/reports/${execution.id}.xlsx`
+          const url = await uploadAsset(
+            key,
+            excelBuffer,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          )
+          attachments.push({
+            name: `reporte-${tenantName.toLowerCase().replace(/\s+/g, "-")}.xlsx`,
+            url,
+          })
+          console.log("[orchestrator] fallback Excel uploaded:", url)
+        }
+      } catch (session2Err) {
+        console.error("[orchestrator] session 2 failed (non-fatal), saving analysis only:", session2Err)
+        agentLogs.push({
+          agent: primaryAgent,
+          event: "session2_failed",
+          error: session2Err instanceof Error ? session2Err.message : String(session2Err),
+        })
+
+        // Fallback: try ExcelJS generator
+        try {
+          const excelBuffer = await generateReport(tenantName, reportData, analysisText)
+          const key = `office/reports/${execution.id}.xlsx`
+          const url = await uploadAsset(
+            key,
+            excelBuffer,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          )
+          attachments.push({
+            name: `reporte-${tenantName.toLowerCase().replace(/\s+/g, "-")}.xlsx`,
+            url,
+          })
+          console.log("[orchestrator] fallback Excel uploaded after session 2 failure:", url)
+        } catch (fallbackErr) {
+          console.error("[orchestrator] fallback Excel also failed:", fallbackErr)
+        }
+      }
+
+      // Save to DB
+      const durationMs = Date.now() - start
+      const finalStatus = task.requiresApproval
+        ? ("pending_approval" as const)
+        : ("approved" as const)
+
+      const output =
+        attachments.length > 0
+          ? { text: analysisText, attachments }
+          : { text: analysisText }
+
+      console.log(
+        `[orchestrator] saving execution ${execution.id}: status=${finalStatus}, chars=${analysisText.length}, attachments=${attachments.length}`,
+      )
+
+      await db
+        .update(executions)
+        .set({ status: finalStatus, output, agentLogs, durationMs })
+        .where(eq(executions.id, execution.id))
+
+      await db
+        .update(tasks)
+        .set({ lastRun: new Date(), updatedAt: new Date() })
+        .where(eq(tasks.id, taskId))
+
+      console.log(`[orchestrator] execution ${execution.id} saved OK`)
+
+      return { executionId: execution.id, status: finalStatus, output, agentLogs, durationMs }
+    }
+
+    // ── Non-data agents: single session flow ─────────────────────────
     const skills = getSkillsForAgent(primaryAgent)
     await sendEvents(sessionId, fullPrompt, skills)
 
-    // 4. Read stream
     const stream = await readStream(sessionId)
 
     agentLogs.push({
@@ -251,40 +386,15 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
       outputLength: stream.text.length,
     })
 
-    // 5. Generate Excel and upload to MinIO (data agent only)
-    const attachments: Array<{ name: string; url: string }> = []
-
-    if (primaryAgent === "data" && reportData) {
-      try {
-        console.log("[orchestrator] generating Excel report...")
-        const excelBuffer = await generateReport(tenantName, reportData, stream.text)
-        const key = `office/reports/${execution.id}.xlsx`
-        const url = await uploadAsset(
-          key,
-          excelBuffer,
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-        attachments.push({
-          name: `reporte-${tenantName.toLowerCase().replace(/\s+/g, "-")}.xlsx`,
-          url,
-        })
-        console.log("[orchestrator] Excel uploaded:", url)
-      } catch (excelErr) {
-        console.error("[orchestrator] Excel generation failed (non-fatal):", excelErr)
-      }
-    }
-
-    // 6. Save to DB
     const durationMs = Date.now() - start
     const finalStatus = task.requiresApproval
       ? ("pending_approval" as const)
       : ("approved" as const)
 
-    const output =
-      attachments.length > 0 ? { text: stream.text, attachments } : { text: stream.text }
+    const output = { text: stream.text }
 
     console.log(
-      `[orchestrator] saving execution ${execution.id}: status=${finalStatus}, chars=${stream.text.length}, attachments=${attachments.length}`,
+      `[orchestrator] saving execution ${execution.id}: status=${finalStatus}, chars=${stream.text.length}`,
     )
 
     await db
@@ -299,13 +409,7 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
 
     console.log(`[orchestrator] execution ${execution.id} saved OK`)
 
-    return {
-      executionId: execution.id,
-      status: finalStatus,
-      output,
-      agentLogs,
-      durationMs,
-    }
+    return { executionId: execution.id, status: finalStatus, output, agentLogs, durationMs }
   } catch (error) {
     const durationMs = Date.now() - start
     const errorMsg = error instanceof Error ? error.message : String(error)
