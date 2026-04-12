@@ -6,6 +6,7 @@ export interface SendEmailOptions {
   subject: string
   template: ReactElement
   from?: string
+  attachments?: Array<{ filename: string; path: string }>
 }
 
 type SendEmailResult = { id: string } | { error: string }
@@ -26,7 +27,7 @@ function getClient(): Resend | null {
 }
 
 export async function sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
-  const { to, subject, template, from } = options
+  const { to, subject, template, from, attachments } = options
   const sender = from ?? process.env.EMAIL_FROM ?? DEFAULT_FROM
   const recipient = process.env.EMAIL_TEST_TO ?? to
 
@@ -48,6 +49,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
       to: Array.isArray(recipient) ? recipient : [recipient],
       subject,
       react: template,
+      attachments: attachments ?? undefined,
     })
 
     if (error) {
