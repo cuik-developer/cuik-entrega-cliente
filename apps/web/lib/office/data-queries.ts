@@ -266,6 +266,7 @@ export async function getClientSegmentation(tenantId: string): Promise<ClientSeg
   const rows = await db
     .select({
       segment: sql<string>`CASE
+        WHEN ${clients.totalVisits} = 0 THEN '0 visitas'
         WHEN ${clients.totalVisits} = 1 THEN '1 visita'
         WHEN ${clients.totalVisits} BETWEEN 2 AND 3 THEN '2-3 visitas'
         WHEN ${clients.totalVisits} BETWEEN 4 AND 5 THEN '4-5 visitas'
@@ -277,6 +278,7 @@ export async function getClientSegmentation(tenantId: string): Promise<ClientSeg
     .where(and(eq(clients.tenantId, tenantId), eq(clients.status, "active")))
     .groupBy(
       sql`CASE
+        WHEN ${clients.totalVisits} = 0 THEN '0 visitas'
         WHEN ${clients.totalVisits} = 1 THEN '1 visita'
         WHEN ${clients.totalVisits} BETWEEN 2 AND 3 THEN '2-3 visitas'
         WHEN ${clients.totalVisits} BETWEEN 4 AND 5 THEN '4-5 visitas'
