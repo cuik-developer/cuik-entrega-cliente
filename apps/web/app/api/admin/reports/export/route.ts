@@ -69,8 +69,7 @@ export async function GET(request: Request) {
       { header: "Fecha Registro", key: "createdAt", width: 16 },
       { header: "Fecha Visita", key: "visitDate", width: 16 },
       { header: "Local", key: "location", width: 22 },
-      { header: "Puntos", key: "points", width: 10 },
-      { header: "Plataforma Wallet", key: "walletPlatform", width: 18 },
+{ header: "Plataforma Wallet", key: "walletPlatform", width: 18 },
     ]
     if (showAmount) {
       cols.push({ header: "Monto", key: "amount", width: 12 })
@@ -97,7 +96,6 @@ export async function GET(request: Request) {
         phone: clients.phone,
         dni: clients.dni,
         clientCreatedAt: clients.createdAt,
-        pointsBalance: clients.pointsBalance,
         clientId: clients.id,
         visitCreatedAt: visits.createdAt,
         visitLocationId: visits.locationId,
@@ -150,7 +148,6 @@ export async function GET(request: Request) {
         createdAt: formatDate(row.clientCreatedAt),
         visitDate: row.visitCreatedAt ? formatDate(row.visitCreatedAt) : "Sin visitas",
         location: row.visitLocationId ? (locationMap.get(row.visitLocationId) ?? "") : "",
-        points: row.pointsBalance ?? 0,
         walletPlatform,
       }
       if (showAmount) {
