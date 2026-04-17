@@ -1,4 +1,15 @@
-import { and, clients, count, db, eq, promotions, rewards, sql, visits } from "@cuik/db"
+import {
+  and,
+  clients,
+  count,
+  db,
+  eq,
+  promotions,
+  rewards,
+  sql,
+  tenants,
+  visits,
+} from "@cuik/db"
 import { pointsPromotionConfigSchema, stampsPromotionConfigSchema } from "@cuik/shared/validators"
 
 import { updateRewardsRedeemed, updateVisitsDaily } from "../analytics/update-visits-daily"
@@ -46,6 +57,14 @@ export async function registerVisit(params: {
       }
     }
 
+    // 1b. Read tenant timezone for "today" comparisons (used below)
+    const tenantRows = await tx
+      .select({ timezone: tenants.timezone })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1)
+    const tenantTz = tenantRows[0]?.timezone ?? "America/Lima"
+
     // 2. Find active promotion (stamps or points)
     const promoRows = await tx
       .select()
@@ -75,10 +94,7 @@ export async function registerVisit(params: {
     if (promotion.type === "points") {
       const pointsConfig = pointsPromotionConfigSchema.parse(promotion.config ?? {})
 
-      // Count today's visits for the points flow
-      const todayStartPts = new Date()
-      todayStartPts.setHours(0, 0, 0, 0)
-
+      // Count today's visits for the points flow (uses tenant timezone, not UTC)
       const todayVisitsPts = await tx
         .select({ cnt: count() })
         .from(visits)
@@ -87,7 +103,7 @@ export async function registerVisit(params: {
             eq(visits.clientId, client.id),
             eq(visits.tenantId, tenantId),
             sql`${visits.source} IS DISTINCT FROM 'bonus'`,
-            sql`${visits.createdAt} >= ${todayStartPts.toISOString()}`,
+            sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tenantTz})::date = (NOW() AT TIME ZONE ${tenantTz})::date`,
           ),
         )
 
@@ -149,10 +165,7 @@ export async function registerVisit(params: {
     // Parse promotion config with defaults
     const config = stampsPromotionConfigSchema.parse(promotion.config ?? {})
 
-    // 3. Count today's visits
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
-
+    // 3. Count today's visits (uses tenant timezone, not UTC)
     const todayVisits = await tx
       .select({ cnt: count() })
       .from(visits)
@@ -161,7 +174,7 @@ export async function registerVisit(params: {
           eq(visits.clientId, client.id),
           eq(visits.tenantId, tenantId),
           sql`${visits.source} IS DISTINCT FROM 'bonus'`,
-          sql`${visits.createdAt} >= ${todayStart.toISOString()}`,
+          sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tenantTz})::date = (NOW() AT TIME ZONE ${tenantTz})::date`,
         ),
       )
 
