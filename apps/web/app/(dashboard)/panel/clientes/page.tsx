@@ -216,17 +216,19 @@ export default function ClientesPage() {
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<ClientDetail | null>(null)
-  const [filter, setFilter] = useState<"all" | "active" | "inactive">("all")
+  const [filter, setFilter] = useState<
+    "all" | "nuevo" | "frecuente" | "esporadico" | "en_riesgo" | "inactivo" | "one_time"
+  >("all")
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null)
 
   const fetchClients = useCallback(
-    async (p: number, search: string, status: string) => {
+    async (p: number, search: string, segment: string) => {
       if (!tenantSlug) return
       setLoading(true)
       try {
         const params = new URLSearchParams({ page: String(p), limit: "20" })
         if (search) params.set("search", search)
-        if (status !== "all") params.set("status", status)
+        if (segment !== "all") params.set("segment", segment)
 
         const res = await fetch(`/api/${tenantSlug}/clients?${params}`)
         const json = await res.json()
@@ -267,8 +269,11 @@ export default function ClientesPage() {
     if (!tenantSlug || exporting) return
     setExporting(true)
     try {
+      // NOTE: segment filter is a UX-layer convenience for the table list;
+      // the export endpoint exports the full client book regardless of which
+      // segment chip is selected. If per-segment export is needed later,
+      // add segment support to /api/[tenant]/clients/export.
       const params = new URLSearchParams()
-      if (filter !== "all") params.set("status", filter)
 
       const res = await fetch(`/api/${tenantSlug}/clients/export?${params}`)
       if (!res.ok) return
@@ -340,19 +345,29 @@ export default function ClientesPage() {
             }}
           />
         </div>
-        <div className="flex gap-2">
-          {(["all", "active", "inactive"] as const).map((f) => (
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              { v: "all", label: "Todos" },
+              { v: "nuevo", label: "Nuevos" },
+              { v: "frecuente", label: "Frecuentes" },
+              { v: "esporadico", label: "Esporádicos" },
+              { v: "en_riesgo", label: "En riesgo" },
+              { v: "inactivo", label: "Inactivos" },
+              { v: "one_time", label: "Una visita" },
+            ] as const
+          ).map((f) => (
             <Button
-              key={f}
+              key={f.v}
               size="sm"
-              variant={filter === f ? "default" : "outline"}
-              className={filter === f ? "bg-primary text-white" : ""}
+              variant={filter === f.v ? "default" : "outline"}
+              className={filter === f.v ? "bg-primary text-white" : ""}
               onClick={() => {
-                setFilter(f)
+                setFilter(f.v)
                 setPage(1)
               }}
             >
-              {f === "all" ? "Todos" : f === "active" ? "Activos" : "Inactivos"}
+              {f.label}
             </Button>
           ))}
         </div>

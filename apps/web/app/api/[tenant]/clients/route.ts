@@ -36,7 +36,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       return errorResponse("Invalid query parameters", 400, queryParsed.error.flatten())
     }
 
-    const { search, qr, status } = queryParsed.data
+    const { search, qr, status, segment } = queryParsed.data
 
     // QR lookup: exact match, return full status
     if (qr) {
@@ -82,50 +82,52 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       conditions.push(eq(clients.status, status))
     }
 
-    // Count total
-    const [{ cnt: total }] = await db
-      .select({ cnt: sql<number>`count(*)::int` })
-      .from(clients)
-      .where(and(...conditions))
+    const selectFields = {
+      id: clients.id,
+      name: clients.name,
+      lastName: clients.lastName,
+      dni: clients.dni,
+      phone: clients.phone,
+      email: clients.email,
+      qrCode: clients.qrCode,
+      status: clients.status,
+      totalVisits: clients.totalVisits,
+      currentCycle: clients.currentCycle,
+      tier: clients.tier,
+      createdAt: clients.createdAt,
+      lastVisitAt: sql<Date | null>`(
+        SELECT MAX("created_at") FROM loyalty.visits
+        WHERE "client_id" = ${clients.id}
+          AND "tenant_id" = ${tenant.id}
+      )`,
+      avgDaysBetweenVisits: sql<number | null>`(
+        SELECT CASE
+          WHEN COUNT(*) <= 1 THEN NULL
+          ELSE EXTRACT(EPOCH FROM (MAX("created_at") - MIN("created_at")))
+            / (COUNT(*) - 1) / 86400.0
+        END
+        FROM loyalty.visits
+        WHERE "client_id" = ${clients.id}
+          AND "tenant_id" = ${tenant.id}
+      )`,
+    }
 
-    // Fetch clients with visit frequency data for segment computation
-    const rows = await db
-      .select({
-        id: clients.id,
-        name: clients.name,
-        lastName: clients.lastName,
-        dni: clients.dni,
-        phone: clients.phone,
-        email: clients.email,
-        qrCode: clients.qrCode,
-        status: clients.status,
-        totalVisits: clients.totalVisits,
-        currentCycle: clients.currentCycle,
-        tier: clients.tier,
-        createdAt: clients.createdAt,
-        lastVisitAt: sql<Date | null>`(
-          SELECT MAX("created_at") FROM loyalty.visits
-          WHERE "client_id" = ${clients.id}
-            AND "tenant_id" = ${tenant.id}
-        )`,
-        avgDaysBetweenVisits: sql<number | null>`(
-          SELECT CASE
-            WHEN COUNT(*) <= 1 THEN NULL
-            ELSE EXTRACT(EPOCH FROM (MAX("created_at") - MIN("created_at")))
-              / (COUNT(*) - 1) / 86400.0
-          END
-          FROM loyalty.visits
-          WHERE "client_id" = ${clients.id}
-            AND "tenant_id" = ${tenant.id}
-        )`,
-      })
-      .from(clients)
-      .where(and(...conditions))
-      .orderBy(clients.createdAt)
-      .limit(limit)
-      .offset(offset)
-
-    const data = rows.map((c) => ({
+    const mapRow = (c: {
+      id: string
+      name: string
+      lastName: string | null
+      dni: string | null
+      phone: string | null
+      email: string | null
+      qrCode: string | null
+      status: "active" | "inactive" | "blocked"
+      totalVisits: number
+      currentCycle: number
+      tier: string | null
+      createdAt: Date
+      lastVisitAt: Date | null
+      avgDaysBetweenVisits: number | null
+    }) => ({
       id: c.id,
       name: c.name,
       lastName: c.lastName,
@@ -147,7 +149,41 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         },
         thresholds,
       ),
-    }))
+    })
+
+    // Segment filtering requires computing all clients — segments are derived
+    // dynamically per-tenant thresholds and not stored as a column.
+    if (segment) {
+      const allRows = await db
+        .select(selectFields)
+        .from(clients)
+        .where(and(...conditions))
+        .orderBy(clients.createdAt)
+
+      const mapped = allRows.map(mapRow).filter((c) => c.segment === segment)
+      const total = mapped.length
+      const paginated = mapped.slice(offset, offset + limit)
+      return successResponse({
+        data: paginated,
+        pagination: paginationMeta(total, page, limit),
+      })
+    }
+
+    // No segment filter — use efficient DB-side pagination
+    const [{ cnt: total }] = await db
+      .select({ cnt: sql<number>`count(*)::int` })
+      .from(clients)
+      .where(and(...conditions))
+
+    const rows = await db
+      .select(selectFields)
+      .from(clients)
+      .where(and(...conditions))
+      .orderBy(clients.createdAt)
+      .limit(limit)
+      .offset(offset)
+
+    const data = rows.map(mapRow)
 
     return successResponse({
       data,

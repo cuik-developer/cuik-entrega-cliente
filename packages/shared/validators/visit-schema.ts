@@ -19,6 +19,9 @@ export const clientSearchSchema = z.object({
   search: z.string().trim().optional(),
   qr: z.string().trim().optional(),
   status: z.enum(["active", "inactive", "blocked"]).optional(),
+  segment: z
+    .enum(["nuevo", "frecuente", "esporadico", "one_time", "en_riesgo", "inactivo"])
+    .optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 })
