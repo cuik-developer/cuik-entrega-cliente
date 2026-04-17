@@ -5,8 +5,6 @@ import {
   db,
   desc,
   eq,
-  gte,
-  lte,
   locations,
   passInstances,
   promotions,
@@ -105,18 +103,12 @@ export async function GET(request: Request) {
     const visitJoinConditions = [eq(visits.clientId, clients.id)]
     if (fromDate) {
       visitJoinConditions.push(
-        gte(
-          sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${PLATFORM_TZ})::date`,
-          sql`${fromDate}::date`,
-        ),
+        sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${PLATFORM_TZ})::date >= ${fromDate}::date`,
       )
     }
     if (toDate) {
       visitJoinConditions.push(
-        lte(
-          sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${PLATFORM_TZ})::date`,
-          sql`${toDate}::date`,
-        ),
+        sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${PLATFORM_TZ})::date <= ${toDate}::date`,
       )
     }
 
