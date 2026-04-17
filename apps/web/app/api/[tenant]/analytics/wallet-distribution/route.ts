@@ -24,32 +24,27 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     const membershipError = await requireTenantMembership(session, tenant.id)
     if (membershipError) return membershipError
 
-    // Count clients by ACTUAL wallet usage:
-    // - Apple: confirmed via apple_devices table (device registered via Web Service Protocol)
-    // - Google: has google_save_url but NO apple device (proxy — Google doesn't have a callback)
-    // - Sin wallet: no apple device AND no google_save_url
-    // Note: a client with both an apple device AND a google_save_url is counted in Apple only
-    // (we can't confirm Google was actually used)
+    // Count clients by wallet platform — canonical detection logic:
+    // - Apple: pass_instances.apple_pass_url IS NOT NULL AND != ''
+    // - Google: pass_instances.google_save_url IS NOT NULL AND != ''
+    // - Sin wallet: neither
+    // Priority when both are present: Apple > Google (never double-counted).
     const result = await db.execute(
       sql`
         WITH client_wallets AS (
           SELECT
             c."id" AS "client_id",
-            EXISTS (
-              SELECT 1 FROM passes.apple_devices ad
-              INNER JOIN passes.pass_instances pi2 ON pi2."serial_number" = ad."serial_number"
-              WHERE pi2."client_id" = c."id"
-            ) AS "has_apple_device",
-            BOOL_OR(pi."google_save_url" IS NOT NULL) AS "has_google_url"
+            BOOL_OR(pi."apple_pass_url" IS NOT NULL AND pi."apple_pass_url" <> '') AS "has_apple",
+            BOOL_OR(pi."google_save_url" IS NOT NULL AND pi."google_save_url" <> '') AS "has_google"
           FROM loyalty.clients c
           LEFT JOIN passes.pass_instances pi ON pi."client_id" = c."id"
           WHERE c."tenant_id" = ${tenant.id}
           GROUP BY c."id"
         )
         SELECT
-          COALESCE(SUM(CASE WHEN "has_apple_device" THEN 1 ELSE 0 END), 0)::int AS "apple",
-          COALESCE(SUM(CASE WHEN "has_google_url" AND NOT "has_apple_device" THEN 1 ELSE 0 END), 0)::int AS "google",
-          COALESCE(SUM(CASE WHEN NOT "has_apple_device" AND NOT "has_google_url" THEN 1 ELSE 0 END), 0)::int AS "none"
+          COALESCE(SUM(CASE WHEN "has_apple" THEN 1 ELSE 0 END), 0)::int AS "apple",
+          COALESCE(SUM(CASE WHEN "has_google" AND NOT "has_apple" THEN 1 ELSE 0 END), 0)::int AS "google",
+          COALESCE(SUM(CASE WHEN NOT "has_apple" AND NOT "has_google" THEN 1 ELSE 0 END), 0)::int AS "none"
         FROM client_wallets
       `,
     )

@@ -113,21 +113,21 @@ export async function GET(request: Request) {
       .where(eq(locations.tenantId, tenant.id))
     const locationMap = new Map(tenantLocations.map((l) => [l.id, l.name]))
 
-    // Pre-fetch wallet platform per client using a single query
-    // Apple: join passInstances → appleDevices on serialNumber
-    // Google: passInstances.googleObjectId IS NOT NULL
+    // Pre-fetch wallet platform per client — canonical detection logic:
+    // - Apple: pass_instances.apple_pass_url IS NOT NULL AND != ''
+    // - Google: pass_instances.google_save_url IS NOT NULL AND != ''
+    // - Sin Wallet: neither. Priority: Apple > Google.
+    // Aggregate with BOOL_OR in case a client has multiple pass_instances.
     const passRows = await db
-      .selectDistinctOn([passInstances.clientId], {
+      .select({
         clientId: passInstances.clientId,
-        hasApple: sql<boolean>`EXISTS (
-          SELECT 1 FROM passes.apple_devices ad
-          WHERE ad.serial_number = ${passInstances.serialNumber}
-        )`,
-        hasGoogle: sql<boolean>`${passInstances.googleObjectId} IS NOT NULL`,
+        hasApple: sql<boolean>`BOOL_OR(${passInstances.applePassUrl} IS NOT NULL AND ${passInstances.applePassUrl} <> '')`,
+        hasGoogle: sql<boolean>`BOOL_OR(${passInstances.googleSaveUrl} IS NOT NULL AND ${passInstances.googleSaveUrl} <> '')`,
       })
       .from(passInstances)
       .innerJoin(clients, eq(clients.id, passInstances.clientId))
       .where(eq(clients.tenantId, tenant.id))
+      .groupBy(passInstances.clientId)
 
     const walletMap = new Map<string, string>()
     for (const p of passRows) {
