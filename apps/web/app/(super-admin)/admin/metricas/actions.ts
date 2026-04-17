@@ -69,8 +69,14 @@ export async function getDailyVisits(days = 30): Promise<ActionResult<DailyVisit
     const since = new Date()
     since.setDate(since.getDate() - days)
 
-    const tz = PLATFORM_TZ
-    const localDay = sql`date_trunc('day', ${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date`
+    // Inline the tz literal (not as a bound parameter) so SELECT and GROUP BY
+    // produce byte-identical expressions. If we interpolate tz via Drizzle's
+    // ${tz} template, each usage becomes a separate $N placeholder and
+    // Postgres treats the expressions as non-equal in GROUP BY comparisons,
+    // throwing "must appear in the GROUP BY clause". PLATFORM_TZ is a
+    // compile-time IANA constant so no injection risk.
+    const tzLit = sql.raw(`'${PLATFORM_TZ}'`)
+    const localDay = sql`date_trunc('day', ${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tzLit})::date`
 
     const rows = await db
       .select({

@@ -32,11 +32,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     }
 
     const { from, to, granularity } = parsed.data
-    const tz = tenant.timezone ?? "America/Lima"
+    const rawTz = tenant.timezone ?? "America/Lima"
+    // Sanitize: keep only IANA-compatible chars to prevent injection, then inline
+    // as a literal so SELECT/GROUP BY produce byte-identical expressions (see
+    // long comment in admin/metricas/actions.ts for the underlying bug).
+    const tz = rawTz.replace(/[^A-Za-z0-9_/+-]/g, "") || "America/Lima"
+    const tzLit = sql.raw(`'${tz}'`)
 
     // Build date truncation based on granularity — always in tenant's timezone
-    const localCreatedAt = sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})`
-    const localClientCreatedAt = sql`(${clients.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})`
+    const localCreatedAt = sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tzLit})`
+    const localClientCreatedAt = sql`(${clients.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tzLit})`
     let dateExpr: ReturnType<typeof sql>
     switch (granularity) {
       case "week":

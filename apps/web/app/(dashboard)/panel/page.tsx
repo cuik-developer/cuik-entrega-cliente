@@ -23,7 +23,12 @@ export default async function DashboardPage() {
   }
 
   const tenantId = tenant.tenantId
-  const tz = tenant.timezone
+  // Inline the tz literal (not as a bound parameter) to avoid PG's "must
+  // appear in GROUP BY" when the same tz appears in SELECT and GROUP BY —
+  // Drizzle gives each ${tz} a separate $N, breaking expression equality.
+  const rawTz = tenant.timezone
+  const safeTz = rawTz.replace(/[^A-Za-z0-9_/+-]/g, "") || "America/Lima"
+  const tz = sql.raw(`'${safeTz}'`)
 
   // "Today" and "week start" evaluated in tenant's timezone via SQL AT TIME ZONE
 

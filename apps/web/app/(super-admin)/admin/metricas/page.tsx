@@ -40,7 +40,10 @@ export default async function MetricasPage({ searchParams }: { searchParams: Sea
       {summaryResult.success && <KpiCards data={summaryResult.data} />}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {visitsResult.success && <VisitsChart data={visitsResult.data} />}
+        {/* Always render VisitsChart — on query failure, pass empty data so
+            the component shows its built-in "Sin datos" fallback instead of
+            disappearing entirely from the page layout. */}
+        <VisitsChart data={visitsResult.success ? visitsResult.data : []} />
         {planResult.success && <PlanDistribution data={planResult.data} />}
       </div>
 
