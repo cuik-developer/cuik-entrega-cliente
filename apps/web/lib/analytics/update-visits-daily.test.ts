@@ -44,7 +44,7 @@ describe("updateVisitsDaily", () => {
   it("calls db.insert with correct initial values when isNewClient is true", async () => {
     const date = new Date("2025-03-15T12:00:00Z")
 
-    await updateVisitsDaily("tenant-1", "loc-1", date, { isNewClient: true })
+    await updateVisitsDaily("tenant-1", "loc-1", date, { isNewClient: true, tenantTimezone: "UTC" })
 
     expect(mockInsert).toHaveBeenCalledTimes(1)
     expect(mockValues).toHaveBeenCalledWith(
@@ -63,7 +63,7 @@ describe("updateVisitsDaily", () => {
   it("sets newClients to 0 when isNewClient is false", async () => {
     const date = new Date("2025-03-15T12:00:00Z")
 
-    await updateVisitsDaily("tenant-1", "loc-1", date, { isNewClient: false })
+    await updateVisitsDaily("tenant-1", "loc-1", date, { isNewClient: false, tenantTimezone: "UTC" })
 
     expect(mockValues).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -75,7 +75,7 @@ describe("updateVisitsDaily", () => {
   it("calls onConflictDoUpdate to handle upsert", async () => {
     const date = new Date("2025-03-15T12:00:00Z")
 
-    await updateVisitsDaily("tenant-1", "loc-1", date, { isNewClient: true })
+    await updateVisitsDaily("tenant-1", "loc-1", date, { isNewClient: true, tenantTimezone: "UTC" })
 
     expect(mockOnConflictDoUpdate).toHaveBeenCalledTimes(1)
     expect(mockOnConflictDoUpdate).toHaveBeenCalledWith(
@@ -93,7 +93,7 @@ describe("updateVisitsDaily", () => {
   it("extracts date string correctly from Date object", async () => {
     const date = new Date("2025-12-31T23:59:59Z")
 
-    await updateVisitsDaily("t", "l", date, { isNewClient: false })
+    await updateVisitsDaily("t", "l", date, { isNewClient: false, tenantTimezone: "UTC" })
 
     expect(mockValues).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -114,7 +114,7 @@ describe("updateRewardsRedeemed", () => {
   it("inserts with rewardsRedeemed=1 and zeroes for visit counters", async () => {
     const date = new Date("2025-06-01T08:00:00Z")
 
-    await updateRewardsRedeemed("tenant-2", "loc-2", date)
+    await updateRewardsRedeemed("tenant-2", "loc-2", date, "UTC")
 
     expect(mockValues).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -132,7 +132,7 @@ describe("updateRewardsRedeemed", () => {
   it("calls onConflictDoUpdate incrementing only rewardsRedeemed", async () => {
     const date = new Date("2025-06-01T08:00:00Z")
 
-    await updateRewardsRedeemed("tenant-2", "loc-2", date)
+    await updateRewardsRedeemed("tenant-2", "loc-2", date, "UTC")
 
     expect(mockOnConflictDoUpdate).toHaveBeenCalledTimes(1)
     const conflictArg = mockOnConflictDoUpdate.mock.calls[0][0]

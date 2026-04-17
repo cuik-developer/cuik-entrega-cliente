@@ -23,14 +23,9 @@ export default async function DashboardPage() {
   }
 
   const tenantId = tenant.tenantId
+  const tz = tenant.timezone
 
-  // Parallel KPI queries
-  const todayStart = new Date()
-  todayStart.setHours(0, 0, 0, 0)
-
-  const weekStart = new Date()
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay())
-  weekStart.setHours(0, 0, 0, 0)
+  // "Today" and "week start" evaluated in tenant's timezone via SQL AT TIME ZONE
 
   const [
     totalClientsResult,
@@ -44,20 +39,26 @@ export default async function DashboardPage() {
     // Total clients
     db.select({ cnt: count() }).from(clients).where(eq(clients.tenantId, tenantId)),
 
-    // Visits today
+    // Visits today (tenant timezone)
     db
       .select({ cnt: count() })
       .from(visits)
       .where(
-        and(eq(visits.tenantId, tenantId), sql`${visits.createdAt} >= ${todayStart.toISOString()}`),
+        and(
+          eq(visits.tenantId, tenantId),
+          sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date = (NOW() AT TIME ZONE ${tz})::date`,
+        ),
       ),
 
-    // Visits this week
+    // Visits this week (tenant timezone, week starts Sunday)
     db
       .select({ cnt: count() })
       .from(visits)
       .where(
-        and(eq(visits.tenantId, tenantId), sql`${visits.createdAt} >= ${weekStart.toISOString()}`),
+        and(
+          eq(visits.tenantId, tenantId),
+          sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date >= date_trunc('week', (NOW() AT TIME ZONE ${tz}))::date`,
+        ),
       ),
 
     // Pending rewards
@@ -66,14 +67,14 @@ export default async function DashboardPage() {
       .from(rewards)
       .where(and(eq(rewards.tenantId, tenantId), eq(rewards.status, "pending"))),
 
-    // New clients today
+    // New clients today (tenant timezone)
     db
       .select({ cnt: count() })
       .from(clients)
       .where(
         and(
           eq(clients.tenantId, tenantId),
-          sql`${clients.createdAt} >= ${todayStart.toISOString()}`,
+          sql`(${clients.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date = (NOW() AT TIME ZONE ${tz})::date`,
         ),
       ),
 
@@ -93,21 +94,23 @@ export default async function DashboardPage() {
       .orderBy(desc(visits.createdAt))
       .limit(10),
 
-    // Daily visit counts for last 7 days
+    // Daily visit counts for last 7 days (bucketed by tenant's local day)
     db
       .select({
-        day: sql<string>`to_char(${visits.createdAt}, 'Dy')`,
+        day: sql<string>`to_char(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz}, 'Dy')`,
         visits: count(),
       })
       .from(visits)
       .where(
         and(
           eq(visits.tenantId, tenantId),
-          sql`${visits.createdAt} >= ${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()}`,
+          sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date >= (NOW() AT TIME ZONE ${tz})::date - interval '6 days'`,
         ),
       )
-      .groupBy(sql`to_char(${visits.createdAt}, 'Dy'), date_trunc('day', ${visits.createdAt})`)
-      .orderBy(sql`date_trunc('day', ${visits.createdAt})`),
+      .groupBy(
+        sql`to_char(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz}, 'Dy'), date_trunc('day', ${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})`,
+      )
+      .orderBy(sql`date_trunc('day', ${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})`),
   ])
 
   const totalClients = totalClientsResult[0]?.cnt ?? 0

@@ -5,8 +5,14 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "rec
 import type { DailyVisit } from "../actions"
 
 function formatDateLabel(dateStr: string): string {
-  const date = new Date(dateStr)
-  return date.toLocaleDateString("es-PE", { day: "numeric", month: "short" })
+  // dateStr comes as YYYY-MM-DD already bucketed in platform tz (America/Lima).
+  // Append T00:00 + format in same tz so the label doesn't drift by system tz.
+  const date = new Date(`${dateStr}T12:00:00`)
+  return date.toLocaleDateString("es-PE", {
+    day: "numeric",
+    month: "short",
+    timeZone: "America/Lima",
+  })
 }
 
 function ChartTooltip({

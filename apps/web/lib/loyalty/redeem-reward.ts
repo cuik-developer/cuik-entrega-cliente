@@ -1,4 +1,17 @@
-import { and, asc, clients, count, db, desc, eq, or, rewards, sql, visits } from "@cuik/db"
+import {
+  and,
+  asc,
+  clients,
+  count,
+  db,
+  desc,
+  eq,
+  or,
+  rewards,
+  sql,
+  tenants,
+  visits,
+} from "@cuik/db"
 
 import { updateRewardsRedeemed } from "../analytics/update-visits-daily"
 import type { RedeemResult } from "./types"
@@ -112,7 +125,14 @@ export async function redeemReward(params: {
 
   // Fire-and-forget: increment rewardsRedeemed counter after transaction commits
   if (result.code === "OK" && resolvedLocationId) {
-    updateRewardsRedeemed(tenantId, resolvedLocationId, new Date()).catch((err) =>
+    const tenantRows = await db
+      .select({ timezone: tenants.timezone })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1)
+    const tenantTz = tenantRows[0]?.timezone ?? "America/Lima"
+
+    updateRewardsRedeemed(tenantId, resolvedLocationId, new Date(), tenantTz).catch((err) =>
       console.error("[redeemReward] updateRewardsRedeemed failed:", err),
     )
   }

@@ -9,9 +9,11 @@ export async function updateVisitsDaily(
   tenantId: string,
   locationId: string,
   date: Date,
-  opts: { isNewClient: boolean },
+  opts: { isNewClient: boolean; tenantTimezone: string },
 ) {
-  const dateStr = date.toISOString().split("T")[0]
+  const { tenantTimezone } = opts
+  // Bucket by tenant's local calendar date, not UTC.
+  const dateStr = date.toLocaleDateString("en-CA", { timeZone: tenantTimezone })
 
   await db
     .insert(visitsDaily)
@@ -40,8 +42,14 @@ export async function updateVisitsDaily(
  * Increments the rewardsRedeemed counter for a given tenant/location/date.
  * Called fire-and-forget after a reward is redeemed or created via cycle completion.
  */
-export async function updateRewardsRedeemed(tenantId: string, locationId: string, date: Date) {
-  const dateStr = date.toISOString().split("T")[0]
+export async function updateRewardsRedeemed(
+  tenantId: string,
+  locationId: string,
+  date: Date,
+  tenantTimezone: string,
+) {
+  // Bucket by tenant's local calendar date, not UTC.
+  const dateStr = date.toLocaleDateString("en-CA", { timeZone: tenantTimezone })
 
   await db
     .insert(visitsDaily)

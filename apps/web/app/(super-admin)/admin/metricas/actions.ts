@@ -56,6 +56,11 @@ function getPlanColor(index: number): string {
 
 // ── Actions ─────────────────────────────────────────────────────────
 
+// Platform-wide super-admin metrics use a single reference timezone.
+// Cuik primarily operates in Peru/Lima; this keeps daily buckets stable
+// on the UI regardless of the server's OS timezone.
+const PLATFORM_TZ = "America/Lima"
+
 export async function getDailyVisits(days = 30): Promise<ActionResult<DailyVisit[]>> {
   const { error } = await requireSuperAdmin()
   if (error) return { success: false, error }
@@ -64,15 +69,18 @@ export async function getDailyVisits(days = 30): Promise<ActionResult<DailyVisit
     const since = new Date()
     since.setDate(since.getDate() - days)
 
+    const tz = PLATFORM_TZ
+    const localDay = sql`date_trunc('day', ${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date`
+
     const rows = await db
       .select({
-        date: sql<string>`date_trunc('day', ${visits.createdAt})::date::text`,
+        date: sql<string>`${localDay}::text`,
         count: count(),
       })
       .from(visits)
       .where(gte(visits.createdAt, since))
-      .groupBy(sql`date_trunc('day', ${visits.createdAt})::date`)
-      .orderBy(sql`date_trunc('day', ${visits.createdAt})::date`)
+      .groupBy(localDay)
+      .orderBy(localDay)
 
     return {
       success: true,
@@ -118,6 +126,7 @@ export async function getTopTenants(limit = 5): Promise<ActionResult<TopTenant[]
   if (error) return { success: false, error }
 
   try {
+    // "Last 30 days" rolling window — UTC is fine for this coarse filter
     const since = new Date()
     since.setDate(since.getDate() - 30)
 

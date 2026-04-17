@@ -19,6 +19,7 @@ export interface RetentionCohortRow {
 export interface TopClient {
   id: string
   name: string
+  tier: string | null
   visitCount: number
 }
 

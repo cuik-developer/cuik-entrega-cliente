@@ -32,18 +32,21 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     }
 
     const { from, to, granularity } = parsed.data
+    const tz = tenant.timezone ?? "America/Lima"
 
-    // Build date truncation based on granularity
+    // Build date truncation based on granularity — always in tenant's timezone
+    const localCreatedAt = sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})`
+    const localClientCreatedAt = sql`(${clients.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})`
     let dateExpr: ReturnType<typeof sql>
     switch (granularity) {
       case "week":
-        dateExpr = sql`date_trunc('week', ${visits.createdAt})::date`
+        dateExpr = sql`date_trunc('week', ${localCreatedAt})::date`
         break
       case "month":
-        dateExpr = sql`date_trunc('month', ${visits.createdAt})::date`
+        dateExpr = sql`date_trunc('month', ${localCreatedAt})::date`
         break
       default:
-        dateExpr = sql`${visits.createdAt}::date`
+        dateExpr = sql`(${localCreatedAt})::date`
     }
 
     // Query visits grouped by date from loyalty.visits directly
@@ -53,7 +56,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         totalVisits: sql<number>`COUNT(*)::int`.as("totalVisits"),
         uniqueClients: sql<number>`COUNT(DISTINCT ${visits.clientId})::int`.as("uniqueClients"),
         newClients:
-          sql<number>`COUNT(DISTINCT CASE WHEN ${clients.createdAt}::date = ${visits.createdAt}::date THEN ${visits.clientId} END)::int`.as(
+          sql<number>`COUNT(DISTINCT CASE WHEN (${localClientCreatedAt})::date = (${localCreatedAt})::date THEN ${visits.clientId} END)::int`.as(
             "newClients",
           ),
       })
@@ -62,8 +65,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       .where(
         and(
           eq(visits.tenantId, tenant.id),
-          sql`${visits.createdAt}::date >= ${from}`,
-          sql`${visits.createdAt}::date <= ${to}`,
+          sql`(${localCreatedAt})::date >= ${from}`,
+          sql`(${localCreatedAt})::date <= ${to}`,
         ),
       )
       .groupBy(dateExpr)

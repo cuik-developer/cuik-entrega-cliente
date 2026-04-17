@@ -1,25 +1,35 @@
-import { db, sql } from "@cuik/db"
+import { db, eq, sql, tenants } from "@cuik/db"
 import type { AnalyticsSummary } from "@cuik/shared/types/analytics"
 
 /**
  * Computes a KPI summary for a tenant within a date range.
- * Uses the pre-aggregated visits_daily table for visit/client metrics.
- * Queries rewards table for redemption rate.
- * Queries clients table for top clients by visit count.
+ * Dates are interpreted in the tenant's timezone.
  */
 export async function computeAnalyticsSummary(
   tenantId: string,
   opts?: { from?: string; to?: string },
 ): Promise<AnalyticsSummary> {
-  const now = new Date()
-  const thirtyDaysAgo = new Date(now)
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+  // Fetch tenant timezone for correct date bucketing
+  const tenantRows = await db
+    .select({ timezone: tenants.timezone })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1)
+  const tz = tenantRows[0]?.timezone ?? "America/Lima"
 
-  const fromDate = opts?.from ?? thirtyDaysAgo.toISOString().split("T")[0]
-  const toDate = opts?.to ?? now.toISOString().split("T")[0]
+  // Default "last 30 days" in tenant timezone (YYYY-MM-DD)
+  const todayLocal = new Date().toLocaleDateString("en-CA", { timeZone: tz }) // YYYY-MM-DD
+  const thirtyAgoDate = new Date()
+  thirtyAgoDate.setDate(thirtyAgoDate.getDate() - 30)
+  const thirtyAgoLocal = thirtyAgoDate.toLocaleDateString("en-CA", { timeZone: tz })
 
-  // 1. Count total visits and unique/new clients from raw visits table
-  //    (visits_daily is pre-aggregated but may not be populated when locationId is missing)
+  const fromDate = opts?.from ?? thirtyAgoLocal
+  const toDate = opts?.to ?? todayLocal
+
+  // Helper: compare visits.created_at as a tenant-local date
+  // (${visits.created_at} AT TIME ZONE 'UTC' AT TIME ZONE tz)::date
+
+  // 1. Count total visits and unique clients (tenant-local date range)
   const visitsAgg = await db.execute(
     sql`
       SELECT
@@ -27,8 +37,8 @@ export async function computeAnalyticsSummary(
         COUNT(DISTINCT "client_id")::int AS "uniqueClients"
       FROM loyalty.visits
       WHERE "tenant_id" = ${tenantId}
-        AND "created_at" >= ${fromDate}::date
-        AND "created_at" < (${toDate}::date + interval '1 day')
+        AND ("created_at" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date >= ${fromDate}::date
+        AND ("created_at" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date <= ${toDate}::date
     `,
   )
 
@@ -39,21 +49,21 @@ export async function computeAnalyticsSummary(
   const totalVisits = visitsRows[0]?.totalVisits ?? 0
   const uniqueClients = visitsRows[0]?.uniqueClients ?? 0
 
-  // 2. Count new clients (created within the date range) for this tenant
+  // 2. Count new clients (created within the date range in tenant's local time)
   const newClientsResult = await db.execute(
     sql`
       SELECT COUNT(*)::int AS "newClients"
       FROM loyalty.clients
       WHERE "tenant_id" = ${tenantId}
-        AND "created_at" >= ${fromDate}::date
-        AND "created_at" < (${toDate}::date + interval '1 day')
+        AND ("created_at" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date >= ${fromDate}::date
+        AND ("created_at" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date <= ${toDate}::date
     `,
   )
 
   const newClientsRows = newClientsResult.rows as Array<{ newClients: number }>
   const newClients = newClientsRows[0]?.newClients ?? 0
 
-  // 3. Count rewards redeemed from rewards table
+  // 3. Count rewards redeemed (tenant-local date range)
   const rewardsAgg = await db.execute(
     sql`
       SELECT
@@ -61,8 +71,8 @@ export async function computeAnalyticsSummary(
         COUNT(*) FILTER (WHERE "status" = 'redeemed')::int AS "totalRedeemed"
       FROM loyalty.rewards
       WHERE "tenant_id" = ${tenantId}
-        AND "created_at" >= ${fromDate}::date
-        AND "created_at" < (${toDate}::date + interval '1 day')
+        AND ("created_at" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date >= ${fromDate}::date
+        AND ("created_at" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date <= ${toDate}::date
     `,
   )
 
@@ -79,19 +89,21 @@ export async function computeAnalyticsSummary(
   const avgVisitsPerClient =
     uniqueClients > 0 ? Number((totalVisits / uniqueClients).toFixed(2)) : 0
 
-  // 5. Top clients by visit count in range
+  // 5. Top clients by visit count in range (tenant-local dates, includes tier)
   const topClientsResult = await db.execute(
     sql`
       SELECT
         c."id",
         c."name",
+        c."last_name" AS "lastName",
+        c."tier",
         COUNT(v."id")::int AS "visitCount"
       FROM loyalty.visits v
       INNER JOIN loyalty.clients c ON c."id" = v."client_id"
       WHERE v."tenant_id" = ${tenantId}
-        AND v."created_at" >= ${fromDate}::date
-        AND v."created_at" < (${toDate}::date + interval '1 day')
-      GROUP BY c."id", c."name"
+        AND (v."created_at" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date >= ${fromDate}::date
+        AND (v."created_at" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date <= ${toDate}::date
+      GROUP BY c."id", c."name", c."last_name", c."tier"
       ORDER BY "visitCount" DESC
       LIMIT 10
     `,
@@ -100,11 +112,14 @@ export async function computeAnalyticsSummary(
   const topClientRows = topClientsResult.rows as Array<{
     id: string
     name: string
+    lastName: string | null
+    tier: string | null
     visitCount: number
   }>
   const topClients = topClientRows.map((row) => ({
     id: row.id,
-    name: row.name,
+    name: [row.name, row.lastName].filter(Boolean).join(" "),
+    tier: row.tier,
     visitCount: row.visitCount,
   }))
 

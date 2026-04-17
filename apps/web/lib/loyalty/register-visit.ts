@@ -35,6 +35,7 @@ export async function registerVisit(params: {
   let analyticsLocationId: string | null = null
   let analyticsIsNewClient = false
   let analyticsCycleComplete = false
+  let analyticsTimezone = "America/Lima"
 
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: transaction with stamps/points dual logic, cycle management, and analytics
   const result = await db.transaction(async (tx) => {
@@ -315,6 +316,7 @@ export async function registerVisit(params: {
       analyticsLocationId = locationId
       analyticsIsNewClient = client.totalVisits === 0
       analyticsCycleComplete = cycleComplete
+      analyticsTimezone = tenantTz
     }
 
     return {
@@ -349,12 +351,16 @@ export async function registerVisit(params: {
   if (result.code === "OK" && analyticsLocationId) {
     updateVisitsDaily(tenantId, analyticsLocationId, new Date(), {
       isNewClient: analyticsIsNewClient,
+      tenantTimezone: analyticsTimezone,
     }).catch((err) => console.error("[registerVisit] updateVisitsDaily failed:", err))
 
     if (analyticsCycleComplete) {
-      updateRewardsRedeemed(tenantId, analyticsLocationId, new Date()).catch((err) =>
-        console.error("[registerVisit] updateRewardsRedeemed failed:", err),
-      )
+      updateRewardsRedeemed(
+        tenantId,
+        analyticsLocationId,
+        new Date(),
+        analyticsTimezone,
+      ).catch((err) => console.error("[registerVisit] updateRewardsRedeemed failed:", err))
     }
   }
 
