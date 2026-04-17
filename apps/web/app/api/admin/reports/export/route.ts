@@ -1,11 +1,12 @@
 import ExcelJS from "exceljs"
 import {
-  appleDevices,
+  and,
   clients,
   db,
   desc,
   eq,
-  isNotNull,
+  gte,
+  lte,
   locations,
   passInstances,
   promotions,
@@ -14,6 +15,8 @@ import {
   sql,
 } from "@cuik/db"
 import { requireAuth, requireRole } from "@/lib/api-utils"
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 export const dynamic = "force-dynamic"
 
@@ -32,6 +35,15 @@ export async function GET(request: Request) {
 
   const roleError = requireRole(session, "super_admin")
   if (roleError) return roleError
+
+  // Optional date range (YYYY-MM-DD in America/Lima). Filters visits only;
+  // clients are always included (0-visit clients still get one row).
+  const url = new URL(request.url)
+  const fromParam = url.searchParams.get("from")
+  const toParam = url.searchParams.get("to")
+  const fromDate = fromParam && ISO_DATE_RE.test(fromParam) ? fromParam : null
+  const toDate = toParam && ISO_DATE_RE.test(toParam) ? toParam : null
+  const PLATFORM_TZ = "America/Lima"
 
   const activeTenants = await db
     .select({ id: tenants.id, name: tenants.name })
@@ -87,7 +99,27 @@ export async function GET(request: Request) {
     headerRow.alignment = { vertical: "middle", horizontal: "center" }
     headerRow.height = 28
 
-    // Query clients with their visits (LEFT JOIN so 0-visit clients appear)
+    // Query clients with their visits (LEFT JOIN so 0-visit clients appear).
+    // When a date range is passed, only visits within it join; clients with
+    // zero visits in range still get a "Sin visitas" row.
+    const visitJoinConditions = [eq(visits.clientId, clients.id)]
+    if (fromDate) {
+      visitJoinConditions.push(
+        gte(
+          sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${PLATFORM_TZ})::date`,
+          sql`${fromDate}::date`,
+        ),
+      )
+    }
+    if (toDate) {
+      visitJoinConditions.push(
+        lte(
+          sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${PLATFORM_TZ})::date`,
+          sql`${toDate}::date`,
+        ),
+      )
+    }
+
     const rows = await db
       .select({
         clientName: clients.name,
@@ -102,7 +134,7 @@ export async function GET(request: Request) {
         visitAmount: visits.amount,
       })
       .from(clients)
-      .leftJoin(visits, eq(visits.clientId, clients.id))
+      .leftJoin(visits, and(...visitJoinConditions))
       .where(eq(clients.tenantId, tenant.id))
       .orderBy(clients.lastName, clients.name, desc(visits.createdAt))
 

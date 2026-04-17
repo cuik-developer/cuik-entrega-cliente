@@ -3,8 +3,10 @@
 import type { AnalyticsSummary } from "@cuik/shared/types/analytics"
 import { CalendarDays, Download, Loader2 } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
+import type { DateRange } from "react-day-picker"
 
 import { Button } from "@/components/ui/button"
+import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { useTenant } from "@/hooks/use-tenant"
 
 import { KpiCards } from "./_components/kpi-cards"
@@ -25,14 +27,15 @@ const RANGE_OPTIONS = [
   { label: "90 días", days: 90 },
 ] as const
 
+function toYMD(d: Date): string {
+  return d.toLocaleDateString("en-CA", { timeZone: "America/Lima" })
+}
+
 function getDateRange(days: number) {
   const to = new Date()
   const from = new Date()
   from.setDate(from.getDate() - days)
-  return {
-    from: from.toISOString().split("T")[0],
-    to: to.toISOString().split("T")[0],
-  }
+  return { from: toYMD(from), to: toYMD(to) }
 }
 
 const EMPTY_SUMMARY: AnalyticsSummary = {
@@ -48,7 +51,9 @@ const EMPTY_SUMMARY: AnalyticsSummary = {
 export default function AnaliticaPage() {
   const { tenantSlug, isLoading: tenantLoading, error: tenantError } = useTenant()
 
-  const [rangeDays, setRangeDays] = useState(30)
+  const [rangeDays, setRangeDays] = useState<number | "custom">(30)
+  const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined)
+  const [minDate, setMinDate] = useState<Date | undefined>(undefined)
   const [period, setPeriod] = useState<Period>("day")
 
   const [visits, setVisits] = useState<VisitsChartRow[]>([])
@@ -66,11 +71,18 @@ export default function AnaliticaPage() {
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
 
+  const currentRange =
+    rangeDays === "custom" && customRange?.from && customRange.to
+      ? { from: toYMD(customRange.from), to: toYMD(customRange.to) }
+      : typeof rangeDays === "number"
+        ? getDateRange(rangeDays)
+        : getDateRange(30)
+
   async function handleExportVisits() {
     if (!tenantSlug) return
     setExporting(true)
     try {
-      const { from, to } = getDateRange(rangeDays)
+      const { from, to } = currentRange
       const res = await fetch(`/api/${tenantSlug}/analytics/export-visits?from=${from}&to=${to}`)
       if (!res.ok) {
         setError("Error al exportar visitas")
@@ -96,7 +108,7 @@ export default function AnaliticaPage() {
     setLoading(true)
     setError(null)
 
-    const { from, to } = getDateRange(rangeDays)
+    const { from, to } = currentRange
 
     try {
       const [visitsRes, retentionRes, summaryRes, walletRes] = await Promise.all([
@@ -147,13 +159,29 @@ export default function AnaliticaPage() {
     } finally {
       setLoading(false)
     }
-  }, [tenantSlug, rangeDays, period])
+  }, [tenantSlug, currentRange.from, currentRange.to, period])
 
   useEffect(() => {
     if (tenantSlug) {
       fetchAnalytics()
     }
   }, [tenantSlug, fetchAnalytics])
+
+  // Fetch tenant's first visit date to constrain the custom date picker minDate
+  useEffect(() => {
+    if (!tenantSlug) return
+    fetch(`/api/${tenantSlug}/analytics/first-visit`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.success && j.data?.firstVisitDate) {
+          const [y, m, d] = (j.data.firstVisitDate as string).split("-").map(Number)
+          setMinDate(new Date(y, m - 1, d))
+        }
+      })
+      .catch(() => {
+        // silent
+      })
+  }, [tenantSlug])
 
   if (tenantLoading) {
     return (
@@ -181,7 +209,7 @@ export default function AnaliticaPage() {
         </div>
 
         {/* Date range selector + export */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <CalendarDays className="w-4 h-4 text-muted-foreground" />
           {RANGE_OPTIONS.map((opt) => (
             <Button
@@ -194,6 +222,15 @@ export default function AnaliticaPage() {
               {opt.label}
             </Button>
           ))}
+          <DateRangePicker
+            value={customRange}
+            onChange={(r) => {
+              setCustomRange(r)
+              if (r?.from && r.to) setRangeDays("custom")
+            }}
+            minDate={minDate}
+            active={rangeDays === "custom"}
+          />
           <Button
             variant="outline"
             size="sm"
