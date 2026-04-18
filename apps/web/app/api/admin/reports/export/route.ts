@@ -58,33 +58,59 @@ export async function GET(request: Request) {
   wb.created = new Date()
 
   for (const tenant of activeTenants) {
-    // Check if this tenant has minimumPurchaseAmount configured in any promotion
-    const promoRows = await db
-      .select({ config: promotions.config })
+    // Determine program type + minimum-purchase setting from the tenant's
+    // ACTIVE promotion. Only one row should match; if multiple exist, prefer
+    // the most recently created (defensive).
+    const activePromoRows = await db
+      .select({ type: promotions.type, config: promotions.config })
       .from(promotions)
-      .where(eq(promotions.tenantId, tenant.id))
+      .where(and(eq(promotions.tenantId, tenant.id), eq(promotions.active, true)))
+      .orderBy(desc(promotions.createdAt))
+      .limit(1)
 
-    const showAmount = promoRows.some((p) => {
-      const cfg = p.config as Record<string, unknown> | null
-      const acc = cfg?.accumulation as Record<string, unknown> | undefined
-      const min = acc?.minimumPurchaseAmount as number | null | undefined
-      return min != null && min > 0
-    })
+    const activePromo = activePromoRows[0]
+    const programType: "stamps" | "points" | null =
+      activePromo?.type === "stamps" || activePromo?.type === "points" ? activePromo.type : null
+
+    // Min purchase amount — path differs by program type
+    let showAmount = false
+    if (activePromo?.config) {
+      const cfg = activePromo.config as Record<string, unknown>
+      if (programType === "stamps") {
+        const acc = cfg.accumulation as Record<string, unknown> | undefined
+        const min = acc?.minimumPurchaseAmount as number | null | undefined
+        showAmount = min != null && min > 0
+      } else if (programType === "points") {
+        const pts = cfg.points as Record<string, unknown> | undefined
+        const min = pts?.minimumPurchaseForPoints as number | null | undefined
+        showAmount = min != null && min > 0
+      }
+    }
 
     const sheetName = tenant.name.replace(/[*?:/\\[\]]/g, "").slice(0, 31) || "Sin nombre"
     const ws = wb.addWorksheet(sheetName)
 
-    // Build columns — Monto is conditional
+    // Build columns in spec order:
+    // Nombre | Email | Teléfono | DNI | [# Sellos | Ciclo] or [Puntos] |
+    // Fecha Registro | Fecha Visita | Local | Plataforma Wallet | [Monto]
     const cols: Partial<ExcelJS.Column>[] = [
       { header: "Nombre", key: "name", width: 22 },
       { header: "Email", key: "email", width: 28 },
       { header: "Teléfono", key: "phone", width: 16 },
       { header: "DNI", key: "dni", width: 14 },
+    ]
+    if (programType === "stamps") {
+      cols.push({ header: "# Sellos", key: "stampNum", width: 10 })
+      cols.push({ header: "Ciclo", key: "cycle", width: 8 })
+    } else if (programType === "points") {
+      cols.push({ header: "Puntos", key: "points", width: 10 })
+    }
+    cols.push(
       { header: "Fecha Registro", key: "createdAt", width: 16 },
       { header: "Fecha Visita", key: "visitDate", width: 16 },
       { header: "Local", key: "location", width: 22 },
-{ header: "Plataforma Wallet", key: "walletPlatform", width: 18 },
-    ]
+      { header: "Plataforma Wallet", key: "walletPlatform", width: 18 },
+    )
     if (showAmount) {
       cols.push({ header: "Monto", key: "amount", width: 12 })
     }
@@ -128,6 +154,9 @@ export async function GET(request: Request) {
         visitCreatedAt: visits.createdAt,
         visitLocationId: visits.locationId,
         visitAmount: visits.amount,
+        visitNum: visits.visitNum,
+        visitCycle: visits.cycleNumber,
+        visitPoints: visits.points,
       })
       .from(clients)
       .leftJoin(visits, and(...visitJoinConditions))
@@ -167,6 +196,7 @@ export async function GET(request: Request) {
     for (const row of rows) {
       const fullName = [row.clientName, row.clientLastName].filter(Boolean).join(" ")
       const walletPlatform = walletMap.get(row.clientId) ?? "Sin Wallet"
+      const hasVisit = row.visitCreatedAt != null
 
       const rowData: Record<string, unknown> = {
         name: fullName,
@@ -174,9 +204,15 @@ export async function GET(request: Request) {
         phone: row.phone ?? "",
         dni: row.dni ?? "",
         createdAt: formatDate(row.clientCreatedAt),
-        visitDate: row.visitCreatedAt ? formatDate(row.visitCreatedAt) : "Sin visitas",
+        visitDate: hasVisit ? formatDate(row.visitCreatedAt) : "Sin visitas",
         location: row.visitLocationId ? (locationMap.get(row.visitLocationId) ?? "") : "",
         walletPlatform,
+      }
+      if (programType === "stamps") {
+        rowData.stampNum = hasVisit ? (row.visitNum ?? "") : ""
+        rowData.cycle = hasVisit ? (row.visitCycle ?? "") : ""
+      } else if (programType === "points") {
+        rowData.points = hasVisit ? (row.visitPoints ?? 0) : ""
       }
       if (showAmount) {
         rowData.amount = row.visitAmount != null ? Number(row.visitAmount) : ""
