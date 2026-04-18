@@ -4,8 +4,8 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useTransition } from "react"
 
 const RANGES = [
+  { value: "7", label: "7 días" },
   { value: "30", label: "30 días" },
-  { value: "60", label: "60 días" },
   { value: "90", label: "90 días" },
 ] as const
 

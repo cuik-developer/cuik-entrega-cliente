@@ -89,7 +89,11 @@ export async function computeAnalyticsSummary(
   const avgVisitsPerClient =
     uniqueClients > 0 ? Number((totalVisits / uniqueClients).toFixed(2)) : 0
 
-  // 5. Top clients by visit count in range (tenant-local dates, includes tier)
+  // 5. Top clients by LIFETIME visit count (no date filter — intentional).
+  // Users expect this widget to show their most loyal clients historically,
+  // not just within the current date selector. Scoping this to the range
+  // truncated the counts (a client with 10 visits showed 2 in the last-7d
+  // view). Range-scoped metrics live in totalVisits/uniqueClients above.
   const topClientsResult = await db.execute(
     sql`
       SELECT
@@ -101,8 +105,6 @@ export async function computeAnalyticsSummary(
       FROM loyalty.visits v
       INNER JOIN loyalty.clients c ON c."id" = v."client_id"
       WHERE v."tenant_id" = ${tenantId}
-        AND (v."created_at" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date >= ${fromDate}::date
-        AND (v."created_at" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date <= ${toDate}::date
       GROUP BY c."id", c."name", c."last_name", c."tier"
       ORDER BY "visitCount" DESC
       LIMIT 10

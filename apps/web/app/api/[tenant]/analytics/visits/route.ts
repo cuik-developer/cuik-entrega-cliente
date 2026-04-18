@@ -54,10 +54,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         dateExpr = sql`(${localCreatedAt})::date`
     }
 
-    // Query visits grouped by date from loyalty.visits directly
+    // Query visits grouped by date from loyalty.visits directly.
+    // IMPORTANT: cast the date bucket to text in the SELECT so the wire
+    // format is a plain "YYYY-MM-DD" string. Returning a PG `date` makes
+    // node-postgres parse it as a Date at UTC midnight, which the browser
+    // then re-formats in its local timezone — shifting the label one day
+    // back in negative-offset zones (Lima = UTC-5).
     const rows = await db
       .select({
-        date: dateExpr.as("date"),
+        date: sql<string>`to_char(${dateExpr}, 'YYYY-MM-DD')`.as("date"),
         totalVisits: sql<number>`COUNT(*)::int`.as("totalVisits"),
         uniqueClients: sql<number>`COUNT(DISTINCT ${visits.clientId})::int`.as("uniqueClients"),
         newClients:

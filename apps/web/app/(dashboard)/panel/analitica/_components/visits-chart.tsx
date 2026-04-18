@@ -27,12 +27,15 @@ const PERIOD_LABELS: Record<Period, string> = {
 }
 
 function formatDateLabel(dateStr: string, period: Period): string {
-  const date = new Date(dateStr)
+  // dateStr arrives as "YYYY-MM-DD" (already bucketed in the tenant's tz by
+  // the server). Construct the Date from components so it represents the
+  // intended local day — new Date("YYYY-MM-DD") parses as UTC midnight and
+  // drifts to the previous day in negative-offset browser timezones.
+  const [y, m, d] = dateStr.split("-").map(Number)
+  if (!y || !m || !d) return dateStr
+  const date = new Date(y, m - 1, d, 12) // noon local to avoid DST edge cases
   if (period === "month") {
     return date.toLocaleDateString("es-PE", { month: "short", year: "2-digit" })
-  }
-  if (period === "week") {
-    return date.toLocaleDateString("es-PE", { day: "numeric", month: "short" })
   }
   return date.toLocaleDateString("es-PE", { day: "numeric", month: "short" })
 }

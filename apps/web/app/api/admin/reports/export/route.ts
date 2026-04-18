@@ -20,10 +20,14 @@ export const dynamic = "force-dynamic"
 
 function formatDate(d: Date | null | undefined): string {
   if (!d) return ""
+  // Render in Lima timezone — a visit at 23:30 Lima is stored as UTC 04:30
+  // of the NEXT day, and without an explicit timeZone the server's OS tz
+  // bleeds through and shifts the date by a day.
   return d.toLocaleDateString("es-MX", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
+    timeZone: "America/Lima",
   })
 }
 
