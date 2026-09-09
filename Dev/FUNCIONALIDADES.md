@@ -154,13 +154,21 @@ Sidebar izquierdo. Rol requerido: `admin` o `super_admin`.
 
 ### 4.1 Dashboard (`/panel`)
 
-**KPI Cards** (4 columnas):
-1. **Visitas hoy** con subtexto "N esta semana"
-2. **Clientes activos** (total registrados)
-3. **Nuevos hoy** (clientes creados hoy)
-4. **Premios pendientes** (rewards con status=pending)
+**KPI Cards** (4 columnas, semana en curso vs. semana pasada): Visitas · Clientes que vinieron (unicos) · Clientes nuevos · Premios canjeados. Cada tarjeta muestra:
+- el valor **de la semana en curso** (lunes 00:00 → ahora), con la etiqueta del tramo cubierto ("lun–mie");
+- un pill de variacion vs. **la semana pasada hasta el mismo dia y la misma hora** (▲ verde / ▼ rojo / = gris); si la semana pasada no tenia datos a esa altura muestra "sin base" en vez de un porcentaje enganoso;
+- debajo, "Hoy: N · Sem. pasada a esta hora: M".
 
-Todos los calculos de "hoy" y "semana" en el **timezone del tenant** (via SQL `AT TIME ZONE`).
+La comparacion es a la misma hora a proposito: contra los dias completos de la semana pasada, todas las mananas parecerian una caida. Semana ISO (empieza lunes). Todo en el **timezone del tenant** (`lib/dashboard/compute-dashboard.ts`, helpers puros en `kpi-utils.ts`).
+
+**Bloque "Para hoy"**: lista de cosas que piden una accion, cada una con link a la pantalla donde se hace. Solo aparecen las filas con algo pendiente; si no hay nada, dice "Todo en orden".
+| Fila | Criterio | Link |
+|---|---|---|
+| N clientes frecuentes dejaron de venir | `getAtRiskClientCount` con umbrales del tenant (mismo criterio que el card de churn) | Campanas |
+| N premios vencen en 7 dias (+ total pendientes) | rewards `pending` con `expires_at` en los proximos 7 dias; si no hay por vencer, muestra los pendientes totales | Clientes |
+| Campana X programada para <fecha> | campanas `scheduled`, hasta 3, ordenadas por fecha | Campanas |
+| N clientes nuevos de esta semana todavia no visitaron | registrados en 7 dias con `total_visits = 0` | Clientes?segment=nuevo |
+| Sin visitas registradas en 7 dias: <cajeros> | miembros no-owner de la organizacion sin `visits.registered_by` en 7 dias | Cajeros |
 
 **Grafico semanal**: BarChart con visitas por dia, hoy y los 6 dias anteriores en tz del tenant. Siempre 7 barras (dias sin visitas = 0), etiquetas en espanol (Lun…Dom) formateadas en la UI — no con `to_char('Dy')`, que depende del `lc_time` de Postgres y salia en ingles. Eje Y solo enteros.
 

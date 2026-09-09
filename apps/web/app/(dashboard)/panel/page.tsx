@@ -1,11 +1,13 @@
-import { and, clients, count, db, desc, eq, rewards, sql, visits } from "@cuik/db"
-import { Plus, Star, TrendingUp, Users } from "lucide-react"
+import { and, clients, count, db, desc, eq, sql, visits } from "@cuik/db"
 import { headers } from "next/headers"
 
-import { Card, CardContent } from "@/components/ui/card"
 import { auth } from "@/lib/auth"
+import { getDashboardKpis, getTodayItems } from "@/lib/dashboard/compute-dashboard"
+import { weekRangeLabel } from "@/lib/dashboard/kpi-utils"
 import { getTenantForUser } from "@/lib/tenant-context"
 
+import { KpiCompareCards } from "./components/kpi-compare-cards"
+import { TodayBlock } from "./components/today-block"
 import { TransactionsTable } from "./components/transactions-table"
 import { WeeklyChart } from "./components/weekly-chart"
 
@@ -30,58 +32,9 @@ export default async function DashboardPage() {
   const safeTz = rawTz.replace(/[^A-Za-z0-9_/+-]/g, "") || "America/Lima"
   const tz = sql.raw(`'${safeTz}'`)
 
-  // "Today" and "week start" evaluated in tenant's timezone via SQL AT TIME ZONE
-
-  const [
-    totalClientsResult,
-    visitsToday,
-    visitsWeek,
-    pendingRewardsResult,
-    newClientsToday,
-    recentVisits,
-    weeklyVisitsData,
-  ] = await Promise.all([
-    // Total clients
-    db.select({ cnt: count() }).from(clients).where(eq(clients.tenantId, tenantId)),
-
-    // Visits today (tenant timezone)
-    db
-      .select({ cnt: count() })
-      .from(visits)
-      .where(
-        and(
-          eq(visits.tenantId, tenantId),
-          sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date = (NOW() AT TIME ZONE ${tz})::date`,
-        ),
-      ),
-
-    // Visits this week (tenant timezone, week starts Sunday)
-    db
-      .select({ cnt: count() })
-      .from(visits)
-      .where(
-        and(
-          eq(visits.tenantId, tenantId),
-          sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date >= date_trunc('week', (NOW() AT TIME ZONE ${tz}))::date`,
-        ),
-      ),
-
-    // Pending rewards
-    db
-      .select({ cnt: count() })
-      .from(rewards)
-      .where(and(eq(rewards.tenantId, tenantId), eq(rewards.status, "pending"))),
-
-    // New clients today (tenant timezone)
-    db
-      .select({ cnt: count() })
-      .from(clients)
-      .where(
-        and(
-          eq(clients.tenantId, tenantId),
-          sql`(${clients.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date = (NOW() AT TIME ZONE ${tz})::date`,
-        ),
-      ),
+  const [kpis, today, recentVisits, weeklyVisitsData] = await Promise.all([
+    getDashboardKpis(tenantId, tenant.timezone),
+    getTodayItems({ tenantId, organizationId: tenant.organizationId }),
 
     // Last 10 visits with client join
     db
@@ -117,47 +70,6 @@ export default async function DashboardPage() {
       .groupBy(sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date`)
       .orderBy(sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date`),
   ])
-
-  const totalClients = totalClientsResult[0]?.cnt ?? 0
-  const todayVisitCount = visitsToday[0]?.cnt ?? 0
-  const weekVisitCount = visitsWeek[0]?.cnt ?? 0
-  const pendingRewards = pendingRewardsResult[0]?.cnt ?? 0
-  const newClientsTodayCount = newClientsToday[0]?.cnt ?? 0
-
-  const kpis = [
-    {
-      label: "Visitas hoy",
-      value: String(todayVisitCount),
-      sub: `${weekVisitCount} esta semana`,
-      subColor: "text-slate-500",
-      icon: TrendingUp,
-      bg: "bg-blue-50 text-primary",
-    },
-    {
-      label: "Clientes activos",
-      value: String(totalClients),
-      sub: "registrados",
-      subColor: "text-slate-500",
-      icon: Users,
-      bg: "bg-emerald-50 text-emerald-600",
-    },
-    {
-      label: "Nuevos hoy",
-      value: String(newClientsTodayCount),
-      sub: "clientes nuevos",
-      subColor: "text-emerald-600",
-      icon: Plus,
-      bg: "bg-amber-50 text-amber-600",
-    },
-    {
-      label: "Premios pendientes",
-      value: String(pendingRewards),
-      sub: "ciclos completados",
-      subColor: "text-accent",
-      icon: Star,
-      bg: "bg-orange-50 text-accent",
-    },
-  ]
 
   // Always 7 bars (today and the 6 days before, tenant-local), zero-filled, so a
   // quiet Monday shows as 0 instead of disappearing from the axis.
@@ -201,27 +113,18 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((kpi) => (
-          <Card key={kpi.label} className="border border-slate-200">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-slate-500 font-medium">{kpi.label}</span>
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${kpi.bg}`}>
-                  <kpi.icon className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="text-2xl font-extrabold text-slate-900">{kpi.value}</div>
-              <div className={`text-xs mt-0.5 font-medium ${kpi.subColor}`}>{kpi.sub}</div>
-            </CardContent>
-          </Card>
-        ))}
+      <KpiCompareCards kpis={kpis} rangeLabel={weekRangeLabel(todayLocal)} />
+
+      <div className="grid lg:grid-cols-5 gap-6">
+        <div className="lg:col-span-2">
+          <TodayBlock items={today} timezone={tenant.timezone} />
+        </div>
+        <div className="lg:col-span-3">
+          <WeeklyChart data={weeklyChart} />
+        </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <WeeklyChart data={weeklyChart} />
-        <TransactionsTable data={transactions} timezone={tenant.timezone} />
-      </div>
+      <TransactionsTable data={transactions} timezone={tenant.timezone} />
     </div>
   )
 }
