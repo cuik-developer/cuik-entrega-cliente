@@ -3,12 +3,12 @@
 import { ArrowLeft, Coins, Loader2, Star } from "lucide-react"
 import { useParams, useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
-
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useTenant } from "@/hooks/use-tenant"
+import { formatDateTime } from "@/lib/format-date"
 
 import { ClientNotes } from "../_components/client-notes"
 import { ClientTags } from "../_components/client-tags"
@@ -52,7 +52,7 @@ const statusColors: Record<string, string> = {
 export default function ClientDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const { tenantSlug } = useTenant()
+  const { tenantSlug, timezone } = useTenant()
   const clientId = params.id as string
 
   const [data, setData] = useState<ClientDetail | null>(null)
@@ -178,6 +178,7 @@ export default function ClientDetailPage() {
         <TabsContent value="info" className="mt-4">
           <ClientInfoTab
             client={client}
+            timezone={timezone}
             isPoints={isPoints}
             stampsCurrent={stampsCurrent}
             stampsMax={stampsMax}
@@ -224,9 +225,11 @@ function ClientInfoTab({
   stampsMax,
   pct,
   points,
+  timezone,
 }: {
   client: ClientRow
   isPoints: boolean
+  timezone: string
   stampsCurrent: number
   stampsMax: number
   pct: number
@@ -241,14 +244,7 @@ function ClientInfoTab({
           <InfoField label="Celular" value={client.phone || "—"} />
           <InfoField label="Email" value={client.email || "—"} />
           <InfoField label="DNI" value={client.dni || "—"} />
-          <InfoField
-            label="Registro"
-            value={new Date(client.createdAt).toLocaleDateString("es-AR", {
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-            })}
-          />
+          <InfoField label="Registro" value={formatDateTime(client.createdAt, timezone)} />
         </div>
 
         <div className="pt-3 border-t border-border space-y-3">

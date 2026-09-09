@@ -3,7 +3,6 @@
 import { ChevronLeft, ChevronRight, Eye, Loader2, Send } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
-
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,6 +22,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { useTenant } from "@/hooks/use-tenant"
+import { formatDateTime } from "@/lib/format-date"
 
 import { CampaignDetailDialog } from "./campaign-detail-dialog"
 
@@ -188,6 +189,7 @@ function MobileCampaignCard({
 }
 
 export function CampaignList({ tenantSlug, refreshKey }: CampaignListProps) {
+  const { timezone } = useTenant()
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([])
   const [pagination, setPagination] = useState<PaginationData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -247,16 +249,7 @@ export function CampaignList({ tenantSlug, refreshKey }: CampaignListProps) {
     }
   }
 
-  function formatDate(dateStr: string | null) {
-    if (!dateStr) return "—"
-    return new Date(dateStr).toLocaleDateString("es-PE", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-  }
+  const formatDate = (dateStr: string | null) => formatDateTime(dateStr, timezone)
 
   return (
     <Card className="border border-border">

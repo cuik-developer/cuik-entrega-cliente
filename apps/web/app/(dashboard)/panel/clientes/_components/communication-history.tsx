@@ -2,9 +2,10 @@
 
 import { Loader2, Mail, MessageSquare, Send } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
-
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
+import { useTenant } from "@/hooks/use-tenant"
+import { formatDateTime } from "@/lib/format-date"
 
 type CommunicationEntry = {
   notificationId: string
@@ -54,6 +55,7 @@ const channelConfig: Record<string, { label: string; className: string; icon: ty
 }
 
 export function CommunicationHistory({ clientId, tenantSlug }: CommunicationHistoryProps) {
+  const { timezone } = useTenant()
   const [entries, setEntries] = useState<CommunicationEntry[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -75,17 +77,7 @@ export function CommunicationHistory({ clientId, tenantSlug }: CommunicationHist
     fetchCommunications()
   }, [fetchCommunications])
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return "—"
-    const date = new Date(dateStr)
-    return date.toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-  }
+  const formatDate = (dateStr: string | null) => formatDateTime(dateStr, timezone)
 
   if (loading) {
     return (

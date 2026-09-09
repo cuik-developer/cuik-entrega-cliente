@@ -148,6 +148,8 @@ Settings globales de la plataforma almacenados en `globalConfig` (key-value json
 
 ## 4. Panel Admin (comercio)
 
+> **Formato de fecha del panel.** Toda fecha visible en `/panel` se muestra como `9 set. 2026, 15:32` (es-PE, 24 h, timezone del tenant) via `formatDateTime` en `apps/web/lib/format-date.ts`. Dato vacio o invalido → `—`. Los exports (`formatDateForExport`) conservan su formato de planilla `09/09/2026 15:32:00`. Las etiquetas de ejes de graficos (ej. "10 ago.", "abr. 26") no son fechas de registro y quedan fuera de esta regla.
+
 Sidebar izquierdo. Rol requerido: `admin` o `super_admin`.
 
 ### 4.1 Dashboard (`/panel`)
@@ -210,6 +212,7 @@ Todos los calculos de "hoy" y "semana" en el **timezone del tenant** (via SQL `A
 - Columnas: month offset (0 = mes del cohorte, 1 = mes siguiente, etc).
 - Celdas: % de la cohorte con **al menos una visita** en ese mes (no acumulado: un cliente visto en M1 y M3 pero no en M2 suma en M1 y M3). Tooltip con la cantidad de clientes. Excluye bloqueados.
 - No se calcula en vivo: la escribe el cron `POST /api/cron/analytics-retention` (header `x-cron-secret`) en `analytics.retention_cohorts` recorriendo todos los tenants activos/trial y recalculando todas las cohortes historicas (`lib/analytics/calculate-retention.ts`, 2 queries por tenant). Sin ese schedule el widget muestra "Sin datos de retencion disponibles". Basta una corrida diaria.
+- `POST /api/cron/analytics-daily[?days=N]` (mismo header) recalcula `analytics.visits_daily` (visitas, clientes unicos, nuevos y premios por dia y sucursal) para los ultimos N dias locales del tenant sin contar hoy (default 3, max 90). Rehacer 3 dias por corrida hace inocua una noche perdida; `?days=90` rellena el historico al activarlo. Cortes de dia en timezone del tenant; el upsert reemplaza la fila (los contadores en vivo de `updateVisitsDaily` quedan superados por el recuento exacto). Hoy ninguna pantalla lee esta tabla: existe como base precalculada para cuando el volumen lo pida.
 - Todos los limites de mes se evaluan en el timezone del tenant: una visita del 31 de mayo 23:30 en Lima pertenece a mayo. La API devuelve `cohortMonth` como texto `YYYY-MM-DD` y el widget arma la etiqueta por componentes (evita el desfase de un dia al parsear en el navegador).
 
 **Top clientes**: tabla de clientes mas activos (lifetime count, no scope a rango), columnas `#`, Nombre, Visitas, Tier.

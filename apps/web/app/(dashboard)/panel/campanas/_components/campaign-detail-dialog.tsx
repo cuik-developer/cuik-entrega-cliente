@@ -3,7 +3,6 @@
 import { Download, Eye, Loader2 } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
-
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -21,6 +20,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { useTenant } from "@/hooks/use-tenant"
+import { formatDateTime } from "@/lib/format-date"
 
 interface Recipient {
   clientId: string
@@ -53,18 +54,7 @@ interface CampaignDetailDialogProps {
   tenantSlug: string
 }
 
-function formatDate(dateStr: string | null) {
-  if (!dateStr) return "--"
-  return new Date(dateStr).toLocaleDateString("es-PE", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-}
-
-function generateCsv(_campaign: CampaignInfo, recipients: Recipient[]): string {
+function generateCsv(_campaign: CampaignInfo, recipients: Recipient[], timezone: string): string {
   const BOM = "\uFEFF"
   const headers = ["Nombre", "Telefono", "Email", "Estado notificacion", "Visito?", "Fecha visita"]
   const rows = recipients.map((r) => [
@@ -73,7 +63,7 @@ function generateCsv(_campaign: CampaignInfo, recipients: Recipient[]): string {
     r.email ?? "",
     r.status,
     r.visited ? "Si" : "No",
-    r.visitedAt ? formatDate(r.visitedAt) : "",
+    r.visitedAt ? formatDateTime(r.visitedAt, timezone) : "",
   ])
 
   const csvContent = [headers, ...rows]
@@ -83,8 +73,8 @@ function generateCsv(_campaign: CampaignInfo, recipients: Recipient[]): string {
   return BOM + csvContent
 }
 
-function downloadCsv(campaign: CampaignInfo, recipients: Recipient[]) {
-  const csv = generateCsv(campaign, recipients)
+function downloadCsv(campaign: CampaignInfo, recipients: Recipient[], timezone: string) {
+  const csv = generateCsv(campaign, recipients, timezone)
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
   const url = URL.createObjectURL(blob)
   const link = document.createElement("a")
@@ -100,6 +90,8 @@ export function CampaignDetailDialog({
   campaign,
   tenantSlug,
 }: CampaignDetailDialogProps) {
+  const { timezone } = useTenant()
+  const formatDate = (dateStr: string | null) => formatDateTime(dateStr, timezone)
   const [recipients, setRecipients] = useState<Recipient[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
@@ -190,7 +182,7 @@ export function CampaignDetailDialog({
               size="sm"
               variant="outline"
               className="gap-1.5 text-xs"
-              onClick={() => downloadCsv(campaign, recipients)}
+              onClick={() => downloadCsv(campaign, recipients, timezone)}
               type="button"
             >
               <Download className="w-3.5 h-3.5" />

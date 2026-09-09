@@ -2,10 +2,11 @@
 
 import { Loader2, Plus, StickyNote } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
-
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
+import { useTenant } from "@/hooks/use-tenant"
+import { formatDateTime } from "@/lib/format-date"
 
 type Note = {
   id: string
@@ -21,6 +22,7 @@ type ClientNotesProps = {
 }
 
 export function ClientNotes({ clientId, tenantSlug }: ClientNotesProps) {
+  const { timezone } = useTenant()
   const [notes, setNotes] = useState<Note[]>([])
   const [loading, setLoading] = useState(true)
   const [content, setContent] = useState("")
@@ -67,16 +69,7 @@ export function ClientNotes({ clientId, tenantSlug }: ClientNotesProps) {
     }
   }
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr)
-    return date.toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-  }
+  const formatDate = (dateStr: string) => formatDateTime(dateStr, timezone)
 
   if (loading) {
     return (

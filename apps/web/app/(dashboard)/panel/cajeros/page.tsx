@@ -47,6 +47,7 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useTenant } from "@/hooks/use-tenant"
 import { authClient, useSession } from "@/lib/auth-client"
+import { formatDateTime } from "@/lib/format-date"
 import type { CajeroStatsMap } from "./actions"
 import { getCajeroStats, resetCajeroPassword, toggleCajeroBan, updateCajeroName } from "./actions"
 
@@ -85,14 +86,7 @@ type InviteFormValues = z.infer<typeof inviteFormSchema>
 // ── Helpers ─────────────────────────────────────────────────────────
 
 function formatLastAccess(date: Date | null | undefined, tz = "America/Lima"): string {
-  if (!date) return "\u2014"
-  return new Date(date).toLocaleDateString("es-PE", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: tz,
-  })
+  return formatDateTime(date, tz)
 }
 
 function getInitial(name: string): string {
@@ -239,11 +233,13 @@ function InvitationRow({
   onCancel,
   onResend,
   isResending,
+  timezone = "America/Lima",
 }: {
   invitation: OrgInvitation
   onCancel: (invitation: OrgInvitation) => void
   onResend: (invitation: OrgInvitation) => void
   isResending: boolean
+  timezone?: string
 }) {
   return (
     <div className="group flex items-center gap-4 rounded-lg border border-dashed border-amber-200 bg-amber-50/50 px-4 py-3">
@@ -254,12 +250,7 @@ function InvitationRow({
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-slate-700">{invitation.email}</p>
         <p className="text-xs text-slate-400">
-          Expira{" "}
-          {new Date(invitation.expiresAt).toLocaleDateString("es-PE", {
-            day: "numeric",
-            month: "short",
-            timeZone: "America/Lima",
-          })}
+          Expira {formatDateTime(invitation.expiresAt, timezone)}
         </p>
       </div>
 
@@ -747,6 +738,7 @@ export default function CajerosPage() {
                   onCancel={handleCancelInvitation}
                   onResend={handleResendInvitation}
                   isResending={resendingId === inv.id}
+                  timezone={timezone}
                 />
               ))}
             </>

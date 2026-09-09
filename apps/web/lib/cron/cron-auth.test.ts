@@ -18,6 +18,7 @@ vi.mock("@cuik/db", () => {
     _tag: "sql",
   })
   sqlTag.join = vi.fn()
+  sqlTag.raw = vi.fn()
 
   return {
     db: {

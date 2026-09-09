@@ -3,9 +3,9 @@ import type { PassDesignConfigV2 } from "@cuik/shared/types/editor"
 import { Award, Clock, Coins, CreditCard, Gift, Info, Smartphone, Star, Zap } from "lucide-react"
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
-
 import { Badge } from "@/components/ui/badge"
 import { auth } from "@/lib/auth"
+import { formatDateTime } from "@/lib/format-date"
 import { getTenantForUser } from "@/lib/tenant-context"
 
 import { CompartirPase } from "./components/compartir-pase"
@@ -47,21 +47,15 @@ function resolvePreviewValue(template: string, maxVisits = 8): string {
   return resolved
 }
 
-function formatDate(date: Date): string {
-  return new Intl.DateTimeFormat("es-PE", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(date)
-}
-
 function PassDetails({
   design,
   config,
   promotion,
   tenantSlug,
+  timezone,
 }: {
   design: { isActive: boolean; updatedAt: Date; type: string }
+  timezone: string
   config: PassDesignConfigV2
   promotion: { type: string; rewardValue: string | null; maxVisits: number | null } | null
   tenantSlug: string
@@ -97,7 +91,9 @@ function PassDetails({
         >
           {design.isActive ? "Activo" : "Inactivo"}
         </Badge>
-        <span className="text-sm text-slate-500">Actualizado {formatDate(design.updatedAt)}</span>
+        <span className="text-sm text-slate-500">
+          Actualizado {formatDateTime(design.updatedAt, timezone)}
+        </span>
       </div>
 
       {/* Key details */}
@@ -142,7 +138,9 @@ function PassDetails({
                 <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
                   {resolvePreviewValue(field.label, maxVisits)}
                 </span>
-                <p className="mt-0.5 text-sm text-slate-700">{resolvePreviewValue(field.value, maxVisits)}</p>
+                <p className="mt-0.5 text-sm text-slate-700">
+                  {resolvePreviewValue(field.value, maxVisits)}
+                </p>
               </div>
             ))}
           </div>
@@ -406,6 +404,7 @@ export default async function MiPasePage() {
             config={config}
             promotion={result.promotion}
             tenantSlug={tenant.tenantSlug}
+            timezone={tenant.timezone}
           />
 
           {/* Promotion rules section */}
