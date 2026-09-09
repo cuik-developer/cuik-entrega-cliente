@@ -1,6 +1,7 @@
 export {
   type AnalyticsQueryInput,
   analyticsQuerySchema,
+  heatmapQuerySchema,
   type RetentionQueryInput,
   retentionQuerySchema,
   type SummaryQueryInput,

@@ -160,7 +160,7 @@ Sidebar izquierdo. Rol requerido: `admin` o `super_admin`.
 
 Todos los calculos de "hoy" y "semana" en el **timezone del tenant** (via SQL `AT TIME ZONE`).
 
-**Grafico semanal**: BarChart con visitas por dia ultimos 7 dias (label = dia abreviado).
+**Grafico semanal**: BarChart con visitas por dia, hoy y los 6 dias anteriores en tz del tenant. Siempre 7 barras (dias sin visitas = 0), etiquetas en espanol (Lun…Dom) formateadas en la UI — no con `to_char('Dy')`, que depende del `lc_time` de Postgres y salia en ingles. Eje Y solo enteros.
 
 **Transacciones recientes**: tabla con las ultimas 10 visitas.
 - Cada fila: fecha relativa ("Hoy", "Ayer", "Mie 15 abr") + hora + cliente + sello # ciclo.
@@ -194,8 +194,16 @@ Todos los calculos de "hoy" y "semana" en el **timezone del tenant** (via SQL `A
 **KPI Cards** (6): totalVisits, uniqueClients, newClients, rewardsRedeemed, redemptionRate, avgVisitsPerClient.
 
 **Grafico de visitas**: BarChart con periodo seleccionable (Dia / Semana / Mes).
-- Eje X: fechas bucketeadas en tz del tenant.
+- Eje X: fechas bucketeadas en tz del tenant. Eje Y solo enteros.
 - 3 series: Total visitas, Clientes unicos, Clientes nuevos.
+
+**Visitas por dia y hora** (heatmap 7×24): en que momentos de la semana llegan los clientes. Filas Lun–Dom (ISO), columnas 0–23 h en tz del tenant, intensidad = cantidad de visitas. Debajo, "Pico: dia hh:00 (N visitas) · Dia mas fuerte". Respeta rango y sucursal. Endpoint `GET /api/{tenant}/analytics/heatmap?from&to[&locationId]`.
+
+**Embudo de fidelizacion** (historico, todo el comercio): Registrados → Con pase instalado → Visitaron 1+ vez → Visitaron 3+ veces → Canjearon un premio. Cada barra muestra cantidad, % sobre registrados y % sobre el paso anterior (oculto si el paso anterior es 0). Excluye bloqueados. No se filtra por rango ni sucursal a proposito: un cliente se registra una vez y se vuelve fiel a lo largo de meses. Endpoint `GET /api/{tenant}/analytics/funnel`.
+
+**Distribucion por segmento** (hoy, todo el comercio): donut con Nuevo / Frecuente / Esporadico / Regular / En riesgo / Una visita / Inactivo, calculado con `computeClientSegment` y los umbrales del tenant, es decir los mismos numeros que los chips de Clientes. Cada fila de la leyenda linkea a `/panel/clientes?segment=<key>` (la lista lee ese parametro al cargar). Endpoint `GET /api/{tenant}/analytics/segments`.
+
+**Filtro por sucursal**: select "Todas las sucursales / <sucursal>" en el header, visible solo si el tenant tiene 2+ sucursales activas (`GET /api/{tenant}/locations`). Aplica a los widgets basados en visitas: KPIs de visitas / clientes unicos / promedio, grafico de visitas, heatmap y export. Clientes nuevos, premios, embudo, segmentos, wallets, retencion y top clientes son de todo el comercio (un cliente no pertenece a una sucursal). El parametro `locationId` (uuid) lo aceptan `visits`, `summary`, `heatmap` y `export-visits`; invalido → 400.
 
 **Mapa de calor de retencion**: 6 meses de cohort analysis.
 - Filas: mes de cohorte (mes de registro del cliente).
@@ -572,7 +580,7 @@ Fecha Registro | Fecha Visita | Local | Plataforma Wallet |
 
 ### 10.2 Admin → Analitica → Exportar Visitas
 
-**Ruta**: `GET /api/{tenant}/analytics/export-visits?from=YYYY-MM-DD&to=YYYY-MM-DD`.
+**Ruta**: `GET /api/{tenant}/analytics/export-visits?from=YYYY-MM-DD&to=YYYY-MM-DD[&locationId=uuid]` (con `locationId`, solo visitas de esa sucursal).
 
 **Estructura**: Excel con **una hoja "Visitas"**, una fila por visita en el rango seleccionado. Mismas columnas que el super admin (dinamicas segun programa). Solo visitas dentro del rango (INNER JOIN, no incluye clientes con 0 visitas).
 

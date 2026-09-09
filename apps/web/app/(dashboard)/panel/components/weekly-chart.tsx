@@ -45,6 +45,7 @@ export function WeeklyChart({ data }: { data: WeeklyData[] }) {
               tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
               axisLine={false}
               tickLine={false}
+              allowDecimals={false}
             />
             <Tooltip
               content={<CustomTooltip />}

@@ -223,6 +223,12 @@ export default function ClientesPage() {
   >("all")
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null)
 
+  // Deep link from the Analítica segments chart: /panel/clientes?segment=en_riesgo
+  useEffect(() => {
+    const s = new URLSearchParams(window.location.search).get("segment")
+    if (s && s in segmentLabels) setFilter(s as typeof filter)
+  }, [])
+
   const fetchClients = useCallback(
     async (p: number, search: string, segment: string) => {
       if (!tenantSlug) return

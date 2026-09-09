@@ -99,10 +99,12 @@ export default async function DashboardPage() {
       .orderBy(desc(visits.createdAt))
       .limit(10),
 
-    // Daily visit counts for last 7 days (bucketed by tenant's local day)
+    // Daily visit counts for last 7 days (bucketed by tenant's local day).
+    // Returns the date as "YYYY-MM-DD" text and lets the UI name the weekday:
+    // to_char(..., 'Dy') depends on Postgres' lc_time and came back in English.
     db
       .select({
-        day: sql<string>`to_char(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz}, 'Dy')`,
+        date: sql<string>`to_char((${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date, 'YYYY-MM-DD')`,
         visits: count(),
       })
       .from(visits)
@@ -112,10 +114,8 @@ export default async function DashboardPage() {
           sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date >= (NOW() AT TIME ZONE ${tz})::date - interval '6 days'`,
         ),
       )
-      .groupBy(
-        sql`to_char(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz}, 'Dy'), date_trunc('day', ${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})`,
-      )
-      .orderBy(sql`date_trunc('day', ${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})`),
+      .groupBy(sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date`)
+      .orderBy(sql`(${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date`),
   ])
 
   const totalClients = totalClientsResult[0]?.cnt ?? 0
@@ -159,10 +159,20 @@ export default async function DashboardPage() {
     },
   ]
 
-  const weeklyChart = weeklyVisitsData.map((d) => ({
-    day: d.day,
-    visits: d.visits,
-  }))
+  // Always 7 bars (today and the 6 days before, tenant-local), zero-filled, so a
+  // quiet Monday shows as 0 instead of disappearing from the axis.
+  const visitsByDate = new Map(weeklyVisitsData.map((d) => [d.date, Number(d.visits)]))
+  const todayLocal = new Date().toLocaleDateString("en-CA", { timeZone: tenant.timezone })
+  const [ty, tm, td] = todayLocal.split("-").map(Number)
+  const weeklyChart = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(ty, tm - 1, td - (6 - i), 12)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+    const label = d.toLocaleDateString("es-PE", { weekday: "short" }).replace(".", "")
+    return {
+      day: label.charAt(0).toUpperCase() + label.slice(1),
+      visits: visitsByDate.get(key) ?? 0,
+    }
+  })
 
   const transactions = recentVisits.map((v) => ({
     id: v.id,

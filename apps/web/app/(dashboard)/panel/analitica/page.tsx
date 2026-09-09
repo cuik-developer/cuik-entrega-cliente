@@ -1,6 +1,11 @@
 "use client"
 
-import type { AnalyticsSummary } from "@cuik/shared/types/analytics"
+import type {
+  AnalyticsSummary,
+  FunnelData,
+  HeatmapData,
+  SegmentsData,
+} from "@cuik/shared/types/analytics"
 import { CalendarDays, Download, Loader2 } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import type { DateRange } from "react-day-picker"
@@ -9,13 +14,18 @@ import { Button } from "@/components/ui/button"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { useTenant } from "@/hooks/use-tenant"
 
+import { FunnelChart } from "./_components/funnel-chart"
 import { KpiCards } from "./_components/kpi-cards"
+import type { LocationOption } from "./_components/location-select"
+import { ALL_LOCATIONS, LocationSelect } from "./_components/location-select"
 import type { RetentionRow } from "./_components/retention-heatmap"
 import { RetentionHeatmap } from "./_components/retention-heatmap"
+import { SegmentsChart } from "./_components/segments-chart"
 import type { TopClientRow } from "./_components/top-clients-table"
 import { TopClientsTable } from "./_components/top-clients-table"
 import type { VisitsChartRow } from "./_components/visits-chart"
 import { VisitsChart } from "./_components/visits-chart"
+import { VisitsHeatmap } from "./_components/visits-heatmap"
 import type { WalletDistribution } from "./_components/wallet-distribution-chart"
 import { WalletDistributionChart } from "./_components/wallet-distribution-chart"
 
@@ -27,16 +37,22 @@ const RANGE_OPTIONS = [
   { label: "90 días", days: 90 },
 ] as const
 
-function toYMD(d: Date): string {
-  return d.toLocaleDateString("en-CA", { timeZone: "America/Lima" })
+// "YYYY-MM-DD" of a Date as seen in the tenant's timezone — the API buckets by
+// tenant-local day, so the range must be expressed the same way.
+function toYMD(d: Date, tz: string): string {
+  return d.toLocaleDateString("en-CA", { timeZone: tz })
 }
 
-function getDateRange(days: number) {
+function getDateRange(days: number, tz: string) {
   const to = new Date()
   const from = new Date()
   from.setDate(from.getDate() - days)
-  return { from: toYMD(from), to: toYMD(to) }
+  return { from: toYMD(from, tz), to: toYMD(to, tz) }
 }
+
+const EMPTY_HEATMAP: HeatmapData = { cells: [], totalVisits: 0 }
+const EMPTY_FUNNEL: FunnelData = { steps: [] }
+const EMPTY_SEGMENTS: SegmentsData = { segments: [], total: 0 }
 
 const EMPTY_SUMMARY: AnalyticsSummary = {
   totalVisits: 0,
@@ -49,12 +65,19 @@ const EMPTY_SUMMARY: AnalyticsSummary = {
 }
 
 export default function AnaliticaPage() {
-  const { tenantSlug, isLoading: tenantLoading, error: tenantError } = useTenant()
+  const {
+    tenantSlug,
+    timezone: tenantTz,
+    isLoading: tenantLoading,
+    error: tenantError,
+  } = useTenant()
 
   const [rangeDays, setRangeDays] = useState<number | "custom">(30)
   const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined)
   const [minDate, setMinDate] = useState<Date | undefined>(undefined)
   const [period, setPeriod] = useState<Period>("day")
+  const [locations, setLocations] = useState<LocationOption[]>([])
+  const [locationId, setLocationId] = useState<string>(ALL_LOCATIONS)
 
   const [visits, setVisits] = useState<VisitsChartRow[]>([])
   const [retention, setRetention] = useState<RetentionRow[]>([])
@@ -66,6 +89,9 @@ export default function AnaliticaPage() {
     google: 0,
     none: 0,
   })
+  const [heatmap, setHeatmap] = useState<HeatmapData>(EMPTY_HEATMAP)
+  const [funnel, setFunnel] = useState<FunnelData>(EMPTY_FUNNEL)
+  const [segments, setSegments] = useState<SegmentsData>(EMPTY_SEGMENTS)
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -73,17 +99,26 @@ export default function AnaliticaPage() {
 
   const currentRange =
     rangeDays === "custom" && customRange?.from && customRange.to
-      ? { from: toYMD(customRange.from), to: toYMD(customRange.to) }
+      ? { from: toYMD(customRange.from, tenantTz), to: toYMD(customRange.to, tenantTz) }
       : typeof rangeDays === "number"
-        ? getDateRange(rangeDays)
-        : getDateRange(30)
+        ? getDateRange(rangeDays, tenantTz)
+        : getDateRange(30, tenantTz)
+
+  // Branch filter applies to visit-based widgets (KPIs, visits chart, heatmap,
+  // export). Client-base widgets (funnel, segments, wallet, retention, top
+  // clients) are tenant-wide — a client is not tied to one branch.
+  const locationQuery = locationId !== ALL_LOCATIONS ? `&locationId=${locationId}` : ""
+  const scopeLabel =
+    locationId !== ALL_LOCATIONS ? locations.find((l) => l.id === locationId)?.name : undefined
 
   async function handleExportVisits() {
     if (!tenantSlug) return
     setExporting(true)
     try {
       const { from, to } = currentRange
-      const res = await fetch(`/api/${tenantSlug}/analytics/export-visits?from=${from}&to=${to}`)
+      const res = await fetch(
+        `/api/${tenantSlug}/analytics/export-visits?from=${from}&to=${to}${locationQuery}`,
+      )
       if (!res.ok) {
         setError("Error al exportar visitas")
         return
@@ -102,53 +137,69 @@ export default function AnaliticaPage() {
     }
   }
 
+  // Stable strings so the callback only changes when the query actually does.
+  const rangeFrom = currentRange.from
+  const rangeTo = currentRange.to
+
   const fetchAnalytics = useCallback(async () => {
     if (!tenantSlug) return
 
     setLoading(true)
     setError(null)
 
-    const { from, to } = currentRange
+    const base = `/api/${tenantSlug}/analytics`
+    const range = `from=${rangeFrom}&to=${rangeTo}`
 
     try {
-      const [visitsRes, retentionRes, summaryRes, walletRes] = await Promise.all([
-        fetch(`/api/${tenantSlug}/analytics/visits?from=${from}&to=${to}&granularity=${period}`),
-        fetch(`/api/${tenantSlug}/analytics/retention?months=6`),
-        fetch(`/api/${tenantSlug}/analytics/summary?from=${from}&to=${to}`),
-        fetch(`/api/${tenantSlug}/analytics/wallet-distribution`),
-      ])
+      const responses = await Promise.all(
+        [
+          `${base}/visits?${range}&granularity=${period}${locationQuery}`,
+          `${base}/retention?months=6`,
+          `${base}/summary?${range}${locationQuery}`,
+          `${base}/wallet-distribution`,
+          `${base}/heatmap?${range}${locationQuery}`,
+          `${base}/funnel`,
+          `${base}/segments`,
+        ].map((u) => fetch(u).then((r) => r.json())),
+      )
+      const [
+        visitsJson,
+        retentionJson,
+        summaryJson,
+        walletJson,
+        heatmapJson,
+        funnelJson,
+        segmentsJson,
+      ] = responses as Array<{ success: boolean; data?: unknown }>
 
-      const [visitsJson, retentionJson, summaryJson, walletJson] = await Promise.all([
-        visitsRes.json(),
-        retentionRes.json(),
-        summaryRes.json(),
-        walletRes.json(),
-      ])
+      // `undefined` when that call failed — leave the previous value in place.
+      const pick = <T,>(j: { success: boolean; data?: unknown }, fallback: T): T | undefined =>
+        j.success ? ((j.data as T) ?? fallback) : undefined
 
-      if (visitsJson.success) {
-        setVisits(visitsJson.data ?? [])
-      }
-      if (retentionJson.success) {
-        setRetention(retentionJson.data ?? [])
-      }
-      if (summaryJson.success) {
-        const s = summaryJson.data
-        setSummary(s ?? EMPTY_SUMMARY)
+      const v = pick<VisitsChartRow[]>(visitsJson, [])
+      if (v) setVisits(v)
+      const r = pick<RetentionRow[]>(retentionJson, [])
+      if (r) setRetention(r)
+      const s = pick<AnalyticsSummary>(summaryJson, EMPTY_SUMMARY)
+      if (s) {
+        setSummary(s)
         setTopClients(
-          (s?.topClients ?? []).map(
-            (c: { id: string; name: string; visitCount: number; tier?: string | null }) => ({
-              id: c.id,
-              name: c.name,
-              visitCount: c.visitCount,
-              tier: c.tier ?? null,
-            }),
-          ),
+          (s.topClients ?? []).map((c) => ({
+            id: c.id,
+            name: c.name,
+            visitCount: c.visitCount,
+            tier: c.tier ?? null,
+          })),
         )
       }
-
-      if (walletJson.success) {
-        setWalletDist(walletJson.data ?? { apple: 0, google: 0, none: 0 })
-      }
+      const w = pick<WalletDistribution>(walletJson, { apple: 0, google: 0, none: 0 })
+      if (w) setWalletDist(w)
+      const h = pick<HeatmapData>(heatmapJson, EMPTY_HEATMAP)
+      if (h) setHeatmap(h)
+      const f = pick<FunnelData>(funnelJson, EMPTY_FUNNEL)
+      if (f) setFunnel(f)
+      const g = pick<SegmentsData>(segmentsJson, EMPTY_SEGMENTS)
+      if (g) setSegments(g)
 
       // Check if all failed
       if (!visitsJson.success && !retentionJson.success && !summaryJson.success) {
@@ -159,13 +210,30 @@ export default function AnaliticaPage() {
     } finally {
       setLoading(false)
     }
-  }, [tenantSlug, currentRange.from, currentRange.to, period])
+  }, [tenantSlug, rangeFrom, rangeTo, period, locationQuery])
 
   useEffect(() => {
     if (tenantSlug) {
       fetchAnalytics()
     }
   }, [tenantSlug, fetchAnalytics])
+
+  // Branches (only shown when there are 2+)
+  useEffect(() => {
+    if (!tenantSlug) return
+    fetch(`/api/${tenantSlug}/locations`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.success && Array.isArray(j.data)) {
+          setLocations(
+            j.data.map((l: { id: string; name: string }) => ({ id: l.id, name: l.name })),
+          )
+        }
+      })
+      .catch(() => {
+        // silent — selector simply stays hidden
+      })
+  }, [tenantSlug])
 
   // Fetch tenant's first visit date to constrain the custom date picker minDate
   useEffect(() => {
@@ -210,6 +278,7 @@ export default function AnaliticaPage() {
 
         {/* Date range selector + export */}
         <div className="flex flex-wrap items-center gap-2">
+          <LocationSelect locations={locations} value={locationId} onChange={setLocationId} />
           <CalendarDays className="w-4 h-4 text-muted-foreground" />
           {RANGE_OPTIONS.map((opt) => (
             <Button
@@ -270,16 +339,23 @@ export default function AnaliticaPage() {
           {/* Visits Chart */}
           <VisitsChart data={visits} period={period} onPeriodChange={setPeriod} />
 
-          {/* Bottom row: Top Clients + Retention Heatmap */}
+          {/* When do clients come */}
+          <VisitsHeatmap data={heatmap} scopeLabel={scopeLabel} />
+
+          {/* Client base: funnel + segments */}
           <div className="grid lg:grid-cols-2 gap-6">
-            <TopClientsTable clients={topClients} />
-            <RetentionHeatmap data={retention} />
+            <FunnelChart data={funnel} />
+            <SegmentsChart data={segments} />
           </div>
 
-          {/* Wallet distribution */}
+          {/* Top clients + wallet platform */}
           <div className="grid lg:grid-cols-2 gap-6">
+            <TopClientsTable clients={topClients} />
             <WalletDistributionChart data={walletDist} />
           </div>
+
+          {/* Retention cohorts (needs the width) */}
+          <RetentionHeatmap data={retention} />
         </>
       )}
     </div>

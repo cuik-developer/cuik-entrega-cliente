@@ -31,7 +31,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       return errorResponse("Invalid query parameters", 400, parsed.error.flatten())
     }
 
-    const { from, to, granularity } = parsed.data
+    const { from, to, granularity, locationId } = parsed.data
     const rawTz = tenant.timezone ?? "America/Lima"
     // Sanitize: keep only IANA-compatible chars to prevent injection, then inline
     // as a literal so SELECT/GROUP BY produce byte-identical expressions (see
@@ -77,6 +77,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
           eq(visits.tenantId, tenant.id),
           sql`(${localCreatedAt})::date >= ${from}`,
           sql`(${localCreatedAt})::date <= ${to}`,
+          locationId ? eq(visits.locationId, locationId) : undefined,
         ),
       )
       .groupBy(dateExpr)

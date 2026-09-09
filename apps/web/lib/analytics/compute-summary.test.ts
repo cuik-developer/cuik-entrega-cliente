@@ -12,11 +12,22 @@ vi.mock("@cuik/db", () => {
   })
   sqlTag.join = vi.fn()
 
+  // computeAnalyticsSummary first reads the tenant timezone via the query
+  // builder; everything else goes through db.execute (mocked per test).
+  const chain = {
+    from: () => chain,
+    where: () => chain,
+    limit: async () => [{ timezone: "America/Lima" }],
+  }
+
   return {
     db: {
       execute: mockExecute,
+      select: () => chain,
     },
     sql: sqlTag,
+    eq: vi.fn(),
+    tenants: { timezone: "timezone", id: "id" },
   }
 })
 

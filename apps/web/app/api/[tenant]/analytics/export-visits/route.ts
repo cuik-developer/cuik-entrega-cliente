@@ -45,6 +45,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     const url = new URL(request.url)
     const from = url.searchParams.get("from")
     const to = url.searchParams.get("to")
+    const locationIdRaw = url.searchParams.get("locationId")
+    const locationId =
+      locationIdRaw && /^[0-9a-f-]{36}$/i.test(locationIdRaw) ? locationIdRaw : undefined
 
     if (!from || !to) {
       return new Response(JSON.stringify({ error: "from and to params required" }), { status: 400 })
@@ -126,6 +129,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
           eq(visits.tenantId, tenant.id),
           gte(visits.createdAt, fromDate),
           sql`${visits.createdAt} <= ${toDate}`,
+          locationId ? eq(visits.locationId, locationId) : undefined,
         ),
       )
       .orderBy(visits.createdAt)

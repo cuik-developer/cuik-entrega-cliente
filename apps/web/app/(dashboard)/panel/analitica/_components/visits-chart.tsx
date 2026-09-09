@@ -81,7 +81,12 @@ export function VisitsChart({ data, period, onPeriodChange }: Props) {
               axisLine={false}
               interval="preserveStartEnd"
             />
-            <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+            <YAxis
+              tick={{ fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+              allowDecimals={false}
+            />
             <Tooltip
               contentStyle={{
                 borderRadius: "8px",

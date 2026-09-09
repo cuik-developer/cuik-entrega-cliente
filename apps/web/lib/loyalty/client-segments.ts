@@ -12,7 +12,7 @@ export type ClientSegment =
 export const SEGMENT_LABELS: Record<ClientSegment, string> = {
   nuevo: "Nuevo",
   frecuente: "Frecuente",
-  esporadico: "Esporadico",
+  esporadico: "Esporádico",
   regular: "Regular",
   one_time: "Una visita",
   en_riesgo: "En riesgo",

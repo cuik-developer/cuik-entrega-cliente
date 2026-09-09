@@ -7,7 +7,7 @@ import type { AnalyticsSummary } from "@cuik/shared/types/analytics"
  */
 export async function computeAnalyticsSummary(
   tenantId: string,
-  opts?: { from?: string; to?: string },
+  opts?: { from?: string; to?: string; locationId?: string },
 ): Promise<AnalyticsSummary> {
   // Fetch tenant timezone for correct date bucketing
   const tenantRows = await db
@@ -26,6 +26,11 @@ export async function computeAnalyticsSummary(
   const fromDate = opts?.from ?? thirtyAgoLocal
   const toDate = opts?.to ?? todayLocal
 
+  // Optional branch filter. Only visit-based metrics (visits, unique clients,
+  // avg visits/client) are location-aware: clients and rewards are not tied to
+  // a branch, so "new clients" and redemptions stay tenant-wide.
+  const locationFilter = opts?.locationId ? sql`AND "location_id" = ${opts.locationId}` : sql``
+
   // Helper: compare visits.created_at as a tenant-local date
   // (${visits.created_at} AT TIME ZONE 'UTC' AT TIME ZONE tz)::date
 
@@ -39,6 +44,7 @@ export async function computeAnalyticsSummary(
       WHERE "tenant_id" = ${tenantId}
         AND ("created_at" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date >= ${fromDate}::date
         AND ("created_at" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date <= ${toDate}::date
+        ${locationFilter}
     `,
   )
 

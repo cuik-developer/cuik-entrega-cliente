@@ -30,6 +30,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     // Only validate if params are provided (both from and to are required by schema)
     let from: string | undefined
     let to: string | undefined
+    let locationId: string | undefined
 
     if (rawParams.from || rawParams.to) {
       const parsed = summaryQuerySchema.safeParse(rawParams)
@@ -38,9 +39,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       }
       from = parsed.data.from
       to = parsed.data.to
+      locationId = parsed.data.locationId
     }
 
-    const summary = await computeAnalyticsSummary(tenant.id, { from, to })
+    const summary = await computeAnalyticsSummary(tenant.id, { from, to, locationId })
 
     return successResponse(summary)
   } catch (error) {
