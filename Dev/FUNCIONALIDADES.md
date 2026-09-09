@@ -228,10 +228,13 @@ Todos los calculos de "hoy" y "semana" en el **timezone del tenant** (via SQL `A
   - `{{rewards.pending}}`
   - `{{tenant.name}}`
 - Boton "Insertar variable" con dropdown.
-- Segmento objetivo: Todos / Activos / Inactivos / VIP / Nuevos / Frecuentes / Esporadicos / Una visita / En riesgo / Personalizado (filtros) / **Lista personalizada (Excel)**.
+- **Destinatarios**: tres pestanas mutuamente excluyentes (una campana tiene una sola audiencia):
+  - **Segmento** — select con los presets: Todos / Activos / Inactivos / VIP / Nuevos / Frecuentes / Esporadicos / Una visita / En riesgo. La descripcion del preset elegido se muestra debajo.
+  - **Filtros** — rango de visitas (min/max) y de ultima visita (despues de / antes de). Un campo vacio no filtra.
+  - **Lista (Excel)** — carga masiva de destinatarios (ver abajo).
 - Checkbox "Programar envio" → datetime picker.
 
-**Lista personalizada (Excel)** — carga masiva de destinatarios:
+**Lista (Excel)** — carga masiva de destinatarios:
 - Link **"Descargar plantilla"** junto al selector de archivo: baja un `.xlsx` vacio con los encabezados correctos, la columna DNI ya en formato texto (conserva ceros iniciales) y una hoja "Instrucciones" con los formatos aceptados. Sin filas de ejemplo a proposito: un DNI o telefono de ejemplo podria coincidir con un cliente real.
 - El operador sube un `.xlsx` (max. 5 MB, 20.000 filas) con columnas `DNI` y/o `Telefono`. El encabezado es opcional: si no se reconoce ninguno, se asume columna A = DNI y B = telefono.
 - Cada fila se cruza contra los clientes **del tenant** (nunca de otro comercio):

@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 type RejectedRow = {
   row: number
@@ -39,11 +40,14 @@ type ImportResult = {
   stats: { total: number; matched: number; rejected: number }
 }
 
-const PRESET_OPTIONS: {
-  value: SegmentPreset | "personalizado" | "lista"
-  label: string
-  description: string
-}[] = [
+/**
+ * Three mutually exclusive ways to pick an audience. A campaign has exactly
+ * one audience, so these are tabs over the same `SegmentFilter` value rather
+ * than separate form sections that could both be set at once.
+ */
+type Mode = "segment" | "filters" | "list"
+
+const PRESET_OPTIONS: { value: SegmentPreset; label: string; description: string }[] = [
   { value: "todos", label: "Todos", description: "Todos los clientes registrados" },
   { value: "activos", label: "Activos", description: "Clientes con visita en los ultimos 30 dias" },
   { value: "inactivos", label: "Inactivos", description: "Sin visita en mas de 30 dias" },
@@ -69,13 +73,15 @@ const PRESET_OPTIONS: {
     label: "En riesgo",
     description: "Eran frecuentes pero dejaron de venir",
   },
-  { value: "personalizado", label: "Personalizado", description: "Filtros personalizados" },
-  {
-    value: "lista",
-    label: "Lista personalizada (Excel)",
-    description: "Sube un .xlsx con DNI y/o teléfono de los destinatarios",
-  },
 ]
+
+function modeFromValue(v: SegmentFilter): Mode {
+  if (v.clientIds !== undefined) return "list"
+  if (!v.preset && ((v.conditions?.length ?? 0) > 0 || (v.tagIds?.length ?? 0) > 0)) {
+    return "filters"
+  }
+  return "segment"
+}
 
 interface SegmentPickerProps {
   value: SegmentFilter
@@ -84,30 +90,24 @@ interface SegmentPickerProps {
 }
 
 export function SegmentPicker({ value, onChange, tenantSlug }: SegmentPickerProps) {
-  const [isCustom, setIsCustom] = useState(!value.preset && (value.conditions?.length ?? 0) > 0)
-  const [isList, setIsList] = useState(value.clientIds !== undefined)
+  // Explicit state, not derived: an empty "filters" value would otherwise
+  // snap back to the "segment" tab while the user is still filling it in.
+  const [mode, setMode] = useState<Mode>(() => modeFromValue(value))
   const [uploading, setUploading] = useState(false)
   const [downloadingRejected, setDownloadingRejected] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  const currentPreset = isList ? "lista" : isCustom ? "personalizado" : (value.preset ?? "todos")
-
-  function handlePresetChange(preset: string) {
+  function handleModeChange(next: Mode) {
+    setMode(next)
     setImportResult(null)
-    if (preset === "lista") {
-      setIsList(true)
-      setIsCustom(false)
-      // Empty list on purpose: zod min(1) blocks submit until a file is uploaded.
+    if (next === "list") {
+      // Empty list on purpose: the schema rejects it until a file is uploaded.
       onChange({ clientIds: [] })
-    } else if (preset === "personalizado") {
-      setIsList(false)
-      setIsCustom(true)
+    } else if (next === "filters") {
       onChange({ conditions: value.conditions ?? [], tagIds: value.tagIds })
     } else {
-      setIsList(false)
-      setIsCustom(false)
-      onChange({ preset: preset as SegmentPreset })
+      onChange({ preset: value.preset ?? "todos" })
     }
   }
 
@@ -172,288 +172,267 @@ export function SegmentPicker({ value, onChange, tenantSlug }: SegmentPickerProp
     }
   }
 
-  function handleMinVisitsChange(val: string) {
-    const num = val === "" ? undefined : Number.parseInt(val, 10)
+  function upsertCondition(
+    field: "totalVisits" | "lastVisitAt",
+    operator: "gte" | "lte",
+    next: number | string | undefined,
+  ) {
     const conditions = [...(value.conditions ?? [])]
-
-    const idx = conditions.findIndex((c) => c.field === "totalVisits" && c.operator === "gte")
-
-    if (num === undefined || Number.isNaN(num)) {
+    const idx = conditions.findIndex((c) => c.field === field && c.operator === operator)
+    if (next === undefined || next === "" || (typeof next === "number" && Number.isNaN(next))) {
       if (idx >= 0) conditions.splice(idx, 1)
     } else if (idx >= 0) {
-      conditions[idx] = { field: "totalVisits", operator: "gte", value: num }
+      conditions[idx] = { field, operator, value: next }
     } else {
-      conditions.push({ field: "totalVisits", operator: "gte", value: num })
+      conditions.push({ field, operator, value: next })
     }
-
     onChange({ ...value, preset: undefined, conditions })
   }
 
-  function handleMaxVisitsChange(val: string) {
-    const num = val === "" ? undefined : Number.parseInt(val, 10)
-    const conditions = [...(value.conditions ?? [])]
-
-    const idx = conditions.findIndex((c) => c.field === "totalVisits" && c.operator === "lte")
-
-    if (num === undefined || Number.isNaN(num)) {
-      if (idx >= 0) conditions.splice(idx, 1)
-    } else if (idx >= 0) {
-      conditions[idx] = { field: "totalVisits", operator: "lte", value: num }
-    } else {
-      conditions.push({ field: "totalVisits", operator: "lte", value: num })
-    }
-
-    onChange({ ...value, preset: undefined, conditions })
-  }
-
-  function handleLastVisitAfterChange(val: string) {
-    const conditions = [...(value.conditions ?? [])]
-
-    const idx = conditions.findIndex((c) => c.field === "lastVisitAt" && c.operator === "gte")
-
-    if (!val) {
-      if (idx >= 0) conditions.splice(idx, 1)
-    } else if (idx >= 0) {
-      conditions[idx] = { field: "lastVisitAt", operator: "gte", value: val }
-    } else {
-      conditions.push({ field: "lastVisitAt", operator: "gte", value: val })
-    }
-
-    onChange({ ...value, preset: undefined, conditions })
-  }
-
-  function handleLastVisitBeforeChange(val: string) {
-    const conditions = [...(value.conditions ?? [])]
-
-    const idx = conditions.findIndex((c) => c.field === "lastVisitAt" && c.operator === "lte")
-
-    if (!val) {
-      if (idx >= 0) conditions.splice(idx, 1)
-    } else if (idx >= 0) {
-      conditions[idx] = { field: "lastVisitAt", operator: "lte", value: val }
-    } else {
-      conditions.push({ field: "lastVisitAt", operator: "lte", value: val })
-    }
-
-    onChange({ ...value, preset: undefined, conditions })
-  }
-
-  // Extract current custom filter values
   const minVisits = value.conditions?.find((c) => c.field === "totalVisits" && c.operator === "gte")
     ?.value as number | undefined
-
   const maxVisits = value.conditions?.find((c) => c.field === "totalVisits" && c.operator === "lte")
     ?.value as number | undefined
-
   const lastVisitAfter = value.conditions?.find(
     (c) => c.field === "lastVisitAt" && c.operator === "gte",
   )?.value as string | undefined
-
   const lastVisitBefore = value.conditions?.find(
     (c) => c.field === "lastVisitAt" && c.operator === "lte",
   )?.value as string | undefined
 
+  const currentPreset = value.preset ?? "todos"
   const selectedOption = PRESET_OPTIONS.find((o) => o.value === currentPreset)
 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <Users className="w-4 h-4 text-muted-foreground" />
-        <Label className="text-sm font-semibold">Segmento</Label>
+        <Label className="text-sm font-semibold">Destinatarios</Label>
       </div>
 
-      <Select value={currentPreset} onValueChange={handlePresetChange}>
-        <SelectTrigger className="w-full">
-          {/* Render only the label in the trigger. By default Radix echoes the whole
-              selected item (label + long description), which widens the dialog past
-              its max-width and forces a horizontal scrollbar. */}
-          <SelectValue placeholder="Seleccionar segmento">{selectedOption?.label}</SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {PRESET_OPTIONS.map((opt) => (
-            <SelectItem key={opt.value} value={opt.value}>
-              <div className="flex items-center gap-2">
-                <span>{opt.label}</span>
-                <span className="text-muted-foreground text-xs hidden sm:inline">
-                  — {opt.description}
-                </span>
-              </div>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <Tabs value={mode} onValueChange={(v) => handleModeChange(v as Mode)}>
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="segment" className="gap-1.5">
+            <Users className="w-3.5 h-3.5" />
+            Segmento
+          </TabsTrigger>
+          <TabsTrigger value="filters" className="gap-1.5">
+            <Filter className="w-3.5 h-3.5" />
+            Filtros
+          </TabsTrigger>
+          <TabsTrigger value="list" className="gap-1.5">
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            Lista (Excel)
+          </TabsTrigger>
+        </TabsList>
 
-      {!isCustom && !isList && selectedOption && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50">
-          <Filter className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-          <p className="text-xs text-muted-foreground">{selectedOption.description}</p>
-          <Badge variant="secondary" className="ml-auto text-xs">
-            {selectedOption.label}
-          </Badge>
-        </div>
-      )}
+        <TabsContent value="segment" className="mt-3 space-y-3">
+          <Select
+            value={currentPreset}
+            onValueChange={(p) => onChange({ preset: p as SegmentPreset })}
+          >
+            <SelectTrigger className="w-full">
+              {/* Label only: Radix would otherwise echo label + description into the
+                  trigger and widen the dialog past its max-width. */}
+              <SelectValue placeholder="Seleccionar segmento">{selectedOption?.label}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {PRESET_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  <div className="flex items-center gap-2">
+                    <span>{opt.label}</span>
+                    <span className="text-muted-foreground text-xs hidden sm:inline">
+                      — {opt.description}
+                    </span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-      {isList && (
-        <div className="space-y-3 rounded-lg border border-dashed p-4">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-              <FileSpreadsheet className="w-3 h-3" />
-              Archivo .xlsx (máx. 20.000 filas)
-            </Label>
-            <Input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              disabled={uploading}
-              onChange={handleFileChange}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Columnas <span className="font-mono">DNI</span> y/o{" "}
-              <span className="font-mono">Teléfono</span> (con o sin encabezado). Formatea la
-              columna DNI como texto para conservar ceros a la izquierda.
-            </p>
-            {/* Plain anchor: same-origin GET sends the session cookie and the
-                Content-Disposition header triggers the download — no fetch needed.
-                Kept left-aligned below the help text: the dialog can overflow
-                horizontally, and a right-aligned link ends up clipped. */}
-            <a
-              href={`/api/${tenantSlug}/campaigns/import-recipients/template`}
-              download
-              className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
-            >
-              <Download className="w-3 h-3" />
-              Descargar plantilla
-            </a>
-          </div>
-
-          {uploading && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              Cruzando con tus clientes…
+          {selectedOption && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50">
+              <Filter className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+              <p className="text-xs text-muted-foreground">{selectedOption.description}</p>
+              <Badge variant="secondary" className="ml-auto text-xs">
+                {selectedOption.label}
+              </Badge>
             </div>
           )}
+        </TabsContent>
 
-          {importResult && !uploading && (
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge
-                  variant="secondary"
-                  className="gap-1 bg-emerald-100 text-emerald-800 border-emerald-200"
-                >
-                  <CheckCircle2 className="w-3 h-3" />
-                  {importResult.stats.matched} encontrados
-                </Badge>
-                {importResult.stats.rejected > 0 && (
+        <TabsContent value="filters" className="mt-3">
+          <div className="space-y-4 rounded-lg border border-dashed p-4">
+            <p className="text-xs text-muted-foreground">
+              Deja un campo vacío para no filtrar por él.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Hash className="w-3 h-3" />
+                  Min. visitas
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="0"
+                  value={minVisits ?? ""}
+                  onChange={(e) =>
+                    upsertCondition(
+                      "totalVisits",
+                      "gte",
+                      e.target.value === "" ? undefined : Number.parseInt(e.target.value, 10),
+                    )
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Hash className="w-3 h-3" />
+                  Max. visitas
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="Sin limite"
+                  value={maxVisits ?? ""}
+                  onChange={(e) =>
+                    upsertCondition(
+                      "totalVisits",
+                      "lte",
+                      e.target.value === "" ? undefined : Number.parseInt(e.target.value, 10),
+                    )
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Calendar className="w-3 h-3" />
+                  Ultima visita despues de
+                </Label>
+                <Input
+                  type="date"
+                  value={lastVisitAfter ?? ""}
+                  onChange={(e) => upsertCondition("lastVisitAt", "gte", e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Calendar className="w-3 h-3" />
+                  Ultima visita antes de
+                </Label>
+                <Input
+                  type="date"
+                  value={lastVisitBefore ?? ""}
+                  onChange={(e) => upsertCondition("lastVisitAt", "lte", e.target.value)}
+                />
+              </div>
+            </div>
+
+            {(value.conditions?.length ?? 0) > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {value.conditions?.map((c) => (
+                  <Badge
+                    key={`${c.field}-${c.operator}-${c.value}`}
+                    variant="outline"
+                    className="text-xs"
+                  >
+                    {c.field} {c.operator} {c.value}
+                    {c.valueTo ? ` - ${c.valueTo}` : ""}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="list" className="mt-3">
+          <div className="space-y-3 rounded-lg border border-dashed p-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <FileSpreadsheet className="w-3 h-3" />
+                Archivo .xlsx (máx. 20.000 filas)
+              </Label>
+              <Input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                disabled={uploading}
+                onChange={handleFileChange}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Columnas <span className="font-mono">DNI</span> y/o{" "}
+                <span className="font-mono">Teléfono</span> (con o sin encabezado). Formatea la
+                columna DNI como texto para conservar ceros a la izquierda.
+              </p>
+              {/* Plain anchor: same-origin GET sends the session cookie and the
+                  Content-Disposition header triggers the download — no fetch needed. */}
+              <a
+                href={`/api/${tenantSlug}/campaigns/import-recipients/template`}
+                download
+                className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+              >
+                <Download className="w-3 h-3" />
+                Descargar plantilla
+              </a>
+            </div>
+
+            {uploading && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Cruzando con tus clientes…
+              </div>
+            )}
+
+            {importResult && !uploading && (
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge
                     variant="secondary"
-                    className="gap-1 bg-amber-100 text-amber-800 border-amber-200"
+                    className="gap-1 bg-emerald-100 text-emerald-800 border-emerald-200"
                   >
-                    <AlertTriangle className="w-3 h-3" />
-                    {importResult.stats.rejected} rechazados
+                    <CheckCircle2 className="w-3 h-3" />
+                    {importResult.stats.matched} encontrados
                   </Badge>
-                )}
-                <span className="text-[11px] text-muted-foreground">
-                  de {importResult.stats.total} filas
-                </span>
-              </div>
-              {importResult.stats.rejected > 0 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs gap-1.5"
-                  onClick={handleDownloadRejected}
-                  disabled={downloadingRejected}
-                >
-                  {downloadingRejected ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Download className="w-3.5 h-3.5" />
+                  {importResult.stats.rejected > 0 && (
+                    <Badge
+                      variant="secondary"
+                      className="gap-1 bg-amber-100 text-amber-800 border-amber-200"
+                    >
+                      <AlertTriangle className="w-3 h-3" />
+                      {importResult.stats.rejected} rechazados
+                    </Badge>
                   )}
-                  Descargar rechazados
-                </Button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {isCustom && (
-        <div className="space-y-4 rounded-lg border border-dashed p-4">
-          <p className="text-xs font-medium text-muted-foreground">Filtros personalizados</p>
-
-          {/* Visit count range */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                <Hash className="w-3 h-3" />
-                Min. visitas
-              </Label>
-              <Input
-                type="number"
-                min={0}
-                placeholder="0"
-                value={minVisits ?? ""}
-                onChange={(e) => handleMinVisitsChange(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                <Hash className="w-3 h-3" />
-                Max. visitas
-              </Label>
-              <Input
-                type="number"
-                min={0}
-                placeholder="Sin limite"
-                value={maxVisits ?? ""}
-                onChange={(e) => handleMaxVisitsChange(e.target.value)}
-              />
-            </div>
+                  <span className="text-[11px] text-muted-foreground">
+                    de {importResult.stats.total} filas
+                  </span>
+                </div>
+                {importResult.stats.rejected > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs gap-1.5"
+                    onClick={handleDownloadRejected}
+                    disabled={downloadingRejected}
+                  >
+                    {downloadingRejected ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Download className="w-3.5 h-3.5" />
+                    )}
+                    Descargar rechazados
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
-
-          {/* Last visit date range */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                <Calendar className="w-3 h-3" />
-                Ultima visita despues de
-              </Label>
-              <Input
-                type="date"
-                value={lastVisitAfter ?? ""}
-                onChange={(e) => handleLastVisitAfterChange(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                <Calendar className="w-3 h-3" />
-                Ultima visita antes de
-              </Label>
-              <Input
-                type="date"
-                value={lastVisitBefore ?? ""}
-                onChange={(e) => handleLastVisitBeforeChange(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {(value.conditions?.length ?? 0) > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {value.conditions?.map((c) => (
-                <Badge
-                  key={`${c.field}-${c.operator}-${c.value}`}
-                  variant="outline"
-                  className="text-xs"
-                >
-                  {c.field} {c.operator} {c.value}
-                  {c.valueTo ? ` - ${c.valueTo}` : ""}
-                </Badge>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
