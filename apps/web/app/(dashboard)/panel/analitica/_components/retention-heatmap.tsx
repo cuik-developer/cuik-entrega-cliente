@@ -23,7 +23,11 @@ function getCellColor(pct: number): string {
 }
 
 function formatCohortLabel(cohortMonth: string): string {
-  const date = new Date(cohortMonth)
+  // "YYYY-MM-DD" → build from components; new Date("YYYY-MM-DD") is UTC midnight
+  // and drifts to the previous month's last day in negative-offset browsers.
+  const [y, m] = cohortMonth.split("-").map(Number)
+  if (!y || !m) return cohortMonth
+  const date = new Date(y, m - 1, 1, 12)
   return date.toLocaleDateString("es-PE", { month: "short", year: "2-digit" })
 }
 

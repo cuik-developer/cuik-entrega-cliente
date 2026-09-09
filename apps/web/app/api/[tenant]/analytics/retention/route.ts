@@ -40,7 +40,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
 
     const rows = await db
       .select({
-        cohortMonth: retentionCohorts.cohortMonth,
+        // Plain "YYYY-MM-DD" text: a PG `date` would be parsed to a JS Date and
+        // re-serialised as UTC midnight, which the browser shifts a day back.
+        cohortMonth: sql<string>`to_char(${retentionCohorts.cohortMonth}, 'YYYY-MM-DD')`,
         monthOffset: retentionCohorts.monthOffset,
         clientsCount: retentionCohorts.clientsCount,
         retentionPct: retentionCohorts.retentionPct,

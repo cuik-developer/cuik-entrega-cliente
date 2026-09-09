@@ -206,9 +206,11 @@ Todos los calculos de "hoy" y "semana" en el **timezone del tenant** (via SQL `A
 **Filtro por sucursal**: select "Todas las sucursales / <sucursal>" en el header, visible solo si el tenant tiene 2+ sucursales activas (`GET /api/{tenant}/locations`). Aplica a los widgets basados en visitas: KPIs de visitas / clientes unicos / promedio, grafico de visitas, heatmap y export. Clientes nuevos, premios, embudo, segmentos, wallets, retencion y top clientes son de todo el comercio (un cliente no pertenece a una sucursal). El parametro `locationId` (uuid) lo aceptan `visits`, `summary`, `heatmap` y `export-visits`; invalido → 400.
 
 **Mapa de calor de retencion**: 6 meses de cohort analysis.
-- Filas: mes de cohorte (mes de registro del cliente).
+- Filas: mes de cohorte = mes de **registro** del cliente (`clients.created_at`, no primera visita), en tz del tenant.
 - Columnas: month offset (0 = mes del cohorte, 1 = mes siguiente, etc).
-- Celdas: % de retencion (color mas intenso = mas retencion).
+- Celdas: % de la cohorte con **al menos una visita** en ese mes (no acumulado: un cliente visto en M1 y M3 pero no en M2 suma en M1 y M3). Tooltip con la cantidad de clientes. Excluye bloqueados.
+- No se calcula en vivo: la escribe el cron `POST /api/cron/analytics-retention` (header `x-cron-secret`) en `analytics.retention_cohorts` recorriendo todos los tenants activos/trial y recalculando todas las cohortes historicas (`lib/analytics/calculate-retention.ts`, 2 queries por tenant). Sin ese schedule el widget muestra "Sin datos de retencion disponibles". Basta una corrida diaria.
+- Todos los limites de mes se evaluan en el timezone del tenant: una visita del 31 de mayo 23:30 en Lima pertenece a mayo. La API devuelve `cohortMonth` como texto `YYYY-MM-DD` y el widget arma la etiqueta por componentes (evita el desfase de un dia al parsear en el navegador).
 
 **Top clientes**: tabla de clientes mas activos (lifetime count, no scope a rango), columnas `#`, Nombre, Visitas, Tier.
 
