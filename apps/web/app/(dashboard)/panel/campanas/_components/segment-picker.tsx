@@ -264,7 +264,10 @@ export function SegmentPicker({ value, onChange, tenantSlug }: SegmentPickerProp
 
       <Select value={currentPreset} onValueChange={handlePresetChange}>
         <SelectTrigger className="w-full">
-          <SelectValue placeholder="Seleccionar segmento" />
+          {/* Render only the label in the trigger. By default Radix echoes the whole
+              selected item (label + long description), which widens the dialog past
+              its max-width and forces a horizontal scrollbar. */}
+          <SelectValue placeholder="Seleccionar segmento">{selectedOption?.label}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {PRESET_OPTIONS.map((opt) => (
