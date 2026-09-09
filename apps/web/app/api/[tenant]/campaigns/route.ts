@@ -54,7 +54,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     // Insert segment filter
     await db.insert(campaignSegments).values({
       campaignId: campaign.id,
-      segmentName: segment.preset ?? "custom",
+      segmentName: segment.clientIds?.length ? "lista" : (segment.preset ?? "custom"),
       filter: segment,
     })
 

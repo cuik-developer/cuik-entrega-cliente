@@ -9,23 +9,37 @@ export const segmentConditionSchema = z.object({
 
 export type SegmentConditionInput = z.infer<typeof segmentConditionSchema>
 
-export const segmentFilterSchema = z.object({
-  preset: z
-    .enum([
-      "todos",
-      "activos",
-      "inactivos",
-      "vip",
-      "nuevos",
-      "frecuentes",
-      "esporadicos",
-      "one_time",
-      "en_riesgo",
-    ])
-    .optional(),
-  conditions: z.array(segmentConditionSchema).max(10).optional(),
-  tagIds: z.array(z.string().uuid()).optional(),
-})
+export const segmentFilterSchema = z
+  .object({
+    preset: z
+      .enum([
+        "todos",
+        "activos",
+        "inactivos",
+        "vip",
+        "nuevos",
+        "frecuentes",
+        "esporadicos",
+        "one_time",
+        "en_riesgo",
+      ])
+      .optional(),
+    conditions: z.array(segmentConditionSchema).max(10).optional(),
+    tagIds: z.array(z.string().uuid()).optional(),
+    // Explicit recipient list resolved from an Excel upload (see import-recipients route).
+    // Snapshot semantics: IDs are resolved at upload time, not at send time.
+    clientIds: z
+      .array(z.string().uuid())
+      .max(20000, "Máximo 20.000 destinatarios por campaña")
+      .optional(),
+  })
+  // An empty list would add no WHERE condition and target EVERY client, so it must
+  // be rejected. This lives on the object (not as array.min(1)) so the error lands on
+  // the `segment` path itself and react-hook-form's <FormMessage> can display it —
+  // a nested `segment.clientIds` error renders nothing in the form.
+  .refine((s) => s.clientIds === undefined || s.clientIds.length > 0, {
+    message: "Sube un archivo con al menos un destinatario válido",
+  })
 
 export type SegmentFilterInput = z.infer<typeof segmentFilterSchema>
 

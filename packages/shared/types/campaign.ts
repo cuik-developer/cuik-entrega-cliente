@@ -34,6 +34,8 @@ export interface SegmentFilter {
   preset?: SegmentPreset
   conditions?: SegmentCondition[]
   tagIds?: string[]
+  /** Explicit recipient list resolved from an Excel upload. Snapshot at upload time. */
+  clientIds?: string[]
 }
 
 export interface CampaignWithStats extends Campaign {

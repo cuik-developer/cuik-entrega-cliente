@@ -228,6 +228,15 @@ function buildWhereConditions(
     }
   }
 
+  // Explicit recipient list (Excel import), bound as ONE param instead of an
+  // IN (...) list of up to 20k. Drizzle expands a JS array inside sql`` into a
+  // ($1, $2, …) tuple — not a PG array — so we build the array literal ourselves.
+  // Ids are zod-validated UUIDs, so the literal needs no quoting or escaping.
+  if (filter.clientIds && filter.clientIds.length > 0) {
+    const pgArray = `{${filter.clientIds.join(",")}}`
+    conditions.push(sql`${clients.id} = ANY(${pgArray}::uuid[])`)
+  }
+
   // Filter by tags using EXISTS subquery
   if (filter.tagIds && filter.tagIds.length > 0) {
     conditions.push(

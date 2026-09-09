@@ -1,9 +1,21 @@
 "use client"
 
 import type { SegmentFilter, SegmentPreset } from "@cuik/shared/types"
-import { Calendar, Filter, Hash, Users } from "lucide-react"
-import { useState } from "react"
+import {
+  AlertTriangle,
+  Calendar,
+  CheckCircle2,
+  Download,
+  FileSpreadsheet,
+  Filter,
+  Hash,
+  Loader2,
+  Users,
+} from "lucide-react"
+import { useRef, useState } from "react"
+import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -14,8 +26,21 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+type RejectedRow = {
+  row: number
+  dni: string | null
+  phone: string | null
+  reason: "not_found" | "blocked" | "duplicate" | "empty"
+}
+
+type ImportResult = {
+  matched: { id: string; name: string; matchedBy: "dni" | "phone"; row: number }[]
+  rejected: RejectedRow[]
+  stats: { total: number; matched: number; rejected: number }
+}
+
 const PRESET_OPTIONS: {
-  value: SegmentPreset | "personalizado"
+  value: SegmentPreset | "personalizado" | "lista"
   label: string
   description: string
 }[] = [
@@ -45,6 +70,11 @@ const PRESET_OPTIONS: {
     description: "Eran frecuentes pero dejaron de venir",
   },
   { value: "personalizado", label: "Personalizado", description: "Filtros personalizados" },
+  {
+    value: "lista",
+    label: "Lista personalizada (Excel)",
+    description: "Sube un .xlsx con DNI y/o teléfono de los destinatarios",
+  },
 ]
 
 interface SegmentPickerProps {
@@ -53,18 +83,92 @@ interface SegmentPickerProps {
   tenantSlug: string
 }
 
-export function SegmentPicker({ value, onChange, tenantSlug: _tenantSlug }: SegmentPickerProps) {
+export function SegmentPicker({ value, onChange, tenantSlug }: SegmentPickerProps) {
   const [isCustom, setIsCustom] = useState(!value.preset && (value.conditions?.length ?? 0) > 0)
+  const [isList, setIsList] = useState(value.clientIds !== undefined)
+  const [uploading, setUploading] = useState(false)
+  const [downloadingRejected, setDownloadingRejected] = useState(false)
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  const currentPreset = isCustom ? "personalizado" : (value.preset ?? "todos")
+  const currentPreset = isList ? "lista" : isCustom ? "personalizado" : (value.preset ?? "todos")
 
   function handlePresetChange(preset: string) {
-    if (preset === "personalizado") {
+    setImportResult(null)
+    if (preset === "lista") {
+      setIsList(true)
+      setIsCustom(false)
+      // Empty list on purpose: zod min(1) blocks submit until a file is uploaded.
+      onChange({ clientIds: [] })
+    } else if (preset === "personalizado") {
+      setIsList(false)
       setIsCustom(true)
       onChange({ conditions: value.conditions ?? [], tagIds: value.tagIds })
     } else {
+      setIsList(false)
       setIsCustom(false)
       onChange({ preset: preset as SegmentPreset })
+    }
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setImportResult(null)
+    try {
+      const body = new FormData()
+      body.append("file", file)
+      const res = await fetch(`/api/${tenantSlug}/campaigns/import-recipients`, {
+        method: "POST",
+        body,
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) {
+        toast.error(json.error ?? "No se pudo procesar el archivo")
+        onChange({ clientIds: [] })
+        return
+      }
+      const result = json.data as ImportResult
+      setImportResult(result)
+      onChange({ clientIds: result.matched.map((m) => m.id) })
+      if (result.stats.matched === 0) {
+        toast.error("Ningún DNI o teléfono del archivo coincide con tus clientes")
+      }
+    } catch {
+      toast.error("Error de conexión al subir el archivo")
+      onChange({ clientIds: [] })
+    } finally {
+      setUploading(false)
+      // Allow re-selecting the same file to re-upload after fixing it.
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }
+  }
+
+  async function handleDownloadRejected() {
+    if (!importResult || importResult.rejected.length === 0) return
+    setDownloadingRejected(true)
+    try {
+      const res = await fetch(`/api/${tenantSlug}/campaigns/import-recipients/rejected`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rejected: importResult.rejected }),
+      })
+      if (!res.ok) {
+        toast.error("No se pudo generar el archivo de rechazados")
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `rechazados-${new Date().toISOString().slice(0, 10)}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error("Error de conexión al descargar")
+    } finally {
+      setDownloadingRejected(false)
     }
   }
 
@@ -176,13 +280,86 @@ export function SegmentPicker({ value, onChange, tenantSlug: _tenantSlug }: Segm
         </SelectContent>
       </Select>
 
-      {!isCustom && selectedOption && (
+      {!isCustom && !isList && selectedOption && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50">
           <Filter className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
           <p className="text-xs text-muted-foreground">{selectedOption.description}</p>
           <Badge variant="secondary" className="ml-auto text-xs">
             {selectedOption.label}
           </Badge>
+        </div>
+      )}
+
+      {isList && (
+        <div className="space-y-3 rounded-lg border border-dashed p-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <FileSpreadsheet className="w-3 h-3" />
+              Archivo .xlsx (máx. 20.000 filas)
+            </Label>
+            <Input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              disabled={uploading}
+              onChange={handleFileChange}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Columnas <span className="font-mono">DNI</span> y/o{" "}
+              <span className="font-mono">Teléfono</span> (con o sin encabezado). Formatea la
+              columna DNI como texto para conservar ceros a la izquierda.
+            </p>
+          </div>
+
+          {uploading && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Cruzando con tus clientes…
+            </div>
+          )}
+
+          {importResult && !uploading && (
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  variant="secondary"
+                  className="gap-1 bg-emerald-100 text-emerald-800 border-emerald-200"
+                >
+                  <CheckCircle2 className="w-3 h-3" />
+                  {importResult.stats.matched} encontrados
+                </Badge>
+                {importResult.stats.rejected > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="gap-1 bg-amber-100 text-amber-800 border-amber-200"
+                  >
+                    <AlertTriangle className="w-3 h-3" />
+                    {importResult.stats.rejected} rechazados
+                  </Badge>
+                )}
+                <span className="text-[11px] text-muted-foreground">
+                  de {importResult.stats.total} filas
+                </span>
+              </div>
+              {importResult.stats.rejected > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5"
+                  onClick={handleDownloadRejected}
+                  disabled={downloadingRejected}
+                >
+                  {downloadingRejected ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Download className="w-3.5 h-3.5" />
+                  )}
+                  Descargar rechazados
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       )}
 

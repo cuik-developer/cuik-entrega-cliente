@@ -131,4 +131,41 @@ describe("resolveSegment", () => {
     expect(mockFrom).toHaveBeenCalledTimes(1)
     expect(mockWhere).toHaveBeenCalledTimes(1)
   })
+
+  describe("clientIds (Excel import)", () => {
+    type SqlChunk = { _tag: "sql"; strings: TemplateStringsArray; values: unknown[] }
+    function anyCondition(): SqlChunk | undefined {
+      const where = mockWhere.mock.calls[0][0] as { conditions: unknown[] }
+      return where.conditions.find(
+        (c): c is SqlChunk =>
+          typeof c === "object" &&
+          c !== null &&
+          (c as SqlChunk)._tag === "sql" &&
+          (c as SqlChunk).strings.join("").includes("= ANY("),
+      )
+    }
+
+    it("binds the id list as ONE postgres array literal, not a tuple of params", async () => {
+      // Regression: passing the JS array straight into sql`` made Drizzle emit
+      // `= ANY(($1, $2)::uuid[])`, which Postgres rejects.
+      mockWhere.mockResolvedValue([{ id: "a" }, { id: "b" }])
+
+      const result = await resolveSegment("tenant-1", { clientIds: ["a", "b"] })
+
+      const cond = anyCondition()
+      expect(cond).toBeDefined()
+      expect(cond?.strings.join("")).toContain("::uuid[]")
+      // values[0] is the mocked clients.id column; values[1] must be the literal.
+      expect(cond?.values).toEqual(["id", "{a,b}"])
+      expect(result.clientIds).toEqual(["a", "b"])
+    })
+
+    it("adds no condition for an empty list (zod min(1) must guard this upstream)", async () => {
+      mockWhere.mockResolvedValue([])
+
+      await resolveSegment("tenant-1", { clientIds: [] })
+
+      expect(anyCondition()).toBeUndefined()
+    })
+  })
 })
