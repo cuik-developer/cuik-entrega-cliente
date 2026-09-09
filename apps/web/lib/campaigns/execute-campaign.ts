@@ -70,7 +70,10 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
     }
   }
 
-  // 3. Set status to sending
+  // 3. Capture original status so we can restore it on unhandled error, then
+  //    mark as sending. Without capturing, a scheduled campaign that fails
+  //    once would be demoted to "draft" and the cron would never retry it.
+  const originalStatus = campaign.status
   await db.update(campaigns).set({ status: "sending" }).where(eq(campaigns.id, campaignId))
 
   try {
@@ -196,11 +199,10 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
     }
 
     // 8. Update campaign final stats
-    const finalStatus = totalSent > 0 ? "sent" : "sent"
     await db
       .update(campaigns)
       .set({
-        status: finalStatus,
+        status: "sent",
         sentAt: new Date(),
         sentCount: totalSent,
         deliveredCount: totalSent, // Initially same as sent
@@ -217,8 +219,14 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
       errors: allErrors,
     }
   } catch (error) {
-    // On unhandled error, mark campaign as failed (revert to draft so it can be retried)
-    await db.update(campaigns).set({ status: "draft" }).where(eq(campaigns.id, campaignId))
+    // On unhandled error, restore the ORIGINAL status (draft or scheduled).
+    // Restoring to "scheduled" preserves the cron reintent — a transient
+    // failure (APNs 5xx, Google API timeout) would otherwise silently
+    // demote the campaign to "draft" and it would never be sent.
+    await db
+      .update(campaigns)
+      .set({ status: originalStatus })
+      .where(eq(campaigns.id, campaignId))
 
     return {
       campaignId,
