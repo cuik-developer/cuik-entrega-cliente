@@ -228,8 +228,19 @@ Todos los calculos de "hoy" y "semana" en el **timezone del tenant** (via SQL `A
   - `{{rewards.pending}}`
   - `{{tenant.name}}`
 - Boton "Insertar variable" con dropdown.
-- Segmento objetivo: Todos / Nuevo / Frecuente / Esporadico / Una visita / En riesgo / Inactivo.
+- Segmento objetivo: Todos / Activos / Inactivos / VIP / Nuevos / Frecuentes / Esporadicos / Una visita / En riesgo / Personalizado (filtros) / **Lista personalizada (Excel)**.
 - Checkbox "Programar envio" → datetime picker.
+
+**Lista personalizada (Excel)** — carga masiva de destinatarios:
+- El operador sube un `.xlsx` (max. 5 MB, 20.000 filas) con columnas `DNI` y/o `Telefono`. El encabezado es opcional: si no se reconoce ninguno, se asume columna A = DNI y B = telefono.
+- Cada fila se cruza contra los clientes **del tenant** (nunca de otro comercio):
+  - **DNI**: se ignoran espacios y puntuacion (`12.345.678` = `12345678`); se conservan ceros a la izquierda. Formatear la columna como texto en Excel para no perderlos.
+  - **Telefono**: se comparan los ultimos 9 digitos, asi `+51 987 654 321`, `51987654321` y `987654321` son el mismo numero. Si la fila trae DNI y telefono, primero se intenta el DNI.
+- Resultado inmediato en el modal: **"N encontrados · M rechazados · de T filas"**. Cada rechazo tiene motivo: no existe cliente con ese DNI/telefono, cliente bloqueado, repetido en el archivo (se cuenta una sola vez), o fila sin identificador. Las filas totalmente vacias se ignoran sin contar.
+- Boton **"Descargar rechazados"** → `.xlsx` con fila, DNI, telefono y motivo, para corregir y volver a subir. Re-subir un archivo reemplaza la lista.
+- La lista es un **snapshot**: los clientes se resuelven al subir, no al enviar. Quien se registre despues con un DNI de la lista no entra.
+- No se puede crear la campana con lista vacia (el formulario muestra "Sube un archivo con al menos un destinatario valido"); una lista vacia enviaria a todos.
+- En el detalle e historial la campana aparece con segmento `lista`.
 
 **Ejecucion**:
 - Envio inmediato o cron job `campaigns-scheduled` cada 5 min.
@@ -566,6 +577,25 @@ Fecha Registro | Fecha Visita | Local | Plataforma Wallet |
 ### 10.4 Cliente individual → Exportar
 
 Desde el modal de detalle del cliente, descarga Excel con historial completo de visitas de ese cliente.
+
+### 10.5 Admin → Campanas → Importar destinatarios / Descargar rechazados
+
+El unico flujo donde Excel **entra** a Cuik. Ver detalle funcional en §4.4.
+
+**Importar**: `POST /api/{tenant}/campaigns/import-recipients` (multipart, campo `file`, `.xlsx`).
+- Acepta con o sin encabezado; detecta las columnas `DNI` / `Telefono` por nombre (case-insensitive, sin tildes; tambien `documento`, `celular`, `whatsapp`, `movil`...).
+- Limites: 5 MB, 20.000 filas de datos. Extension `.xlsx` + parseo valido son el filtro (el MIME que manda el navegador no se usa).
+- Responde `{ matched, rejected, stats, layout }` — no crea nada; los ids matched se guardan recien al crear la campana.
+
+**Descargar rechazados**: `POST /api/{tenant}/campaigns/import-recipients/rejected` con las filas rechazadas → `rechazados-YYYY-MM-DD.xlsx`.
+
+| Columna | Contenido |
+|---|---|
+| Fila | Numero de fila en el archivo original |
+| DNI / Telefono | Tal como venian en el archivo |
+| Motivo | "No existe un cliente con ese DNI ni telefono" · "Cliente bloqueado" · "Cliente repetido en el archivo" · "Fila sin DNI ni telefono" |
+
+Mismo estilo que los demas exports (encabezado azul `#0E70DB`, auto-filter). Ambos endpoints exigen rol admin y membresia del tenant.
 
 ---
 
