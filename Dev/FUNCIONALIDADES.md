@@ -232,6 +232,7 @@ Todos los calculos de "hoy" y "semana" en el **timezone del tenant** (via SQL `A
 - Checkbox "Programar envio" → datetime picker.
 
 **Lista personalizada (Excel)** — carga masiva de destinatarios:
+- Link **"Descargar plantilla"** junto al selector de archivo: baja un `.xlsx` vacio con los encabezados correctos, la columna DNI ya en formato texto (conserva ceros iniciales) y una hoja "Instrucciones" con los formatos aceptados. Sin filas de ejemplo a proposito: un DNI o telefono de ejemplo podria coincidir con un cliente real.
 - El operador sube un `.xlsx` (max. 5 MB, 20.000 filas) con columnas `DNI` y/o `Telefono`. El encabezado es opcional: si no se reconoce ninguno, se asume columna A = DNI y B = telefono.
 - Cada fila se cruza contra los clientes **del tenant** (nunca de otro comercio):
   - **DNI**: se ignoran espacios y puntuacion (`12.345.678` = `12345678`); se conservan ceros a la izquierda. Formatear la columna como texto en Excel para no perderlos.
@@ -586,6 +587,8 @@ El unico flujo donde Excel **entra** a Cuik. Ver detalle funcional en §4.4.
 - Acepta con o sin encabezado; detecta las columnas `DNI` / `Telefono` por nombre (case-insensitive, sin tildes; tambien `documento`, `celular`, `whatsapp`, `movil`...).
 - Limites: 5 MB, 20.000 filas de datos. Extension `.xlsx` + parseo valido son el filtro (el MIME que manda el navegador no se usa).
 - Responde `{ matched, rejected, stats, layout }` — no crea nada; los ids matched se guardan recien al crear la campana.
+
+**Plantilla**: `GET /api/{tenant}/campaigns/import-recipients/template` → `plantilla-destinatarios-cuik.xlsx` (hoja "Destinatarios" con solo el encabezado `DNI | Telefono`, columna DNI en formato texto; hoja "Instrucciones"). Subirla vacia devuelve "No se encontraron filas con datos".
 
 **Descargar rechazados**: `POST /api/{tenant}/campaigns/import-recipients/rejected` con las filas rechazadas → `rechazados-YYYY-MM-DD.xlsx`.
 

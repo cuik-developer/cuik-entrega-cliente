@@ -309,6 +309,18 @@ export function SegmentPicker({ value, onChange, tenantSlug }: SegmentPickerProp
               <span className="font-mono">Teléfono</span> (con o sin encabezado). Formatea la
               columna DNI como texto para conservar ceros a la izquierda.
             </p>
+            {/* Plain anchor: same-origin GET sends the session cookie and the
+                Content-Disposition header triggers the download — no fetch needed.
+                Kept left-aligned below the help text: the dialog can overflow
+                horizontally, and a right-aligned link ends up clipped. */}
+            <a
+              href={`/api/${tenantSlug}/campaigns/import-recipients/template`}
+              download
+              className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+            >
+              <Download className="w-3 h-3" />
+              Descargar plantilla
+            </a>
           </div>
 
           {uploading && (
