@@ -45,7 +45,7 @@ export interface HeatmapData {
   totalVisits: number
 }
 
-export type FunnelStepKey = "registered" | "wallet" | "visited" | "loyal" | "redeemed"
+export type FunnelStepKey = "registered" | "visited" | "loyal" | "redeemed"
 
 export interface FunnelStep {
   key: FunnelStepKey

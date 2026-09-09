@@ -10,7 +10,7 @@ import {
 
 /**
  * GET /api/[tenant]/analytics/funnel
- * Lifetime loyalty funnel: registered → wallet → 1+ visit → 3+ visits → redeemed.
+ * Lifetime loyalty funnel: registered → 1+ visit → 3+ visits → redeemed.
  * Not range/location scoped on purpose (see computeLoyaltyFunnel).
  */
 export async function GET(request: Request, { params }: { params: Promise<{ tenant: string }> }) {

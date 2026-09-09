@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 const STEP_META: Record<FunnelStepKey, { label: string; hint: string }> = {
   registered: { label: "Registrados", hint: "Clientes en tu base (sin bloqueados)" },
-  wallet: { label: "Con pase instalado", hint: "Agregaron la tarjeta a Apple o Google Wallet" },
   visited: { label: "Visitaron al menos 1 vez", hint: "Tienen una visita registrada" },
   loyal: { label: "Visitaron 3+ veces", hint: "Ya son clientes recurrentes" },
   redeemed: { label: "Canjearon un premio", hint: "Completaron un ciclo y lo cobraron" },
@@ -42,8 +41,7 @@ export function FunnelChart({ data }: Props) {
             {steps.map((step, i) => {
               const meta = STEP_META[step.key]
               const width = Math.max(pct(step.count, base), step.count > 0 ? 3 : 0)
-              // Step-over-step conversion; hidden when the previous step is empty
-              // (0 → 8 is not "0%", it just means nobody installed the pass yet).
+              // Step-over-step conversion; hidden when the previous step is empty.
               const prev = i > 0 ? steps[i - 1].count : 0
               const conversion = prev > 0 ? pct(step.count, prev) : null
               return (

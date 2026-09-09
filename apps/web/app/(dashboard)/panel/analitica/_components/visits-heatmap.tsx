@@ -3,19 +3,23 @@
 import type { HeatmapData } from "@cuik/shared/types/analytics"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { hourLabel } from "@/lib/analytics/hour-label"
 
 // ISO weekday: 1 = Monday … 7 = Sunday (what EXTRACT(ISODOW) returns).
 const DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
-const HOURS = Array.from({ length: 24 }, (_, h) => h)
+// Business hours shown in the grid (8am–8pm). Visits outside are counted in a
+// footnote rather than hidden; the API still returns all 24 hours.
+const FIRST_HOUR = 8
+const LAST_HOUR = 20
+const HOURS = Array.from({ length: LAST_HOUR - FIRST_HOUR + 1 }, (_, i) => FIRST_HOUR + i)
+// Column labels: 9am · 11am · 1pm · 3pm · 5pm · 7pm
+const LABELED_HOURS = new Set([9, 11, 13, 15, 17, 19])
+const GRID_COLS = `2.5rem repeat(${HOURS.length}, minmax(0, 1fr))`
 
 type Props = {
   data: HeatmapData
   /** Shown under the title, e.g. "Sede Principal" when a branch filter is active. */
   scopeLabel?: string
-}
-
-function hourLabel(h: number): string {
-  return `${String(h).padStart(2, "0")}:00`
 }
 
 /** Opacity steps against the brand colour; 0 visits renders as the muted grid. */
@@ -48,6 +52,10 @@ export function VisitsHeatmap({ data, scopeLabel }: Props) {
     }
   }
   const busiestDay = perDay.indexOf(Math.max(...perDay))
+  const outsideHours = grid.reduce(
+    (acc, row) => acc + row.reduce((a, v, h) => (h < FIRST_HOUR || h > LAST_HOUR ? a + v : a), 0),
+    0,
+  )
 
   return (
     <Card className="border border-border">
@@ -65,19 +73,16 @@ export function VisitsHeatmap({ data, scopeLabel }: Props) {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <div className="min-w-[640px]">
+              <div className="min-w-[520px]">
                 {/* Hour header */}
-                <div
-                  className="grid gap-px"
-                  style={{ gridTemplateColumns: "2.5rem repeat(24, minmax(0, 1fr))" }}
-                >
+                <div className="grid gap-px" style={{ gridTemplateColumns: GRID_COLS }}>
                   <div />
                   {HOURS.map((h) => (
                     <div
                       key={h}
                       className="text-[10px] text-muted-foreground text-center tabular-nums leading-4"
                     >
-                      {h % 3 === 0 ? h : ""}
+                      {LABELED_HOURS.has(h) ? hourLabel(h) : ""}
                     </div>
                   ))}
                 </div>
@@ -86,7 +91,7 @@ export function VisitsHeatmap({ data, scopeLabel }: Props) {
                   <div
                     key={day}
                     className="grid gap-px mt-px"
-                    style={{ gridTemplateColumns: "2.5rem repeat(24, minmax(0, 1fr))" }}
+                    style={{ gridTemplateColumns: GRID_COLS }}
                   >
                     <div className="text-xs text-muted-foreground pr-2 flex items-center justify-end">
                       {day}
@@ -118,6 +123,13 @@ export function VisitsHeatmap({ data, scopeLabel }: Props) {
                     ({peak.visits} visita{peak.visits === 1 ? "" : "s"}) · Día más fuerte:{" "}
                     <span className="font-semibold text-foreground">{DAYS[busiestDay]}</span> (
                     {perDay[busiestDay]})
+                  </>
+                )}
+                {outsideHours > 0 && (
+                  <>
+                    {" "}
+                    · {outsideHours} visita{outsideHours === 1 ? "" : "s"} fuera de{" "}
+                    {hourLabel(FIRST_HOUR)}–{hourLabel(LAST_HOUR)}
                   </>
                 )}
               </span>
