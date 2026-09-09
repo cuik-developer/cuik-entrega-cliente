@@ -94,9 +94,10 @@ function buildWhereConditions(
         break
 
       case "nuevos":
-        conditions.push(sql`${clients.totalVisits} <= 3`)
+        // Same rule as the client list segment "nuevo" (computeClientSegment):
+        // registered within newClientDays, regardless of visits.
         conditions.push(
-          sql`${clients.createdAt} >= NOW() - INTERVAL '1 day' * ${thresholds.newClientDays * 2}`,
+          sql`${clients.createdAt} >= NOW() - INTERVAL '1 day' * ${thresholds.newClientDays}`,
         )
         break
 

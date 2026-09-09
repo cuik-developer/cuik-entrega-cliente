@@ -39,7 +39,8 @@ const { mockDb } = vi.hoisted(() => {
     chain.from = vi.fn().mockImplementation(() => {
       const fromChain: Record<string, unknown> = {}
 
-      // Client query chain
+      // Client query chain: from -> leftJoin(visit stats) -> where -> orderBy -> limit
+      fromChain.leftJoin = vi.fn().mockImplementation(() => fromChain)
       fromChain.where = vi.fn().mockImplementation(() => {
         const whereChain: Record<string, unknown> = {}
         whereChain.orderBy = vi.fn().mockImplementation(() => {
@@ -114,6 +115,17 @@ vi.mock("@cuik/db", () => {
     and: vi.fn((...args: unknown[]) => ({ type: "and", conditions: args })),
   }
 })
+
+// The visit-stats subquery builds its own Drizzle chain; keep it out of the db mock.
+vi.mock("@/lib/loyalty/visit-stats", () => ({
+  visitStatsSubquery: () => ({
+    clientId: "vs.clientId",
+    lastVisitAt: "vs.lastVisitAt",
+    avgDaysBetweenVisits: "vs.avgDaysBetweenVisits",
+  }),
+  parseAvgDays: (v: unknown) => (v == null ? null : Number(v)),
+  parseVisitDate: (v: unknown) => (v == null ? null : new Date(v as string)),
+}))
 
 vi.mock("exceljs", () => {
   // Minimal ExcelJS mock that captures added rows

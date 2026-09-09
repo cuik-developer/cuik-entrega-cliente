@@ -6,12 +6,14 @@ import {
   desc,
   eq,
   gte,
+  isNotNull,
   locations,
   passInstances,
   rewards,
   sql,
   visits,
 } from "@cuik/db"
+import { parseVisitDate, visitStatsSubquery } from "@/lib/loyalty/visit-stats"
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -293,37 +295,45 @@ export async function getInactiveClients(tenantId: string, days = 30): Promise<I
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - days)
 
+  // LEFT JOINed aggregate, not a correlated subquery — see visitStatsSubquery.
+  const vs = visitStatsSubquery(tenantId)
+
   const rows = await db
     .select({
       name: clients.name,
       lastName: clients.lastName,
       email: clients.email,
       totalVisits: clients.totalVisits,
-      lastVisitAt: sql<Date>`(SELECT MAX(v.created_at) FROM loyalty.visits v WHERE v.client_id = ${clients.id})`,
+      lastVisitAt: vs.lastVisitAt,
     })
     .from(clients)
+    .leftJoin(vs, eq(vs.clientId, clients.id))
     .where(
       and(
         eq(clients.tenantId, tenantId),
         eq(clients.status, "active"),
-        sql`(SELECT MAX(v.created_at) FROM loyalty.visits v WHERE v.client_id = ${clients.id}) IS NOT NULL`,
-        sql`(SELECT MAX(v.created_at) FROM loyalty.visits v WHERE v.client_id = ${clients.id}) < ${cutoff}`,
+        isNotNull(vs.lastVisitAt),
+        sql`${vs.lastVisitAt} < ${cutoff}`,
       ),
     )
-    .orderBy(
-      sql`(SELECT MAX(v.created_at) FROM loyalty.visits v WHERE v.client_id = ${clients.id})`,
-    )
+    .orderBy(vs.lastVisitAt)
     .limit(20)
 
   const now = Date.now()
-  return rows.map((r) => ({
-    name: r.name,
-    lastName: r.lastName,
-    email: r.email,
-    totalVisits: r.totalVisits,
-    lastVisitAt: r.lastVisitAt,
-    daysSinceLastVisit: r.lastVisitAt ? Math.floor((now - new Date(r.lastVisitAt).getTime()) / 86_400_000) : null,
-  }))
+  return rows.map((r) => {
+    // WHERE requires IS NOT NULL; the type is nullable only because of the LEFT JOIN.
+    const lastVisitAt = parseVisitDate(r.lastVisitAt) as Date
+    return {
+      name: r.name,
+      lastName: r.lastName,
+      email: r.email,
+      totalVisits: r.totalVisits,
+      lastVisitAt,
+      daysSinceLastVisit: lastVisitAt
+        ? Math.floor((now - lastVisitAt.getTime()) / 86_400_000)
+        : null,
+    }
+  })
 }
 
 export async function getRetentionByMonth(tenantId: string): Promise<MonthlyRetention[]> {

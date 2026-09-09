@@ -13,6 +13,7 @@ import {
 import { getClientStatus } from "@/lib/loyalty"
 import type { SegmentationThresholds } from "@/lib/loyalty/client-segments"
 import { computeClientSegment, getThresholds } from "@/lib/loyalty/client-segments"
+import { parseAvgDays, parseVisitDate, visitStatsSubquery } from "@/lib/loyalty/visit-stats"
 
 export async function GET(request: Request, { params }: { params: Promise<{ tenant: string }> }) {
   try {
@@ -82,6 +83,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       conditions.push(eq(clients.status, status))
     }
 
+    // Visit aggregates come from a LEFT JOINed subquery, never from a correlated
+    // subquery in the select list — see visitStatsSubquery for why.
+    const vs = visitStatsSubquery(tenant.id)
+
     const selectFields = {
       id: clients.id,
       name: clients.name,
@@ -95,21 +100,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       currentCycle: clients.currentCycle,
       tier: clients.tier,
       createdAt: clients.createdAt,
-      lastVisitAt: sql<Date | null>`(
-        SELECT MAX("created_at") FROM loyalty.visits
-        WHERE "client_id" = ${clients.id}
-          AND "tenant_id" = ${tenant.id}
-      )`,
-      avgDaysBetweenVisits: sql<number | null>`(
-        SELECT CASE
-          WHEN COUNT(*) <= 1 THEN NULL
-          ELSE EXTRACT(EPOCH FROM (MAX("created_at") - MIN("created_at")))
-            / (COUNT(*) - 1) / 86400.0
-        END
-        FROM loyalty.visits
-        WHERE "client_id" = ${clients.id}
-          AND "tenant_id" = ${tenant.id}
-      )`,
+      lastVisitAt: vs.lastVisitAt,
+      avgDaysBetweenVisits: vs.avgDaysBetweenVisits,
     }
 
     const mapRow = (c: {
@@ -125,8 +117,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       currentCycle: number
       tier: string | null
       createdAt: Date
-      lastVisitAt: Date | null
-      avgDaysBetweenVisits: number | null
+      lastVisitAt: Date | string | null
+      avgDaysBetweenVisits: string | null
     }) => ({
       id: c.id,
       name: c.name,
@@ -144,8 +136,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         {
           createdAt: c.createdAt,
           totalVisits: c.totalVisits,
-          lastVisitAt: c.lastVisitAt ? new Date(c.lastVisitAt) : null,
-          avgDaysBetweenVisits: c.avgDaysBetweenVisits ? Number(c.avgDaysBetweenVisits) : null,
+          lastVisitAt: parseVisitDate(c.lastVisitAt),
+          avgDaysBetweenVisits: parseAvgDays(c.avgDaysBetweenVisits),
         },
         thresholds,
       ),
@@ -157,6 +149,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       const allRows = await db
         .select(selectFields)
         .from(clients)
+        .leftJoin(vs, eq(vs.clientId, clients.id))
         .where(and(...conditions))
         .orderBy(clients.createdAt)
 
@@ -178,6 +171,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     const rows = await db
       .select(selectFields)
       .from(clients)
+      .leftJoin(vs, eq(vs.clientId, clients.id))
       .where(and(...conditions))
       .orderBy(clients.createdAt)
       .limit(limit)

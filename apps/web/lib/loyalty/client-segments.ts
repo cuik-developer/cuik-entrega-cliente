@@ -4,6 +4,7 @@ export type ClientSegment =
   | "nuevo"
   | "frecuente"
   | "esporadico"
+  | "regular"
   | "one_time"
   | "en_riesgo"
   | "inactivo"
@@ -12,6 +13,7 @@ export const SEGMENT_LABELS: Record<ClientSegment, string> = {
   nuevo: "Nuevo",
   frecuente: "Frecuente",
   esporadico: "Esporadico",
+  regular: "Regular",
   one_time: "Una visita",
   en_riesgo: "En riesgo",
   inactivo: "Inactivo",
@@ -21,6 +23,7 @@ export const SEGMENT_COLORS: Record<ClientSegment, string> = {
   nuevo: "bg-sky-100 text-sky-700",
   frecuente: "bg-emerald-100 text-emerald-700",
   esporadico: "bg-amber-100 text-amber-700",
+  regular: "bg-violet-100 text-violet-700",
   one_time: "bg-slate-100 text-slate-600",
   en_riesgo: "bg-orange-100 text-orange-700",
   inactivo: "bg-red-100 text-red-700",
@@ -39,7 +42,7 @@ export type SegmentationThresholds = {
   frequentMaxDays: number // Client is "frecuente" if avg interval < this
   oneTimeInactiveDays: number // Client is "one_time" if single visit and no return in this many days
   riskMultiplier: number // Client is "en_riesgo" if absent > avg * this multiplier
-  newClientDays: number // Client is "nuevo" if created within this many days
+  newClientDays: number // Client is "nuevo" if created within this many days (regardless of visits)
 }
 
 export const DEFAULT_THRESHOLDS: SegmentationThresholds = {
@@ -142,6 +145,12 @@ export function getThresholds(
  *
  * Priority order matters: more specific segments are checked first.
  * Accepts optional thresholds for per-tenant/business-type configuration.
+ *
+ * "nuevo" is strictly about registration age: a client is new for their first
+ * `newClientDays` days and never again. Everything that matches no behavioural
+ * rule lands in "regular" (e.g. 2 visits, or 1 recent visit after the new
+ * window) — NOT in "nuevo". The old fallback-to-"nuevo" hid for months a bug
+ * where visit stats arrived NULL for every client and the whole list read "Nuevo".
  */
 export function computeClientSegment(
   client: ClientSegmentInput,
@@ -150,8 +159,8 @@ export function computeClientSegment(
   const now = new Date()
   const daysSinceCreation = daysBetween(client.createdAt, now)
 
-  // nuevo: created within newClientDays AND has <= 1 visit
-  if (daysSinceCreation <= thresholds.newClientDays && client.totalVisits <= 1) {
+  // nuevo: registered within newClientDays, whatever they did since
+  if (daysSinceCreation <= thresholds.newClientDays) {
     return "nuevo"
   }
 
@@ -199,8 +208,9 @@ export function computeClientSegment(
     return "esporadico"
   }
 
-  // Default fallback: nuevo (recently created with few visits but >newClientDays, etc.)
-  return "nuevo"
+  // regular: no behavioural rule applies (2 visits, 1 visit still inside the
+  // one_time window, 3+ visits all at the same instant, ...)
+  return "regular"
 }
 
 function daysBetween(a: Date, b: Date): number {

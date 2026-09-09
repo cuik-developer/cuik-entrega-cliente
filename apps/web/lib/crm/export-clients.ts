@@ -4,6 +4,7 @@ import ExcelJS from "exceljs"
 import { formatDateForExport } from "@/lib/format-date"
 import type { SegmentationThresholds } from "@/lib/loyalty/client-segments"
 import { computeClientSegment, getThresholds, SEGMENT_LABELS } from "@/lib/loyalty/client-segments"
+import { parseAvgDays, parseVisitDate, visitStatsSubquery } from "@/lib/loyalty/visit-stats"
 
 const BATCH_SIZE = 500
 
@@ -65,8 +66,8 @@ export async function exportClientsXlsx(
         {
           createdAt: row.createdAt,
           totalVisits: row.totalVisits,
-          lastVisitAt: row.lastVisitAt,
-          avgDaysBetweenVisits: row.avgDaysBetweenVisits,
+          lastVisitAt: parseVisitDate(row.lastVisitAt),
+          avgDaysBetweenVisits: parseAvgDays(row.avgDaysBetweenVisits),
         },
         segThresholds,
       )
@@ -106,8 +107,8 @@ type ClientRow = {
   totalVisits: number
   currentCycle: number
   marketingOptIn: boolean
-  lastVisitAt: Date | null
-  avgDaysBetweenVisits: number | null
+  lastVisitAt: Date | string | null
+  avgDaysBetweenVisits: string | null
   createdAt: Date
 }
 
@@ -157,6 +158,9 @@ async function fetchBatch(
     conditions.push(sql`${clients.id} > ${lastId}`)
   }
 
+  // LEFT JOINed aggregate, not a correlated subquery — see visitStatsSubquery.
+  const vs = visitStatsSubquery(tenantId)
+
   const rows = await db
     .select({
       id: clients.id,
@@ -170,17 +174,11 @@ async function fetchBatch(
       currentCycle: clients.currentCycle,
       marketingOptIn: clients.marketingOptIn,
       createdAt: clients.createdAt,
-      lastVisitAt:
-        sql<Date | null>`(SELECT max(created_at) FROM loyalty.visits WHERE client_id = ${clients.id})`.as(
-          "last_visit_at",
-        ),
-      avgDaysBetweenVisits: sql<number | null>`(
-          SELECT CASE WHEN count(*) < 2 THEN NULL
-          ELSE EXTRACT(EPOCH FROM (max(created_at) - min(created_at))) / NULLIF(count(*) - 1, 0) / 86400.0
-          END FROM loyalty.visits WHERE client_id = ${clients.id}
-        )`.as("avg_days_between_visits"),
+      lastVisitAt: vs.lastVisitAt,
+      avgDaysBetweenVisits: vs.avgDaysBetweenVisits,
     })
     .from(clients)
+    .leftJoin(vs, eq(vs.clientId, clients.id))
     .where(and(...conditions))
     .orderBy(clients.id)
     .limit(BATCH_SIZE)

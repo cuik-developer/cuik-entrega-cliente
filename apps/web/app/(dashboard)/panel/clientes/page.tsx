@@ -60,6 +60,7 @@ const segmentColors: Record<string, string> = {
   nuevo: "bg-sky-100 text-sky-700",
   frecuente: "bg-emerald-100 text-emerald-700",
   esporadico: "bg-amber-100 text-amber-700",
+  regular: "bg-violet-100 text-violet-700",
   one_time: "bg-slate-100 text-slate-600",
   en_riesgo: "bg-orange-100 text-orange-700",
   inactivo: "bg-red-100 text-red-700",
@@ -69,6 +70,7 @@ const segmentLabels: Record<string, string> = {
   nuevo: "Nuevo",
   frecuente: "Frecuente",
   esporadico: "Esporádico",
+  regular: "Regular",
   one_time: "Una visita",
   en_riesgo: "En riesgo",
   inactivo: "Inactivo",
@@ -217,7 +219,7 @@ export default function ClientesPage() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<ClientDetail | null>(null)
   const [filter, setFilter] = useState<
-    "all" | "nuevo" | "frecuente" | "esporadico" | "en_riesgo" | "inactivo" | "one_time"
+    "all" | "nuevo" | "frecuente" | "esporadico" | "regular" | "en_riesgo" | "inactivo" | "one_time"
   >("all")
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null)
 
@@ -352,6 +354,7 @@ export default function ClientesPage() {
               { v: "nuevo", label: "Nuevos" },
               { v: "frecuente", label: "Frecuentes" },
               { v: "esporadico", label: "Esporádicos" },
+              { v: "regular", label: "Regulares" },
               { v: "en_riesgo", label: "En riesgo" },
               { v: "inactivo", label: "Inactivos" },
               { v: "one_time", label: "Una visita" },

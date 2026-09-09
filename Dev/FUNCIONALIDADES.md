@@ -172,7 +172,7 @@ Todos los calculos de "hoy" y "semana" en el **timezone del tenant** (via SQL `A
 
 **Busqueda**: campo con debounce, busca en name, lastName, dni, phone, email.
 
-**Filtro por segmento** (chips): Todos / Nuevos / Frecuentes / Esporadicos / En riesgo / Inactivos / Una visita.
+**Filtro por segmento** (chips): Todos / Nuevos / Frecuentes / Esporadicos / Regulares / En riesgo / Inactivos / Una visita.
 
 > Nota: el filtro actua sobre el **segmento** (computado dinamicamente desde comportamiento), no sobre el campo `status` administrativo.
 
@@ -229,7 +229,7 @@ Todos los calculos de "hoy" y "semana" en el **timezone del tenant** (via SQL `A
   - `{{tenant.name}}`
 - Boton "Insertar variable" con dropdown.
 - **Destinatarios**: tres pestanas mutuamente excluyentes (una campana tiene una sola audiencia):
-  - **Segmento** — select con los presets: Todos / Activos / Inactivos / VIP / Nuevos / Frecuentes / Esporadicos / Una visita / En riesgo. La descripcion del preset elegido se muestra debajo.
+  - **Segmento** — select con los presets: Todos / Activos / Inactivos / VIP / Nuevos / Frecuentes / Esporadicos / Una visita / En riesgo. La descripcion del preset elegido se muestra debajo. "Nuevos" usa el mismo criterio que el segmento **nuevo** de Clientes (registrado hace ≤ `newClientDays`).
   - **Filtros** — rango de visitas (min/max) y de ultima visita (despues de / antes de). Un campo vacio no filtra.
   - **Lista (Excel)** — carga masiva de destinatarios (ver abajo).
 - Checkbox "Programar envio" → datetime picker.
@@ -406,28 +406,32 @@ Configuracion:
 
 ### 7.3 Segmentacion de clientes
 
-Calculada dinamicamente en `apps/web/lib/loyalty/client-segments.ts`. Los umbrales dependen del `businessType` del tenant, con override via `segmentationConfig`.
+Calculada dinamicamente en `apps/web/lib/loyalty/client-segments.ts` (`computeClientSegment`, funcion pura). Los umbrales dependen del `businessType` del tenant, con override via `segmentationConfig`. Se evalua en este orden; gana la primera regla que matchea:
 
 | Segmento | Criterio |
 |---|---|
-| **nuevo** | Creado hace ≤ `newClientDays` AND totalVisits ≤ 1 |
+| **nuevo** | Registrado hace ≤ `newClientDays`, sin importar las visitas. Solo por antiguedad: un cliente es nuevo sus primeros dias y nunca mas. |
+| **inactivo** | 0 visitas AND creado hace ≥ `oneTimeInactiveDays` |
+| **one_time** | Exactamente 1 visita AND ultima visita hace ≥ `oneTimeInactiveDays` |
+| **en_riesgo** | ≥3 visitas, `avgDaysBetweenVisits < frequentMaxDays` (era frecuente) pero no visita hace ≥ `avgDaysBetweenVisits × riskMultiplier` |
 | **frecuente** | ≥3 visitas AND `avgDaysBetweenVisits < frequentMaxDays` |
 | **esporadico** | ≥3 visitas AND `avgDaysBetweenVisits >= frequentMaxDays` |
-| **one_time** | Exactamente 1 visita AND ultima visita hace ≥ `oneTimeInactiveDays` |
-| **en_riesgo** | Fue frecuente pero no visita hace > `avgDaysBetweenVisits × riskMultiplier` |
-| **inactivo** | 0 visitas AND creado hace ≥ `oneTimeInactiveDays` |
+| **regular** | Ninguna regla anterior aplica (p. ej. 2 visitas; 1 visita reciente pasada la ventana de nuevo). Es el valor por defecto. |
 
-**Defaults por businessType** (en `client-segments.ts`):
+`lastVisitAt` y `avgDaysBetweenVisits` salen de `loyalty.visits` (no de `clients.total_visits`) via `visitStatsSubquery` (`apps/web/lib/loyalty/visit-stats.ts`), un subquery agregado que se hace `LEFT JOIN` a `clients`. **No usar subqueries correlacionados en la lista de columnas del select**: Drizzle quita el prefijo de tabla en selects de una sola tabla y `${clients.id}` se renderiza como `"id"`, que dentro del subquery resuelve a `visits.id`. Ese bug hizo que todo el listado leyera "Nuevo" hasta sep-2026; `visit-stats.test.ts` verifica el SQL generado.
+
+**Defaults por businessType** (en `client-segments.ts`; match case/accent-insensitive; base `DEFAULT_THRESHOLDS` = 7 / 7 / 30 / 3):
 
 | businessType | newClientDays | frequentMaxDays | oneTimeInactiveDays | riskMultiplier |
 |---|---|---|---|---|
-| cafeteria | 14 | 5 | 15 | 2.5 |
-| restaurante | 14 | 7 | 21 | 2.5 |
-| barberia | 30 | 21 | 45 | 2.0 |
-| veterinaria | 30 | 30 | 60 | 2.0 |
-| gym | 14 | 3 | 14 | 2.0 |
-| spa | 30 | 14 | 30 | 2.0 |
-| panaderia | 7 | 4 | 14 | 2.5 |
+| Cafeteria / Cafe | 7 | 5 | 15 | 3 |
+| Restaurante | 7 | 7 | 21 | 3 |
+| Barberia / Peluqueria | 14 | 21 | 45 | 3 |
+| Veterinaria | 14 | 30 | 60 | 3 |
+| Gym / Gimnasio | 7 | 3 | 14 | 3 |
+| Spa | 7 | 14 | 30 | 3 |
+| Panaderia | 7 | 4 | 14 | 3 |
+| Lavanderia | 7 | 10 | 30 | 3 |
 
 ### 7.4 Tiers
 
