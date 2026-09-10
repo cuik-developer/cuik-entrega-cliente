@@ -316,35 +316,35 @@ export default function RegistroClient({
     }
   }
 
-  // --- Determine which basic fields to show ---
-  // When no config, show all basic fields for backward compat
-  const _hasBirthdayField =
-    registrationConfig?.strategicFields.some((f) => f.key === "birthday" || f.type === "date") ??
-    false
+  // --- Birthday (first-class field, enabled from the registration config) ---
+  const birthdayConfig = registrationConfig?.birthday
+  function renderBirthdayField(label: string, required: boolean) {
+    return (
+      <div key="birthday" className="space-y-1.5">
+        <Label htmlFor="birthday" className="text-gray-700">
+          {label}
+          {required && <span className="text-red-500 ml-0.5">*</span>}
+        </Label>
+        <Input
+          id="birthday"
+          type="date"
+          required={required}
+          value={form.birthday}
+          onChange={(e) => handleFormChange("birthday", e.target.value)}
+          max={new Date().toISOString().split("T")[0]}
+          min={
+            new Date(Date.now() - 120 * 365.25 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+          }
+        />
+      </div>
+    )
+  }
 
   // --- Render strategic field ---
   function renderStrategicField(field: StrategicField) {
-    // Birthday is handled as a basic field
+    // Legacy: a strategic field keyed "birthday" (older configs) renders the same input.
     if (field.key === "birthday") {
-      return (
-        <div key={field.key} className="space-y-1.5">
-          <Label htmlFor="birthday" className="text-gray-700">
-            {field.label}
-            {field.required && <span className="text-red-500 ml-0.5">*</span>}
-          </Label>
-          <Input
-            id="birthday"
-            type="date"
-            required={field.required}
-            value={form.birthday}
-            onChange={(e) => handleFormChange("birthday", e.target.value)}
-            max={new Date().toISOString().split("T")[0]}
-            min={
-              new Date(Date.now() - 120 * 365.25 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
-            }
-          />
-        </div>
-      )
+      return renderBirthdayField(field.label, field.required)
     }
 
     switch (field.type) {
@@ -676,6 +676,10 @@ export default function RegistroClient({
                     Cambiar email
                   </button>
                 </div>
+
+                {/* Birthday (toggle in the registration config) */}
+                {birthdayConfig?.enabled &&
+                  renderBirthdayField("Fecha de cumpleaños", birthdayConfig.required)}
 
                 {/* Strategic fields (dynamic) */}
                 {strategicFields.length > 0 &&

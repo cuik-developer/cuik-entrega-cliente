@@ -45,10 +45,17 @@ const marketingBonusSchema = z.object({
   pointsBonus: z.number().int().min(0).max(1000).default(0),
 })
 
+/** Birthday is a first-class client field (clients.birthday), not a strategic field. */
+const birthdayFieldSchema = z.object({
+  enabled: z.boolean().default(false),
+  required: z.boolean().default(false),
+})
+
 export const registrationConfigSchema = z
   .object({
     strategicFields: z.array(strategicFieldSchema).max(10).default([]),
     marketingBonus: marketingBonusSchema.default({}),
+    birthday: birthdayFieldSchema.default({}),
   })
   .refine(
     (config) => {

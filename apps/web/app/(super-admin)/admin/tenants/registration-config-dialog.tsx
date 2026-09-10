@@ -103,6 +103,10 @@ export function RegistrationConfigDialog({
   // -- Field drafts --
   const [fields, setFields] = useState<FieldDraft[]>([])
 
+  // -- Birthday field --
+  const [birthdayEnabled, setBirthdayEnabled] = useState(false)
+  const [birthdayRequired, setBirthdayRequired] = useState(false)
+
   // -- Marketing bonus --
   const [bonusEnabled, setBonusEnabled] = useState(false)
   const [stampsBonus, setStampsBonus] = useState(0)
@@ -119,8 +123,12 @@ export function RegistrationConfigDialog({
         setBonusEnabled(config.marketingBonus.enabled)
         setStampsBonus(config.marketingBonus.stampsBonus)
         setPointsBonus(config.marketingBonus.pointsBonus)
+        setBirthdayEnabled(config.birthday?.enabled ?? false)
+        setBirthdayRequired(config.birthday?.required ?? false)
       } else {
         setFields([])
+        setBirthdayEnabled(false)
+        setBirthdayRequired(false)
         setBonusEnabled(false)
         setStampsBonus(0)
         setPointsBonus(0)
@@ -248,6 +256,7 @@ export function RegistrationConfigDialog({
           stampsBonus: bonusEnabled ? stampsBonus : 0,
           pointsBonus: bonusEnabled ? pointsBonus : 0,
         },
+        birthday: { enabled: birthdayEnabled, required: birthdayEnabled && birthdayRequired },
       }
 
       const result = await updateRegistrationConfig(tenantId, newConfig)
@@ -413,6 +422,26 @@ export function RegistrationConfigDialog({
               <p className="text-[10px] text-slate-400">
                 {fields.length}/{MAX_FIELDS} campos configurados
               </p>
+            )}
+          </div>
+
+          {/* ── Birthday ── */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-semibold">Cumpleaños</Label>
+              <Switch checked={birthdayEnabled} onCheckedChange={setBirthdayEnabled} />
+            </div>
+
+            <p className="text-xs text-slate-400">
+              Pide la fecha de cumpleaños en el registro. Necesario para el saludo automático de
+              cumpleaños que el comercio configura en Campañas.
+            </p>
+
+            {birthdayEnabled && (
+              <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between">
+                <Label className="text-xs">Obligatorio</Label>
+                <Switch checked={birthdayRequired} onCheckedChange={setBirthdayRequired} />
+              </div>
             )}
           </div>
 

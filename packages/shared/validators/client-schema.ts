@@ -31,6 +31,12 @@ export function buildRegistrationSchema(config: RegistrationConfig | null) {
     marketingOptIn: z.boolean().default(false),
   }
 
+  // Birthday toggle (registration config → "Cumpleaños"): top-level, validated as YYYY-MM-DD.
+  if (config?.birthday?.enabled) {
+    const dateField = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato de fecha inválido")
+    baseShape.birthday = config.birthday.required ? dateField : dateField.optional()
+  }
+
   if (!config || config.strategicFields.length === 0) {
     return z.object(baseShape)
   }
