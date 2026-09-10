@@ -6,6 +6,7 @@ import { useCallback, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useTenant } from "@/hooks/use-tenant"
 
+import { BirthdayAutomationCard } from "./_components/birthday-automation-card"
 import { CampaignList } from "./_components/campaign-list"
 import { ChurnPreventionCard } from "./_components/churn-prevention-card"
 import { CreateCampaignForm } from "./_components/create-campaign-form"
@@ -62,6 +63,9 @@ export default function CampanasPage() {
 
       {/* Churn prevention */}
       <ChurnPreventionCard tenantSlug={tenantSlug} onCampaignSent={handleCampaignCreated} />
+
+      {/* Birthday automation */}
+      <BirthdayAutomationCard tenantSlug={tenantSlug} />
 
       {/* Campaign list */}
       <CampaignList tenantSlug={tenantSlug} refreshKey={refreshKey} />

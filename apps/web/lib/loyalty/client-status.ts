@@ -161,6 +161,7 @@ export async function getClientStatus(params: {
       totalVisits: client.totalVisits,
       currentCycle: client.currentCycle,
       tier: client.tier,
+      birthday: client.birthday,
       createdAt: client.createdAt,
     },
     segment,

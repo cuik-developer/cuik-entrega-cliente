@@ -30,6 +30,7 @@ type ClientRow = {
   status: string
   createdAt: string
   qrCode: string | null
+  birthday: string | null
 }
 
 type ClientDetail = {
@@ -237,6 +238,8 @@ export default function ClientDetailPage() {
           <ClientInfoTab
             client={client}
             timezone={timezone}
+            tenantSlug={tenantSlug ?? ""}
+            onChanged={fetchClient}
             isPoints={isPoints}
             stampsCurrent={stampsCurrent}
             stampsMax={stampsMax}
@@ -261,6 +264,88 @@ export default function ClientDetailPage() {
   )
 }
 
+/** Birthday shown as "9 set." with an inline date editor (saved via PATCH). */
+function BirthdayField({
+  value,
+  clientId,
+  tenantSlug,
+  onSaved,
+}: {
+  value: string | null
+  clientId: string
+  tenantSlug: string
+  onSaved: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value ?? "")
+  const [saving, setSaving] = useState(false)
+
+  async function save(next: string | null) {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/${tenantSlug}/clients/${clientId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ birthday: next }),
+      })
+      const json = await res.json()
+      if (!json.success) throw new Error(json.error ?? "error")
+      toast.success(next ? "Cumpleaños guardado" : "Cumpleaños borrado")
+      setEditing(false)
+      onSaved()
+    } catch {
+      toast.error("No se pudo guardar el cumpleaños")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const label = value
+    ? new Date(`${value}T12:00:00`).toLocaleDateString("es-PE", { day: "numeric", month: "long" })
+    : "—"
+
+  return (
+    <div>
+      <dt className="text-xs text-muted-foreground">Cumpleaños</dt>
+      {editing ? (
+        <dd className="mt-1 flex flex-wrap items-center gap-2">
+          <input
+            type="date"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+          />
+          <Button size="sm" disabled={saving || !draft} onClick={() => save(draft)}>
+            Guardar
+          </Button>
+          {value && (
+            <Button size="sm" variant="ghost" disabled={saving} onClick={() => save(null)}>
+              Borrar
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" disabled={saving} onClick={() => setEditing(false)}>
+            Cancelar
+          </Button>
+        </dd>
+      ) : (
+        <dd className="text-sm font-medium text-foreground mt-0.5 flex items-center gap-2">
+          {label}
+          <button
+            type="button"
+            className="text-xs font-normal text-primary hover:underline"
+            onClick={() => {
+              setDraft(value ?? "")
+              setEditing(true)
+            }}
+          >
+            {value ? "Editar" : "Agregar"}
+          </button>
+        </dd>
+      )}
+    </div>
+  )
+}
+
 function InfoField({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -278,10 +363,14 @@ function ClientInfoTab({
   pct,
   points,
   timezone,
+  tenantSlug,
+  onChanged,
 }: {
   client: ClientRow
   isPoints: boolean
   timezone: string
+  tenantSlug: string
+  onChanged: () => void
   stampsCurrent: number
   stampsMax: number
   pct: number
@@ -297,6 +386,12 @@ function ClientInfoTab({
           <InfoField label="Email" value={client.email || "—"} />
           <InfoField label="DNI" value={client.dni || "—"} />
           <InfoField label="Registro" value={formatDateTime(client.createdAt, timezone)} />
+          <BirthdayField
+            value={client.birthday}
+            clientId={client.id}
+            tenantSlug={tenantSlug}
+            onSaved={onChanged}
+          />
         </div>
 
         <div className="pt-3 border-t border-border space-y-3">

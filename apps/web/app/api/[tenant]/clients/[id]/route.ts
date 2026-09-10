@@ -48,16 +48,23 @@ export async function GET(
   }
 }
 
-const patchClientSchema = z.object({
-  status: z.enum(["active", "blocked"]),
-  reason: z.string().trim().max(500).optional(),
-})
+const patchClientSchema = z
+  .object({
+    status: z.enum(["active", "blocked"]).optional(),
+    reason: z.string().trim().max(500).optional(),
+    /** "YYYY-MM-DD" to set, null to clear. */
+    birthday: z.string().date().nullable().optional(),
+  })
+  .refine((v) => v.status !== undefined || v.birthday !== undefined, {
+    message: "Nada que actualizar",
+  })
 
 /**
- * PATCH /api/[tenant]/clients/[id]  { status: "active" | "blocked", reason? }
- * Blocks or unblocks a client. Admin only. The change is written to the
- * client's notes with who did it and why, so it shows up in the timeline —
- * there is no separate audit table and this keeps the schema untouched.
+ * PATCH /api/[tenant]/clients/[id]
+ *   { status: "active" | "blocked", reason? }  — block / unblock (audit note)
+ *   { birthday: "YYYY-MM-DD" | null }           — set / clear the birthday
+ * Admin only. A status change is written to the client's notes with who did
+ * it and why, so it shows up in the timeline — no separate audit table.
  */
 export async function PATCH(
   request: Request,
@@ -84,7 +91,7 @@ export async function PATCH(
     if (!parsed.success) {
       return errorResponse("Invalid body", 400, parsed.error.flatten())
     }
-    const { status, reason } = parsed.data
+    const { status, reason, birthday } = parsed.data
 
     const [current] = await db
       .select({ id: clients.id, status: clients.status })
@@ -92,6 +99,13 @@ export async function PATCH(
       .where(and(eq(clients.id, id), eq(clients.tenantId, tenant.id)))
       .limit(1)
     if (!current) return errorResponse("Client not found", 404)
+
+    if (birthday !== undefined) {
+      await db.update(clients).set({ birthday }).where(eq(clients.id, id))
+    }
+    if (status === undefined) {
+      return successResponse({ id, birthday, changed: true })
+    }
 
     if (current.status === status) {
       return successResponse({ id, status, changed: false })

@@ -104,6 +104,8 @@ export type ClientStatus = {
     totalVisits: number
     currentCycle: number
     tier: string | null
+    /** "YYYY-MM-DD" or null. */
+    birthday: string | null
     createdAt: Date
   }
   segment: string

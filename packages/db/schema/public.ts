@@ -69,6 +69,8 @@ export const tenants = pgTable("tenants", {
   registrationConfig: jsonb("registration_config"),
   walletConfig: jsonb("wallet_config"),
   segmentationConfig: jsonb("segmentation_config"),
+  // Per-tenant automation settings (birthday greeting, ...). Shape: AutomationsConfig.
+  automations: jsonb("automations"),
   appleConfig: jsonb("apple_config"),
   timezone: text("timezone").default("America/Lima").notNull(),
   ownerId: text("owner_id").references(() => user.id),

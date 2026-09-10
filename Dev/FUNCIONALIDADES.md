@@ -213,6 +213,7 @@ Sidebar izquierdo. Rol requerido: `admin` o `super_admin`.
 - Columnas: month offset (0 = mes del cohorte, 1 = mes siguiente, etc).
 - Celdas: % de la cohorte con **al menos una visita** en ese mes (no acumulado: un cliente visto en M1 y M3 pero no en M2 suma en M1 y M3). Tooltip con la cantidad de clientes. Excluye bloqueados.
 - No se calcula en vivo: la escribe el cron `POST /api/cron/analytics-retention` (header `x-cron-secret`) en `analytics.retention_cohorts` recorriendo todos los tenants activos/trial y recalculando todas las cohortes historicas (`lib/analytics/calculate-retention.ts`, 2 queries por tenant). Sin ese schedule el widget muestra "Sin datos de retencion disponibles". Basta una corrida diaria.
+- `POST /api/cron/campaigns-birthday[?force=1]` (mismo header): cada hora; saludo de cumpleanos automatico (ver §4.4).
 - `POST /api/cron/analytics-daily[?days=N]` (mismo header) recalcula `analytics.visits_daily` (visitas, clientes unicos, nuevos y premios por dia y sucursal) para los ultimos N dias locales del tenant sin contar hoy (default 3, max 90). Rehacer 3 dias por corrida hace inocua una noche perdida; `?days=90` rellena el historico al activarlo. Cortes de dia en timezone del tenant; el upsert reemplaza la fila (los contadores en vivo de `updateVisitsDaily` quedan superados por el recuento exacto). Hoy ninguna pantalla lee esta tabla: existe como base precalculada para cuando el volumen lo pida.
 - Todos los limites de mes se evaluan en el timezone del tenant: una visita del 31 de mayo 23:30 en Lima pertenece a mayo. La API devuelve `cohortMonth` como texto `YYYY-MM-DD` y el widget arma la etiqueta por componentes (evita el desfase de un dia al parsear en el navegador).
 
@@ -229,6 +230,10 @@ Sidebar izquierdo. Rol requerido: `admin` o `super_admin`.
 ### 4.4 Campanas (`/panel/campanas`)
 
 **Card "Prevencion de churn"**: campania pre-configurada para clientes `en_riesgo` con mensaje editable.
+
+**Card "Saludo de cumpleanos"** (automatizacion): switch activado/desactivado, mensaje (150 chars, con variables como `{{client.name}}` y `{{tenant.name}}`, boton "Insertar variable"), hora de envio (0-23, hora local del comercio) y un resumen: quienes cumplen hoy, proximos 7 dias, y cuantos clientes tienen cumpleanos cargado. Se guarda en `tenants.automations` (jsonb, columna agregada en la migracion `0018_tenant_automations`; forma `AutomationsConfig` en `packages/shared/validators/automations-schema.ts`). API: `GET/PUT /api/{tenant}/automations`.
+- Envio: cron `POST /api/cron/campaigns-birthday` (header `x-cron-secret`), **cada hora**. Para cada tenant activo con la automatizacion encendida y cuya hora local coincide con `sendHour`, crea una campana push "Cumpleanos · 9 set. 2026" dirigida por lista (`clientIds`) a los clientes no bloqueados cuyo `birthday` cae ese dia (los del 29 de febrero se saludan el 28 en anos no bisiestos), la ejecuta con el pipeline normal y queda en el historial con sus destinatarios. Idempotente por dia: la campana lleva `content = { automation: "birthday", date }` y una segunda corrida el mismo dia no hace nada. Sin cumpleaneros ese dia no crea campana. `?force=1` ignora la hora (para pruebas). `lib/campaigns/birthday.ts`.
+- El cumpleanos del cliente lo carga el cliente en el registro publico (solo si el super-admin activo ese campo estrategico para el tenant) o el admin desde la ficha, pestana Informacion, campo "Cumpleanos" con editor inline (`PATCH /api/{tenant}/clients/{id}` `{ birthday: "YYYY-MM-DD" | null }`).
 
 **Lista de campanas**: tabla con nombre, tipo, segmento objetivo, estado (`draft | scheduled | sending | sent | cancelled`), fecha envio, stats (target, sent, delivered).
 

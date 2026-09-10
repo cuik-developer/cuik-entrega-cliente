@@ -15,6 +15,16 @@ export {
   appleConfigSchema,
 } from "./apple-config-schema"
 export {
+  type AutomationsConfig,
+  automationsConfigSchema,
+  type BirthdayAutomation,
+  birthdayAutomationSchema,
+  DEFAULT_BIRTHDAY_AUTOMATION,
+  DEFAULT_BIRTHDAY_MESSAGE,
+  type UpdateAutomationsInput,
+  updateAutomationsSchema,
+} from "./automations-schema"
+export {
   type TenantBranding,
   tenantBrandingSchema,
 } from "./branding-schema"
@@ -35,12 +45,6 @@ export {
   updateCatalogItemSchema,
 } from "./catalog-schema"
 export {
-  type CreateDesignChangeRequestInput,
-  createDesignChangeRequestSchema,
-  type DesignChangeRequestType,
-  designChangeRequestTypeEnum,
-} from "./design-change-request-schema"
-export {
   buildRegistrationSchema,
   type DynamicRegisterClientInput,
   type RegisterClientInput,
@@ -56,6 +60,12 @@ export {
   createNoteSchema,
   createTagSchema,
 } from "./crm-schema"
+export {
+  type CreateDesignChangeRequestInput,
+  createDesignChangeRequestSchema,
+  type DesignChangeRequestType,
+  designChangeRequestTypeEnum,
+} from "./design-change-request-schema"
 export {
   canvasNodeSchema,
   getConfigVersion,
