@@ -3,7 +3,6 @@ import { headers } from "next/headers"
 
 import { auth } from "@/lib/auth"
 import { getDashboardKpis, getTodayItems } from "@/lib/dashboard/compute-dashboard"
-import { weekRangeLabel } from "@/lib/dashboard/kpi-utils"
 import { getTenantForUser } from "@/lib/tenant-context"
 
 import { KpiCompareCards } from "./components/kpi-compare-cards"
@@ -113,7 +112,7 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <KpiCompareCards kpis={kpis} rangeLabel={weekRangeLabel(todayLocal)} />
+      <KpiCompareCards kpis={kpis} />
 
       <div className="grid lg:grid-cols-5 gap-6">
         <div className="lg:col-span-2">

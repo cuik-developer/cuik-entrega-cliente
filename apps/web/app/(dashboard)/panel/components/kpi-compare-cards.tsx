@@ -2,13 +2,11 @@ import { Award, TrendingUp, UserPlus, Users } from "lucide-react"
 
 import { Card, CardContent } from "@/components/ui/card"
 import type { DashboardKpis } from "@/lib/dashboard/compute-dashboard"
-import type { WeekKpi } from "@/lib/dashboard/kpi-utils"
+import type { DayKpi } from "@/lib/dashboard/kpi-utils"
 import { pctDelta } from "@/lib/dashboard/kpi-utils"
 
 type Props = {
   kpis: DashboardKpis
-  /** "lun–mar": the days the week-to-date window covers. */
-  rangeLabel: string
 }
 
 const CARDS: Array<{
@@ -17,34 +15,29 @@ const CARDS: Array<{
   icon: typeof TrendingUp
   bg: string
 }> = [
-  { key: "visits", label: "Visitas", icon: TrendingUp, bg: "bg-blue-50 text-primary" },
+  { key: "visits", label: "Visitas hoy", icon: TrendingUp, bg: "bg-blue-50 text-primary" },
   {
     key: "uniqueClients",
-    label: "Clientes que vinieron",
+    label: "Clientes que vinieron hoy",
     icon: Users,
     bg: "bg-emerald-50 text-emerald-600",
   },
-  { key: "newClients", label: "Clientes nuevos", icon: UserPlus, bg: "bg-amber-50 text-amber-600" },
+  {
+    key: "newClients",
+    label: "Clientes nuevos hoy",
+    icon: UserPlus,
+    bg: "bg-amber-50 text-amber-600",
+  },
   {
     key: "rewardsRedeemed",
-    label: "Premios canjeados",
+    label: "Premios canjeados hoy",
     icon: Award,
     bg: "bg-orange-50 text-accent",
   },
 ]
 
-function DeltaPill({ kpi }: { kpi: WeekKpi }) {
-  const delta = pctDelta(kpi.current, kpi.previous)
-  if (delta === null) {
-    return (
-      <span
-        className="text-[11px] font-medium text-slate-400"
-        title="La semana pasada no hubo datos a esta altura"
-      >
-        sin base
-      </span>
-    )
-  }
+function DeltaPill({ kpi }: { kpi: DayKpi }) {
+  const delta = pctDelta(kpi.today, kpi.previous)
   const up = delta > 0
   const flat = delta === 0
   const cls = flat
@@ -55,17 +48,20 @@ function DeltaPill({ kpi }: { kpi: WeekKpi }) {
   return (
     <span
       className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${cls}`}
+      title="Variación contra el mismo día de la semana pasada, hasta esta misma hora"
     >
-      {flat ? "=" : up ? "▲" : "▼"} {Math.abs(delta)}%
+      {flat ? "" : up ? "▲ " : "▼ "}
+      {Math.abs(delta)}%
     </span>
   )
 }
 
 /**
- * Week-to-date KPIs against the same window last week. "Hoy" is called out
- * separately because that is what the operator asks first thing in the morning.
+ * Today so far vs. the same weekday last week up to the same time of day.
+ * One number per card on purpose — an accumulated week next to "today" read
+ * as two different things and confused the operator.
  */
-export function KpiCompareCards({ kpis, rangeLabel }: Props) {
+export function KpiCompareCards({ kpis }: Props) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       {CARDS.map((card) => {
@@ -74,22 +70,18 @@ export function KpiCompareCards({ kpis, rangeLabel }: Props) {
           <Card key={card.key} className="border border-slate-200">
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-slate-500 font-medium">
-                  {card.label} <span className="text-slate-400">· {rangeLabel}</span>
-                </span>
+                <span className="text-xs text-slate-500 font-medium">{card.label}</span>
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${card.bg}`}>
                   <card.icon className="w-4 h-4" />
                 </div>
               </div>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-extrabold text-slate-900 tabular-nums">
-                  {kpi.current}
+                  {kpi.today}
                 </span>
                 <DeltaPill kpi={kpi} />
               </div>
               <div className="mt-1 text-xs text-slate-500 tabular-nums">
-                Hoy: <span className="font-medium text-slate-700">{kpi.today}</span>
-                <span className="mx-1.5 text-slate-300">·</span>
                 Sem. pasada a esta hora:{" "}
                 <span className="font-medium text-slate-700">{kpi.previous}</span>
               </div>

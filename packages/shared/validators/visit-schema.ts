@@ -22,6 +22,8 @@ export const clientSearchSchema = z.object({
   segment: z
     .enum(["nuevo", "frecuente", "esporadico", "regular", "one_time", "en_riesgo", "inactivo"])
     .optional(),
+  // "1" → only clients with at least one reward pending redemption
+  pendingReward: z.enum(["1"]).optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 })

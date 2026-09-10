@@ -3,13 +3,13 @@ import { tenantTzLiteral } from "@/lib/analytics/tenant-tz"
 import { getAtRiskClientCount } from "@/lib/loyalty/churn-detection"
 import type { SegmentationThresholds } from "@/lib/loyalty/client-segments"
 import { getThresholds } from "@/lib/loyalty/client-segments"
-import type { WeekKpi } from "./kpi-utils"
+import type { DayKpi } from "./kpi-utils"
 
 export type DashboardKpis = {
-  visits: WeekKpi
-  uniqueClients: WeekKpi
-  newClients: WeekKpi
-  rewardsRedeemed: WeekKpi
+  visits: DayKpi
+  uniqueClients: DayKpi
+  newClients: DayKpi
+  rewardsRedeemed: DayKpi
 }
 
 export type TodayItems = {
@@ -21,37 +21,36 @@ export type TodayItems = {
   idleCashiers: Array<{ name: string }>
 }
 
-type CountRow = { current: number; previous: number; today: number }
+type CountRow = { today: number; previous: number }
 
-function toKpi(row: CountRow | undefined): WeekKpi {
+function toKpi(row: CountRow | undefined): DayKpi {
   return {
-    current: Number(row?.current ?? 0),
-    previous: Number(row?.previous ?? 0),
     today: Number(row?.today ?? 0),
+    previous: Number(row?.previous ?? 0),
   }
 }
 
 /**
- * Week-to-date KPIs with a like-for-like comparison: this week from Monday
- * 00:00 up to now, against last week from Monday 00:00 up to the same weekday
- * and time of day. Comparing against last week's FULL days would make every
- * morning look like a collapse. All boundaries in the tenant's timezone.
+ * Today's KPIs with a like-for-like comparison: today from 00:00 up to now,
+ * against the same weekday last week from 00:00 up to the same time of day.
+ * Comparing against last week's FULL day would make every morning look like
+ * a collapse. No accumulated week: one number per card, easy to read.
+ * All boundaries in the tenant's timezone.
  */
 export async function getDashboardKpis(tenantId: string, timezone: string): Promise<DashboardKpis> {
   const tzLit = tenantTzLiteral(timezone)
   const nowLocal = sql`(NOW() AT TIME ZONE ${tzLit})`
-  const weekStart = sql`date_trunc('week', ${nowLocal})` // ISO week → Monday 00:00
-  const twoWeeksAgo = sql`${weekStart} - interval '7 days'`
+  const dayStart = sql`date_trunc('day', ${nowLocal})`
+  const twoWeeksAgo = sql`${dayStart} - interval '7 days'`
 
   // Local-time version of a timestamp column; `col` is a fixed identifier.
   const local = (col: "v.created_at" | "c.created_at" | "r.redeemed_at") =>
     sql`(${sql.raw(col)} AT TIME ZONE 'UTC' AT TIME ZONE ${tzLit})`
 
-  // The three windows, as one SELECT list. `agg` is COUNT(*) or COUNT(DISTINCT …).
+  // The two windows, as one SELECT list. `agg` is COUNT(*) or COUNT(DISTINCT …).
   const windows = (agg: string, ts: ReturnType<typeof sql>) => sql`
-    ${sql.raw(agg)} FILTER (WHERE ${ts} >= ${weekStart} AND ${ts} <= ${nowLocal})::int AS "current",
-    ${sql.raw(agg)} FILTER (WHERE ${ts} >= ${weekStart} - interval '7 days' AND ${ts} <= ${nowLocal} - interval '7 days')::int AS "previous",
-    ${sql.raw(agg)} FILTER (WHERE (${ts})::date = (${nowLocal})::date)::int AS "today"`
+    ${sql.raw(agg)} FILTER (WHERE ${ts} >= ${dayStart} AND ${ts} <= ${nowLocal})::int AS "today",
+    ${sql.raw(agg)} FILTER (WHERE ${ts} >= ${dayStart} - interval '7 days' AND ${ts} <= ${nowLocal} - interval '7 days')::int AS "previous"`
 
   const [visitsRes, uniqueRes, newRes, redeemedRes] = await Promise.all([
     db.execute(sql`

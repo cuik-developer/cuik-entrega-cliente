@@ -154,18 +154,13 @@ Sidebar izquierdo. Rol requerido: `admin` o `super_admin`.
 
 ### 4.1 Dashboard (`/panel`)
 
-**KPI Cards** (4 columnas, semana en curso vs. semana pasada): Visitas · Clientes que vinieron (unicos) · Clientes nuevos · Premios canjeados. Cada tarjeta muestra:
-- el valor **de la semana en curso** (lunes 00:00 → ahora), con la etiqueta del tramo cubierto ("lun–mie");
-- un pill de variacion vs. **la semana pasada hasta el mismo dia y la misma hora** (▲ verde / ▼ rojo / = gris); si la semana pasada no tenia datos a esa altura muestra "sin base" en vez de un porcentaje enganoso;
-- debajo, "Hoy: N · Sem. pasada a esta hora: M".
-
-La comparacion es a la misma hora a proposito: contra los dias completos de la semana pasada, todas las mananas parecerian una caida. Semana ISO (empieza lunes). Todo en el **timezone del tenant** (`lib/dashboard/compute-dashboard.ts`, helpers puros en `kpi-utils.ts`).
+**KPI Cards** (4 columnas, hoy vs. el mismo dia de la semana pasada): Visitas hoy · Clientes que vinieron hoy · Clientes nuevos hoy · Premios canjeados hoy. Cada tarjeta muestra el valor **de hoy** (00:00 → ahora), un pill de variacion contra **el mismo dia de la semana pasada hasta la misma hora** (▲ verde / ▼ rojo / 0% gris; sin base tambien se muestra como 0%), y debajo "Sem. pasada a esta hora: M". Un solo numero por tarjeta a proposito: un acumulado semanal al lado de "hoy" se leia como dos cosas distintas. La comparacion es a la misma hora para no leer cada manana como una caida. Todo en el **timezone del tenant** (`lib/dashboard/compute-dashboard.ts`, helpers puros en `kpi-utils.ts`).
 
 **Bloque "Para hoy"**: lista de cosas que piden una accion, cada una con link a la pantalla donde se hace. Solo aparecen las filas con algo pendiente; si no hay nada, dice "Todo en orden".
 | Fila | Criterio | Link |
 |---|---|---|
 | N clientes frecuentes dejaron de venir | `getAtRiskClientCount` con umbrales del tenant (mismo criterio que el card de churn) | Campanas |
-| N premios vencen en 7 dias (+ total pendientes) | rewards `pending` con `expires_at` en los proximos 7 dias; si no hay por vencer, muestra los pendientes totales | Clientes |
+| N premios vencen en 7 dias (+ total pendientes) | rewards `pending` con `expires_at` en los proximos 7 dias; si no hay por vencer, muestra los pendientes totales | Clientes?pendingReward=1 (lista filtrada) |
 | Campana X programada para <fecha> | campanas `scheduled`, hasta 3, ordenadas por fecha | Campanas |
 | N clientes nuevos de esta semana todavia no visitaron | registrados en 7 dias con `total_visits = 0` | Clientes?segment=nuevo |
 | Sin visitas registradas en 7 dias: <cajeros> | miembros no-owner de la organizacion sin `visits.registered_by` en 7 dias | Cajeros |
@@ -182,7 +177,7 @@ La comparacion es a la misma hora a proposito: contra los dias completos de la s
 
 **Busqueda**: campo con debounce, busca en name, lastName, dni, phone, email.
 
-**Filtro por segmento** (chips): Todos / Nuevos / Frecuentes / Esporadicos / Regulares / En riesgo / Inactivos / Una visita.
+**Filtro por segmento** (chips): Todos / Nuevos / Frecuentes / Esporadicos / Regulares / En riesgo / Inactivos / Una visita. Chip adicional **"Con premio pendiente"** (combinable con el segmento; `?pendingReward=1`, deep link desde el Dashboard): solo clientes con al menos un reward `pending`; cada fila muestra una etiqueta con la cantidad de premios pendientes. La API expone `pendingRewards` por cliente via `pendingRewardsSubquery` (LEFT JOIN, mismo patron que las estadisticas de visitas).
 
 > Nota: el filtro actua sobre el **segmento** (computado dinamicamente desde comportamiento), no sobre el campo `status` administrativo.
 

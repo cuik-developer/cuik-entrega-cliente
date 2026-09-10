@@ -63,8 +63,8 @@ export function TodayBlock({ items, timezone }: Props) {
           )}
         </>
       ),
-      href: "/panel/clientes",
-      cta: "Ver clientes",
+      href: "/panel/clientes?pendingReward=1",
+      cta: "Ver quiénes",
     })
   } else if (items.rewardsPending > 0) {
     rows.push({
@@ -77,8 +77,8 @@ export function TodayBlock({ items, timezone }: Props) {
           {plural(items.rewardsPending, "premio pendiente", "premios pendientes")} de canje
         </>
       ),
-      href: "/panel/clientes",
-      cta: "Ver clientes",
+      href: "/panel/clientes?pendingReward=1",
+      cta: "Ver quiénes",
     })
   }
 

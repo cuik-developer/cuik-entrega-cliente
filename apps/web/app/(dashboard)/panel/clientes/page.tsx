@@ -6,6 +6,7 @@ import {
   Download,
   ExternalLink,
   Eye,
+  Gift,
   Loader2,
   Search,
   Star,
@@ -32,6 +33,7 @@ type ClientRow = {
   status: string
   createdAt: string
   segment: string | null
+  pendingRewards?: number
 }
 
 type ClientDetail = {
@@ -221,22 +223,28 @@ export default function ClientesPage() {
   const [filter, setFilter] = useState<
     "all" | "nuevo" | "frecuente" | "esporadico" | "regular" | "en_riesgo" | "inactivo" | "one_time"
   >("all")
+  // "Con premio pendiente" toggle — combinable with the segment chips.
+  const [pendingOnly, setPendingOnly] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null)
 
-  // Deep link from the Analítica segments chart: /panel/clientes?segment=en_riesgo
+  // Deep links: /panel/clientes?segment=en_riesgo (Analítica) and
+  // /panel/clientes?pendingReward=1 (Dashboard "Para hoy").
   useEffect(() => {
-    const s = new URLSearchParams(window.location.search).get("segment")
+    const qs = new URLSearchParams(window.location.search)
+    const s = qs.get("segment")
     if (s && s in segmentLabels) setFilter(s as typeof filter)
+    if (qs.get("pendingReward") === "1") setPendingOnly(true)
   }, [])
 
   const fetchClients = useCallback(
-    async (p: number, search: string, segment: string) => {
+    async (p: number, search: string, segment: string, pending: boolean) => {
       if (!tenantSlug) return
       setLoading(true)
       try {
         const params = new URLSearchParams({ page: String(p), limit: "20" })
         if (search) params.set("search", search)
         if (segment !== "all") params.set("segment", segment)
+        if (pending) params.set("pendingReward", "1")
 
         const res = await fetch(`/api/${tenantSlug}/clients?${params}`)
         const json = await res.json()
@@ -255,11 +263,14 @@ export default function ClientesPage() {
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => fetchClients(page, searchQuery, filter), 300)
+    debounceRef.current = setTimeout(
+      () => fetchClients(page, searchQuery, filter, pendingOnly),
+      300,
+    )
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [page, searchQuery, filter, fetchClients])
+  }, [page, searchQuery, filter, pendingOnly, fetchClients])
 
   const _selectClient = async (clientId: string) => {
     try {
@@ -315,7 +326,9 @@ export default function ClientesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-foreground">Clientes</h1>
-          <p className="text-sm text-muted-foreground">{total} clientes registrados</p>
+          <p className="text-sm text-muted-foreground">
+            {total} {pendingOnly ? "con premio pendiente" : "clientes registrados"}
+          </p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -379,6 +392,19 @@ export default function ClientesPage() {
               {f.label}
             </Button>
           ))}
+          <Button
+            size="sm"
+            variant={pendingOnly ? "default" : "outline"}
+            className={`gap-1.5 ${pendingOnly ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-500" : ""}`}
+            onClick={() => {
+              setPendingOnly((v) => !v)
+              setPage(1)
+            }}
+            title="Solo clientes con un premio pendiente de canje"
+          >
+            <Gift className="w-3.5 h-3.5" />
+            Con premio pendiente
+          </Button>
         </div>
       </div>
 
@@ -424,8 +450,17 @@ export default function ClientesPage() {
                             {c.name[0]}
                           </div>
                           <div>
-                            <div className="font-medium text-foreground">
+                            <div className="font-medium text-foreground flex items-center gap-1.5">
                               {c.name} {c.lastName || ""}
+                              {(c.pendingRewards ?? 0) > 0 && (
+                                <span
+                                  className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[10px] font-semibold"
+                                  title="Premio pendiente de canje"
+                                >
+                                  <Gift className="w-3 h-3" />
+                                  {c.pendingRewards}
+                                </span>
+                              )}
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {c.phone || c.dni || ""}

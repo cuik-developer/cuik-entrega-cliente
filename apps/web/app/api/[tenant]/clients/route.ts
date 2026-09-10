@@ -13,6 +13,7 @@ import {
 import { getClientStatus } from "@/lib/loyalty"
 import type { SegmentationThresholds } from "@/lib/loyalty/client-segments"
 import { computeClientSegment, getThresholds } from "@/lib/loyalty/client-segments"
+import { pendingRewardsSubquery } from "@/lib/loyalty/reward-stats"
 import { parseAvgDays, parseVisitDate, visitStatsSubquery } from "@/lib/loyalty/visit-stats"
 
 export async function GET(request: Request, { params }: { params: Promise<{ tenant: string }> }) {
@@ -37,7 +38,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       return errorResponse("Invalid query parameters", 400, queryParsed.error.flatten())
     }
 
-    const { search, qr, status, segment } = queryParsed.data
+    const { search, qr, status, segment, pendingReward } = queryParsed.data
 
     // QR lookup: exact match, return full status
     if (qr) {
@@ -86,6 +87,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     // Visit aggregates come from a LEFT JOINed subquery, never from a correlated
     // subquery in the select list — see visitStatsSubquery for why.
     const vs = visitStatsSubquery(tenant.id)
+    const rs = pendingRewardsSubquery(tenant.id)
+
+    if (pendingReward === "1") {
+      conditions.push(sql`COALESCE(${rs.pendingRewards}, 0) > 0`)
+    }
 
     const selectFields = {
       id: clients.id,
@@ -102,6 +108,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       createdAt: clients.createdAt,
       lastVisitAt: vs.lastVisitAt,
       avgDaysBetweenVisits: vs.avgDaysBetweenVisits,
+      pendingRewards: rs.pendingRewards,
     }
 
     const mapRow = (c: {
@@ -119,6 +126,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       createdAt: Date
       lastVisitAt: Date | string | null
       avgDaysBetweenVisits: string | null
+      pendingRewards: number | null
     }) => ({
       id: c.id,
       name: c.name,
@@ -132,6 +140,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       currentCycle: c.currentCycle,
       tier: c.tier,
       createdAt: c.createdAt,
+      pendingRewards: Number(c.pendingRewards ?? 0),
       segment: computeClientSegment(
         {
           createdAt: c.createdAt,
@@ -150,6 +159,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         .select(selectFields)
         .from(clients)
         .leftJoin(vs, eq(vs.clientId, clients.id))
+        .leftJoin(rs, eq(rs.clientId, clients.id))
         .where(and(...conditions))
         .orderBy(clients.createdAt)
 
@@ -166,12 +176,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     const [{ cnt: total }] = await db
       .select({ cnt: sql<number>`count(*)::int` })
       .from(clients)
+      .leftJoin(rs, eq(rs.clientId, clients.id))
       .where(and(...conditions))
 
     const rows = await db
       .select(selectFields)
       .from(clients)
       .leftJoin(vs, eq(vs.clientId, clients.id))
+      .leftJoin(rs, eq(rs.clientId, clients.id))
       .where(and(...conditions))
       .orderBy(clients.createdAt)
       .limit(limit)
