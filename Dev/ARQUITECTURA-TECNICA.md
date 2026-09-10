@@ -202,6 +202,7 @@ address, phone, contactEmail text
 registrationConfig jsonb   # campos del form de registro (DNI, email, phone required/optional)
 walletConfig jsonb         # locations (array con lat/lng/name/relevantText), relevantDateEnabled
 segmentationConfig jsonb   # thresholds custom (newClientDays, frequentMaxDays, etc)
+automations jsonb          # automatizaciones por tenant: { birthday: { enabled, message, sendHour } } (AutomationsConfig, 0018)
 appleConfig jsonb          # passTypeId, teamId, signer cert (encriptado), mode
 timezone text DEFAULT 'America/Lima' NOT NULL
 ownerId text → user.id
@@ -576,7 +577,10 @@ Lista cronologica actual:
 0015_design_change_requests.sql
 0016_office_schema.sql
 0017_office_tasks.sql
+0018_tenant_automations.sql       # tenants.automations jsonb (sep-2026)
 ```
+
+**Como se aplican en produccion (sep-2026):** el deploy de Dokploy NO ejecuta `db:migrate`. Ademas `meta/_journal.json` registra solo 7 de los 18 archivos (drift historico), asi que `pnpm db:migrate` contra la base real podria intentar aplicar migraciones viejas. Para columnas nuevas se aplica el SQL a mano contra el contenedor de Postgres (`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`), como se hizo con `0018`. Para levantar un entorno local desde cero ver `.claude/skills/verify/SKILL.md` (drizzle-kit push con `schemaFilter` de los 6 schemas).
 
 ### 4.9 Seed
 
@@ -853,6 +857,8 @@ URL base: `APPLE_WEBSERVICE_URL` (sin `/v1` — Apple agrega `/v1/devices/...` a
 
 Cada visita registrada hace upsert via `updateVisitsDaily()` (fire-and-forget). La clave compuesta `(tenantId, date, locationId)` asegura que se acumulen contadores por dia y sucursal. La fecha se calcula en **timezone del tenant**, no UTC.
 
+El cron `analytics-daily` (`apps/web/lib/analytics/aggregate-visits-daily.ts`) recalcula desde `loyalty.visits`/`rewards` los ultimos N dias locales (default 3, max 90, `?days=`) sin contar hoy, y **reemplaza** la fila (los contadores en vivo quedan superados por el recuento exacto). Rehacer 3 dias por corrida hace inocua una noche perdida; `?days=90` rellena historico. Premios atribuidos a la sucursal de una visita del mismo cliente ese dia (LATERAL), sino `00000000-…` como sentinel. **Ninguna pantalla lee esta tabla todavia**: Analitica y Dashboard consultan `loyalty.visits` en vivo; existe como base precalculada para cuando el volumen lo pida.
+
 ### 8.2 Summary por tenant
 
 `apps/web/lib/analytics/compute-summary.ts` → `computeAnalyticsSummary(tenantId, { from, to })`:
@@ -872,26 +878,34 @@ Todas las queries que agrupan o filtran por dia usan:
 (${visits.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${tenantTz})::date
 ```
 
-**Gotcha importante**: `tenantTz` NO se puede pasar como parametro Drizzle (`${tz}`) si la misma expresion aparece en `SELECT` y `GROUP BY` — Drizzle asigna `$1` y `$2` distintos, y Postgres los ve como expresiones diferentes → error "must appear in GROUP BY clause". Fix: usar `sql.raw(\`'${tz}'\`)` para inlinear el literal (con sanitizacion IANA contra inyeccion).
+**Gotcha importante**: `tenantTz` NO se puede pasar como parametro Drizzle (`${tz}`) si la misma expresion aparece en `SELECT` y `GROUP BY` — Drizzle asigna `$1` y `$2` distintos, y Postgres los ve como expresiones diferentes → error "must appear in GROUP BY clause". Fix: usar `sql.raw(\`'${tz}'\`)` para inlinear el literal (con sanitizacion IANA contra inyeccion). Helper compartido: `apps/web/lib/analytics/tenant-tz.ts` → `tenantTzLiteral(tz)`. El mismo problema aparece con cualquier constante repetida en SELECT y GROUP BY (ej. el sentinel de `location_id` en `aggregate-visits-daily.ts`): inlinear con `sql.raw`.
+
+**Gotcha 2 — subqueries correlacionados en la lista del SELECT (bug de segmentos, sep-2026):** en un `db.select({...}).from(tabla)` de una sola tabla, Drizzle quita el prefijo de tabla a las columnas que encuentra dentro de `sql\`\`` en la lista de columnas. Un `(SELECT MAX(created_at) FROM loyalty.visits WHERE client_id = ${clients.id})` se renderiza como `client_id = "id"`, que dentro del subquery resuelve contra `visits.id` → NULL para todas las filas, sin error. Durante meses todo el listado de Clientes leyo "Nuevo" por esto. Regla: los agregados por cliente se hacen con un subquery agrupado + `LEFT JOIN` (`lib/loyalty/visit-stats.ts` → `visitStatsSubquery`, `lib/loyalty/reward-stats.ts` → `pendingRewardsSubquery`); con join Drizzle conserva los nombres calificados. `visit-stats.test.ts` verifica el SQL generado con `.toSQL()`. Los valores del subquery llegan crudos del driver (timestamp como string, numeric como string): normalizar con `parseVisitDate` / `parseAvgDays`.
+
+**Gotcha 3 — arrays:** `sql\`${jsArray}\`` se expande a una tupla `($1,$2,…)`, no a un array de PG. Para `= ANY(...)` bindear un literal `{a,b,c}` como un solo parametro (`resolve-segment.ts`, `findBirthdayClients`).
+
+**Fechas en la UI:** toda fecha visible en `/panel` pasa por `formatDateTime` (`apps/web/lib/format-date.ts`, es-PE, 24 h, tz del tenant, `—` si vacio). Fechas de la API para graficos viajan como texto `YYYY-MM-DD` y el cliente arma el `Date` por componentes (evita el desfase de un dia de `new Date("YYYY-MM-DD")`).
 
 ### 8.4 Dashboard admin (`/panel`)
 
-`apps/web/app/(dashboard)/panel/page.tsx` ejecuta 7 queries en paralelo:
-- totalClients
-- Visitas hoy (timezone-aware)
-- Visitas esta semana (date_trunc 'week' AT TIME ZONE tz)
-- Pending rewards
-- New clients hoy
-- Last 10 visits
-- Weekly chart (to_char con dayOfWeek)
+`apps/web/app/(dashboard)/panel/page.tsx` (server component) ejecuta en paralelo:
+- `getDashboardKpis()` (`lib/dashboard/compute-dashboard.ts`): 4 queries con dos ventanas cada una — hoy 00:00→ahora y el mismo dia de la semana pasada 00:00→misma hora — para visitas, clientes unicos, clientes nuevos y premios canjeados. `pctDelta` en `kpi-utils.ts` (0 cuando no hay base).
+- `getTodayItems()`: clientes en riesgo (`getAtRiskClientCount` con umbrales del tenant), premios pendientes / por vencer en 7 dias, campanas programadas, nuevos de la semana sin visita, cajeros sin visitas en 7 dias (members no-owner sin `visits.registered_by` reciente).
+- Last 10 visits.
+- Weekly chart: la query devuelve `YYYY-MM-DD` (no `to_char('Dy')`, que depende de `lc_time` y salia en ingles); la UI arma 7 barras con ceros y etiquetas es-PE.
 
 ### 8.5 Analitica tenant (`/panel/analitica`)
 
-Llama 4 endpoints:
-- `GET /api/[tenant]/analytics/summary?from=&to=` → KpiCards, TopClientsTable
-- `GET /api/[tenant]/analytics/visits?from=&to=&granularity=day|week|month` → VisitsChart (date cast a `YYYY-MM-DD` text para evitar drift de timezone en cliente)
-- `GET /api/[tenant]/analytics/retention?months=6` → RetentionHeatmap
+Llama 7 endpoints en paralelo (`fetchAnalytics`):
+- `GET /api/[tenant]/analytics/summary?from=&to=[&locationId]` → KpiCards, TopClientsTable (top = historico)
+- `GET /api/[tenant]/analytics/visits?from=&to=&granularity=day|week|month[&locationId]` → VisitsChart (date cast a `YYYY-MM-DD` text para evitar drift de timezone en cliente)
+- `GET /api/[tenant]/analytics/heatmap?from=&to=[&locationId]` → VisitsHeatmap (ISO dow × hora en tz del tenant; `lib/analytics/compute-heatmap.ts`; la UI muestra 8am–8pm y cuenta aparte lo de fuera)
+- `GET /api/[tenant]/analytics/funnel` → FunnelChart (registrados → 1+ visita → 3+ → premio canjeado; historico, sin rango ni sucursal; `compute-funnel.ts`)
+- `GET /api/[tenant]/analytics/segments` → SegmentsChart (`computeClientSegment` sobre toda la base con `visitStatsSubquery`; `compute-segments.ts`; misma cifra que los chips de Clientes)
+- `GET /api/[tenant]/analytics/retention?months=6` → RetentionHeatmap (`cohortMonth` como texto `YYYY-MM-DD`)
 - `GET /api/[tenant]/analytics/wallet-distribution` → WalletDistributionChart
+
+**Filtro por sucursal**: `GET /api/[tenant]/locations` alimenta un select (visible con 2+ sucursales). `locationId` lo aplican `visits`, `summary` (solo metricas basadas en visitas), `heatmap` y `export-visits`; embudo, segmentos, wallets, retencion y top clientes son de todo el comercio (un cliente no pertenece a una sucursal). Nota: `visits` parseaba `locationId` y no lo aplicaba hasta sep-2026.
 
 ### 8.6 Super admin metricas (`/admin/metricas`)
 
@@ -903,11 +917,11 @@ Llama 4 endpoints:
 
 ### 8.7 Retention cohorts
 
-`apps/web/lib/analytics.ts` → `calculateRetentionCohorts(tenantId)`:
-- Cohort = primer mes de creacion del cliente (`to_char(created_at, 'YYYY-MM-01')`)
-- Por cada cohort y offset (0..N meses despues), cuenta cuantos del cohort tuvieron ≥1 visita en ese mes
-- Upsert en `retention_cohorts`
-- Se corre via cron `/api/cron/analytics-retention` (diario)
+`apps/web/lib/analytics/calculate-retention.ts` → `calculateRetentionCohorts(tenantId)`:
+- Cohort = mes de **registro** del cliente (`clients.created_at`), en tz del tenant (`AT TIME ZONE`); antes de sep-2026 cortaba en UTC y un registro del 30/4 23:30 Lima caia en mayo.
+- Por cada cohort y offset (0..N meses despues), cuenta cuantos del cohort tuvieron ≥1 visita en ese mes (no acumulado). 2 queries por tenant (cohortes + pares cohort/mes con visita) y aritmetica de meses solo con strings `YYYY-MM-01`.
+- Upsert en `retention_cohorts`. Excluye bloqueados.
+- Se corre via cron `/api/cron/analytics-retention` (diario, 22:15 Lima en Dokploy). Sin el schedule el widget queda vacio: no se calcula en vivo.
 
 ### 8.8 Wallet distribution
 
@@ -938,6 +952,20 @@ Prioridad Apple > Google (nunca double-count).
 - Por cada campaign enviada, cuenta visitas en ventana N horas post-envio
 - Se cruza con clientes del segmento objetivo
 - KPI: conversion rate post-campaign
+
+### 8.10 Automatizaciones (cumpleanos)
+
+`tenants.automations` (jsonb, `AutomationsConfig` en `packages/shared/validators/automations-schema.ts`). `GET/PUT /api/[tenant]/automations` (admin). `apps/web/lib/campaigns/birthday.ts`:
+- `findBirthdayClients(tenantId, dateLocal)`: no bloqueados con `to_char(birthday,'MM-DD')` = dia local; 29/2 se saluda el 28 en anos no bisiestos.
+- `runBirthdayAutomation()`: crea `campaigns` (`type push`, `content = { automation: "birthday", date }`) + `campaign_segments` con `filter.clientIds`, y llama `executeCampaign()` — el mismo pipeline que una campana manual, queda en el historial. Idempotente por dia local (busca `content->>'automation'/'date'`). Sin cumpleaneros no crea nada.
+- Cron `POST /api/cron/campaigns-birthday` cada hora: actua cuando la hora local del tenant == `sendHour`; `?force=1` ignora la hora.
+- El dato `clients.birthday` entra por el registro publico si `registrationConfig.birthday.enabled` (switch "Cumpleanos" del super-admin; `buildRegistrationSchema` lo valida `YYYY-MM-DD`; `birthday` es clave reservada, no es campo estrategico) o por `PATCH /api/[tenant]/clients/[id] { birthday }` desde la ficha.
+
+### 8.11 Ficha del cliente: timeline y estado
+
+- `GET /api/[tenant]/clients/[id]/timeline` (`lib/crm/client-timeline.ts`): une visitas (con sucursal y cajero), rewards (ganado/canjeado/vencido), notas, notificaciones de campana y el registro, ordenados desc. `+N pts` solo si la promo activa es de puntos.
+- `PATCH /api/[tenant]/clients/[id]`: `{ status: active|blocked, reason? }` cambia el estado en transaccion y escribe una nota de auditoria "Cliente bloqueado. Motivo: …" (sin tabla nueva; el timeline la muestra como evento propio); `{ birthday }` setea/borra el cumpleanos.
+- Segmento en la ficha y en el listado: `computeClientSegment` (`lib/loyalty/client-segments.ts`; `regular` es el segmento por defecto, `nuevo` es solo por antiguedad). Badges compartidos en `apps/web/components/panel/badges.tsx`. El **tier** sigue calculandose (`register-visit.ts`) pero esta oculto en toda la UI desde sep-2026.
 
 ---
 
@@ -1034,9 +1062,12 @@ Todos requieren header `x-cron-secret: ${CRON_SECRET}`:
 | Ruta | Frecuencia recomendada | Funcion |
 |---|---|---|
 | `POST /api/cron/office-tasks` | cada 5 min | Ejecuta `tasks` activas con `nextRun <= NOW()`, recalcula `nextRun` con `cron-parser` (tz `America/Lima`) |
-| `POST /api/cron/analytics-daily` | 1×/dia (3 AM) | Agrega visitas de ayer por location en `visits_daily` |
-| `POST /api/cron/analytics-retention` | 1×/dia (4 AM) | `calculateRetentionCohorts()` por cada tenant activo |
+| `POST /api/cron/analytics-daily[?days=N]` | 1×/dia (22:30 Lima) | Recalcula `visits_daily` de los ultimos N dias locales (default 3, max 90) por tenant/sucursal, en tz del tenant |
+| `POST /api/cron/analytics-retention` | 1×/dia (22:15 Lima) | `calculateRetentionCohorts()` por cada tenant activo |
 | `POST /api/cron/campaigns-scheduled` | cada 5 min | Ejecuta campaigns con `scheduledAt <= NOW()` y status `scheduled` |
+| `POST /api/cron/campaigns-birthday[?force=1]` | cada hora (`5 * * * *`) | Saludo de cumpleanos: crea y envia la campana del dia para los tenants cuya hora local == `sendHour` |
+
+**Produccion (Dokploy, sep-2026):** los schedules se crean a mano en la app `cuik-loyalty-frontend` (la que corre Next.js; `-backend` es Postgres). Corren en el contexto de Dokploy, asi que deben llamar a `https://cuik.org/...` (no `localhost`) y llevar el secret literal en el header (`$CRON_SECRET` no se expande). Creados: `campaigns-scheduled`, `analytics-retention`, `analytics-daily`, `campaigns-birthday`. `office-tasks` sin programar hasta que se use Cuik Office.
 
 ### 9.7 Email
 
