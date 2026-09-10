@@ -19,6 +19,17 @@ export const SEGMENT_LABELS: Record<ClientSegment, string> = {
   inactivo: "Inactivo",
 }
 
+/** One-line, operator-facing explanation of each segment (tooltips). */
+export const SEGMENT_HINTS: Record<ClientSegment, string> = {
+  nuevo: "Registrado hace pocos días",
+  frecuente: "Viene seguido (3+ visitas, intervalo corto)",
+  esporadico: "Viene, pero espaciado (3+ visitas, intervalo largo)",
+  regular: "Sin un patrón claro todavía",
+  en_riesgo: "Era frecuente y dejó de venir",
+  one_time: "Una sola visita, hace tiempo",
+  inactivo: "Registrado hace tiempo y nunca visitó",
+}
+
 export const SEGMENT_COLORS: Record<ClientSegment, string> = {
   nuevo: "bg-sky-100 text-sky-700",
   frecuente: "bg-emerald-100 text-emerald-700",

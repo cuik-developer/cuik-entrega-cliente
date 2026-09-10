@@ -181,16 +181,14 @@ Sidebar izquierdo. Rol requerido: `admin` o `super_admin`.
 
 > Nota: el filtro actua sobre el **segmento** (computado dinamicamente desde comportamiento), no sobre el campo `status` administrativo.
 
-**Modal de detalle del cliente**:
-- Avatar + nombre + telefono + email + DNI + fecha registro
-- Total visitas, ciclo actual (stamps) o puntos balance (points)
-- Barra de progreso de sellos
-- Segmento y tier
-- Listado de rewards pendientes con boton "Canjear"
-- Catalogo de items canjeables (solo points)
-- QR code del cliente para escanear manualmente
-- Tags asignadas (CRM)
-- Notas (CRM) con editor inline
+**Ficha del cliente** (`/panel/clientes/[id]`, se abre al hacer click en la fila):
+- Cabecera: avatar, nombre, telefono · email · DNI, y badges de **segmento** (con tooltip que explica el criterio, `SEGMENT_HINTS`), **tier** y **estado** (Activo / Bloqueado / Inactivo).
+- Boton **Bloquear / Desbloquear** (solo admin): dialogo de confirmacion con motivo opcional. `PATCH /api/{tenant}/clients/{id}` `{ status: "active" | "blocked", reason? }` actualiza el estado y escribe una nota de auditoria ("Cliente bloqueado. Motivo: …") con el usuario que lo hizo — sin tabla nueva. Idempotente (`changed: false` si ya estaba en ese estado).
+- 4 KPIs: visitas totales, sellos del ciclo (o puntos), premios pendientes, ciclo actual. Banner amarillo si hay premios pendientes.
+- Tabs:
+  - **Actividad** (por defecto): timeline unificado, mas reciente primero, con filtros Todo / Visitas / Premios / Notas / Campanas. Eventos: registro, visita (sello N, ciclo, sucursal, monto, `+N pts` solo en programas de puntos, "registro manual"/"bonus", cajero), premio ganado (con vencimiento), premio canjeado, premio vencido sin canjear, nota (con autor), bloqueo/desbloqueo (evento propio, detectado por el contenido de la nota), campana enviada/entregada/fallida (con el mensaje). `GET /api/{tenant}/clients/{id}/timeline?limit=N` (default 100, max 500; hasta 200 filas por fuente) — `lib/crm/client-timeline.ts`. Se recarga solo tras bloquear/desbloquear.
+  - **Informacion**: datos, registro, tier, estado, progreso del ciclo.
+  - **Notas**, **Tags**, **Comunicaciones** (CRM).
 
 **Boton Exportar Excel**: descarga todos los clientes del tenant (ver §10).
 

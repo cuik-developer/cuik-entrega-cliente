@@ -1,17 +1,21 @@
 "use client"
 
-import { ArrowLeft, Coins, Loader2, Star } from "lucide-react"
+import { ArrowLeft, Ban, CircleCheck, Coins, Loader2, Star } from "lucide-react"
 import { useParams, useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
+import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useTenant } from "@/hooks/use-tenant"
 import { formatDateTime } from "@/lib/format-date"
+import { SEGMENT_COLORS, SEGMENT_HINTS, SEGMENT_LABELS } from "@/lib/loyalty/client-segments"
 
 import { ClientNotes } from "../_components/client-notes"
+import { ClientStatusDialog } from "../_components/client-status-dialog"
 import { ClientTags } from "../_components/client-tags"
+import { ClientTimeline } from "../_components/client-timeline"
 import { CommunicationHistory } from "../_components/communication-history"
 
 type ClientRow = {
@@ -31,6 +35,7 @@ type ClientRow = {
 
 type ClientDetail = {
   client: ClientRow
+  segment: string
   stamps: { current: number | null; max: number | null }
   pendingRewards: number
   promotion: { type: string; rewardValue: string | null } | null
@@ -49,6 +54,35 @@ const statusColors: Record<string, string> = {
   blocked: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
 }
 
+function ClientBadges({
+  segment,
+  tier,
+  status,
+}: {
+  segment: string
+  tier: string | null
+  status: string
+}) {
+  const statusLabel =
+    status === "active" ? "Activo" : status === "blocked" ? "Bloqueado" : "Inactivo"
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+      <Badge
+        className={`text-xs ${SEGMENT_COLORS[segment as keyof typeof SEGMENT_COLORS] ?? "bg-slate-100 text-slate-600"}`}
+        title={SEGMENT_HINTS[segment as keyof typeof SEGMENT_HINTS]}
+      >
+        {SEGMENT_LABELS[segment as keyof typeof SEGMENT_LABELS] ?? segment}
+      </Badge>
+      {tier && (
+        <Badge className={`text-xs ${tierColors[tier] ?? "bg-slate-100 text-slate-600"}`}>
+          {tier}
+        </Badge>
+      )}
+      <Badge className={`text-xs ${statusColors[status] ?? ""}`}>{statusLabel}</Badge>
+    </div>
+  )
+}
+
 export default function ClientDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -57,6 +91,11 @@ export default function ClientDetailPage() {
 
   const [data, setData] = useState<ClientDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [statusDialog, setStatusDialog] = useState<"blocked" | "active" | null>(null)
+  const [statusReason, setStatusReason] = useState("")
+  const [statusSaving, setStatusSaving] = useState(false)
+  // Bumps after a status change so the Actividad tab reloads and shows the audit note.
+  const [timelineKey, setTimelineKey] = useState(0)
 
   const fetchClient = useCallback(async () => {
     if (!tenantSlug || !clientId) return
@@ -76,6 +115,29 @@ export default function ClientDetailPage() {
   useEffect(() => {
     fetchClient()
   }, [fetchClient])
+
+  async function applyStatus() {
+    if (!tenantSlug || !statusDialog) return
+    setStatusSaving(true)
+    try {
+      const res = await fetch(`/api/${tenantSlug}/clients/${clientId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: statusDialog, reason: statusReason || undefined }),
+      })
+      const json = await res.json()
+      if (!json.success) throw new Error(json.error ?? "error")
+      toast.success(statusDialog === "blocked" ? "Cliente bloqueado" : "Cliente desbloqueado")
+      setStatusDialog(null)
+      setStatusReason("")
+      setTimelineKey((k) => k + 1)
+      await fetchClient()
+    } catch {
+      toast.error("No se pudo cambiar el estado del cliente")
+    } finally {
+      setStatusSaving(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -99,7 +161,8 @@ export default function ClientDetailPage() {
     )
   }
 
-  const { client, stamps, pendingRewards } = data
+  const { client, stamps, pendingRewards, segment } = data
+  const isBlocked = client.status === "blocked"
   const isPoints = data.promotion?.type === "points"
   const stampsMax = stamps.max ?? 0
   const stampsCurrent = stamps.current ?? 0
@@ -139,8 +202,29 @@ export default function ClientDetailPage() {
           <p className="text-sm text-muted-foreground">
             {[client.phone, client.email, client.dni].filter(Boolean).join(" · ")}
           </p>
+          <ClientBadges segment={segment} tier={client.tier} status={client.status} />
+        </div>
+        <div className="ml-auto shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            className={`gap-1.5 ${isBlocked ? "" : "text-red-600 border-red-200 hover:bg-red-50"}`}
+            onClick={() => setStatusDialog(isBlocked ? "active" : "blocked")}
+          >
+            {isBlocked ? <CircleCheck className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
+            {isBlocked ? "Desbloquear" : "Bloquear"}
+          </Button>
         </div>
       </div>
+
+      <ClientStatusDialog
+        target={statusDialog}
+        reason={statusReason}
+        saving={statusSaving}
+        onReasonChange={setStatusReason}
+        onConfirm={applyStatus}
+        onClose={() => setStatusDialog(null)}
+      />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {statsCards.map((stat) => (
@@ -167,13 +251,20 @@ export default function ClientDetailPage() {
         </div>
       )}
 
-      <Tabs defaultValue="info">
+      <Tabs defaultValue="activity">
         <TabsList>
+          <TabsTrigger value="activity">Actividad</TabsTrigger>
           <TabsTrigger value="info">Información</TabsTrigger>
           <TabsTrigger value="notes">Notas</TabsTrigger>
           <TabsTrigger value="tags">Tags</TabsTrigger>
           <TabsTrigger value="communications">Comunicaciones</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="activity" className="mt-4">
+          {tenantSlug && (
+            <ClientTimeline key={timelineKey} clientId={clientId} tenantSlug={tenantSlug} />
+          )}
+        </TabsContent>
 
         <TabsContent value="info" className="mt-4">
           <ClientInfoTab

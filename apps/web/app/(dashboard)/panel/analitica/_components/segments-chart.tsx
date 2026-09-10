@@ -5,7 +5,7 @@ import Link from "next/link"
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { SEGMENT_LABELS } from "@/lib/loyalty/client-segments"
+import { SEGMENT_HINTS, SEGMENT_LABELS } from "@/lib/loyalty/client-segments"
 
 // Hex twins of SEGMENT_COLORS (Tailwind *-500) — recharts needs literal colours.
 const SEGMENT_HEX: Record<string, string> = {
@@ -16,16 +16,6 @@ const SEGMENT_HEX: Record<string, string> = {
   en_riesgo: "#f97316",
   one_time: "#94a3b8",
   inactivo: "#ef4444",
-}
-
-const SEGMENT_HINT: Record<string, string> = {
-  nuevo: "Registrados hace pocos días",
-  frecuente: "Vienen seguido",
-  esporadico: "Vienen, pero espaciado",
-  regular: "Sin un patrón claro todavía",
-  en_riesgo: "Eran frecuentes y dejaron de venir",
-  one_time: "Una sola visita, hace tiempo",
-  inactivo: "Nunca visitaron",
 }
 
 type Entry = { key: string; name: string; value: number; color: string }
@@ -105,7 +95,7 @@ export function SegmentsChart({ data }: Props) {
                   <Link
                     key={item.key}
                     href={`/panel/clientes?segment=${item.key}`}
-                    title={SEGMENT_HINT[item.key]}
+                    title={SEGMENT_HINTS[item.key as keyof typeof SEGMENT_HINTS]}
                     className="flex items-center gap-2.5 text-sm rounded px-1 -mx-1 hover:bg-muted transition-colors"
                   >
                     <span
