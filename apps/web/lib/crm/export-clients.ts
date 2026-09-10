@@ -15,6 +15,7 @@ const COLUMNS: Partial<ExcelJS.Column>[] = [
   { header: "Teléfono", key: "phone", width: 18 },
   { header: "Estado", key: "status", width: 12 },
   { header: "Visitas totales", key: "totalVisits", width: 16 },
+  { header: "Última visita", key: "lastVisitAt", width: 22 },
   { header: "Ciclo actual", key: "currentCycle", width: 14 },
   { header: "Marketing", key: "marketingOptIn", width: 12 },
   { header: "Segmento", key: "segment", width: 18 },
@@ -61,11 +62,12 @@ export async function exportClientsXlsx(
 
     for (const row of rows) {
       const tags = tagMap.get(row.id) ?? ""
+      const lastVisitAt = parseVisitDate(row.lastVisitAt)
       const segment = computeClientSegment(
         {
           createdAt: row.createdAt,
           totalVisits: row.totalVisits,
-          lastVisitAt: parseVisitDate(row.lastVisitAt),
+          lastVisitAt,
           avgDaysBetweenVisits: parseAvgDays(row.avgDaysBetweenVisits),
         },
         segThresholds,
@@ -78,6 +80,7 @@ export async function exportClientsXlsx(
         phone: row.phone ?? "",
         status: row.status,
         totalVisits: row.totalVisits,
+        lastVisitAt: lastVisitAt ? formatDateForExport(lastVisitAt, tz) : "",
         currentCycle: row.currentCycle,
         marketingOptIn: row.marketingOptIn ? "Sí" : "No",
         segment: SEGMENT_LABELS[segment as keyof typeof SEGMENT_LABELS] ?? segment,

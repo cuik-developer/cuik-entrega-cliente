@@ -190,7 +190,7 @@ Sidebar izquierdo. Rol requerido: `admin` o `super_admin`.
   - **Informacion**: datos, registro, estado, progreso del ciclo.
   - **Notas**, **Tags**, **Comunicaciones** (CRM).
 
-**Boton Exportar Excel**: descarga todos los clientes del tenant (ver §10).
+**Boton Exportar Excel**: descarga todos los clientes del tenant (ver §10). Columnas: Nombre, Apellido, Email, Telefono, Estado, Visitas totales, **Ultima visita** (fecha y hora en tz del tenant, vacio si nunca visito), Ciclo actual, Marketing, Segmento, Tags, Fecha registro.
 
 ### 4.3 Analitica (`/panel/analitica`)
 
