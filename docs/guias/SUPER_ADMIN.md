@@ -272,7 +272,7 @@ Gestion de las promociones del comercio. Cuik soporta dos tipos de promocion: **
 
 Configuracion de los campos estrategicos que aparecen en el formulario de registro de clientes del comercio.
 
-**Que son los campos estrategicos**: Campos adicionales que el comercio quiere capturar al registrar un cliente nuevo. Ejemplos: zona donde vive, como se entero del local, cumpleanos, etc.
+**Que son los campos estrategicos**: Campos adicionales que el comercio quiere capturar al registrar un cliente nuevo. Ejemplos: zona donde vive, como se entero del local, etc. (El cumpleanos NO es un campo estrategico: tiene su propio interruptor, ver abajo.)
 
 **Configurar**:
 
@@ -284,10 +284,11 @@ Configuracion de los campos estrategicos que aparecen en el formulario de regist
    - **Opciones**: Solo para tipo "Selector", las opciones disponibles (una por linea).
    - **Placeholder**: Texto de ayuda dentro del campo.
 3. Se pueden agregar multiples campos.
-4. Opcionalmente, configurar **Bono de marketing**:
+4. Opcionalmente, activar **Cumpleanos**: agrega el campo "Fecha de cumpleanos" al formulario de registro, con la opcion **Obligatorio**. Es necesario para que el comercio pueda usar el **saludo de cumpleanos automatico** de Campanas (sin fecha, el saludo no tiene a quien llegar). El admin del comercio tambien puede cargar la fecha a mano desde la ficha de cada cliente.
+5. Opcionalmente, configurar **Bono de marketing**:
    - Sellos bonus por registrarse (ej: +1 sello gratis).
    - Puntos bonus por registrarse (ej: +50 puntos).
-5. Guardar.
+6. Guardar.
 
 **Vista de la configuracion**:
 
@@ -304,6 +305,8 @@ Configuracion de los campos estrategicos que aparecen en el formulario de regist
 Configuracion de los umbrales de segmentacion de clientes para este tenant. La segmentacion automatica clasifica a los clientes en categorias (frecuente, en riesgo, inactivo, etc.) basandose en la frecuencia de visitas.
 
 **Tipo de negocio**: Se muestra el tipo de negocio del tenant. Los valores por defecto de segmentacion se ajustan segun el tipo (una cafeteria tiene umbrales distintos a un gimnasio).
+
+**Segmentos que produce** (los ve el comercio en Clientes, Analitica y Campanas): Nuevo (solo por antiguedad de registro), Frecuente, Esporadico, Regular (sin patron claro todavia), En riesgo, Una visita, Inactivo. Los **tiers** de la promocion (Nuevo/Frecuente/VIP por visitas totales) siguen calculandose pero **no se muestran** en el panel del comercio desde setiembre 2026: cumplian una funcion parecida al segmento y confundian.
 
 **Valores por defecto** (referencia):
 

@@ -46,40 +46,44 @@ El equipo de Cuik (Super Admin) crea tu comercio en la plataforma y te envia un 
 
 ## 2. Dashboard (`/panel`)
 
-El Dashboard es tu pantalla principal. Muestra un resumen en tiempo real del estado de tu negocio.
+El Dashboard es tu pantalla principal: te dice como va el dia y que tenes que hacer hoy.
 
 ![Dashboard completo con KPIs, grafico y tabla](../screenshots/admin-01-dashboard.png)
 
 ### Encabezado
 
-Muestra el titulo "Dashboard", el nombre de tu comercio y la fecha actual en formato legible (ejemplo: "viernes, 14 de marzo de 2026").
+Muestra el titulo "Dashboard", el nombre de tu comercio y la fecha actual (ejemplo: "miercoles, 9 de setiembre de 2026").
 
-### 4 tarjetas de KPIs
+### 4 tarjetas de KPIs (hoy vs. la semana pasada)
 
 | Tarjeta | Que muestra |
 |---------|-------------|
-| **Visitas hoy** | Cantidad de visitas registradas en el dia, con subtexto de visitas de la semana |
-| **Clientes activos** | Total de clientes registrados en tu comercio |
-| **Nuevos hoy** | Clientes que se registraron hoy |
-| **Premios pendientes** | Premios generados que aun no se canjearon |
+| **Visitas hoy** | Visitas registradas hoy hasta este momento |
+| **Clientes que vinieron hoy** | Cuantos clientes distintos visitaron hoy |
+| **Clientes nuevos hoy** | Clientes que se registraron hoy |
+| **Premios canjeados hoy** | Premios entregados hoy |
+
+Cada tarjeta compara el numero de hoy con **el mismo dia de la semana pasada hasta esta misma hora** y muestra la variacion: **▲ verde** si subio, **▼ rojo** si bajo, **0%** en gris si esta igual o si la semana pasada no habia datos a esa hora. Debajo aparece el valor de referencia ("Sem. pasada a esta hora: 4"). Comparar a la misma hora evita que cada manana parezca una caida.
+
+### Bloque "Para hoy"
+
+Una lista corta de cosas que piden una accion, cada una con un link a la pantalla donde se hace. Solo aparecen las filas que tienen algo pendiente; si no hay nada, dice "Todo en orden".
+
+| Fila | Que significa | A donde lleva |
+|------|---------------|---------------|
+| **N clientes frecuentes dejaron de venir** | Clientes que venian seguido y llevan demasiado tiempo sin visitar (segmento "En riesgo") | Campanas, para mandarles un mensaje |
+| **N premios vencen en los proximos 7 dias** | Premios ganados que van a expirar sin canjearse (o el total de pendientes si ninguno vence pronto) | Clientes, con el filtro "Con premio pendiente" ya activado |
+| **Campana X programada para ...** | Tus campanas programadas, con fecha y hora | Campanas |
+| **N clientes nuevos de esta semana todavia no visitaron** | Se registraron en los ultimos 7 dias y no tienen ninguna visita | Clientes, filtrado en Nuevos |
+| **Sin visitas registradas en 7 dias: (cajeros)** | Cajeros de tu equipo que no registraron ninguna visita en la semana | Cajeros |
 
 ### Grafico de visitas semanal
 
-Un grafico de barras que muestra las visitas de los ultimos 7 dias, agrupadas por dia de la semana. Te permite ver tendencias rapidas de actividad.
-
-![Grafico de barras semanal](../screenshots/admin-01-dashboard.png)
+Barras con las visitas de hoy y los 6 dias anteriores, siempre los 7 dias (un dia sin visitas muestra 0), con el nombre del dia en espanol.
 
 ### Transacciones recientes
 
-Una tabla con las ultimas 10 visitas registradas. Cada fila muestra:
-
-- **Hora** (formato HH:MM)
-- **Nombre del cliente**
-- **Numero de sello y ciclo** (ejemplo: "Sello 3 (ciclo 1)")
-
-Si no hay transacciones, muestra el mensaje "Sin transacciones recientes".
-
-![Tabla de transacciones recientes](../screenshots/admin-01-dashboard.png)
+Las ultimas 10 visitas registradas. Cada fila muestra la fecha y hora (ejemplo: "9 set. 2026, 15:32"), el nombre del cliente y el numero de sello y ciclo (ejemplo: "Sello 3 (ciclo 1)").
 
 ---
 
@@ -123,59 +127,65 @@ La tabla muestra:
 
 | Columna | Descripcion |
 |---------|-------------|
-| **Cliente** | Avatar con inicial + nombre completo |
-| **Segmento (Tier)** | Badge con el nivel del cliente |
+| **Cliente** | Avatar con inicial, nombre completo y telefono. Si tiene premios sin canjear, una etiqueta naranja con un regalo y la cantidad |
+| **Segmento** | Badge de color con el segmento del cliente (ver abajo) |
 | **Visitas** | Total de visitas registradas |
-| **Estado** | Activo o inactivo |
-| **Acciones** | Icono de ojo para ver detalle |
+| **Estado** | Activo, Inactivo o Bloqueado |
+| **Acciones** | Icono de ojo para ver la ficha |
 
 ### Segmentos de clientes
 
-Los clientes se clasifican automaticamente segun su actividad:
+Los clientes se clasifican automaticamente segun su comportamiento. El calculo usa umbrales que dependen del tipo de negocio (una cafeteria no es lo mismo que una veterinaria) y que el equipo de Cuik puede ajustar para tu comercio.
 
 | Segmento | Color | Criterio |
 |----------|-------|----------|
-| **Nuevo** | Azul | Cliente recien registrado |
-| **Regular** | Verde | Cliente con actividad habitual |
-| **VIP** | Ambar | Cliente con alta frecuencia de visitas |
-| **En riesgo** | — | Cliente que esta dejando de visitar |
-| **Inactivo** | Gris | Cliente sin actividad reciente |
+| **Nuevo** | Celeste | Se registro hace pocos dias, sin importar cuantas veces vino |
+| **Frecuente** | Verde | 3 o mas visitas, con poco tiempo entre una y otra |
+| **Esporadico** | Ambar | 3 o mas visitas, pero espaciadas |
+| **Regular** | Violeta | Todavia no tiene un patron claro (por ejemplo, 2 visitas) |
+| **En riesgo** | Naranja | Era frecuente y dejo de venir |
+| **Una visita** | Gris | Vino una sola vez, hace tiempo |
+| **Inactivo** | Rojo | Se registro hace tiempo y nunca visito |
+
+Pasando el mouse por el badge se ve el criterio. Los mismos segmentos se usan en Campanas (preset "Nuevos", "Frecuentes", etc.) y en el grafico "Distribucion por segmento" de Analitica, asi que los numeros coinciden entre pantallas.
 
 ### Buscar clientes
 
-Usa la barra de busqueda para filtrar por **nombre**, **DNI** o **numero de celular**. La busqueda se ejecuta automaticamente mientras escribes (con un pequeno retraso para no sobrecargar el sistema).
+Usa la barra de busqueda para filtrar por **nombre**, **DNI** o **numero de celular**. La busqueda se ejecuta automaticamente mientras escribes.
 
-### Filtrar por estado
+### Filtrar por segmento y por premio pendiente
 
-Usa los botones **Todos** / **Activos** / **Inactivos** para filtrar la lista segun el estado del cliente.
+Los chips **Todos / Nuevos / Frecuentes / Esporadicos / Regulares / En riesgo / Inactivos / Una visita** filtran por segmento. El chip **"Con premio pendiente"** (naranja) deja solo los clientes que tienen un premio ganado sin canjear, y se combina con el de segmento. El encabezado indica cuantos clientes cumplen el filtro.
 
-### Exportar a Excel/CSV
+### Exportar a Excel
 
-Haz clic en el boton **"Exportar CSV"** en la parte superior para descargar la lista completa de clientes en formato CSV (compatible con Excel). El archivo incluye la fecha en el nombre.
+El boton **"Exportar Excel"** descarga la lista completa de clientes (sin aplicar los filtros de la pantalla) con las columnas: Nombre, Apellido, Email, Telefono, Estado, Visitas totales, **Ultima visita**, Ciclo actual, Marketing, Segmento, Tags y Fecha de registro.
 
-### Ver detalle de un cliente
+### Ficha del cliente
 
-Haz clic en cualquier fila de la tabla (o en el icono del ojo) para ir al detalle del cliente.
+Haz clic en cualquier fila (o en el icono del ojo) para abrir la ficha.
 
-<!-- TODO: capture screenshot for detalle de un cliente con stats y tabs -->
+#### Encabezado
 
-#### Informacion del detalle
+Avatar, nombre completo, telefono · email · DNI, y debajo los badges de **segmento** (con el criterio al pasar el mouse) y **estado**. A la derecha, el boton **Bloquear** (o **Desbloquear** si ya esta bloqueado).
 
-- **Encabezado**: avatar, nombre completo, telefono, email, DNI
-- **4 tarjetas de estadisticas**: visitas totales, sellos actuales (X/Y), premios pendientes, ciclo actual
-- **Barra de progreso**: visualizacion del avance en el ciclo actual
-- **Alerta de premios**: si el cliente tiene premios pendientes de canjear, se muestra un banner ambar
+**Bloquear un cliente**: abre una confirmacion con un campo de motivo opcional. Un cliente bloqueado deja de recibir campanas y sale de los conteos de segmentos. Queda registrado en su actividad quien lo bloqueo, cuando y por que. Usalo para abuso del programa (sellos sin comprar, QR compartido), cuentas de prueba o duplicados, o cuando el cliente pide que no le escriban mas. Se puede revertir en cualquier momento.
 
-#### 4 tabs de informacion
+#### 4 tarjetas
 
-1. **Informacion**: datos personales del cliente (nombre, apellido, celular, email, DNI, fecha de registro, tier, estado)
-2. **Notas**: agrega notas internas sobre el cliente (ejemplo: "Prefiere servicio express", "Cliente frecuente de los viernes"). Las notas incluyen fecha y autor
-3. **Tags**: asigna etiquetas al cliente para segmentacion. Puedes crear tags nuevos con nombre y color personalizado (8 colores disponibles)
-4. **Comunicaciones**: historial de notificaciones enviadas a este cliente, con detalle de campana, canal (Wallet Push/Email), estado (Enviado/Entregado/Fallido/Pendiente) y fecha
+Visitas totales, sellos del ciclo actual (X/Y) o puntos, premios pendientes y ciclo actual. Si hay premios pendientes, un banner ambar lo recuerda.
+
+#### 5 tabs
+
+1. **Actividad** (se abre por defecto): todo lo que paso con ese cliente en orden cronologico, de lo mas reciente a lo mas antiguo: cuando se registro, cada visita (sello, ciclo, sucursal y cajero que la registro), cada premio ganado (con su vencimiento), canjeado o vencido sin canjear, las notas con su autor, los bloqueos y desbloqueos, y cada campana que recibio con si se entrego o fallo. Arriba, filtros **Todo / Visitas / Premios / Notas / Campanas**. Es la pantalla para resolver reclamos ("yo vine la semana pasada", "nunca me dieron el premio").
+2. **Informacion**: nombre, apellido, celular, email, DNI, fecha de registro, **cumpleanos** (con Agregar / Editar / Borrar, para completar los clientes que no lo cargaron al registrarse), estado y progreso del ciclo.
+3. **Notas**: notas internas sobre el cliente (ejemplo: "Prefiere turnos de tarde"), con fecha y autor.
+4. **Tags**: etiquetas para segmentar. Puedes crear tags nuevos con nombre y color.
+5. **Comunicaciones**: historial de notificaciones enviadas a este cliente, con campana, canal, estado y fecha.
 
 ### Paginacion
 
-Si tienes mas de 20 clientes, la tabla se pagina. Usa los botones **Anterior** / **Siguiente** en la parte inferior.
+Si tienes mas de 20 clientes, la tabla se pagina. Usa los botones **Anterior** / **Siguiente**.
 
 ---
 
@@ -230,58 +240,58 @@ Las invitaciones que aun no fueron aceptadas aparecen en una seccion separada. P
 
 ## 6. Analitica (`/panel/analitica`)
 
-Panel de analitica avanzada con metricas detalladas del comportamiento de tus clientes.
+Panel de analitica con metricas detalladas del comportamiento de tus clientes.
 
 ![Panel de analitica completo](../screenshots/admin-05-analitica.png)
 
-### Selector de rango
+### Selector de rango y de sucursal
 
-En la parte superior, puedes elegir el periodo de analisis:
+En la parte superior:
 
-- **7 dias** — ultima semana
-- **30 dias** — ultimo mes (por defecto)
-- **90 dias** — ultimos 3 meses
+- **7 dias / 30 dias / 90 dias** (30 por defecto) o **Rango personalizado** con un calendario (desde tu primera visita registrada, maximo un ano).
+- **Sucursal**: si tu comercio tiene 2 o mas sucursales, aparece un selector "Todas las sucursales". Filtra los KPIs de visitas, el grafico de visitas, el mapa de calor y el export. El embudo, los segmentos, las wallets, la retencion y el top de clientes son siempre de todo el comercio, porque un cliente no pertenece a una sucursal.
+- **Exportar visitas**: descarga un Excel con una fila por visita del rango (y de la sucursal) elegido.
 
 ### 6 tarjetas de KPIs
 
 | KPI | Descripcion |
 |-----|-------------|
-| **Total visitas** | Visitas en el periodo seleccionado |
-| **Clientes totales** | Total de clientes registrados |
+| **Total visitas** | Visitas en el periodo |
+| **Clientes totales** | Clientes distintos que visitaron en el periodo |
 | **Clientes nuevos** | Clientes que se registraron en el periodo |
-| **Tasa de canje (%)** | Porcentaje de premios canjeados vs generados |
-| **Premios canjeados** | Total de premios canjeados en el periodo |
-| **Promedio visitas/cliente** | Promedio de visitas por cliente |
+| **Tasa de canje (%)** | Premios canjeados sobre premios generados |
+| **Premios canjeados** | Premios canjeados en el periodo |
+| **Promedio visitas/cliente** | Visitas por cliente que visito |
 
 ### Grafico de visitas
 
-Grafico de barras con 3 metricas por periodo:
+Barras con 3 series por periodo: **Total visitas**, **Clientes unicos** y **Clientes nuevos**. Puedes cambiar la granularidad: **Dia**, **Semana** o **Mes**.
 
-- **Total visitas** (azul)
-- **Clientes unicos** (verde)
-- **Clientes nuevos** (ambar)
+### Visitas por dia y hora (mapa de calor)
 
-Puedes cambiar la granularidad del grafico:
+Una grilla de lunes a domingo por hora, de 8am a 8pm, donde el color mas intenso marca los momentos con mas visitas. Debajo te dice el **pico** (ejemplo: "Mie 4pm, 6 visitas") y el **dia mas fuerte**. Si hubo visitas fuera de ese horario, las cuenta aparte. Sirve para decidir turnos del equipo y a que hora conviene lanzar una promocion.
 
-- **Dia**: una barra por dia
-- **Semana**: una barra por semana
-- **Mes**: una barra por mes
+### Embudo de fidelizacion
 
-![Grafico de visitas con selector de granularidad](../screenshots/admin-05-analitica.png)
+Cuantos clientes llegan a cada etapa, de todo el historico del comercio: **Registrados → Visitaron al menos 1 vez → Visitaron 3+ veces → Canjearon un premio**. Cada barra muestra la cantidad, el porcentaje sobre los registrados y el porcentaje sobre el paso anterior. Te muestra donde se pierde a los clientes: por ejemplo, si muchos se registran pero pocos llegan a la tercera visita.
 
-### Top 10 clientes
+### Distribucion por segmento
 
-Tabla con los clientes mas activos, ordenados por cantidad de visitas (descendente). Muestra ranking, nombre, total de visitas y segmento. Puedes invertir el orden haciendo clic en el encabezado de la columna "Visitas".
+Donut con cuantos clientes hay en cada segmento (Nuevo, Frecuente, Esporadico, Regular, En riesgo, Una visita, Inactivo), calculado igual que los filtros de Clientes. Cada fila de la leyenda es un link que abre Clientes ya filtrado por ese segmento.
 
-### Heatmap de retencion
+### Top clientes
 
-Tabla de cohortes mensuales que muestra que porcentaje de clientes vuelve despues de registrarse. Los porcentajes estan coloreados:
+Los clientes con mas visitas en todo el historico (no solo en el rango elegido), con ranking, nombre y visitas. Puedes invertir el orden haciendo clic en "Visitas".
 
-- **Verde**: retencion alta
-- **Ambar**: retencion media
-- **Rojo**: retencion baja
+### Distribucion por plataforma
 
-Si no hay suficientes datos, muestra "Sin datos de retencion disponibles."
+Donut con cuantos clientes tienen el pase en **Apple Wallet**, **Google Wallet** o **sin wallet**.
+
+### Retencion por cohorte
+
+Una tabla donde cada fila es un grupo de clientes que se registraron el mismo mes (una "cohorte") y cada columna es cuantos meses despues (M0 = el mismo mes, M1 = el siguiente, etc.). Cada celda dice que porcentaje de esa cohorte tuvo al menos una visita en ese mes, de rojo (baja) a verde (alta). Al pasar el mouse se ve la cantidad de clientes.
+
+Como leerla: si M0 es alto y M1 se desploma en todas las cohortes, la mayoria viene una vez y no vuelve: el problema es el segundo contacto, no la captacion. Si las cohortes nuevas retienen mejor que las viejas, lo que cambiaste esta funcionando. Los meses se cortan en tu zona horaria. La tabla se recalcula una vez por dia.
 
 ---
 
@@ -291,45 +301,57 @@ Crea y envia mensajes segmentados a tus clientes via notificaciones de Wallet.
 
 ![Lista de campanas con boton de nueva campana](../screenshots/admin-06-campanas.png)
 
-### Lista de campanas
+### Prevencion de abandono
+
+Una tarjeta naranja arriba del historial con la cantidad de clientes **En riesgo** (eran frecuentes y dejaron de venir), un mensaje editable y el boton "Enviar a N clientes". Es la forma mas rapida de reaccionar a la fila "dejaron de venir" del Dashboard.
+
+### Saludo de cumpleanos (automatico)
+
+Una tarjeta rosa que envia solo, cada dia, un push a los clientes que cumplen anos:
+
+- **Activado / Desactivado**: el interruptor de la derecha.
+- **Mensaje**: hasta 150 caracteres, con variables. Por defecto: "¡Feliz cumpleanos, {{client.name}}! Pasa hoy por {{tenant.name}} y celebra con nosotros."
+- **Hora de envio**: en la hora local de tu comercio.
+- **Guardar**: los cambios no se aplican hasta que guardes.
+- Debajo: quienes cumplen anos **hoy**, quienes en los **proximos 7 dias**, y cuantos de tus clientes tienen la fecha cargada. Si el porcentaje es bajo aparece en naranja: el saludo solo llega a quienes tienen cumpleanos registrado.
+
+Cada envio aparece en el historial como una campana llamada "Cumpleanos · 10 set. 2026", con sus destinatarios, igual que cualquier otra. Si un dia nadie cumple anos, no se crea nada.
+
+**De donde sale la fecha de cumpleanos**: el cliente la carga al registrarse (si el equipo de Cuik activo ese campo en tu formulario de registro; pedilo si no esta) o la cargas vos desde la ficha del cliente, pestana Informacion.
+
+### Historial de campanas
 
 Muestra tus campanas con:
 
-- **Nombre** de la campana
-- **Estado**: badge con color
-  - Borrador (gris)
-  - Programada (azul)
-  - Enviando (ambar)
-  - Enviada (verde)
-  - Cancelada (rojo)
-- **Tipo**: Push Notification o Wallet Update
-- **Enviados / Total**: cuantos mensajes se enviaron vs el total
-- **Fecha** de creacion o envio
-- **Acciones**: ver detalle (icono ojo) y enviar (icono de enviar, solo para borradores y programadas)
+- **Nombre**
+- **Estado**: Borrador (gris), Programada (azul), Enviando (ambar), Enviada (verde), Cancelada (rojo)
+- **Tipo**: Push o Wallet Update
+- **Enviados / Total**
+- **Efectividad**: cuantos destinatarios visitaron despues de recibirla
+- **Fecha** (ejemplo: "9 set. 2026, 15:32")
+- **Acciones**: ver detalle (icono ojo, con la lista de destinatarios y descarga en CSV) y enviar (solo para borradores y programadas)
 
-Puedes filtrar campanas por estado usando el selector en la parte superior del historial.
+Puedes filtrar por estado con el selector de la derecha.
 
 ### Crear una nueva campana
 
 1. Haz clic en **"Nueva campana"**
-2. Se abre un formulario (dialog) con los siguientes campos:
+2. Completa el formulario:
 
 #### Nombre de la campana
 
-Nombre descriptivo para identificar la campana (ejemplo: "Promo fin de semana").
+Nombre descriptivo (ejemplo: "Promo fin de semana").
 
 #### Tipo de campana
 
 | Tipo | Descripcion |
 |------|-------------|
-| **Push Notification** | Envia una notificacion visible al cliente con tu mensaje |
-| **Wallet Update** | Actualiza silenciosamente los pases de todos los clientes seleccionados (no muestra notificacion) |
+| **Push Notification** | Notificacion visible al cliente con tu mensaje |
+| **Wallet Update** | Actualiza silenciosamente los pases (sin notificacion) |
 
 #### Mensaje
 
-Escribe el mensaje que recibiran tus clientes. Limite de **150 caracteres**. El contador se muestra debajo del campo y cambia de color cuando te acercas al limite.
-
-**Variables disponibles**: puedes personalizar el mensaje con datos del cliente usando el boton **"Insertar variable"**:
+Hasta **150 caracteres**. El contador cambia de color al acercarse al limite. Con **"Insertar variable"** puedes personalizarlo:
 
 | Variable | Descripcion |
 |----------|-------------|
@@ -342,42 +364,37 @@ Escribe el mensaje que recibiran tus clientes. Limite de **150 caracteres**. El 
 | `{{points.balance}}` | Balance de puntos |
 | `{{tenant.name}}` | Nombre de tu comercio |
 
-Ejemplo de mensaje: `Hola {{client.name}}! Te faltan {{stamps.remaining}} sellos para tu premio en {{tenant.name}}. Te esperamos!`
+Ejemplo: `Hola {{client.name}}! Te faltan {{stamps.remaining}} sellos para tu premio en {{tenant.name}}. Te esperamos!`
 
-#### Segmento
+#### Destinatarios
 
-Elige a quien enviar la campana:
+Tres pestanas; una campana tiene una sola audiencia:
 
-| Segmento | Descripcion |
-|----------|-------------|
-| **Todos** | Todos los clientes registrados |
-| **Activos** | Clientes con actividad reciente |
-| **Inactivos** | Clientes sin actividad reciente |
-| **VIP** | Clientes con alta frecuencia |
-| **Nuevos** | Clientes registrados recientemente |
-| **Personalizado** | Define filtros avanzados |
+- **Segmento**: elige un preset.
 
-Si eliges **Personalizado**, se muestran filtros adicionales:
+  | Preset | Descripcion |
+  |--------|-------------|
+  | **Todos** | Todos los clientes registrados |
+  | **Activos** | Con visita reciente |
+  | **Inactivos** | Sin visita reciente |
+  | **Nuevos** | Registrados hace pocos dias (mismo criterio que el segmento Nuevo de Clientes) |
+  | **Frecuentes** | 3+ visitas, seguidas |
+  | **Esporadicos** | 3+ visitas, espaciadas |
+  | **Una visita** | Una sola visita, hace tiempo |
+  | **En riesgo** | Eran frecuentes y dejaron de venir |
 
-- **Min/Max visitas**: rango de visitas totales
-- **Ultima visita despues de / antes de**: rango de fechas
-- Se muestran badges con los filtros aplicados
+- **Filtros**: minimo y maximo de visitas, y rango de ultima visita.
+- **Lista (Excel)**: sube un archivo con DNI o telefono de los destinatarios. Hay un boton **"Descargar plantilla"** con el formato correcto. Al subirlo te dice cuantos encontro y cuantos rechazo, y puedes descargar los rechazados para corregirlos. Maximo 20.000 filas.
 
 #### Programar envio
 
-Activa el interruptor **"Programar envio"** si quieres que la campana se envie en una fecha y hora futura. Se muestra un selector de fecha y hora.
+Activa **"Programar envio"** para elegir fecha y hora. La campana queda como "Programada" y se envia sola.
 
-3. Haz clic en **"Crear campana"** (o **"Programar"** si configuraste fecha futura)
+3. Haz clic en **"Crear campana"** (o **"Programar"**)
 
 ### Enviar una campana
 
-Las campanas se crean como **borrador**. Para enviarla:
-
-1. Busca la campana en la lista
-2. Haz clic en el icono de **enviar** (flecha) en la columna de acciones
-3. Confirma el envio
-
-El estado cambiara a "Enviando" y luego a "Enviada" cuando se complete.
+Las campanas se crean como **borrador**. Busca la campana en el historial, haz clic en el icono de **enviar** y confirma. El estado pasa a "Enviando" y luego a "Enviada".
 
 ---
 
@@ -482,6 +499,18 @@ Ve a [Cajeros](#5-cajeros-panelcajeros) y verifica:
 ### Como se que mis campanas se enviaron correctamente?
 
 En la lista de [Campanas](#7-campanas-panelcampanas), el estado cambiara a "Enviada" (badge verde) y podras ver la columna "Enviados/Total" con la cantidad de mensajes entregados.
+
+### Un cliente aparece como "En riesgo" pero vino la semana pasada
+
+El segmento se calcula con el ritmo de visitas de ese cliente: si venia cada 3 dias y lleva mas de 9 sin venir, cuenta como en riesgo aunque haya venido "hace poco" en terminos absolutos. En su ficha, pestana Actividad, ves todas sus visitas y podes confirmar el ritmo.
+
+### Bloquee a un cliente por error
+
+Abri su ficha y usa **Desbloquear**. Queda registrado en su actividad, igual que el bloqueo.
+
+### El saludo de cumpleanos no le llego a un cliente
+
+Revisa, en este orden: que la automatizacion este **activada y guardada**; que el cliente tenga el **cumpleanos cargado** (ficha → Informacion); que tenga el **pase instalado** en su celular; y que la hora de envio ya haya pasado. En el historial de Campanas, la campana "Cumpleanos · (fecha)" te muestra a quien se envio.
 
 ### Mis clientes no reciben las notificaciones push
 

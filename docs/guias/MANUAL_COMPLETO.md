@@ -112,8 +112,9 @@ El admin comparte el link de registro (`/:slug/registro`) con sus clientes, ya s
 
 ### Paso 8 — Campanas y analitica
 
-- El admin envia campanas push segmentadas a sus clientes
-- Revisa metricas de visitas, retencion, y top clientes en la analitica
+- El admin envia campanas push segmentadas a sus clientes (por segmento, por filtros o por lista Excel), programa envios y activa el saludo automatico de cumpleanos
+- Revisa metricas en la analitica: visitas por periodo y por sucursal, mapa de calor dia × hora, embudo de fidelizacion, distribucion por segmento, top clientes, wallets y retencion por cohorte
+- En el Dashboard ve el dia comparado con la semana pasada y el bloque "Para hoy" con lo que requiere accion
 
 ![Dashboard del admin](../screenshots/admin-01-dashboard.png)
 
@@ -179,7 +180,7 @@ El sistema clasifica clientes segun sus visitas totales:
 | Frecuente | 5-19 visitas | Cliente regular |
 | VIP | 20+ visitas | Cliente leal |
 
-Los tiers son configurables (nombre, rango) y pueden desactivarse.
+Los tiers son configurables (nombre, rango) y pueden desactivarse. **Desde setiembre 2026 no se muestran en el panel del comercio**: se usan los segmentos por comportamiento (Nuevo, Frecuente, Esporadico, Regular, En riesgo, Una visita, Inactivo), que cumplen la misma funcion con mas precision. El tier se sigue calculando y queda disponible como variable `{{client.tier}}` en el pase.
 
 ---
 
@@ -221,23 +222,25 @@ El admin es el dueno o gerente del negocio. No puede editar pases ni configurar 
 
 | Seccion | Ruta | Funcion |
 |---------|------|---------|
-| Dashboard | `/panel` | KPIs del dia, grafico de visitas semanales, ultimas transacciones |
+| Dashboard | `/panel` | KPIs de hoy vs. la semana pasada, bloque "Para hoy", grafico semanal, ultimas transacciones |
 | Mi Pase | `/panel/mi-pase` | Preview del pase, reglas de promocion, catalogo (solo lectura) |
-| Clientes | `/panel/clientes` | Lista de clientes, busqueda, detalle, notas CRM, tags, exportar CSV |
+| Clientes | `/panel/clientes` | Lista con segmentos y filtro de premio pendiente, busqueda, ficha con timeline de actividad, bloqueo, cumpleanos, notas, tags, exportar Excel |
 | Cajeros | `/panel/cajeros` | Invitar cajeros por email, ver estadisticas, eliminar miembros |
-| Analitica | `/panel/analitica` | KPIs avanzados, graficos de visitas, heatmap de retencion, top clientes |
-| Campanas | `/panel/campanas` | Crear y enviar notificaciones push segmentadas via wallet |
+| Analitica | `/panel/analitica` | KPIs por rango y sucursal, visitas, mapa de calor dia × hora, embudo, segmentos, top clientes, wallets, retencion por cohorte, export de visitas |
+| Campanas | `/panel/campanas` | Campanas push por segmento / filtros / lista Excel, programadas, prevencion de abandono y saludo de cumpleanos automatico |
 | Configuracion | `/panel/configuracion` | Editar datos del comercio, ver plan actual |
 
 ### Flujos clave del Admin
 
-**Ver estado del negocio**: Dashboard > KPIs del dia (visitas hoy, clientes activos, nuevos, premios pendientes) + grafico semanal + ultimas transacciones.
+**Ver estado del negocio**: Dashboard > KPIs de hoy comparados con el mismo dia de la semana pasada + "Para hoy" (clientes en riesgo, premios por vencer, campanas programadas, nuevos sin visita, cajeros inactivos) + grafico semanal + ultimas transacciones.
 
-**Gestionar clientes**: Clientes > Buscar por nombre/DNI/celular > Click para ver detalle > Tabs: Informacion, Notas, Tags, Comunicaciones.
+**Gestionar clientes**: Clientes > Buscar o filtrar por segmento / premio pendiente > Click para abrir la ficha > Tabs: Actividad (timeline), Informacion (con cumpleanos editable), Notas, Tags, Comunicaciones. Boton Bloquear/Desbloquear con motivo.
 
 **Invitar cajero**: Cajeros > "Invitar cajero" > Ingresar email > Se envia invitacion real.
 
-**Enviar campana push**: Campanas > "Nueva campana" > Escribir mensaje > Elegir segmento (Todos, VIP, Nuevos, etc.) > Enviar o programar.
+**Enviar campana push**: Campanas > "Nueva campana" > Escribir mensaje > Destinatarios por Segmento (Todos, Nuevos, Frecuentes, En riesgo, etc.), Filtros o Lista Excel > Enviar o programar.
+
+**Activar el saludo de cumpleanos**: Campanas > tarjeta "Saludo de cumpleanos" > activar, escribir mensaje, elegir hora > Guardar. Requiere que el SA haya activado el campo Cumpleanos en la configuracion de registro del tenant.
 
 **Compartir link de registro**: Clientes > "Pagina de registro" > Copiar URL `/:slug/registro` > Compartir con clientes.
 
