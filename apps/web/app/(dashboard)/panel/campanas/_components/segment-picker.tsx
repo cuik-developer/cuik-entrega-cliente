@@ -51,7 +51,6 @@ const PRESET_OPTIONS: { value: SegmentPreset; label: string; description: string
   { value: "todos", label: "Todos", description: "Todos los clientes registrados" },
   { value: "activos", label: "Activos", description: "Clientes con visita en los ultimos 30 dias" },
   { value: "inactivos", label: "Inactivos", description: "Sin visita en mas de 30 dias" },
-  { value: "vip", label: "VIP", description: "Clientes en tier VIP" },
   {
     value: "nuevos",
     label: "Nuevos",

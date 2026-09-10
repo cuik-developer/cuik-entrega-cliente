@@ -12,7 +12,6 @@ import {
 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useTenant } from "@/hooks/use-tenant"
@@ -51,12 +50,6 @@ type CatalogItem = {
   pointsCost: number
   category: string | null
   imageUrl: string | null
-}
-
-const tierColors: Record<string, string> = {
-  Nuevo: "bg-blue-100 text-blue-700",
-  Regular: "bg-emerald-100 text-emerald-700",
-  VIP: "bg-amber-100 text-amber-700",
 }
 
 const LOCATION_STORAGE_KEY = "cuik:cashier:locationId"
@@ -532,13 +525,6 @@ function ClientSearchView({
               </div>
               <div className="text-right">
                 <div className="text-xs font-semibold text-gray-600">{c.totalVisits} visitas</div>
-                {c.tier && (
-                  <Badge
-                    className={`text-xs mt-0.5 ${tierColors[c.tier] || "bg-gray-100 text-gray-600"}`}
-                  >
-                    {c.tier}
-                  </Badge>
-                )}
               </div>
             </button>
           ))}
@@ -607,13 +593,6 @@ function ClientDetailView({
             </div>
             <div className="text-white/60 text-sm">{selected.client.phone || ""}</div>
           </div>
-          {selected.client.tier && (
-            <Badge
-              className={`ml-auto text-xs font-semibold border-0 ${tierColors[selected.client.tier] || ""}`}
-            >
-              {selected.client.tier}
-            </Badge>
-          )}
         </div>
 
         {isPoints && selected.points ? (

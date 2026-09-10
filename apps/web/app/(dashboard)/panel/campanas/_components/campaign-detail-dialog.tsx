@@ -215,7 +215,7 @@ export function CampaignDetailDialog({
                   <TableRow key={r.clientId}>
                     <TableCell className="font-medium">{r.name}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {r.phone || r.email || "--"}
+                      {r.phone || r.email || "—"}
                     </TableCell>
                     <TableCell className="text-center">
                       {r.visited ? (
@@ -229,7 +229,7 @@ export function CampaignDetailDialog({
                       )}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {r.visitedAt ? formatDate(r.visitedAt) : "--"}
+                      {r.visitedAt ? formatDate(r.visitedAt) : "—"}
                     </TableCell>
                   </TableRow>
                 ))}

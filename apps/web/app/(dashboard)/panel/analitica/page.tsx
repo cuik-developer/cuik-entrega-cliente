@@ -188,7 +188,6 @@ export default function AnaliticaPage() {
             id: c.id,
             name: c.name,
             visitCount: c.visitCount,
-            tier: c.tier ?? null,
           })),
         )
       }

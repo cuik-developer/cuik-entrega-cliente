@@ -4,13 +4,12 @@ import { ArrowLeft, Ban, CircleCheck, Coins, Loader2, Star } from "lucide-react"
 import { useParams, useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
-import { Badge } from "@/components/ui/badge"
+import { SegmentBadge, StatusBadge } from "@/components/panel/badges"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useTenant } from "@/hooks/use-tenant"
 import { formatDateTime } from "@/lib/format-date"
-import { SEGMENT_COLORS, SEGMENT_HINTS, SEGMENT_LABELS } from "@/lib/loyalty/client-segments"
 
 import { ClientNotes } from "../_components/client-notes"
 import { ClientStatusDialog } from "../_components/client-status-dialog"
@@ -42,43 +41,11 @@ type ClientDetail = {
   points?: { balance: number; availableCatalogItems?: number }
 }
 
-const tierColors: Record<string, string> = {
-  Nuevo: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  Regular: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-  VIP: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-}
-
-const statusColors: Record<string, string> = {
-  active: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-  inactive: "bg-slate-100 text-slate-500 dark:bg-slate-800/50 dark:text-slate-400",
-  blocked: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-}
-
-function ClientBadges({
-  segment,
-  tier,
-  status,
-}: {
-  segment: string
-  tier: string | null
-  status: string
-}) {
-  const statusLabel =
-    status === "active" ? "Activo" : status === "blocked" ? "Bloqueado" : "Inactivo"
+function ClientBadges({ segment, status }: { segment: string; status: string }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-      <Badge
-        className={`text-xs ${SEGMENT_COLORS[segment as keyof typeof SEGMENT_COLORS] ?? "bg-slate-100 text-slate-600"}`}
-        title={SEGMENT_HINTS[segment as keyof typeof SEGMENT_HINTS]}
-      >
-        {SEGMENT_LABELS[segment as keyof typeof SEGMENT_LABELS] ?? segment}
-      </Badge>
-      {tier && (
-        <Badge className={`text-xs ${tierColors[tier] ?? "bg-slate-100 text-slate-600"}`}>
-          {tier}
-        </Badge>
-      )}
-      <Badge className={`text-xs ${statusColors[status] ?? ""}`}>{statusLabel}</Badge>
+      <SegmentBadge segment={segment} />
+      <StatusBadge status={status} />
     </div>
   )
 }
@@ -202,7 +169,7 @@ export default function ClientDetailPage() {
           <p className="text-sm text-muted-foreground">
             {[client.phone, client.email, client.dni].filter(Boolean).join(" · ")}
           </p>
-          <ClientBadges segment={segment} tier={client.tier} status={client.status} />
+          <ClientBadges segment={segment} status={client.status} />
         </div>
         <div className="ml-auto shrink-0">
           <Button
@@ -303,12 +270,6 @@ function InfoField({ label, value }: { label: string; value: string }) {
   )
 }
 
-function getStatusLabel(status: string): string {
-  if (status === "active") return "Activo"
-  if (status === "inactive") return "Inactivo"
-  return status
-}
-
 function ClientInfoTab({
   client,
   isPoints,
@@ -340,16 +301,8 @@ function ClientInfoTab({
 
         <div className="pt-3 border-t border-border space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Tier</span>
-            <Badge className={tierColors[client.tier || ""] || "bg-muted text-muted-foreground"}>
-              {client.tier || "Sin tier"}
-            </Badge>
-          </div>
-          <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Estado</span>
-            <Badge className={statusColors[client.status] || "bg-muted text-muted-foreground"}>
-              {getStatusLabel(client.status)}
-            </Badge>
+            <StatusBadge status={client.status} />
           </div>
           {!isPoints && (
             <div>
