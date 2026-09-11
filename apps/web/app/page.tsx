@@ -30,6 +30,7 @@ import Link from "next/link"
 import type { ReactNode } from "react"
 import { useEffect, useRef, useState } from "react"
 import { CuikLogo } from "@/components/cuik-logo"
+import { HeroLivePass } from "@/components/landing/hero-live-pass"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -597,8 +598,7 @@ export default function HomePage() {
                 <div
                   className="absolute top-1/2 left-1/2 w-[76%] z-0"
                   style={{
-                    transform:
-                      "translate(-95%, -50%) translateZ(-80px) rotateY(25deg) scale(0.85)",
+                    transform: "translate(-95%, -50%) translateZ(-80px) rotateY(25deg) scale(0.85)",
                     transformOrigin: "center center",
                     opacity: 0.6,
                     filter: "blur(1.5px)",
@@ -616,8 +616,7 @@ export default function HomePage() {
                 <div
                   className="absolute top-1/2 left-1/2 w-[52%]"
                   style={{
-                    transform:
-                      "translate(15%, -50%) translateZ(-40px) rotateY(-25deg) scale(0.85)",
+                    transform: "translate(15%, -50%) translateZ(-40px) rotateY(-25deg) scale(0.85)",
                     transformOrigin: "center center",
                     opacity: 0.65,
                     filter: "blur(1.5px)",
@@ -639,14 +638,7 @@ export default function HomePage() {
                     transformOrigin: "center center",
                   }}
                 >
-                  <Image
-                    src="/landing/mockup-gradual.png"
-                    alt="Pase de fidelización Gradual Café en Apple Wallet"
-                    width={564}
-                    height={1002}
-                    className="w-full h-auto drop-shadow-2xl"
-                    priority
-                  />
+                  <HeroLivePass active={hero.inView} />
                 </div>
                 {/* Shadow underneath the group */}
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[80%] h-6 bg-black/10 rounded-full blur-2xl" />
