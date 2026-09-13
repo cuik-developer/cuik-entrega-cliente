@@ -30,6 +30,7 @@ import Link from "next/link"
 import type { ReactNode } from "react"
 import { useEffect, useRef, useState } from "react"
 import { CuikLogo } from "@/components/cuik-logo"
+import { BeforeAfter } from "@/components/landing/before-after"
 import { DemoWalkthrough } from "@/components/landing/demo-walkthrough"
 import { HeroCarousel } from "@/components/landing/hero-carousel"
 import { Badge } from "@/components/ui/badge"
@@ -37,6 +38,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 
 /* ─── Data ─────────────────────────────────────────────── */
+
+// "Así de simple" está oculta temporalmente; la demo ocupa su lugar.
+const SHOW_BENEFITS = false
 
 const VERTICALS: { icon: ReactNode; label: string }[] = [
   { icon: <Coffee className="w-4 h-4" />, label: "Cafeterías" },
@@ -357,18 +361,9 @@ function AnimatedNumber({ target, suffix = "" }: { target: number; suffix?: stri
 
 export default function HomePage() {
   const [billing, setBilling] = useState<BillingCycle>("monthly")
-  const [beforeAfter, setBeforeAfter] = useState<"before" | "after">("after")
-  const [showConfetti, setShowConfetti] = useState(false)
   const [mobileMenu, setMobileMenu] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [plans, setPlans] = useState<PlanCard[]>(FALLBACK_PLANS)
-
-  const handleAfterClick = () => {
-    if (beforeAfter === "after") return
-    setBeforeAfter("after")
-    setShowConfetti(true)
-    setTimeout(() => setShowConfetti(false), 2500)
-  }
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20)
@@ -392,6 +387,7 @@ export default function HomePage() {
   const hero = useInView(0.1)
   const benefits = useInView()
   const demo = useInView()
+  const beforeAfter = useInView()
   const diff = useInView()
   const mechanics = useInView()
   const social = useInView()
@@ -424,9 +420,6 @@ export default function HomePage() {
         .anim-stagger.is-visible > *:nth-child(5) { animation-delay: 0.25s; }
         .anim-stagger.is-visible > *:nth-child(6) { animation-delay: 0.3s; }
         .grain::after { content: ''; position: absolute; inset: 0; opacity: 0.025; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); pointer-events: none; }
-        @keyframes confetti-fall { 0% { transform: translateY(-20px) rotate(0deg) scale(0); opacity: 1; } 15% { transform: translateY(0) rotate(45deg) scale(1); opacity: 1; } 100% { transform: translateY(calc(100vh - 100px)) rotate(720deg) scale(0.5); opacity: 0; } }
-        @keyframes confetti-spread { 0% { transform: translate(0,0) scale(0); opacity: 1; } 20% { transform: translate(var(--cx), var(--cy)) scale(1.2); opacity: 1; } 100% { transform: translate(var(--cx), calc(var(--cy) + 300px)) scale(0.3); opacity: 0; } }
-        .confetti-particle { position: absolute; pointer-events: none; animation: confetti-spread 2.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
       `}</style>
 
       {/* ─── Navbar ──────────────────────────────────── */}
@@ -631,68 +624,90 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ─── Benefits: Así de simple ─────────────────── */}
-      <section id="beneficios" className="py-20 sm:py-24 bg-white">
-        <div ref={benefits.ref} className="max-w-5xl mx-auto px-4 sm:px-6">
+      {/* ─── Demo Interactiva ────────────────────────── */}
+      <div id="beneficios" />
+      <section id="demo" className="relative py-20 sm:py-24 grain overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-blue-50/70 via-white to-gray-50 pointer-events-none" />
+        <div ref={demo.ref} className="max-w-5xl mx-auto px-4 sm:px-6 relative">
           <div className="text-center mb-14">
             <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
-              Así de simple
+              Mira cómo funciona tu pase
             </h2>
-            <p className="text-gray-500 text-lg max-w-md mx-auto">
-              Tres pasos para que tus clientes vuelvan una y otra vez
-            </p>
+            <p className="text-gray-500 text-lg">En 3 simples pasos, tu cliente queda fidelizado</p>
           </div>
           <div
-            className={`grid md:grid-cols-3 gap-6 anim-stagger ${benefits.inView ? "is-visible" : ""}`}
+            className={`flex flex-col lg:flex-row items-center gap-14 ${demo.inView ? "" : "opacity-0"}`}
+            style={demo.inView ? { animation: "fade-up 0.8s ease-out both" } : undefined}
           >
-            {[
-              {
-                icon: <QrCode className="w-9 h-9" />,
-                step: "01",
-                title: "Escanea",
-                desc: "Tu cliente muestra su QR en el mostrador. El cajero lo escanea en segundos.",
-                img: "/landing/step-scan.png",
-              },
-              {
-                icon: <Stamp className="w-9 h-9" />,
-                step: "02",
-                title: "Acumula",
-                desc: "Cada visita suma un sello digital a su tarjeta en Apple o Google Wallet.",
-                img: "/landing/step-stamp.png",
-              },
-              {
-                icon: <Gift className="w-9 h-9" />,
-                step: "03",
-                title: "Premia",
-                desc: "Al completar el ciclo, gana su recompensa automáticamente.",
-                img: "/landing/step-reward.png",
-              },
-            ].map((item) => (
-              <div
-                key={item.step}
-                className="relative p-8 rounded-2xl bg-gradient-to-b from-gray-50 to-white border border-gray-100 hover:border-[#0e70db]/20 hover:shadow-lg hover:shadow-blue-50 transition-all duration-300 group overflow-hidden"
-              >
-                <div className="text-6xl font-black text-gray-100/80 group-hover:text-blue-100 absolute top-4 right-6 transition-colors select-none">
-                  {item.step}
-                </div>
-                <div className="relative w-full h-40 mb-5 rounded-xl overflow-hidden bg-blue-50/50">
-                  <Image
-                    src={item.img}
-                    alt={item.title}
-                    fill
-                    className="object-contain p-2 group-hover:scale-105 transition-transform duration-500"
-                  />
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-[#0e70db] text-white flex items-center justify-center mb-4 shadow-lg shadow-blue-200/40">
-                  {item.icon}
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">{item.title}</h3>
-                <p className="text-gray-500 leading-relaxed">{item.desc}</p>
-              </div>
-            ))}
+            <DemoWalkthrough active={demo.inView} />
           </div>
         </div>
       </section>
+
+      {/* ─── Benefits: Así de simple (oculta temporalmente) ── */}
+      {SHOW_BENEFITS && (
+        <section id="beneficios" className="py-20 sm:py-24 bg-white">
+          <div ref={benefits.ref} className="max-w-5xl mx-auto px-4 sm:px-6">
+            <div className="text-center mb-14">
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
+                Así de simple
+              </h2>
+              <p className="text-gray-500 text-lg max-w-md mx-auto">
+                Tres pasos para que tus clientes vuelvan una y otra vez
+              </p>
+            </div>
+            <div
+              className={`grid md:grid-cols-3 gap-6 anim-stagger ${benefits.inView ? "is-visible" : ""}`}
+            >
+              {[
+                {
+                  icon: <QrCode className="w-9 h-9" />,
+                  step: "01",
+                  title: "Escanea",
+                  desc: "Tu cliente muestra su QR en el mostrador. El cajero lo escanea en segundos.",
+                  img: "/landing/step-scan.png",
+                },
+                {
+                  icon: <Stamp className="w-9 h-9" />,
+                  step: "02",
+                  title: "Acumula",
+                  desc: "Cada visita suma un sello digital a su tarjeta en Apple o Google Wallet.",
+                  img: "/landing/step-stamp.png",
+                },
+                {
+                  icon: <Gift className="w-9 h-9" />,
+                  step: "03",
+                  title: "Premia",
+                  desc: "Al completar el ciclo, gana su recompensa automáticamente.",
+                  img: "/landing/step-reward.png",
+                },
+              ].map((item) => (
+                <div
+                  key={item.step}
+                  className="relative p-8 rounded-2xl bg-gradient-to-b from-gray-50 to-white border border-gray-100 hover:border-[#0e70db]/20 hover:shadow-lg hover:shadow-blue-50 transition-all duration-300 group overflow-hidden"
+                >
+                  <div className="text-6xl font-black text-gray-100/80 group-hover:text-blue-100 absolute top-4 right-6 transition-colors select-none">
+                    {item.step}
+                  </div>
+                  <div className="relative w-full h-40 mb-5 rounded-xl overflow-hidden bg-blue-50/50">
+                    <Image
+                      src={item.img}
+                      alt={item.title}
+                      fill
+                      className="object-contain p-2 group-hover:scale-105 transition-transform duration-500"
+                    />
+                  </div>
+                  <div className="w-12 h-12 rounded-xl bg-[#0e70db] text-white flex items-center justify-center mb-4 shadow-lg shadow-blue-200/40">
+                    {item.icon}
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">{item.title}</h3>
+                  <p className="text-gray-500 leading-relaxed">{item.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ─── Hero Banner Image ────────────────────────── */}
       <section className="relative h-[280px] sm:h-[360px] overflow-hidden">
@@ -710,25 +725,6 @@ export default function HomePage() {
               Comercios reales en Perú ya usan Cuik para convertir cada visita en un cliente que
               vuelve.
             </p>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── Demo Interactiva ────────────────────────── */}
-      <section id="demo" className="relative py-20 sm:py-24 grain overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-blue-50/70 via-white to-gray-50 pointer-events-none" />
-        <div ref={demo.ref} className="max-w-5xl mx-auto px-4 sm:px-6 relative">
-          <div className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
-              Mira cómo funciona tu pase
-            </h2>
-            <p className="text-gray-500 text-lg">En 3 simples pasos, tu cliente queda fidelizado</p>
-          </div>
-          <div
-            className={`flex flex-col lg:flex-row items-center gap-14 ${demo.inView ? "" : "opacity-0"}`}
-            style={demo.inView ? { animation: "fade-up 0.8s ease-out both" } : undefined}
-          >
-            <DemoWalkthrough active={demo.inView} />
           </div>
         </div>
       </section>
@@ -819,143 +815,11 @@ export default function HomePage() {
       </section>
 
       {/* ─── Before / After ──────────────────────────── */}
-      <section className="relative py-20 sm:py-24 bg-gray-50/80 overflow-hidden">
-        {/* Confetti burst */}
-        {showConfetti && (
-          <div className="absolute inset-0 pointer-events-none z-20">
-            {Array.from({ length: 40 }).map((_, i) => {
-              const colors = ["#0e70db", "#ff4810", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"]
-              const color = colors[i % colors.length]
-              const cx = `${(Math.random() - 0.5) * 600}px`
-              const cy = `${(Math.random() - 0.5) * 200 - 100}px`
-              const delay = `${Math.random() * 0.4}s`
-              const size = 6 + Math.random() * 8
-              const shapes = ["rounded-full", "rounded-sm", "rounded-none"]
-              const shape = shapes[i % shapes.length]
-              return (
-                <div
-                  // biome-ignore lint/suspicious/noArrayIndexKey: static confetti particles
-                  key={i}
-                  className={`confetti-particle ${shape}`}
-                  style={
-                    {
-                      left: "50%",
-                      top: "30%",
-                      width: size,
-                      height: size,
-                      backgroundColor: color,
-                      "--cx": cx,
-                      "--cy": cy,
-                      animationDelay: delay,
-                    } as React.CSSProperties
-                  }
-                />
-              )
-            })}
-          </div>
-        )}
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 relative">
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 text-center mb-8 tracking-tight">
-            El antes y el ahora
-          </h2>
-          <div className="flex justify-center mb-10">
-            <div className="bg-white rounded-xl p-1 border border-gray-200 flex gap-1 shadow-sm">
-              <button
-                type="button"
-                onClick={() => setBeforeAfter("before")}
-                className={`px-6 py-2.5 rounded-lg text-sm font-semibold transition-all ${beforeAfter === "before" ? "bg-gray-900 text-white shadow-md" : "text-gray-500 hover:text-gray-700"}`}
-              >
-                Antes
-              </button>
-              <button
-                type="button"
-                onClick={handleAfterClick}
-                className={`px-6 py-2.5 rounded-lg text-sm font-semibold transition-all ${beforeAfter === "after" ? "bg-[#0e70db] text-white shadow-md shadow-blue-200/50" : "text-gray-500 hover:text-gray-700"}`}
-              >
-                Ahora con Cuik
-              </button>
-            </div>
-          </div>
-          {beforeAfter === "before" ? (
-            <Card className="border-2 border-red-100 anim-scale-in">
-              <CardContent className="p-8 sm:p-10">
-                <div className="grid md:grid-cols-2 gap-8 items-center">
-                  <div className="space-y-4">
-                    {[
-                      "Se pierde entre bolsillos",
-                      "No genera data útil",
-                      "Cero tecnología",
-                      "Diseño poco profesional",
-                      "No se puede actualizar",
-                    ].map((item) => (
-                      <div key={item} className="flex items-center gap-3">
-                        <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                          <X className="w-3.5 h-3.5 text-red-500" />
-                        </div>
-                        <span className="text-gray-600">{item}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex justify-center">
-                    <div className="relative w-56 h-40 rounded-xl overflow-hidden shadow-inner opacity-80 -rotate-2">
-                      <Image
-                        src="/landing/old-stamp-card.png"
-                        alt="Tarjeta de sellos de cartón desgastada"
-                        fill
-                        className="object-cover"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="relative rounded-2xl bg-[#0c3d7a] overflow-hidden anim-scale-in">
-              {/* Floating Lucide icons as decoration */}
-              <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                <QrCode className="absolute top-6 left-8 w-8 h-8 text-white/[0.07] rotate-12" />
-                <Gift className="absolute top-12 right-12 w-10 h-10 text-white/[0.07] -rotate-6" />
-                <Star className="absolute bottom-16 left-12 w-7 h-7 text-white/[0.07] rotate-45" />
-                <CheckCircle2 className="absolute bottom-8 right-20 w-9 h-9 text-white/[0.07] -rotate-12" />
-                <Stamp className="absolute top-1/2 left-4 w-6 h-6 text-white/[0.07] rotate-[-20deg]" />
-                <Zap className="absolute top-8 left-1/3 w-6 h-6 text-white/[0.07] rotate-12" />
-                <Coffee className="absolute bottom-12 left-1/3 w-7 h-7 text-white/[0.07] -rotate-6" />
-                <Trophy className="absolute top-1/3 right-8 w-6 h-6 text-white/[0.07] rotate-[25deg]" />
-              </div>
-              <div className="relative p-8 sm:p-10">
-                <div className="grid md:grid-cols-2 gap-8 items-center">
-                  <div className="space-y-4">
-                    {[
-                      "Siempre en su teléfono",
-                      "Data accionable en tiempo real",
-                      "Tecnología Apple & Google Wallet",
-                      "Diseño profesional personalizado",
-                      "Se actualiza automáticamente",
-                    ].map((item) => (
-                      <div key={item} className="flex items-center gap-3">
-                        <div className="w-6 h-6 rounded-full bg-white/15 flex items-center justify-center flex-shrink-0">
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        </div>
-                        <span className="text-white font-medium">{item}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex justify-center">
-                    <div className="w-[200px]">
-                      <Image
-                        src="/landing/mockup-elpatron.png"
-                        alt="Pase de puntos El Patrón Barber en Apple Wallet"
-                        width={564}
-                        height={1002}
-                        className="w-full h-auto drop-shadow-2xl"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+      <section
+        ref={beforeAfter.ref}
+        className="relative py-20 sm:py-24 bg-gray-50/80 overflow-hidden"
+      >
+        <BeforeAfter active={beforeAfter.inView} />
       </section>
 
       {/* ─── 4 Mechanics ─────────────────────────────── */}
