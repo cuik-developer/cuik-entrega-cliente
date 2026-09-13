@@ -95,6 +95,7 @@ export function HeroCarousel({ active }: { active: boolean }) {
 
   // Clicking a phone brings it to the front and plays its scene from the start.
   const goTo = (phone: number) => {
+    if (TIMELINE[step].front === phone) return
     setStep(TIMELINE.findIndex((t) => t.front === phone))
     setTick((t) => t + 1)
   }
@@ -110,6 +111,13 @@ export function HeroCarousel({ active }: { active: boolean }) {
         .hc-stage { container-type: inline-size; --hc-ease: cubic-bezier(0.77, 0, 0.175, 1); }
         .hc-phone { position: absolute; top: 50%; left: 50%; transform-origin: center center; transition: transform 800ms var(--hc-ease), opacity 800ms var(--hc-ease), filter 800ms var(--hc-ease); will-change: transform, opacity; background: none; border: 0; padding: 0; cursor: pointer; }
         .hc-phone.slot-0 { cursor: default; }
+        /* The PNGs have big transparent margins that would swallow clicks meant for the phones behind:
+           the button itself ignores the pointer and only the visible phone body (.hc-hit) takes it. */
+        .hc-phone { pointer-events: none; }
+        .hc-hit { position: absolute; pointer-events: auto; }
+        .hc-hit.standard { left: 22.5%; width: 55%; top: 4.5%; height: 91%; }
+        .hc-hit.wide { left: 11%; width: 78%; top: 4.5%; height: 91%; }
+        .hc-phone.slot-0 .hc-hit { cursor: default; }
         .hc-phone:focus-visible { outline: 2px solid #0e70db; outline-offset: 6px; border-radius: 24px; }
         .hc-phone.slot-0 { transform: translate(-50%, -50%) translateZ(0) rotateY(0deg) scale(1); opacity: 1; filter: blur(0); }
         .hc-phone.slot-1 { transform: translate(calc(-50% + 26cqw), -50%) translateZ(-80px) rotateY(-25deg) scale(0.82); opacity: 0.62; filter: blur(1.5px); }
@@ -142,6 +150,7 @@ export function HeroCarousel({ active }: { active: boolean }) {
               push={isFront && scene === "push" ? (p.push ?? null) : null}
               priority
             />
+            <span className={`hc-hit ${p.frame}`} aria-hidden="true" />
           </button>
         )
       })}
