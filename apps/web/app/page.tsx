@@ -30,7 +30,8 @@ import Link from "next/link"
 import type { ReactNode } from "react"
 import { useEffect, useRef, useState } from "react"
 import { CuikLogo } from "@/components/cuik-logo"
-import { HeroLivePass } from "@/components/landing/hero-live-pass"
+import { DemoWalkthrough } from "@/components/landing/demo-walkthrough"
+import { HeroCarousel } from "@/components/landing/hero-carousel"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -587,62 +588,7 @@ export default function HomePage() {
               className="relative flex items-center justify-center h-[440px] lg:h-[520px]"
               style={{ perspective: "1200px" }}
             >
-              <div
-                className="relative w-[320px] sm:w-[380px] lg:w-[420px] h-[380px] sm:h-[440px] lg:h-[500px]"
-                style={{
-                  transformStyle: "preserve-3d",
-                  animation: "float 6s ease-in-out infinite",
-                }}
-              >
-                {/* Left phone — MascotaVeloz (BEHIND, rotated in 3D) */}
-                <div
-                  className="absolute top-1/2 left-1/2 w-[76%] z-0"
-                  style={{
-                    transform: "translate(-95%, -50%) translateZ(-80px) rotateY(25deg) scale(0.85)",
-                    transformOrigin: "center center",
-                    opacity: 0.6,
-                    filter: "blur(1.5px)",
-                  }}
-                >
-                  <Image
-                    src="/landing/mockup-mascotaveloz.png"
-                    alt="Pase de fidelización MascotaVeloz en Apple Wallet"
-                    width={564}
-                    height={1002}
-                    className="w-full h-auto drop-shadow-xl"
-                  />
-                </div>
-                {/* Right phone — El Patrón Barber (BEHIND, rotated in 3D) */}
-                <div
-                  className="absolute top-1/2 left-1/2 w-[52%]"
-                  style={{
-                    transform: "translate(15%, -50%) translateZ(-40px) rotateY(-25deg) scale(0.85)",
-                    transformOrigin: "center center",
-                    opacity: 0.65,
-                    filter: "blur(1.5px)",
-                  }}
-                >
-                  <Image
-                    src="/landing/mockup-elpatron.png"
-                    alt="Pase de puntos El Patrón Barber en Apple Wallet"
-                    width={564}
-                    height={1002}
-                    className="w-full h-auto drop-shadow-xl"
-                  />
-                </div>
-                {/* Center phone — Gradual (FRONT, no rotation) */}
-                <div
-                  className="absolute top-1/2 left-1/2 w-[80%] z-10"
-                  style={{
-                    transform: "translate(-50%, -50%) rotateY(0deg) scale(1)",
-                    transformOrigin: "center center",
-                  }}
-                >
-                  <HeroLivePass active={hero.inView} />
-                </div>
-                {/* Shadow underneath the group */}
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[80%] h-6 bg-black/10 rounded-full blur-2xl" />
-              </div>
+              <HeroCarousel active={hero.inView} />
             </div>
           </div>
         </div>
@@ -782,57 +728,7 @@ export default function HomePage() {
             className={`flex flex-col lg:flex-row items-center gap-14 ${demo.inView ? "" : "opacity-0"}`}
             style={demo.inView ? { animation: "fade-up 0.8s ease-out both" } : undefined}
           >
-            {/* Phone */}
-            <div className="relative flex-shrink-0">
-              <div className="absolute -inset-8 bg-[#0e70db]/[0.04] rounded-full blur-2xl" />
-              <div className="relative w-[320px]">
-                <Image
-                  src="/landing/mockup-gradual.png"
-                  alt="Pase de fidelización Gradual Café en Apple Wallet"
-                  width={564}
-                  height={1002}
-                  className="w-full h-auto drop-shadow-2xl"
-                />
-              </div>
-            </div>
-
-            {/* Steps */}
-            <div className="flex-1 grid sm:grid-cols-3 gap-8">
-              {[
-                {
-                  icon: <QrCode className="w-7 h-7" />,
-                  step: "1",
-                  title: "El cliente escanea el QR",
-                  desc: "Apunta la cámara al código QR en tu mostrador. Sin apps, sin registro complicado.",
-                },
-                {
-                  icon: <CheckCircle2 className="w-7 h-7" />,
-                  step: "2",
-                  title: "Se registra la visita",
-                  desc: "El sello se agrega automáticamente a su pase digital en el wallet.",
-                },
-                {
-                  icon: <Gift className="w-7 h-7" />,
-                  step: "3",
-                  title: "Completa y gana",
-                  desc: "Al completar todos los sellos, el premio se desbloquea al instante.",
-                },
-              ].map((item) => (
-                <div key={item.step} className="text-center lg:text-left space-y-3">
-                  <div className="w-12 h-12 rounded-xl bg-[#0e70db] text-white flex items-center justify-center mx-auto lg:mx-0 shadow-lg shadow-blue-200/40">
-                    {item.icon}
-                  </div>
-                  <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0e70db] uppercase tracking-wider">
-                    <span className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-[10px]">
-                      {item.step}
-                    </span>
-                    Paso {item.step}
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900">{item.title}</h3>
-                  <p className="text-sm text-gray-500 leading-relaxed">{item.desc}</p>
-                </div>
-              ))}
-            </div>
+            <DemoWalkthrough active={demo.inView} />
           </div>
         </div>
       </section>
