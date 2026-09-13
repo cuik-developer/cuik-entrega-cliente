@@ -6,8 +6,10 @@ import {
   Coffee,
   Dumbbell,
   Gift,
+  Pause,
   PawPrint,
   Percent,
+  Play,
   Scissors,
   Shirt,
   Sparkles,
@@ -159,14 +161,16 @@ export function MechanicsShowcase({ active }: { active: boolean }) {
   const [tab, setTab] = useState(0)
   const [tick, setTick] = useState(0) // bumped on manual clicks to restart the timer
   const [sceneStep, setSceneStep] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const running = active && !paused
 
-  // Auto-advance tabs.
+  // Auto-advance tabs (not while paused).
   // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` intentionally restarts the timer on manual clicks
   useEffect(() => {
-    if (!active) return
+    if (!running) return
     const t = setTimeout(() => setTab((v) => (v + 1) % MECHANICS.length), TAB_MS)
     return () => clearTimeout(t)
-  }, [active, tab, tick])
+  }, [running, tab, tick])
 
   // Micro-scene of the active pass; restarts on every tab change.
   // biome-ignore lint/correctness/useExhaustiveDependencies: `tab` and `tick` reset the scene on purpose
@@ -195,6 +199,7 @@ export function MechanicsShowcase({ active }: { active: boolean }) {
         .mx-bar { height: 3px; border-radius: 9999px; background: #e5e7eb; overflow: hidden; }
         .mx-bar > i { display: block; height: 100%; background: #0e70db; transform: scaleX(0); transform-origin: left; }
         .mx-tab.is-on.is-running .mx-bar > i { animation: mx-fill ${TAB_MS}ms linear forwards; }
+        .mx-tab.is-paused .mx-bar > i { animation-play-state: paused; }
         @keyframes mx-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
         /* Stacked layers (passes, details): crossfade + short rise */
@@ -228,44 +233,55 @@ export function MechanicsShowcase({ active }: { active: boolean }) {
 
         <div className="grid gap-8 lg:gap-6 lg:grid-cols-[minmax(0,300px)_auto_minmax(0,1fr)] items-center">
           {/* Tabs */}
-          <div
-            className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible -mx-4 px-4 lg:mx-0 lg:px-0 pb-2 lg:pb-0 snap-x"
-            role="tablist"
-            aria-label="Mecánicas de fidelización"
-          >
-            {MECHANICS.map((it, i) => {
-              const on = i === tab
-              return (
-                <button
-                  key={it.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={on}
-                  onClick={() => {
-                    setTab(i)
-                    setTick((t) => t + 1)
-                  }}
-                  className={`mx-tab snap-start flex-none w-[240px] lg:w-full text-left rounded-2xl p-4 cursor-pointer ${on ? "is-on" : ""} ${active ? "is-running" : ""}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`mx-tile w-10 h-10 rounded-xl ${it.accent} text-white flex items-center justify-center shadow-md flex-shrink-0`}
-                    >
-                      {it.icon}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="font-bold text-gray-900">{it.title}</div>
-                      <div className="text-xs text-gray-500 leading-snug line-clamp-2">
-                        {it.tagline}
+          <div>
+            <div
+              className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible -mx-4 px-4 lg:mx-0 lg:px-0 pb-2 lg:pb-0 snap-x"
+              role="tablist"
+              aria-label="Mecánicas de fidelización"
+            >
+              {MECHANICS.map((it, i) => {
+                const on = i === tab
+                return (
+                  <button
+                    key={it.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={on}
+                    onClick={() => {
+                      setTab(i)
+                      setTick((t) => t + 1)
+                    }}
+                    className={`mx-tab snap-start flex-none w-[240px] lg:w-full text-left rounded-2xl p-4 cursor-pointer ${on ? "is-on" : ""} ${active ? "is-running" : ""} ${paused ? "is-paused" : ""}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`mx-tile w-10 h-10 rounded-xl ${it.accent} text-white flex items-center justify-center shadow-md flex-shrink-0`}
+                      >
+                        {it.icon}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="font-bold text-gray-900">{it.title}</div>
+                        <div className="text-xs text-gray-500 leading-snug line-clamp-2">
+                          {it.tagline}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="mx-bar mt-3" aria-hidden="true">
-                    <i key={`${it.key}-${tick}`} />
-                  </div>
-                </button>
-              )
-            })}
+                    <div className="mx-bar mt-3" aria-hidden="true">
+                      <i key={`${it.key}-${tick}`} />
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => setPaused((p) => !p)}
+              aria-pressed={paused}
+              className="mx-pause mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+            >
+              {paused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+              {paused ? "Reanudar rotación" : "Pausar rotación"}
+            </button>
           </div>
 
           {/* Pass */}
