@@ -41,6 +41,9 @@ import { Card, CardContent } from "@/components/ui/card"
 
 // "Así de simple" está oculta temporalmente; la demo ocupa su lugar.
 const SHOW_BENEFITS = false
+// "¿Por qué Cuik y no otra solución?" y "Comercios que ya confían en Cuik": ocultas hasta nuevo aviso.
+const SHOW_DIFFERENTIATORS = false
+const SHOW_SOCIAL_PROOF = false
 
 const VERTICALS: { icon: ReactNode; label: string }[] = [
   { icon: <Coffee className="w-4 h-4" />, label: "Cafeterías" },
@@ -729,90 +732,92 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ─── Differentiators ─────────────────────────── */}
-      <section className="py-20 sm:py-24 bg-white">
-        <div ref={diff.ref} className="max-w-5xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
-              ¿Por qué Cuik y no otra solución?
-            </h2>
-            <p className="text-gray-500 text-lg">Comparamos para que no tengas que hacerlo tú</p>
-          </div>
-          <div
-            className={`grid md:grid-cols-3 gap-6 anim-stagger ${diff.inView ? "is-visible" : ""}`}
-          >
-            <Card className="border-2 border-gray-200 bg-gray-50/50 opacity-75">
-              <CardContent className="p-6 space-y-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="w-7 h-7 rounded bg-gray-300 flex items-center justify-center">
-                    <Stamp className="w-4 h-4 text-gray-500" />
-                  </span>
-                  <h3 className="text-lg font-bold text-gray-400 line-through">
-                    Tarjetas de cartón
-                  </h3>
-                </div>
-                {[
-                  "Se pierden o se dañan",
-                  "No generan data",
-                  "No escalan",
-                  "Cero personalización",
-                ].map((item) => (
-                  <div key={item} className="flex items-center gap-2">
-                    <X className="w-4 h-4 text-red-400 flex-shrink-0" />
-                    <span className="text-sm text-gray-400 line-through">{item}</span>
+      {/* ─── Differentiators (oculta temporalmente) ── */}
+      {SHOW_DIFFERENTIATORS && (
+        <section className="py-20 sm:py-24 bg-white">
+          <div ref={diff.ref} className="max-w-5xl mx-auto px-4 sm:px-6">
+            <div className="text-center mb-14">
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
+                ¿Por qué Cuik y no otra solución?
+              </h2>
+              <p className="text-gray-500 text-lg">Comparamos para que no tengas que hacerlo tú</p>
+            </div>
+            <div
+              className={`grid md:grid-cols-3 gap-6 anim-stagger ${diff.inView ? "is-visible" : ""}`}
+            >
+              <Card className="border-2 border-gray-200 bg-gray-50/50 opacity-75">
+                <CardContent className="p-6 space-y-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-7 h-7 rounded bg-gray-300 flex items-center justify-center">
+                      <Stamp className="w-4 h-4 text-gray-500" />
+                    </span>
+                    <h3 className="text-lg font-bold text-gray-400 line-through">
+                      Tarjetas de cartón
+                    </h3>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
+                  {[
+                    "Se pierden o se dañan",
+                    "No generan data",
+                    "No escalan",
+                    "Cero personalización",
+                  ].map((item) => (
+                    <div key={item} className="flex items-center gap-2">
+                      <X className="w-4 h-4 text-red-400 flex-shrink-0" />
+                      <span className="text-sm text-gray-400 line-through">{item}</span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
 
-            <Card className="border-2 border-amber-200 bg-amber-50/30">
-              <CardContent className="p-6 space-y-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="w-7 h-7 rounded bg-amber-200 flex items-center justify-center">
-                    <AlertTriangle className="w-4 h-4 text-amber-600" />
-                  </span>
-                  <h3 className="text-lg font-bold text-amber-700">Apps genéricas</h3>
-                </div>
-                {[
-                  "El cliente debe descargar una app",
-                  "Abandono del 80% en la descarga",
-                  "Sin integración con wallet",
-                  "Diseño genérico",
-                ].map((item) => (
-                  <div key={item} className="flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
-                    <span className="text-sm text-amber-700">{item}</span>
+              <Card className="border-2 border-amber-200 bg-amber-50/30">
+                <CardContent className="p-6 space-y-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-7 h-7 rounded bg-amber-200 flex items-center justify-center">
+                      <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    </span>
+                    <h3 className="text-lg font-bold text-amber-700">Apps genéricas</h3>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
+                  {[
+                    "El cliente debe descargar una app",
+                    "Abandono del 80% en la descarga",
+                    "Sin integración con wallet",
+                    "Diseño genérico",
+                  ].map((item) => (
+                    <div key={item} className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                      <span className="text-sm text-amber-700">{item}</span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
 
-            <Card className="border-2 border-[#0e70db] bg-gradient-to-b from-blue-50/60 to-white shadow-xl shadow-blue-100/50 md:scale-105">
-              <CardContent className="p-6 space-y-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <CuikLogo size="sm" />
-                  <h3 className="text-lg font-bold text-[#0e70db]">Cuik</h3>
-                  <Badge className="ml-auto bg-emerald-100 text-emerald-700 text-xs font-bold border-0">
-                    Mejor opción
-                  </Badge>
-                </div>
-                {[
-                  "Directo en Apple & Google Wallet",
-                  "Sin descargar apps",
-                  "Data en tiempo real",
-                  "Diseño personalizado con IA",
-                  "Notificaciones push nativas",
-                ].map((item) => (
-                  <div key={item} className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                    <span className="text-sm text-gray-700 font-medium">{item}</span>
+              <Card className="border-2 border-[#0e70db] bg-gradient-to-b from-blue-50/60 to-white shadow-xl shadow-blue-100/50 md:scale-105">
+                <CardContent className="p-6 space-y-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CuikLogo size="sm" />
+                    <h3 className="text-lg font-bold text-[#0e70db]">Cuik</h3>
+                    <Badge className="ml-auto bg-emerald-100 text-emerald-700 text-xs font-bold border-0">
+                      Mejor opción
+                    </Badge>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
+                  {[
+                    "Directo en Apple & Google Wallet",
+                    "Sin descargar apps",
+                    "Data en tiempo real",
+                    "Diseño personalizado con IA",
+                    "Notificaciones push nativas",
+                  ].map((item) => (
+                    <div key={item} className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                      <span className="text-sm text-gray-700 font-medium">{item}</span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ─── Before / After ──────────────────────────── */}
       <section
@@ -856,76 +861,78 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ─── Social Proof ────────────────────────────── */}
-      <section id="social-proof" className="py-20 sm:py-24 bg-gray-50/80">
-        <div ref={social.ref} className="max-w-5xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
-              Comercios que ya confían en Cuik
-            </h2>
-            <p className="text-gray-500 text-lg">Negocios reales, resultados reales</p>
-          </div>
+      {/* ─── Social Proof (oculta temporalmente) ── */}
+      {SHOW_SOCIAL_PROOF && (
+        <section id="social-proof" className="py-20 sm:py-24 bg-gray-50/80">
+          <div ref={social.ref} className="max-w-5xl mx-auto px-4 sm:px-6">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
+                Comercios que ya confían en Cuik
+              </h2>
+              <p className="text-gray-500 text-lg">Negocios reales, resultados reales</p>
+            </div>
 
-          <div className="flex flex-wrap justify-center gap-8 mb-14">
-            {[
-              { initials: "MV", name: "Mascota Veloz", color: "bg-emerald-500" },
-              { initials: "GC", name: "Gradual Café", color: "bg-orange-500" },
-            ].map((logo) => (
-              <div key={logo.initials} className="flex flex-col items-center gap-2 group">
-                <div
-                  className={`w-14 h-14 rounded-full ${logo.color} flex items-center justify-center text-white font-bold text-lg shadow-lg group-hover:scale-110 transition-transform`}
-                >
-                  {logo.initials}
+            <div className="flex flex-wrap justify-center gap-8 mb-14">
+              {[
+                { initials: "MV", name: "Mascota Veloz", color: "bg-emerald-500" },
+                { initials: "GC", name: "Gradual Café", color: "bg-orange-500" },
+              ].map((logo) => (
+                <div key={logo.initials} className="flex flex-col items-center gap-2 group">
+                  <div
+                    className={`w-14 h-14 rounded-full ${logo.color} flex items-center justify-center text-white font-bold text-lg shadow-lg group-hover:scale-110 transition-transform`}
+                  >
+                    {logo.initials}
+                  </div>
+                  <span className="text-xs text-gray-500 font-medium">{logo.name}</span>
                 </div>
-                <span className="text-xs text-gray-500 font-medium">{logo.name}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
 
-          <div
-            className={`grid md:grid-cols-2 gap-6 max-w-3xl mx-auto anim-stagger ${social.inView ? "is-visible" : ""}`}
-          >
-            {[
-              {
-                quote:
-                  "Desde que usamos Cuik, nuestros clientes vuelven un 40% más. El pase en el wallet es un game changer.",
-                author: "Reynaldo M.",
-                business: "Gradual Café",
-              },
-              {
-                quote:
-                  "La demo con IA nos convenció al instante. En 24 horas teníamos nuestro pase funcionando.",
-                author: "David L.",
-                business: "Mascota Veloz",
-              },
-            ].map((t) => (
-              <Card
-                key={t.author}
-                className="border border-gray-200 bg-white hover:shadow-lg transition-shadow duration-300"
-              >
-                <CardContent className="p-6 space-y-4">
-                  <div className="flex gap-0.5">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <Star
-                        // biome-ignore lint/suspicious/noArrayIndexKey: static star rating display
-                        key={i}
-                        className="w-4 h-4 fill-amber-400 text-amber-400"
-                      />
-                    ))}
-                  </div>
-                  <p className="text-sm text-gray-600 leading-relaxed italic">
-                    &ldquo;{t.quote}&rdquo;
-                  </p>
-                  <div className="pt-3 border-t border-gray-100">
-                    <div className="text-sm font-semibold text-gray-900">{t.author}</div>
-                    <div className="text-xs text-gray-500">{t.business}</div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            <div
+              className={`grid md:grid-cols-2 gap-6 max-w-3xl mx-auto anim-stagger ${social.inView ? "is-visible" : ""}`}
+            >
+              {[
+                {
+                  quote:
+                    "Desde que usamos Cuik, nuestros clientes vuelven un 40% más. El pase en el wallet es un game changer.",
+                  author: "Reynaldo M.",
+                  business: "Gradual Café",
+                },
+                {
+                  quote:
+                    "La demo con IA nos convenció al instante. En 24 horas teníamos nuestro pase funcionando.",
+                  author: "David L.",
+                  business: "Mascota Veloz",
+                },
+              ].map((t) => (
+                <Card
+                  key={t.author}
+                  className="border border-gray-200 bg-white hover:shadow-lg transition-shadow duration-300"
+                >
+                  <CardContent className="p-6 space-y-4">
+                    <div className="flex gap-0.5">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star
+                          // biome-ignore lint/suspicious/noArrayIndexKey: static star rating display
+                          key={i}
+                          className="w-4 h-4 fill-amber-400 text-amber-400"
+                        />
+                      ))}
+                    </div>
+                    <p className="text-sm text-gray-600 leading-relaxed italic">
+                      &ldquo;{t.quote}&rdquo;
+                    </p>
+                    <div className="pt-3 border-t border-gray-100">
+                      <div className="text-sm font-semibold text-gray-900">{t.author}</div>
+                      <div className="text-xs text-gray-500">{t.business}</div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ─── Use Cases ───────────────────────────────── */}
       <section id="casos" className="py-16 sm:py-20 bg-white">
