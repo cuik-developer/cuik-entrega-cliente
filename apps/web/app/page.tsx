@@ -11,6 +11,7 @@ import {
   Coffee,
   Dumbbell,
   Gift,
+  Instagram,
   Menu,
   MessageCircle,
   PawPrint,
@@ -1051,19 +1052,29 @@ export default function HomePage() {
                 Fidelización digital para comercios físicos en LATAM.
               </p>
               <div className="flex gap-2">
+                {/* TikTok y LinkedIn ocultos hasta tener cuentas */}
                 {[
-                  { label: "I", href: "https://instagram.com/cuik.app" },
-                  { label: "T", href: "https://tiktok.com/@cuik.app" },
-                  { label: "L", href: "https://linkedin.com/company/cuik" },
+                  {
+                    label: "Instagram de Cuik",
+                    href: "https://www.instagram.com/cuik.ia/",
+                    icon: <Instagram className="w-4 h-4" />,
+                  },
+                  {
+                    label: "Escríbenos por WhatsApp",
+                    href: "https://wa.me/51972213023",
+                    icon: <MessageCircle className="w-4 h-4" />,
+                  },
                 ].map((s) => (
                   <a
-                    key={s.label}
+                    key={s.href}
                     href={s.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-xs font-bold text-gray-400 hover:text-white transition-all"
+                    aria-label={s.label}
+                    title={s.label}
+                    className="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
                   >
-                    {s.label}
+                    {s.icon}
                   </a>
                 ))}
               </div>
