@@ -33,6 +33,7 @@ import { CuikLogo } from "@/components/cuik-logo"
 import { BeforeAfter } from "@/components/landing/before-after"
 import { DemoWalkthrough } from "@/components/landing/demo-walkthrough"
 import { HeroCarousel } from "@/components/landing/hero-carousel"
+import { MechanicsShowcase } from "@/components/landing/mechanics-showcase"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -58,37 +59,6 @@ const VERTICALS: { icon: ReactNode; label: string }[] = [
   { icon: <Sparkles className="w-4 h-4" />, label: "Spas" },
   { icon: <Sparkles className="w-4 h-4" />, label: "Yoga Studios" },
   { icon: <Trophy className="w-4 h-4" />, label: "Canchas" },
-]
-
-const MECHANICS = [
-  {
-    icon: <Stamp className="w-8 h-8" />,
-    title: "Estampillas",
-    desc: "Compra 8, llévate 1 gratis. El clásico, ahora digital.",
-    color: "from-blue-50 to-blue-100/50",
-    iconBg: "bg-[#0e70db]",
-  },
-  {
-    icon: <span className="text-3xl font-black">%</span>,
-    title: "Descuentos",
-    desc: "Martes de descuentos exclusivos para clientes frecuentes.",
-    color: "from-orange-50 to-orange-100/50",
-    iconBg: "bg-[#ff4810]",
-  },
-  {
-    icon: <Gift className="w-8 h-8" />,
-    title: "Cupones de regalo",
-    desc: "Regálale una experiencia a alguien especial.",
-    color: "from-emerald-50 to-emerald-100/50",
-    iconBg: "bg-emerald-600",
-  },
-  {
-    icon: <Star className="w-8 h-8" />,
-    title: "Puntos",
-    desc: "Cada compra suma. Cada punto cuenta.",
-    color: "from-amber-50 to-amber-100/50",
-    iconBg: "bg-amber-500",
-  },
 ]
 
 /* ─── Plan types ──────────────────────────────────────── */
@@ -828,37 +798,8 @@ export default function HomePage() {
       </section>
 
       {/* ─── 4 Mechanics ─────────────────────────────── */}
-      <section className="py-20 sm:py-24 bg-white">
-        <div ref={mechanics.ref} className="max-w-5xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
-              4 formas de fidelizar
-            </h2>
-            <p className="text-gray-500 text-lg">
-              Elige la mecánica que mejor funciona para tu negocio
-            </p>
-          </div>
-          <div
-            className={`grid sm:grid-cols-2 lg:grid-cols-4 gap-5 anim-stagger ${mechanics.inView ? "is-visible" : ""}`}
-          >
-            {MECHANICS.map((m) => (
-              <Card
-                key={m.title}
-                className={`bg-gradient-to-b ${m.color} border-0 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-default`}
-              >
-                <CardContent className="p-6 space-y-4">
-                  <div
-                    className={`w-12 h-12 rounded-xl ${m.iconBg} text-white flex items-center justify-center shadow-lg`}
-                  >
-                    {m.icon}
-                  </div>
-                  <h3 className="font-bold text-gray-900 text-lg">{m.title}</h3>
-                  <p className="text-sm text-gray-500 leading-relaxed">{m.desc}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
+      <section ref={mechanics.ref} className="relative py-20 sm:py-24 bg-white overflow-hidden">
+        <MechanicsShowcase active={mechanics.inView} />
       </section>
 
       {/* ─── Social Proof (oculta temporalmente) ── */}
