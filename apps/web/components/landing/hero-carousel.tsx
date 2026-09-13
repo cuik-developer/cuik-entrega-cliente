@@ -108,7 +108,9 @@ export function HeroCarousel({ active }: { active: boolean }) {
       style={{ transformStyle: "preserve-3d", animation: "float 6s ease-in-out infinite" }}
     >
       <style>{`
-        .hc-stage { container-type: inline-size; --hc-ease: cubic-bezier(0.77, 0, 0.175, 1); }
+        /* pointer-events: none on the stage: the back phones sit behind its 3D plane (translateZ < 0),
+           and a hittable parent plane would win every click over them. */
+        .hc-stage { container-type: inline-size; --hc-ease: cubic-bezier(0.77, 0, 0.175, 1); pointer-events: none; }
         .hc-phone { position: absolute; top: 50%; left: 50%; transform-origin: center center; transition: transform 800ms var(--hc-ease), opacity 800ms var(--hc-ease), filter 800ms var(--hc-ease); will-change: transform, opacity; background: none; border: 0; padding: 0; cursor: pointer; }
         .hc-phone.slot-0 { cursor: default; }
         /* The PNGs have big transparent margins that would swallow clicks meant for the phones behind:
