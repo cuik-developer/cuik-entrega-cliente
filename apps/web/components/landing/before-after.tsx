@@ -1,6 +1,6 @@
 "use client"
 
-import { BarChart3, Gift, Palette, RefreshCw, Smartphone, Wallet } from "lucide-react"
+import { BarChart3, Palette, PawPrint, RefreshCw, Smartphone, Wallet } from "lucide-react"
 import Image from "next/image"
 import type { CSSProperties, ReactNode } from "react"
 import { useEffect, useState } from "react"
@@ -10,7 +10,7 @@ import { LivePass, type PushContent } from "./live-pass"
  * "El antes y el ahora": the worn cardboard card lifts, flips in 3D and comes
  * back as the digital pass in Apple Wallet. While it flips, the cardboard's
  * problems get struck through; once the pass is up, its advantages appear one
- * by one and the pass plays its loop (7 → 8 stamps, reward push).
+ * by one and the pass plays its loop (2 → 3 visits, visit push).
  *
  * Auto-plays and loops while in view. Transform + opacity only; the flip is a
  * single rotateY on a wrapper with two backface-hidden faces.
@@ -42,11 +42,11 @@ const PROS: { icon: ReactNode; text: string }[] = [
   { icon: <Palette className="w-4 h-4" />, text: "Con el diseño de tu marca" },
 ]
 
-const REWARD_PUSH: PushContent = {
-  title: "Gradual Café",
-  body: "¡Completaste tu tarjeta! 🎁 Tu café gratis te espera.",
-  icon: <Gift />,
-  color: "#e26534",
+const VISIT_PUSH: PushContent = {
+  title: "Mascota Veloz",
+  body: "¡Visita registrada, Diego! 🐾 Te faltan 3 visitas para tu premio.",
+  icon: <PawPrint />,
+  color: "#d9542b",
 }
 
 export function BeforeAfter({ active }: { active: boolean }) {
@@ -164,11 +164,11 @@ export function BeforeAfter({ active }: { active: boolean }) {
                   <div className="ba-face ba-face-back">
                     <div className="w-full">
                       <LivePass
-                        base="/landing/mockup-gradual-7.png"
-                        next="/landing/mockup-gradual-8.png"
-                        alt="Pase de fidelización Gradual Café en Apple Wallet"
+                        base="/landing/mockup-mascotaveloz-2.png"
+                        next="/landing/mockup-mascotaveloz-3.png"
+                        alt="Pase de fidelización Mascota Veloz en Apple Wallet"
                         crossfade={phase === "visit" || phase === "push" || phase === "hold"}
-                        push={phase === "push" ? REWARD_PUSH : null}
+                        push={phase === "push" ? VISIT_PUSH : null}
                       />
                     </div>
                   </div>
