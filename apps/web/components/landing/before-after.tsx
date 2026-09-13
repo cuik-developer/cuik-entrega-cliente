@@ -1,39 +1,45 @@
 "use client"
 
-import { Check, Gift, X } from "lucide-react"
+import { BarChart3, Gift, Palette, RefreshCw, Smartphone, Wallet } from "lucide-react"
 import Image from "next/image"
-import type { CSSProperties } from "react"
+import type { CSSProperties, ReactNode } from "react"
 import { useEffect, useState } from "react"
 import { LivePass, type PushContent } from "./live-pass"
 
 /**
- * "El antes y el ahora": a segmented control that swaps two stacked panels.
- *   - Antes: the worn cardboard card, warm paper tones.
- *   - Ahora: dark panel with the live Gradual pass (7 → 8 stamps + reward push).
+ * "El antes y el ahora": the worn cardboard card lifts, flips in 3D and comes
+ * back as the digital pass in Apple Wallet. While it flips, the cardboard's
+ * problems get struck through; once the pass is up, its advantages appear one
+ * by one and the pass plays its loop (7 → 8 stamps, reward push).
  *
- * Auto-plays once: starts on "Antes" and, 2.4 s after entering view, flips to
- * "Ahora" with a small confetti burst. After that the visitor is in control.
- * Panels crossfade with a short horizontal slide (before exits left, after
- * enters from the right); list items stagger 40 ms. Transitions, not keyframes,
- * so rapid toggling retargets instead of restarting.
+ * Auto-plays and loops while in view. Transform + opacity only; the flip is a
+ * single rotateY on a wrapper with two backface-hidden faces.
  */
 
-type View = "before" | "after"
+type Phase = "card" | "lift" | "flip" | "pass" | "visit" | "push" | "hold" | "reset"
 
-const BEFORE = [
-  "Se pierde entre bolsillos",
-  "No genera data útil",
-  "Cero tecnología",
-  "Diseño poco profesional",
-  "No se puede actualizar",
+const TIMELINE: { phase: Phase; ms: number }[] = [
+  { phase: "card", ms: 2200 },
+  { phase: "lift", ms: 450 },
+  { phase: "flip", ms: 900 },
+  { phase: "pass", ms: 1100 },
+  { phase: "visit", ms: 1200 },
+  { phase: "push", ms: 2800 },
+  { phase: "hold", ms: 1800 },
+  { phase: "reset", ms: 420 },
 ]
 
-const AFTER = [
-  "Siempre en su teléfono",
-  "Data accionable en tiempo real",
-  "Tecnología Apple & Google Wallet",
-  "Diseño profesional personalizado",
-  "Se actualiza automáticamente",
+const FLIPPED: Phase[] = ["flip", "pass", "visit", "push", "hold"]
+const PROS_ON: Phase[] = ["pass", "visit", "push", "hold"]
+
+const CONS = ["Se pierde o se moja", "Cualquiera falsifica el sello", "No sabes quién volvió"]
+
+const PROS: { icon: ReactNode; text: string }[] = [
+  { icon: <Smartphone className="w-4 h-4" />, text: "Siempre en su teléfono" },
+  { icon: <RefreshCw className="w-4 h-4" />, text: "Se actualiza sola en cada visita" },
+  { icon: <BarChart3 className="w-4 h-4" />, text: "Data de cada cliente en tiempo real" },
+  { icon: <Wallet className="w-4 h-4" />, text: "Apple Wallet y Google Wallet" },
+  { icon: <Palette className="w-4 h-4" />, text: "Con el diseño de tu marca" },
 ]
 
 const REWARD_PUSH: PushContent = {
@@ -43,222 +49,159 @@ const REWARD_PUSH: PushContent = {
   color: "#e26534",
 }
 
-// Live pass loop inside the "Ahora" panel.
-type Scene = "idle" | "visit" | "push" | "reset"
-const LOOP: { scene: Scene; ms: number }[] = [
-  { scene: "idle", ms: 1400 },
-  { scene: "visit", ms: 1200 },
-  { scene: "push", ms: 2600 },
-  { scene: "reset", ms: 1000 },
-]
-
-const CONFETTI_COLORS = ["#0e70db", "#ff4810", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"]
-
 export function BeforeAfter({ active }: { active: boolean }) {
-  const [view, setView] = useState<View>("before")
-  const [autoPlayed, setAutoPlayed] = useState(false)
-  const [burst, setBurst] = useState(0) // > 0 mounts a confetti burst; bumped per burst
   const [step, setStep] = useState(0)
 
-  const goAfter = () => {
-    if (view === "after") return
-    setView("after")
-    setBurst((b) => b + 1)
-  }
-
-  // Auto-play once when the section comes into view.
   useEffect(() => {
-    if (!active || autoPlayed) return
-    const t = setTimeout(() => {
-      setAutoPlayed(true)
-      setView((v) => {
-        if (v === "after") return v
-        setBurst((b) => b + 1)
-        return "after"
-      })
-    }, 2400)
+    if (!active) return
+    const t = setTimeout(() => setStep((s) => (s + 1) % TIMELINE.length), TIMELINE[step].ms)
     return () => clearTimeout(t)
-  }, [active, autoPlayed])
+  }, [active, step])
 
-  // Confetti self-clears after its animation.
-  useEffect(() => {
-    if (!burst) return
-    const t = setTimeout(() => setBurst(0), 1800)
-    return () => clearTimeout(t)
-  }, [burst])
-
-  // Live pass loop, only while "Ahora" is showing and the section is in view.
-  const looping = active && view === "after"
-  useEffect(() => {
-    if (!looping) {
-      setStep(0)
-      return
-    }
-    const t = setTimeout(() => setStep((s) => (s + 1) % LOOP.length), LOOP[step].ms)
-    return () => clearTimeout(t)
-  }, [looping, step])
-  const scene = LOOP[step].scene
-
-  const isAfter = view === "after"
+  const phase = TIMELINE[step].phase
+  const flipped = FLIPPED.includes(phase)
+  const prosOn = PROS_ON.includes(phase)
+  const resetting = phase === "reset"
 
   return (
-    <div className="relative">
+    <div className={`ba relative ${resetting ? "no-anim" : ""}`}>
       <style>{`
-        .ba { --ba-ease-out: cubic-bezier(0.23, 1, 0.32, 1); }
+        .ba { --ba-ease-out: cubic-bezier(0.23, 1, 0.32, 1); --ba-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1); }
 
-        /* Segmented control: one sliding indicator behind two equal buttons */
-        .ba-seg { position: relative; display: grid; grid-template-columns: 1fr 1fr; }
-        .ba-ind { position: absolute; top: 0; left: 0; width: 50%; height: 100%; border-radius: 0.5rem; background: #111827; box-shadow: 0 4px 12px rgba(17, 24, 39, 0.18); transform: translateX(0); transition: transform 220ms var(--ba-ease-out), background-color 220ms ease, box-shadow 220ms ease; will-change: transform; }
-        .ba-ind.is-after { transform: translateX(100%); background: #0e70db; box-shadow: 0 4px 12px rgba(14, 112, 219, 0.28); }
-        .ba-btn { position: relative; z-index: 1; transition: color 200ms ease; }
+        /* Loop reset: the stage fades out, then everything snaps back without transitions */
+        .ba-stage { perspective: 1400px; transition: opacity 380ms var(--ba-ease-out); }
+        .ba-stage.is-reset { opacity: 0; }
+        .ba.no-anim .ba-flip, .ba.no-anim .ba-lift, .ba.no-anim .ba-pro, .ba.no-anim .ba-con, .ba.no-anim .ba-con i, .ba.no-anim .ba-cap > span { transition: none !important; }
 
-        /* Panels stacked in the same grid cell; crossfade + short slide */
-        .ba-stack { display: grid; }
-        .ba-stack > * { grid-area: 1 / 1; }
-        .ba-panel { opacity: 0; pointer-events: none; transition: opacity 260ms var(--ba-ease-out), transform 260ms var(--ba-ease-out); will-change: transform, opacity; }
-        .ba-panel.is-on { opacity: 1; pointer-events: auto; transform: translateX(0); }
-        .ba-panel.from-left { transform: translateX(-24px); }
-        .ba-panel.from-right { transform: translateX(24px); }
-        .ba-panel.is-on.from-left, .ba-panel.is-on.from-right { transform: translateX(0); }
+        /* Lift: the card rises before flipping */
+        .ba-lift { transform: translateY(0) scale(1); transition: transform 450ms var(--ba-ease-out); }
+        .ba-lift.is-up { transform: translateY(-10px) scale(1.04); }
 
-        /* Items: enter staggered, leave together */
-        .ba-item { opacity: 0; transform: translateY(6px); transition: opacity 220ms var(--ba-ease-out), transform 220ms var(--ba-ease-out); }
-        .ba-panel.is-on .ba-item { opacity: 1; transform: translateY(0); transition-delay: calc(60ms + var(--i) * 40ms); }
+        /* Flip: one rotateY on the wrapper; both faces backface-hidden */
+        .ba-flip { position: relative; transform-style: preserve-3d; transform: rotateY(0deg); transition: transform 900ms var(--ba-ease-in-out); will-change: transform; }
+        .ba-flip.is-flipped { transform: rotateY(180deg); }
+        .ba-face { position: absolute; inset: 0; display: grid; place-items: center; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+        .ba-face-back { transform: rotateY(180deg); }
 
-        /* Confetti: one short burst, transform + opacity only */
-        .ba-confetti { position: absolute; left: 50%; top: 22%; pointer-events: none; animation: ba-spread 1.6s cubic-bezier(0.23, 1, 0.32, 1) forwards; }
-        @keyframes ba-spread { 0% { transform: translate(0, 0) scale(0.6); opacity: 1; } 25% { transform: translate(var(--cx), var(--cy)) scale(1); opacity: 1; } 100% { transform: translate(var(--cx), calc(var(--cy) + 220px)) rotate(540deg) scale(0.4); opacity: 0; } }
+        /* Cardboard: zoomed crop of the photo, warm shadow */
+        .ba-card { width: 80%; aspect-ratio: 1.62; border-radius: 14px; overflow: hidden; box-shadow: 0 30px 50px -22px rgba(60, 40, 20, 0.6), 0 0 0 1px rgba(60, 40, 20, 0.08); transform: rotate(-3deg); }
+        .ba-card img { transform: scale(1.42); transform-origin: 50% 48%; }
+
+        /* Cons: strike-through draws left → right, text dims */
+        .ba-con { position: relative; transition: opacity 320ms var(--ba-ease-out); }
+        .ba-con.is-struck { opacity: 0.45; }
+        .ba-con i { position: absolute; left: 0; right: 0; top: 50%; height: 2px; background: #b4432a; transform: scaleX(0); transform-origin: left center; transition: transform 320ms var(--ba-ease-out); transition-delay: calc(var(--i) * 90ms); }
+        .ba-con.is-struck i { transform: scaleX(1); }
+
+        /* Pros: rise in one by one */
+        .ba-pro { opacity: 0; transform: translateY(10px); transition: opacity 320ms var(--ba-ease-out), transform 320ms var(--ba-ease-out); }
+        .ba-pro.is-on { opacity: 1; transform: translateY(0); transition-delay: calc(var(--i) * 140ms); }
+
+        /* Caption under the stage */
+        .ba-cap { display: grid; }
+        .ba-cap > span { grid-area: 1 / 1; opacity: 0; transform: translateY(6px); transition: opacity 260ms var(--ba-ease-out), transform 260ms var(--ba-ease-out); }
+        .ba-cap > span.is-on { opacity: 1; transform: translateY(0); }
 
         @media (prefers-reduced-motion: reduce) {
-          .ba-ind { transition: background-color 220ms ease; }
-          .ba-panel, .ba-panel.from-left, .ba-panel.from-right { transform: none; transition: opacity 220ms ease; }
-          .ba-item { transform: none; transition: opacity 220ms ease; }
-          .ba-panel.is-on .ba-item { transition-delay: 0ms; }
-          .ba-confetti { display: none; }
+          .ba-lift, .ba-lift.is-up { transform: none; transition: none; }
+          .ba-flip, .ba-flip.is-flipped { transform: none; transition: none; }
+          .ba-face { transition: opacity 300ms ease; }
+          .ba-flip.is-flipped .ba-face-front { opacity: 0; }
+          .ba-face-back { transform: none; opacity: 0; }
+          .ba-flip.is-flipped .ba-face-back { opacity: 1; }
+          .ba-pro, .ba-cap > span { transform: none; }
+          .ba-con i { transition: none; }
         }
       `}</style>
 
-      {burst > 0 && (
-        <div key={burst} className="absolute inset-0 pointer-events-none z-20" aria-hidden="true">
-          {Array.from({ length: 24 }).map((_, i) => {
-            const angle = (i / 24) * Math.PI * 2
-            const r = 140 + (i % 4) * 45
-            const style = {
-              width: 6 + (i % 3) * 3,
-              height: 6 + (i % 3) * 3,
-              backgroundColor: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-              borderRadius: i % 2 ? "9999px" : "2px",
-              animationDelay: `${(i % 5) * 60}ms`,
-              "--cx": `${Math.cos(angle) * r}px`,
-              "--cy": `${Math.sin(angle) * r * 0.5 - 60}px`,
-            } as CSSProperties
-            // biome-ignore lint/suspicious/noArrayIndexKey: static particles
-            return <span key={i} className="ba-confetti" style={style} />
-          })}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        <div className="text-center mb-12 sm:mb-16">
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
+            El antes y el ahora
+          </h2>
+          <p className="text-gray-500 text-lg max-w-xl mx-auto">
+            La misma tarjeta de sellos que tus clientes ya conocen, ahora en su Wallet: sin cartón,
+            sin perderse y con data para ti.
+          </p>
         </div>
-      )}
 
-      <div className="ba max-w-4xl mx-auto px-4 sm:px-6 relative">
-        <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 text-center mb-3 tracking-tight">
-          El antes y el ahora
-        </h2>
-        <p className="text-gray-500 text-lg text-center mb-8">
-          La misma tarjeta de sellos, sin cartón y sin perderse
-        </p>
+        <div className="grid gap-10 lg:gap-8 items-center lg:grid-cols-[1fr_auto_1fr]">
+          {/* Antes — cons */}
+          <div className="order-2 lg:order-1 lg:justify-self-end">
+            <div className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">Antes</div>
+            <ul className="space-y-3">
+              {CONS.map((c, i) => (
+                <li key={c}>
+                  <span
+                    className={`ba-con inline-block text-lg text-gray-700 ${flipped ? "is-struck" : ""}`}
+                    style={{ "--i": i } as CSSProperties}
+                  >
+                    {c}
+                    <i aria-hidden="true" />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
 
-        <div className="flex justify-center mb-10">
-          <div className="ba-seg bg-white rounded-xl p-1 border border-gray-200 shadow-sm w-[300px]">
-            <div className={`ba-ind ${isAfter ? "is-after" : ""}`} aria-hidden="true" />
-            <button
-              type="button"
-              onClick={() => setView("before")}
-              aria-pressed={!isAfter}
-              className={`ba-btn px-4 py-2.5 rounded-lg text-sm font-semibold ${!isAfter ? "text-white" : "text-gray-500"}`}
-            >
-              Antes
-            </button>
-            <button
-              type="button"
-              onClick={goAfter}
-              aria-pressed={isAfter}
-              className={`ba-btn px-4 py-2.5 rounded-lg text-sm font-semibold ${isAfter ? "text-white" : "text-gray-500"}`}
-            >
+          {/* Stage */}
+          <div className="order-1 lg:order-2 justify-self-center">
+            <div className={`ba-stage relative w-[300px] sm:w-[360px] ${resetting ? "is-reset" : ""}`}>
+              {/* glow, same language as the hero */}
+              <div className="absolute -inset-10 rounded-full bg-[#0e70db]/[0.06] blur-3xl pointer-events-none" />
+              <div className={`ba-lift relative ${phase === "lift" ? "is-up" : ""}`}>
+                <div className={`ba-flip aspect-[4/5] ${flipped ? "is-flipped" : ""}`}>
+                  <div className="ba-face ba-face-front">
+                    <div className="ba-card relative">
+                      <Image
+                        src="/landing/old-stamp-card.png"
+                        alt="Tarjeta de sellos de cartón desgastada"
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                  </div>
+                  <div className="ba-face ba-face-back">
+                    <div className="w-full">
+                      <LivePass
+                        base="/landing/mockup-gradual-7.png"
+                        next="/landing/mockup-gradual-8.png"
+                        alt="Pase de fidelización Gradual Café en Apple Wallet"
+                        crossfade={phase === "visit" || phase === "push" || phase === "hold"}
+                        push={phase === "push" ? REWARD_PUSH : null}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="ba-cap text-center mt-2 text-sm font-medium">
+                <span className={`text-gray-400 ${flipped ? "" : "is-on"}`}>Tarjeta de cartón</span>
+                <span className={`text-[#0e70db] ${flipped ? "is-on" : ""}`}>
+                  Pase digital en Apple Wallet
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Ahora — pros */}
+          <div className="order-3">
+            <div className="text-xs font-bold uppercase tracking-wider text-[#0e70db] mb-4">
               Ahora con Cuik
-            </button>
-          </div>
-        </div>
-
-        <div className="ba-stack">
-          {/* Antes */}
-          <div
-            className={`ba-panel from-left rounded-2xl border border-[#e7dcc6] bg-[#f6efe2] overflow-hidden ${!isAfter ? "is-on" : ""}`}
-            aria-hidden={isAfter}
-          >
-            <div className="h-full flex items-center p-8 sm:p-10">
-              <div className="w-full grid md:grid-cols-2 gap-10 items-center">
-                <div className="space-y-4">
-                  {BEFORE.map((item, i) => (
-                    <div
-                      key={item}
-                      className="ba-item flex items-center gap-3"
-                      style={{ "--i": i } as CSSProperties}
-                    >
-                      <div className="w-6 h-6 rounded-full bg-[#e9cfc4] flex items-center justify-center flex-shrink-0">
-                        <X className="w-3.5 h-3.5 text-[#b4432a]" />
-                      </div>
-                      <span className="text-[#5b4a3a]">{item}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex justify-center">
-                  <div className="relative w-64 h-44 rounded-xl overflow-hidden shadow-[0_18px_40px_-18px_rgba(60,40,20,0.55)] -rotate-3">
-                    <Image
-                      src="/landing/old-stamp-card.png"
-                      alt="Tarjeta de sellos de cartón desgastada"
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
-                </div>
-              </div>
             </div>
-          </div>
-
-          {/* Ahora */}
-          <div
-            className={`ba-panel from-right rounded-2xl bg-[#0c3d7a] overflow-hidden ${isAfter ? "is-on" : ""}`}
-            aria-hidden={!isAfter}
-          >
-            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top_right,rgba(14,112,219,0.35),transparent_55%)]" />
-            <div className="relative p-8 sm:p-10">
-              <div className="grid md:grid-cols-2 gap-10 items-center">
-                <div className="space-y-4">
-                  {AFTER.map((item, i) => (
-                    <div
-                      key={item}
-                      className="ba-item flex items-center gap-3"
-                      style={{ "--i": i } as CSSProperties}
-                    >
-                      <div className="w-6 h-6 rounded-full bg-white/15 flex items-center justify-center flex-shrink-0">
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      </div>
-                      <span className="text-white font-medium">{item}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex justify-center">
-                  <div className="w-[260px]">
-                    <LivePass
-                      base="/landing/mockup-gradual-7.png"
-                      next="/landing/mockup-gradual-8.png"
-                      alt="Pase de fidelización Gradual Café en Apple Wallet"
-                      crossfade={scene === "visit" || scene === "push"}
-                      push={scene === "push" ? REWARD_PUSH : null}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
+            <ul className="space-y-3">
+              {PROS.map((p, i) => (
+                <li
+                  key={p.text}
+                  className={`ba-pro flex items-center gap-3 ${prosOn ? "is-on" : ""}`}
+                  style={{ "--i": i } as CSSProperties}
+                >
+                  <span className="w-8 h-8 rounded-lg bg-blue-50 text-[#0e70db] flex items-center justify-center flex-shrink-0">
+                    {p.icon}
+                  </span>
+                  <span className="text-lg text-gray-900 font-medium">{p.text}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </div>
