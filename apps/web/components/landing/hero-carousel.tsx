@@ -1,6 +1,6 @@
 "use client"
 
-import { Cake, Gift } from "lucide-react"
+import { Cake, Gift, PawPrint } from "lucide-react"
 import { useEffect, useState } from "react"
 import { LivePass, type PassFrame, type PushContent } from "./live-pass"
 
@@ -34,6 +34,12 @@ const PHONES: Phone[] = [
     alt: "Pase de fidelización MascotaVeloz en Apple Wallet",
     frame: "standard",
     width: "80%",
+    push: {
+      title: "Mascota Veloz",
+      body: "¡Visita registrada, Diego! 🐾 Te faltan 3 visitas para tu premio.",
+      icon: <PawPrint />,
+      color: "#d9542b",
+    },
   },
   {
     key: "gradual",
@@ -67,12 +73,13 @@ const PHONES: Phone[] = [
 // front phone index → scene → how long it holds before the next beat.
 const TIMELINE: { front: number; scene: Scene; ms: number }[] = [
   { front: 0, scene: "idle", ms: 1400 },
-  { front: 0, scene: "visit", ms: 2400 },
-  { front: 1, scene: "idle", ms: 1600 },
-  { front: 1, scene: "visit", ms: 1300 },
-  { front: 1, scene: "push", ms: 3200 },
-  { front: 2, scene: "idle", ms: 1600 },
-  { front: 2, scene: "push", ms: 3200 },
+  { front: 0, scene: "visit", ms: 1200 },
+  { front: 0, scene: "push", ms: 2600 },
+  { front: 1, scene: "idle", ms: 1400 },
+  { front: 1, scene: "visit", ms: 1000 },
+  { front: 1, scene: "push", ms: 2400 },
+  { front: 2, scene: "idle", ms: 1400 },
+  { front: 2, scene: "push", ms: 2600 },
 ]
 
 export function HeroCarousel({ active }: { active: boolean }) {
