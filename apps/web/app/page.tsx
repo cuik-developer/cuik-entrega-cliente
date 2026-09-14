@@ -46,6 +46,8 @@ const SHOW_BENEFITS = false
 // "¿Por qué Cuik y no otra solución?" y "Comercios que ya confían en Cuik": ocultas hasta nuevo aviso.
 const SHOW_DIFFERENTIATORS = false
 const SHOW_SOCIAL_PROOF = false
+// "Para negocios como el tuyo": oculta, el marquee del hero ya muestra los rubros.
+const SHOW_USE_CASES = false
 
 const VERTICALS: { icon: ReactNode; label: string }[] = [
   { icon: <Coffee className="w-4 h-4" />, label: "Cafeterías" },
@@ -412,15 +414,17 @@ export default function HomePage() {
               { href: "#demo", label: "Demo" },
               { href: "#precios", label: "Precios" },
               { href: "#casos", label: "Casos de uso" },
-            ].map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-[#0e70db] rounded-lg hover:bg-blue-50/60 transition-all"
-              >
-                {link.label}
-              </a>
-            ))}
+            ]
+              .filter((link) => SHOW_USE_CASES || link.href !== "#casos")
+              .map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-[#0e70db] rounded-lg hover:bg-blue-50/60 transition-all"
+                >
+                  {link.label}
+                </a>
+              ))}
           </div>
 
           <div className="flex items-center gap-2">
@@ -459,16 +463,18 @@ export default function HomePage() {
               { href: "#demo", label: "Demo" },
               { href: "#precios", label: "Precios" },
               { href: "#casos", label: "Casos de uso" },
-            ].map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileMenu(false)}
-                className="block px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg"
-              >
-                {link.label}
-              </a>
-            ))}
+            ]
+              .filter((link) => SHOW_USE_CASES || link.href !== "#casos")
+              .map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileMenu(false)}
+                  className="block px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg"
+                >
+                  {link.label}
+                </a>
+              ))}
             <div className="pt-3 border-t border-gray-100 space-y-2">
               <Link
                 href="/login"
@@ -876,28 +882,30 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* ─── Use Cases ───────────────────────────────── */}
-      <section id="casos" className="py-16 sm:py-20 bg-white">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
-            Para negocios como el tuyo
-          </h2>
-          <p className="text-gray-500 text-lg mb-10">
-            Funciona para cualquier comercio físico con clientes recurrentes
-          </p>
-          <div className="flex flex-wrap justify-center gap-3">
-            {VERTICALS.map((v) => (
-              <span
-                key={v.label}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gray-50 border border-gray-200 text-sm font-medium text-gray-700 hover:border-[#0e70db]/40 hover:bg-blue-50/40 hover:text-[#0e70db] transition-all cursor-default shadow-sm"
-              >
-                <span className="text-[#0e70db]">{v.icon}</span>
-                <span>{v.label}</span>
-              </span>
-            ))}
+      {/* ─── Use Cases (oculta temporalmente) ── */}
+      {SHOW_USE_CASES && (
+        <section id="casos" className="py-16 sm:py-20 bg-white">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
+              Para negocios como el tuyo
+            </h2>
+            <p className="text-gray-500 text-lg mb-10">
+              Funciona para cualquier comercio físico con clientes recurrentes
+            </p>
+            <div className="flex flex-wrap justify-center gap-3">
+              {VERTICALS.map((v) => (
+                <span
+                  key={v.label}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gray-50 border border-gray-200 text-sm font-medium text-gray-700 hover:border-[#0e70db]/40 hover:bg-blue-50/40 hover:text-[#0e70db] transition-all cursor-default shadow-sm"
+                >
+                  <span className="text-[#0e70db]">{v.icon}</span>
+                  <span>{v.label}</span>
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ─── Pricing ─────────────────────────────────── */}
       <section id="precios" className="relative py-20 sm:py-24 grain overflow-hidden">
@@ -1086,7 +1094,7 @@ export default function HomePage() {
                   { label: "Beneficios", href: "#beneficios" },
                   { label: "Precios", href: "#precios" },
                   { label: "Casos de uso", href: "#casos" },
-                ],
+                ].filter((l) => SHOW_USE_CASES || l.href !== "#casos"),
               },
               {
                 title: "Recursos",
