@@ -16,7 +16,7 @@ import {
   todayLocal,
   upcomingBirthdays,
 } from "@/lib/campaigns/birthday"
-import { getReportsConfig, reportRecipients } from "@/lib/reports/send-report"
+import { defaultRecipients, getReportsConfig } from "@/lib/reports/send-report"
 
 /**
  * GET /api/[tenant]/automations
@@ -42,7 +42,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       birthdayCoverage(tenant.id),
       findBirthdayClients(tenant.id, date),
       upcomingBirthdays(tenant.id, date, 7),
-      reportRecipients(tenant.id),
+      defaultRecipients(tenant.id),
     ])
 
     return successResponse({
@@ -54,7 +54,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       },
       reports: {
         config: getReportsConfig(tenant.automations),
-        recipients,
+        /** Default list (contact email + owner + admins), used when config.recipients is empty. */
+        suggested: recipients,
         myEmail: session.user.email ?? null,
       },
     })
@@ -105,6 +106,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ tena
               monthly: reportsPatch.monthly
                 ? { ...currentReports.monthly, ...reportsPatch.monthly }
                 : currentReports.monthly,
+              recipients: reportsPatch.recipients ?? currentReports.recipients,
             },
           }
         : {}),

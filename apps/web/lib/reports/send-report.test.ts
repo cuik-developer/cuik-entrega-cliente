@@ -10,6 +10,7 @@ describe("getReportsConfig", () => {
     expect(getReportsConfig(null)).toEqual({
       weekly: { enabled: false, dayOfWeek: 1, sendHour: 8 },
       monthly: { enabled: false, dayOfMonth: 1, sendHour: 8 },
+      recipients: [],
     })
     const cfg = getReportsConfig({
       reports: {
@@ -23,6 +24,16 @@ describe("getReportsConfig", () => {
       lastSentPeriod: "2026-09-07",
     })
     expect(cfg.monthly.enabled).toBe(false)
+  })
+
+  it("keeps a valid recipients list, lower-cased; drops an invalid one", () => {
+    expect(
+      getReportsConfig({ reports: { recipients: ["Ana@Comercio.pe", "socio@comercio.pe"] } })
+        .recipients,
+    ).toEqual(["ana@comercio.pe", "socio@comercio.pe"])
+    expect(getReportsConfig({ reports: { recipients: ["no-es-un-correo"] } }).recipients).toEqual(
+      [],
+    )
   })
 
   it("ignores malformed json instead of throwing", () => {

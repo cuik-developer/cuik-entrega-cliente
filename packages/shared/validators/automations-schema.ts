@@ -40,9 +40,15 @@ export const monthlyReportSchema = z.object({
   lastSentPeriod: z.string().optional(),
 })
 
+/** Who receives the reports. Empty/absent = the default list (contact email + owner + admins). */
+export const reportRecipientsSchema = z
+  .array(z.string().trim().toLowerCase().email("Correo inválido"))
+  .max(10, "Máximo 10 correos")
+
 export const reportsAutomationSchema = z.object({
   weekly: weeklyReportSchema.optional(),
   monthly: monthlyReportSchema.optional(),
+  recipients: reportRecipientsSchema.optional(),
 })
 
 export type WeeklyReportConfig = z.infer<typeof weeklyReportSchema>
@@ -81,6 +87,7 @@ export const updateAutomationsSchema = z
       .object({
         weekly: weeklyReportSchema.omit({ lastSentPeriod: true }).optional(),
         monthly: monthlyReportSchema.omit({ lastSentPeriod: true }).optional(),
+        recipients: reportRecipientsSchema.optional(),
       })
       .optional(),
   })

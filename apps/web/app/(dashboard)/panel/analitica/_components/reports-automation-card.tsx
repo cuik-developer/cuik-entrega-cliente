@@ -1,11 +1,12 @@
 "use client"
 
-import { Loader2, Mail, Save, Send } from "lucide-react"
+import { Loader2, Mail, Plus, Save, Send, X } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
@@ -18,8 +19,9 @@ import { Switch } from "@/components/ui/switch"
 type Weekly = { enabled: boolean; dayOfWeek: number; sendHour: number; lastSentPeriod?: string }
 type Monthly = { enabled: boolean; dayOfMonth: number; sendHour: number; lastSentPeriod?: string }
 type Data = {
-  config: { weekly: Weekly; monthly: Monthly }
-  recipients: string[]
+  config: { weekly: Weekly; monthly: Monthly; recipients: string[] }
+  /** Default list (contact email + owner + admins), used when recipients is empty. */
+  suggested: string[]
   myEmail: string | null
 }
 
@@ -34,16 +36,26 @@ const WEEKDAYS = [
   [6, "Sábado"],
   [7, "Domingo"],
 ] as const
+const MAX_RECIPIENTS = 10
 
 function hourLabel(h: number) {
   return `${String(h).padStart(2, "0")}:00`
 }
 
+function isEmail(s: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)
+}
+
+function sameList(a: string[], b: string[]) {
+  return a.length === b.length && a.every((x, i) => x === b[i])
+}
+
 /**
- * Weekly and monthly reports by email. One card, two rows: each with its
- * switch, day, hour and a "send me a test" button. Sending happens in the
- * reports cron; the test goes only to the signed-in admin and never counts
- * as the scheduled send.
+ * Weekly and monthly reports by email. Each row has its switch, day, hour and
+ * a "send me a test" button; below, who receives them: pick from the
+ * suggested addresses (contact email, owner, admins) or type any email.
+ * Sending happens in the reports cron; the test goes only to the signed-in
+ * admin and never counts as the scheduled send.
  */
 export function ReportsAutomationCard({ tenantSlug }: { tenantSlug: string }) {
   const [data, setData] = useState<Data | null>(null)
@@ -52,6 +64,8 @@ export function ReportsAutomationCard({ tenantSlug }: { tenantSlug: string }) {
   const [testing, setTesting] = useState<"weekly" | "monthly" | null>(null)
   const [weekly, setWeekly] = useState<Weekly>({ enabled: false, dayOfWeek: 1, sendHour: 8 })
   const [monthly, setMonthly] = useState<Monthly>({ enabled: false, dayOfMonth: 1, sendHour: 8 })
+  const [recipients, setRecipients] = useState<string[]>([])
+  const [draft, setDraft] = useState("")
 
   const load = useCallback(async () => {
     try {
@@ -62,6 +76,7 @@ export function ReportsAutomationCard({ tenantSlug }: { tenantSlug: string }) {
       setData(r)
       setWeekly(r.config.weekly)
       setMonthly(r.config.monthly)
+      setRecipients(r.config.recipients)
     } catch {
       toast.error("No se pudieron cargar los reportes por correo")
     } finally {
@@ -80,7 +95,27 @@ export function ReportsAutomationCard({ tenantSlug }: { tenantSlug: string }) {
       weekly.sendHour !== data.config.weekly.sendHour ||
       monthly.enabled !== data.config.monthly.enabled ||
       monthly.dayOfMonth !== data.config.monthly.dayOfMonth ||
-      monthly.sendHour !== data.config.monthly.sendHour)
+      monthly.sendHour !== data.config.monthly.sendHour ||
+      !sameList(recipients, data.config.recipients))
+
+  function addRecipient(raw: string) {
+    const email = raw.trim().toLowerCase()
+    if (!email) return
+    if (!isEmail(email)) {
+      toast.error("Escribí un correo válido")
+      return
+    }
+    if (recipients.includes(email)) {
+      setDraft("")
+      return
+    }
+    if (recipients.length >= MAX_RECIPIENTS) {
+      toast.error(`Máximo ${MAX_RECIPIENTS} correos`)
+      return
+    }
+    setRecipients([...recipients, email])
+    setDraft("")
+  }
 
   async function save() {
     setSaving(true)
@@ -100,6 +135,7 @@ export function ReportsAutomationCard({ tenantSlug }: { tenantSlug: string }) {
               dayOfMonth: monthly.dayOfMonth,
               sendHour: monthly.sendHour,
             },
+            recipients,
           },
         }),
       })
@@ -142,6 +178,9 @@ export function ReportsAutomationCard({ tenantSlug }: { tenantSlug: string }) {
     )
   }
   if (!data) return null
+
+  const suggestedLeft = data.suggested.filter((e) => !recipients.includes(e))
+  const usingDefault = recipients.length === 0
 
   return (
     <Card className="border-sky-200 bg-sky-50/50 dark:border-sky-900 dark:bg-sky-950/20">
@@ -300,12 +339,82 @@ export function ReportsAutomationCard({ tenantSlug }: { tenantSlug: string }) {
           </div>
         </div>
 
+        {/* Recipients */}
+        <div className="rounded-xl border border-sky-200/70 dark:border-sky-900 bg-white dark:bg-background p-4 space-y-3">
+          <div>
+            <div className="font-semibold text-sm">A quién le llegan</div>
+            <div className="text-xs text-muted-foreground">
+              {usingDefault
+                ? "Sin lista propia: van al correo de contacto del comercio y a los administradores. Agregá correos para elegir vos."
+                : "Solo a esta lista. Si la vaciás, vuelven al correo de contacto y los administradores."}
+            </div>
+          </div>
+
+          {recipients.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {recipients.map((e) => (
+                <span
+                  key={e}
+                  className="inline-flex items-center gap-1 pl-3 pr-1.5 py-1 rounded-full bg-sky-100 dark:bg-sky-900/40 text-xs font-medium"
+                >
+                  {e}
+                  <button
+                    type="button"
+                    onClick={() => setRecipients(recipients.filter((x) => x !== e))}
+                    aria-label={`Quitar ${e}`}
+                    className="w-5 h-5 rounded-full hover:bg-sky-200 dark:hover:bg-sky-800 flex items-center justify-center"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {suggestedLeft.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-muted-foreground">Sugeridos:</span>
+              {suggestedLeft.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => addRecipient(e)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-dashed border-sky-300 dark:border-sky-800 text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-900/30"
+                >
+                  <Plus className="w-3 h-3" />
+                  {e}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(ev) => {
+              ev.preventDefault()
+              addRecipient(draft)
+            }}
+          >
+            <Input
+              type="email"
+              value={draft}
+              onChange={(ev) => setDraft(ev.target.value)}
+              placeholder="otro@correo.com"
+              className="h-8 text-sm max-w-xs"
+              aria-label="Agregar correo"
+            />
+            <Button type="submit" variant="outline" size="sm" className="gap-1.5">
+              <Plus className="w-3.5 h-3.5" />
+              Agregar
+            </Button>
+            <span className="text-xs text-muted-foreground ml-auto">
+              {recipients.length}/{MAX_RECIPIENTS}
+            </span>
+          </form>
+        </div>
+
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-          <span>
-            Llega a:{" "}
-            <span className="font-medium text-foreground">{data.recipients.join(", ") || "—"}</span>
-            {" · "}hora local del comercio. La prueba va solo a {data.myEmail ?? "tu correo"}.
-          </span>
+          <span>Hora local del comercio. La prueba va solo a {data.myEmail ?? "tu correo"}.</span>
           <Button size="sm" className="ml-auto gap-1.5" onClick={save} disabled={saving || !dirty}>
             {saving ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />

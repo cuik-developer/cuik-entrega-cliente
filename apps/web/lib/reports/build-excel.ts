@@ -16,9 +16,10 @@ const AT_RISK_NOTE =
 
 function styleHeader(sheet: ExcelJS.Worksheet, rowNumber = 1) {
   const row = sheet.getRow(rowNumber)
-  row.font = { bold: true }
+  // Cuik blue (#0e70db) with white text, same as the panel's primary color.
+  row.font = { bold: true, color: { argb: "FFFFFFFF" } }
   row.alignment = { vertical: "middle" }
-  row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8F1FC" } }
+  row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0E70DB" } }
 }
 
 function addTable(
@@ -221,17 +222,19 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
     3,
   )
 
-  // ── Cumpleaños ────────────────────────────────────────────────────
-  addTable(
-    wb.addWorksheet(isWeekly ? "Cumpleaños" : "Cumpleaños del mes"),
-    [
-      { header: "Nombre", key: "name", width: 26 },
-      { header: "Cumpleaños", key: "date", width: 16 },
-      { header: "Día", key: "weekday", width: 12 },
-      { header: "Push automático", key: "autoPush", width: 18 },
-    ],
-    data.birthdays.map((b) => ({ ...b, date: dayLabel(b.date), weekday: capitalize(b.weekday) })),
-  )
+  // ── Cumpleaños (only when there is someone to list) ───────────────
+  if (data.birthdays.length > 0) {
+    addTable(
+      wb.addWorksheet(isWeekly ? "Cumpleaños" : "Cumpleaños del mes"),
+      [
+        { header: "Nombre", key: "name", width: 26 },
+        { header: "Cumpleaños", key: "date", width: 16 },
+        { header: "Día", key: "weekday", width: 12 },
+        { header: "Push automático", key: "autoPush", width: 18 },
+      ],
+      data.birthdays.map((b) => ({ ...b, date: dayLabel(b.date), weekday: capitalize(b.weekday) })),
+    )
+  }
 
   // ── Acumulado (monthly) ───────────────────────────────────────────
   if (data.monthly) addCumulativeSheets(wb, data.monthly.cumulative, data, tz)

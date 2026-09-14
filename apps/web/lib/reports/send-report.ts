@@ -24,7 +24,18 @@ export function getReportsConfig(raw: unknown) {
   return {
     weekly: { ...DEFAULT_WEEKLY_REPORT, ...(cfg.reports?.weekly ?? {}) },
     monthly: { ...DEFAULT_MONTHLY_REPORT, ...(cfg.reports?.monthly ?? {}) },
+    /** Explicit list chosen in the panel; empty = use defaultRecipients(). */
+    recipients: cfg.reports?.recipients ?? [],
   }
+}
+
+/** Who actually gets the scheduled report: the configured list, else the default one. */
+export async function resolveRecipients(
+  tenantId: string,
+  cfg: ReturnType<typeof getReportsConfig>,
+): Promise<string[]> {
+  if (cfg.recipients.length > 0) return cfg.recipients
+  return defaultRecipients(tenantId)
 }
 
 function appUrl(): string {
@@ -32,7 +43,7 @@ function appUrl(): string {
 }
 
 /** Contact email + owner + admins of the tenant's organization, de-duplicated. */
-export async function reportRecipients(tenantId: string): Promise<string[]> {
+export async function defaultRecipients(tenantId: string): Promise<string[]> {
   const res = await db.execute<{ email: string | null }>(sql`
     SELECT t.contact_email AS email FROM tenants t WHERE t.id = ${tenantId}
     UNION
@@ -92,7 +103,7 @@ export async function sendReport(params: {
     return { status: "skipped", reason: "already_sent" }
   }
 
-  const to = params.to?.length ? params.to : await reportRecipients(tenantId)
+  const to = params.to?.length ? params.to : await resolveRecipients(tenantId, cfg)
   if (to.length === 0) return { status: "skipped", reason: "no_recipients" }
 
   const base = appUrl()

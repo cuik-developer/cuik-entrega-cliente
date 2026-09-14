@@ -19,6 +19,7 @@ import { FunnelChart } from "./_components/funnel-chart"
 import { KpiCards } from "./_components/kpi-cards"
 import type { LocationOption } from "./_components/location-select"
 import { ALL_LOCATIONS, LocationSelect } from "./_components/location-select"
+import { ReportsAutomationCard } from "./_components/reports-automation-card"
 import type { RetentionRow } from "./_components/retention-heatmap"
 import { RetentionHeatmap } from "./_components/retention-heatmap"
 import { SegmentsChart } from "./_components/segments-chart"
@@ -359,6 +360,9 @@ export default function AnaliticaPage() {
           <RetentionHeatmap data={retention} />
         </>
       )}
+
+      {/* Email reports (weekly / monthly) — lives here since sep-2026 */}
+      <ReportsAutomationCard tenantSlug={tenantSlug} />
     </div>
   )
 }

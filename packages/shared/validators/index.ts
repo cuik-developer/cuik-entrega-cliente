@@ -26,6 +26,7 @@ export {
   type MonthlyReportConfig,
   monthlyReportSchema,
   type ReportsAutomation,
+  reportRecipientsSchema,
   reportsAutomationSchema,
   type UpdateAutomationsInput,
   updateAutomationsSchema,

@@ -94,7 +94,7 @@ export function composeReportEmail(
     sections,
     panelUrl: urls.panel,
     attachmentName,
-    settingsHint: `Recibes este correo porque el reporte ${isWeekly ? "semanal" : "mensual"} está activado en Campañas → Automatizaciones. Podés cambiar el día, la hora o desactivarlo desde ahí.`,
+    settingsHint: `Recibes este correo porque el reporte ${isWeekly ? "semanal" : "mensual"} está activado en Analítica → Reportes por correo. Podés cambiar el día, la hora, los destinatarios o desactivarlo desde ahí.`,
   }
 }
 
