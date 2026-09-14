@@ -16,6 +16,7 @@ import {
   todayLocal,
   upcomingBirthdays,
 } from "@/lib/campaigns/birthday"
+import { getReportsConfig, reportRecipients } from "@/lib/reports/send-report"
 
 /**
  * GET /api/[tenant]/automations
@@ -37,10 +38,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
 
     const tz = tenant.timezone ?? "America/Lima"
     const date = todayLocal(tz)
-    const [coverage, today, upcoming] = await Promise.all([
+    const [coverage, today, upcoming, recipients] = await Promise.all([
       birthdayCoverage(tenant.id),
       findBirthdayClients(tenant.id, date),
       upcomingBirthdays(tenant.id, date, 7),
+      reportRecipients(tenant.id),
     ])
 
     return successResponse({
@@ -50,6 +52,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         today,
         upcoming,
       },
+      reports: {
+        config: getReportsConfig(tenant.automations),
+        recipients,
+        myEmail: session.user.email ?? null,
+      },
     })
   } catch (error) {
     console.error("[GET /api/[tenant]/automations]", error)
@@ -58,8 +65,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
 }
 
 /**
- * PUT /api/[tenant]/automations  { birthday: { enabled, message, sendHour } }
- * Merges the given automation(s) into tenants.automations.
+ * PUT /api/[tenant]/automations
+ *   { birthday: { enabled, message, sendHour } }
+ *   { reports: { weekly?: { enabled, dayOfWeek, sendHour }, monthly?: { enabled, dayOfMonth, sendHour } } }
+ * Merges the given automation(s) into tenants.automations. Report updates keep
+ * the stored lastSentPeriod so re-saving never re-sends a period.
  */
 export async function PUT(request: Request, { params }: { params: Promise<{ tenant: string }> }) {
   try {
@@ -81,11 +91,28 @@ export async function PUT(request: Request, { params }: { params: Promise<{ tena
 
     const currentParsed = automationsConfigSchema.safeParse(tenant.automations ?? {})
     const current = currentParsed.success ? currentParsed.data : {}
-    const next = { ...current, ...parsed.data }
+    const { reports: reportsPatch, ...rest } = parsed.data
+    const currentReports = getReportsConfig(current)
+    const next = {
+      ...current,
+      ...rest,
+      ...(reportsPatch
+        ? {
+            reports: {
+              weekly: reportsPatch.weekly
+                ? { ...currentReports.weekly, ...reportsPatch.weekly }
+                : currentReports.weekly,
+              monthly: reportsPatch.monthly
+                ? { ...currentReports.monthly, ...reportsPatch.monthly }
+                : currentReports.monthly,
+            },
+          }
+        : {}),
+    }
 
     await db.update(tenants).set({ automations: next }).where(eq(tenants.id, tenant.id))
 
-    return successResponse({ birthday: getBirthdayConfig(next) })
+    return successResponse({ birthday: getBirthdayConfig(next), reports: getReportsConfig(next) })
   } catch (error) {
     console.error("[PUT /api/[tenant]/automations]", error)
     return errorResponse("Internal server error", 500)

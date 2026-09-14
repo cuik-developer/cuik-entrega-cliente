@@ -21,8 +21,16 @@ export {
   birthdayAutomationSchema,
   DEFAULT_BIRTHDAY_AUTOMATION,
   DEFAULT_BIRTHDAY_MESSAGE,
+  DEFAULT_MONTHLY_REPORT,
+  DEFAULT_WEEKLY_REPORT,
+  type MonthlyReportConfig,
+  monthlyReportSchema,
+  type ReportsAutomation,
+  reportsAutomationSchema,
   type UpdateAutomationsInput,
   updateAutomationsSchema,
+  type WeeklyReportConfig,
+  weeklyReportSchema,
 } from "./automations-schema"
 export {
   type TenantBranding,

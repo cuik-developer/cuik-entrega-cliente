@@ -10,6 +10,7 @@ import { BirthdayAutomationCard } from "./_components/birthday-automation-card"
 import { CampaignList } from "./_components/campaign-list"
 import { ChurnPreventionCard } from "./_components/churn-prevention-card"
 import { CreateCampaignForm } from "./_components/create-campaign-form"
+import { ReportsAutomationCard } from "./_components/reports-automation-card"
 
 export default function CampanasPage() {
   const { tenantSlug, isLoading, error } = useTenant()
@@ -66,6 +67,9 @@ export default function CampanasPage() {
 
       {/* Birthday automation */}
       <BirthdayAutomationCard tenantSlug={tenantSlug} />
+
+      {/* Email reports (weekly / monthly) */}
+      <ReportsAutomationCard tenantSlug={tenantSlug} />
 
       {/* Campaign list */}
       <CampaignList tenantSlug={tenantSlug} refreshKey={refreshKey} />

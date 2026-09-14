@@ -407,6 +407,8 @@ Google Wallet usa "Loyalty Objects" creados y actualizados via la API de Google.
 
 Los admins pueden enviar notificaciones push a los clientes de su comercio directamente a traves de los pases de wallet.
 
+> **Reportes por correo**: en la misma pantalla de Campanas, la tarjeta "Reportes por correo" activa un resumen semanal y/o mensual con Excel adjunto (visitas, clientes nuevos, premios, clientes en riesgo con recomendacion de campana, cumpleanos; el mensual agrega la historia completa del comercio). Vienen apagados; cada uno tiene dia, hora y boton "Enviarme una prueba". Detalle en la guia del administrador, seccion 7.
+
 ### Crear una campana
 
 1. Ir a `/panel/campanas` > "Nueva campana"

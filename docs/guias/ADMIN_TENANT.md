@@ -250,6 +250,7 @@ En la parte superior:
 
 - **7 dias / 30 dias / 90 dias** (30 por defecto) o **Rango personalizado** con un calendario (desde tu primera visita registrada, maximo un ano).
 - **Sucursal**: si tu comercio tiene 2 o mas sucursales, aparece un selector "Todas las sucursales". Filtra los KPIs de visitas, el grafico de visitas, el mapa de calor y el export. El embudo, los segmentos, las wallets, la retencion y el top de clientes son siempre de todo el comercio, porque un cliente no pertenece a una sucursal.
+- **Acumulado**: elegi un mes en "hasta <mes>" y toca **Acumulado** para descargar un Excel con tu historia completa hasta el cierre de ese mes: totales desde que empezaste, mes a mes, tus 20 clientes con mas visitas y como se reparten hoy tus clientes por segmento. Es el mismo contenido que va en el reporte mensual por correo (ver Campanas).
 - **Exportar visitas**: descarga un Excel con una fila por visita del rango (y de la sucursal) elegido.
 
 ### 6 tarjetas de KPIs
@@ -318,6 +319,22 @@ Una tarjeta rosa que envia solo, cada dia, un push a los clientes que cumplen an
 Cada envio aparece en el historial como una campana llamada "Cumpleanos · 10 set. 2026", con sus destinatarios, igual que cualquier otra. Si un dia nadie cumple anos, no se crea nada.
 
 **De donde sale la fecha de cumpleanos**: el cliente la carga al registrarse (si el equipo de Cuik activo ese campo en tu formulario de registro; pedilo si no esta) o la cargas vos desde la ficha del cliente, pestana Informacion.
+
+### Reportes por correo (semanal y mensual)
+
+Una tarjeta celeste debajo del saludo de cumpleanos. Cuik te manda un resumen de tu negocio por correo, con un Excel adjunto, sin que tengas que entrar al panel.
+
+- **Reporte semanal**: la semana cerrada (lunes a domingo) comparada con la anterior. Elegi el dia y la hora (por defecto lunes a las 8:00, hora local de tu comercio).
+- **Reporte mensual**: el mes cerrado comparado con el anterior, mas una seccion "Desde que empezaste" con tu historia completa. Elegi el dia del mes (1 al 28) y la hora.
+- Los dos vienen **apagados**: activalos con el interruptor y toca **Guardar**.
+- **Enviarme una prueba**: te manda ahora mismo el ultimo periodo cerrado, solo a tu correo, para que veas como queda antes de activarlo. No cuenta como envio.
+- **A quien llega**: al correo de contacto del comercio y a los administradores. Nunca a cajeros. Lo ves debajo de las dos filas.
+
+**Que trae el correo**: visitas, clientes nuevos y premios canjeados con la comparacion; el dia mas fuerte y el mas flojo; cuantos clientes distintos vinieron y cuantos repitieron; las campanas que enviaste; tus clientes mas fieles del periodo; y una lista "Para actuar": clientes en riesgo (con la recomendacion de mandarles una campana y un enlace directo), premios sin cobrar y cumpleanos que se vienen.
+
+**Que trae el Excel**: hojas Resumen, Visitas por dia (con hora pico), Clientes del periodo (visitas, ultima visita, sellos o puntos, segmento), En riesgo (con una accion sugerida por cliente) y Cumpleanos. El mensual suma Semanas del mes, Campanas y las hojas historicas (Resumen historico, Mes a mes, Top 20 historico, Segmentos hoy). **Sin telefonos ni correos**: para contactar a alguien usa el panel.
+
+Si tu comercio usa **puntos** en vez de sellos, la columna "Sellos" dice "Puntos" y "Premios canjeados" cuenta los canjes del catalogo.
 
 ### Historial de campanas
 

@@ -58,6 +58,10 @@ Ready in ~20s. Warning about a duplicate `pnpm-lock.yaml` in the parent checkout
 
 `curl http://localhost:3000/api/seed` (~40s). Creates tenants `mascota-veloz` (active) and `cafe-central` (trial), 5 users, 6 clients, 2 promos, **0 campaigns**. All seeded users use password `password123`.
 
+**Never probe readiness against `/api/seed`.** Two overlapping seed calls race (one truncates while the other inserts): FK violation on `visits`, a deadlock, and a half-seeded DB that then says "Organization already exists". Probe `GET /` (or any cheap route) and call `/api/seed` exactly once with a long timeout. Recovery: `dropdb --force` + `createdb` + schemas + `drizzle-kit push` + one seed.
+
+**Reports feature (sep-2026):** `POST /api/<slug>/reports/send {kind}` (cookie jar) logs `[Email Dev Mode] … Attachments: <slug>-semana-<start>.xlsx` when `RESEND_API_KEY` is unset; `GET /api/<slug>/reports/export?until=YYYY-MM` returns an xlsx (inspect sheet names with python `zipfile` on `xl/workbook.xml`); `POST /api/cron/reports?force=1` sends once and answers `already_sent` on the second run (`tenants.automations.reports.<kind>.lastSentPeriod`).
+
 ## 5. Flows worth driving
 
 **Cron:** `curl -X POST -H "x-cron-secret: $CRON_SECRET" http://localhost:3000/api/cron/campaigns-scheduled` — picks `status='scheduled' AND scheduled_at <= now()`. Auth check runs before any DB work, so 401/405 probes need no seed.

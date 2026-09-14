@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest"
 
 import { BienvenidaComercio } from "./bienvenida-comercio"
 import { Credenciales } from "./credenciales"
+import { ReportePeriodico } from "./reporte-periodico"
 import { RewardCanjeado } from "./reward-canjeado"
 import { SolicitudRecibida } from "./solicitud-recibida"
 
@@ -174,6 +175,33 @@ describe("email templates", () => {
 
       expect(html).toContain("Cuik")
       expect(html).toContain("Fidelización Digital")
+    })
+  })
+
+  describe("ReportePeriodico", () => {
+    const props = ReportePeriodico.PreviewProps
+
+    it("renders heading, period, KPIs and sections", async () => {
+      const html = await render(React.createElement(ReportePeriodico, props))
+      expect(html).toContain("Tu semana en Mascota Veloz")
+      expect(html).toContain("comparado con la semana anterior")
+      expect(html).toContain("Visitas")
+      expect(html).toContain("42")
+      expect(html).toContain("▲ +14 % · antes 37")
+      expect(html).toContain("Lo que pasó")
+      expect(html).toContain("Crear campaña para clientes en riesgo")
+      expect(html).toContain("mascota-veloz-semana-2026-09-07.xlsx")
+      expect(html).toContain("Ver el panel completo")
+    })
+
+    it("shows a placeholder for an empty section", async () => {
+      const html = await render(
+        React.createElement(ReportePeriodico, {
+          ...props,
+          sections: [{ title: "Tus clientes más fieles de la semana", items: [] }],
+        }),
+      )
+      expect(html).toContain("Nada que reportar en este período.")
     })
   })
 })

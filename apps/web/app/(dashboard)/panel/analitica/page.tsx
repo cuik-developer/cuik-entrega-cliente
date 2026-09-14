@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { useTenant } from "@/hooks/use-tenant"
 
+import { CumulativeExportButton } from "./_components/cumulative-export-button"
 import { FunnelChart } from "./_components/funnel-chart"
 import { KpiCards } from "./_components/kpi-cards"
 import type { LocationOption } from "./_components/location-select"
@@ -314,6 +315,7 @@ export default function AnaliticaPage() {
             )}
             <span className="hidden sm:inline">Exportar visitas</span>
           </Button>
+          <CumulativeExportButton tenantSlug={tenantSlug} timezone={tenantTz} />
         </div>
       </div>
 

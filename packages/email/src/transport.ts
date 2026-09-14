@@ -1,12 +1,21 @@
 import type { ReactElement } from "react"
 import { Resend } from "resend"
 
+export interface EmailAttachment {
+  filename: string
+  /** Path to a file on disk. Use `content` for in-memory attachments (e.g. a generated xlsx). */
+  path?: string
+  /** In-memory file content (Buffer or base64 string). */
+  content?: Buffer | string
+  contentType?: string
+}
+
 export interface SendEmailOptions {
   to: string | string[]
   subject: string
   template: ReactElement
   from?: string
-  attachments?: Array<{ filename: string; path: string }>
+  attachments?: EmailAttachment[]
 }
 
 type SendEmailResult = { id: string } | { error: string }
@@ -40,6 +49,9 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
     console.log(`  To: ${Array.isArray(recipient) ? recipient.join(", ") : recipient}`)
     console.log(`  Subject: ${subject}`)
     console.log("  Template: (React Email component)")
+    if (attachments?.length) {
+      console.log(`  Attachments: ${attachments.map((a) => a.filename).join(", ")}`)
+    }
     return { id: `dev-${Date.now()}` }
   }
 
@@ -49,7 +61,12 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
       to: Array.isArray(recipient) ? recipient : [recipient],
       subject,
       react: template,
-      attachments: attachments ?? undefined,
+      attachments: attachments?.map((a) => ({
+        filename: a.filename,
+        path: a.path,
+        content: a.content,
+        contentType: a.contentType,
+      })),
     })
 
     if (error) {

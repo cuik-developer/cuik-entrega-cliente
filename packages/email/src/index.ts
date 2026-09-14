@@ -16,6 +16,12 @@ export type { InvitacionCajeroProps } from "./templates/invitacion-cajero"
 export { InvitacionCajero } from "./templates/invitacion-cajero"
 export type { ReporteAprobadoProps } from "./templates/reporte-aprobado"
 export { ReporteAprobado } from "./templates/reporte-aprobado"
+export type {
+  ReportePeriodicoProps,
+  ReportKpiProps,
+  ReportSectionProps,
+} from "./templates/reporte-periodico"
+export { ReportePeriodico } from "./templates/reporte-periodico"
 export type { ResetPasswordProps } from "./templates/reset-password"
 export { ResetPassword } from "./templates/reset-password"
 export type { RewardCanjeadoProps } from "./templates/reward-canjeado"
@@ -23,5 +29,5 @@ export { RewardCanjeado } from "./templates/reward-canjeado"
 export type { SolicitudRecibidaProps } from "./templates/solicitud-recibida"
 // Templates
 export { SolicitudRecibida } from "./templates/solicitud-recibida"
-export type { SendEmailOptions } from "./transport"
+export type { EmailAttachment, SendEmailOptions } from "./transport"
 export { sendEmail } from "./transport"
