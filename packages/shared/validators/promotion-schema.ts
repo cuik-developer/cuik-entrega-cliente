@@ -102,15 +102,36 @@ export const DEFAULT_POINTS_CONFIG: PointsPromotionConfig = pointsPromotionConfi
 
 // --- API schemas ---
 
-export const createPromotionSchema = z.object({
-  type: z.enum(["stamps", "points"]),
-  maxVisits: z.number().int().min(2).max(50).optional(),
-  rewardValue: z.string().trim().min(1).max(200),
-  active: z.boolean().default(true),
-  config: z.union([stampsPromotionConfigSchema, pointsPromotionConfigSchema]).default({}),
-})
+/**
+ * `config` is validated by the schema that matches `type`. A plain
+ * `z.union([stamps, points])` is NOT enough: Zod takes the first branch that
+ * parses, and the stamps schema accepts any object thanks to its defaults, so a
+ * points config used to be silently rewritten as a default stamps config.
+ */
+export const createPromotionSchema = z
+  .object({
+    type: z.enum(["stamps", "points"]),
+    maxVisits: z.number().int().min(2).max(50).optional(),
+    rewardValue: z.string().trim().min(1).max(200),
+    active: z.boolean().default(true),
+    config: z.unknown().optional(),
+  })
+  .transform((value, ctx) => {
+    const schema =
+      value.type === "points" ? pointsPromotionConfigSchema : stampsPromotionConfigSchema
+    const parsed = schema.safeParse(value.config ?? {})
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) {
+        ctx.addIssue({ ...issue, path: ["config", ...issue.path] })
+      }
+      return z.NEVER
+    }
+    return { ...value, config: parsed.data }
+  })
 
-export type CreatePromotionInput = z.infer<typeof createPromotionSchema>
+/** What callers pass in (config may be partial: defaults are filled by the matching schema). */
+export type CreatePromotionInput = z.input<typeof createPromotionSchema>
+export type CreatePromotionParsed = z.output<typeof createPromotionSchema>
 
 export const updateStampsPromotionSchema = z.object({
   maxVisits: z.number().int().min(2).max(50).optional(),

@@ -12,7 +12,8 @@ type PointsVisitParams = {
     totalVisits: number
     pointsBalance: number
     tier: string | null
-    birthday?: Date | null
+    /** Date or "YYYY-MM-DD" (Postgres `date` column). */
+    birthday?: Date | string | null
   }
   promotion: {
     id: string
@@ -25,11 +26,17 @@ type PointsVisitParams = {
   locationId?: string | null
   amount: string
   todayVisitCount: number
+  /** Tenant timezone, used to decide whether today is the client's birthday. */
+  timezone?: string
   tx: Parameters<Parameters<typeof dbType.transaction>[0]>[0]
 }
 
 export async function registerPointsVisit(params: PointsVisitParams): Promise<PointsVisitResult> {
   const { client, config, tenantId, cashierId, locationId, amount, todayVisitCount, tx } = params
+  const now = new Date()
+  const visitDateLocal = params.timezone
+    ? now.toLocaleDateString("en-CA", { timeZone: params.timezone })
+    : undefined
 
   // 1. Parse amount to number, validate > 0
   const numericAmount = Number(amount)
@@ -50,7 +57,8 @@ export async function registerPointsVisit(params: PointsVisitParams): Promise<Po
 
   // 2. Build context and evaluate rules
   const rulesContext: PointsRulesContext = {
-    visitDate: new Date(),
+    visitDate: now,
+    visitDateLocal,
     clientTotalVisits: client.totalVisits,
     clientBirthday: client.birthday ?? null,
     visitAmount: numericAmount,

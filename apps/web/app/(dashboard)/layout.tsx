@@ -4,6 +4,7 @@ import {
   BarChart3,
   Bell,
   CreditCard,
+  Gift,
   LayoutDashboard,
   LogOut,
   Megaphone,
@@ -27,6 +28,8 @@ const navItems = [
   { href: "/panel", label: "Dashboard", icon: LayoutDashboard },
   { href: "/panel/mi-pase", label: "Mi Pase", icon: CreditCard },
   { href: "/panel/clientes", label: "Clientes", icon: Users },
+  // Only shown to points programs (see SidebarNav).
+  { href: "/panel/premios", label: "Premios", icon: Gift, pointsOnly: true },
   { href: "/panel/cajeros", label: "Cajeros", icon: UserCheck },
   { href: "/panel/analitica", label: "Analítica", icon: BarChart3 },
   { href: "/panel/campanas", label: "Campañas", icon: Megaphone },
@@ -139,8 +142,9 @@ function TopBarTenantAvatar() {
 
 function SidebarNav({ onNavClick }: { onNavClick: () => void }) {
   const pathname = usePathname()
-  const { branding } = useTenant()
+  const { branding, promotionType } = useTenant()
   const primaryColor = branding?.primaryColor ?? CUIK_PRIMARY
+  const visibleItems = navItems.filter((item) => !item.pointsOnly || promotionType === "points")
 
   const isActive = (href: string) => {
     if (href === "/panel") return pathname === "/panel"
@@ -149,7 +153,7 @@ function SidebarNav({ onNavClick }: { onNavClick: () => void }) {
 
   return (
     <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
-      {navItems.map((item) => (
+      {visibleItems.map((item) => (
         <Link
           key={item.href}
           href={item.href}

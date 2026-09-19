@@ -233,6 +233,16 @@ Sidebar izquierdo. Rol requerido: `admin` o `super_admin`.
 - **Acumulado a pedido**: en Analitica, selector "hasta <mes>" (ultimos 12 meses cerrados) + boton **Acumulado** → `GET /api/{tenant}/reports/export?until=YYYY-MM` descarga el Excel historico hasta el cierre de ese mes.
 - **Motor** (`lib/reports/`): `period.ts` (semana cerrada lunes-domingo / mes cerrado, deltas, etiquetas en espanol), `compute-report.ts` (todo en la zona horaria del tenant, mismas reglas que Dashboard/Analitica; programas de puntos leen canjes de `points_transactions`), `compose-email.ts` (frases), `send-report.ts` (destinatarios, adjunto en memoria via Resend, `isReportDue`, `runDueReports`). Cron `POST /api/cron/reports` **cada hora**; `?force=1` ignora dia/hora pero respeta `lastSentPeriod`.
 
+### 4.3b Premios (`/panel/premios`, solo programas de puntos)
+
+Visible en el menu solo cuando la promocion activa es de **puntos** (`useTenant().promotionType`). El admin administra su propio catalogo de canje sin pasar por el super-admin; el look de la pagina publica sigue saliendo de Branding.
+
+- **Lista** en tarjetas con foto (16:9), costo en puntos, categoria, descripcion, interruptor Visible/Oculto (`PATCH { active }`) y boton Editar. Los ocultos van en una seccion aparte. Aviso si la promocion de puntos esta inactiva.
+- **Nuevo / Editar premio** (dialogo): foto (PNG/JPG hasta 5 MB, se sube al elegirla via `POST /api/{tenant}/assets/upload` y se guarda su URL relativa `/api/assets/...`), nombre, descripcion, costo en puntos (entero > 0), categoria, orden y visible.
+- **Compartir la pagina de premios**: URL publica `/{slug}/premios` con Copiar, WhatsApp y Ver pagina.
+- API (admin del tenant, con membresia): `GET /api/{tenant}/catalog` (todos los items + `pointsProgramActive`), `POST /api/{tenant}/catalog`, `PATCH /api/{tenant}/catalog/{id}`, `DELETE /api/{tenant}/catalog/{id}` (baja logica: `active=false`, los canjes referencian el item). Validador `createCatalogItemSchema` acepta `imageUrl` absoluta o relativa a `/api/assets/`.
+- El super-admin conserva su seccion de catalogo en el modal del tenant (misma tabla `reward_catalog`).
+
 ### 4.4 Campanas (`/panel/campanas`)
 
 **Card "Prevencion de churn"**: campania pre-configurada para clientes `en_riesgo` con mensaje editable.

@@ -979,6 +979,16 @@ Prioridad Apple > Google (nunca double-count).
 - Rutas: `POST /api/cron/reports[?force=1]` (x-cron-secret), `POST /api/[tenant]/reports/send { kind, to? }` (admin; prueba al email de sesion), `GET /api/[tenant]/reports/export?until=YYYY-MM` (xlsx acumulado).
 - UI (ambas en Analitica): `panel/analitica/_components/reports-automation-card.tsx` (config + destinatarios) y `cumulative-export-button.tsx`.
 
+### 8.13 Catalogo de premios administrable por el tenant
+
+Rutas `app/api/[tenant]/catalog/route.ts` (GET/POST) y `.../catalog/[id]/route.ts` (PATCH/DELETE logico), guard `requireAuth + requireRole("admin") + requireTenantMembership`; siempre filtradas por `tenantId`. Subida de fotos `app/api/[tenant]/assets/upload/route.ts` (PNG/JPG, 5 MB) reutiliza `lib/storage.ts` (`generateAssetKey` + `uploadAsset`, MinIO o `.local-storage`) y devuelve la URL relativa `/api/assets/...`; `catalogImageUrlSchema` la acepta ademas de URLs absolutas. UI: `panel/premios/page.tsx` (server, resuelve `promotionType` con `getTenantForUser`; para sellos muestra un aviso) + `_components/{premios-client,reward-form-dialog}.tsx`. Entrada de menu `Premios` con `pointsOnly: true` en `(dashboard)/layout.tsx`.
+
+### 8.14 Canje de puntos: confirmacion, auditoria y refresco del pase
+
+- Cajero (`(cajero)/cajero/buscar/page.tsx`): "Canjear" pasa a dos pasos (Canjear → Confirmar canje / Cancelar); todos los botones del catalogo se deshabilitan mientras hay un canje en vuelo. Codigo `DUPLICATE_REDEEM` (en `types.ts`) se muestra como "Este premio ya se canjeo hace un momento".
+- `app/api/[tenant]/redeem/route.ts`: tras un canje de puntos `OK` llama a `triggerWalletUpdate` (fire-and-forget) — helper extraido a `lib/wallet/trigger-wallet-update.ts` desde la ruta de visitas: bump de ETag en `pass_instances`, push APNs a los dispositivos registrados y upsert del objeto de Google. Antes el pase seguia mostrando el saldo viejo hasta la proxima visita.
+- Pendiente de aprobacion (archivos protegidos, ver `Dev/APROBACION-PUNTOS.md`): guardar `cashierId` en `points_transactions.metadata` y el bloqueo de doble canje de 10 s en `redeem-points.ts`; pasar cumpleanos y zona horaria en `register-visit.ts`; strip para puntos en las rutas Apple (`lib/wallet/points-strip.ts` ya existe); saldo real en Google.
+
 ---
 
 ## 9. Cuik Office — agentes AI

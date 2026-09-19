@@ -1,8 +1,14 @@
 import type { StampsPromotionConfig } from "@cuik/shared/validators"
 
-import { DEFAULT_STAMPS_CONFIG } from "@cuik/shared/validators"
+import { DEFAULT_POINTS_CONFIG, DEFAULT_STAMPS_CONFIG } from "@cuik/shared/validators"
 import { describe, expect, it } from "vitest"
-import { computeTier, evaluateStampRules, getNextTier } from "./rules-engine"
+import {
+  computeTier,
+  evaluatePointsRules,
+  evaluateStampRules,
+  getNextTier,
+  isBirthdayVisit,
+} from "./rules-engine"
 import type { RulesEvaluationContext } from "./types"
 
 // --- Helpers ---
@@ -418,5 +424,71 @@ describe("getNextTier", () => {
       },
     })
     expect(getNextTier(config, 0)).toBeNull()
+  })
+})
+
+// --- isBirthdayVisit (birthday as Date or as the "YYYY-MM-DD" string Postgres returns) ---
+
+describe("isBirthdayVisit", () => {
+  it("matches a string birthday against the tenant-local visit date", () => {
+    expect(
+      isBirthdayVisit({
+        visitDate: new Date("2026-09-19T03:30:00Z"), // 22:30 of the 18th in Lima
+        visitDateLocal: "2026-09-18",
+        clientBirthday: "1990-09-18",
+      }),
+    ).toBe(true)
+    expect(
+      isBirthdayVisit({
+        visitDate: new Date("2026-09-19T03:30:00Z"),
+        visitDateLocal: "2026-09-18",
+        clientBirthday: "1990-09-19",
+      }),
+    ).toBe(false)
+  })
+
+  it("falls back to visitDate when no local date is given, and accepts a Date birthday", () => {
+    expect(
+      isBirthdayVisit({
+        visitDate: new Date("2026-03-15T14:00:00"),
+        clientBirthday: new Date("1990-03-15T12:00:00"),
+      }),
+    ).toBe(true)
+  })
+
+  it("greets Feb 29 birthdays on Feb 28 in non-leap years only", () => {
+    expect(
+      isBirthdayVisit({
+        visitDate: new Date(),
+        visitDateLocal: "2026-02-28",
+        clientBirthday: "1996-02-29",
+      }),
+    ).toBe(true)
+    expect(
+      isBirthdayVisit({
+        visitDate: new Date(),
+        visitDateLocal: "2028-02-28",
+        clientBirthday: "1996-02-29",
+      }),
+    ).toBe(false)
+  })
+
+  it("points: applies the birthday multiplier with a string birthday", () => {
+    const config = {
+      ...DEFAULT_POINTS_CONFIG,
+      accumulation: { ...DEFAULT_POINTS_CONFIG.accumulation, birthdayMultiplier: 2 },
+    }
+    const result = evaluatePointsRules(config, {
+      visitDate: new Date("2026-09-18T15:00:00Z"),
+      visitDateLocal: "2026-09-18",
+      clientTotalVisits: 3,
+      clientBirthday: "1990-09-18",
+      visitAmount: 20,
+      locationId: null,
+      todayVisitCount: 0,
+    })
+    expect(result.eligible).toBe(true)
+    expect(result.pointsToEarn).toBe(40)
+    expect(result.bonusReasons).toContain("birthday_multiplier")
   })
 })

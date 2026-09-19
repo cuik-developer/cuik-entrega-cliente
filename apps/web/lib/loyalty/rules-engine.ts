@@ -82,16 +82,9 @@ export function evaluateStampRules(
   }
 
   // 4b. Check birthday bonus
-  if (config.accumulation.birthdayBonus > 0 && context.clientBirthday != null) {
-    const visitMonth = context.visitDate.getMonth()
-    const visitDayOfMonth = context.visitDate.getDate()
-    const birthdayMonth = context.clientBirthday.getMonth()
-    const birthdayDay = context.clientBirthday.getDate()
-
-    if (visitMonth === birthdayMonth && visitDayOfMonth === birthdayDay) {
-      stampsToEarn *= config.accumulation.birthdayBonus
-      bonusReasons.push("birthday_bonus")
-    }
+  if (config.accumulation.birthdayBonus > 0 && isBirthdayVisit(context)) {
+    stampsToEarn *= config.accumulation.birthdayBonus
+    bonusReasons.push("birthday_bonus")
   }
 
   return { eligible: true, stampsToEarn, bonusReasons }
@@ -185,16 +178,9 @@ export function evaluatePointsRules(
   }
 
   // 7. Apply birthday multiplier (stacks multiplicatively with day multiplier)
-  if (config.accumulation.birthdayMultiplier > 1 && context.clientBirthday != null) {
-    const visitMonth = context.visitDate.getMonth()
-    const visitDayOfMonth = context.visitDate.getDate()
-    const birthdayMonth = context.clientBirthday.getMonth()
-    const birthdayDay = context.clientBirthday.getDate()
-
-    if (visitMonth === birthdayMonth && visitDayOfMonth === birthdayDay) {
-      pointsToEarn = Math.floor(pointsToEarn * config.accumulation.birthdayMultiplier)
-      bonusReasons.push("birthday_multiplier")
-    }
+  if (config.accumulation.birthdayMultiplier > 1 && isBirthdayVisit(context)) {
+    pointsToEarn = Math.floor(pointsToEarn * config.accumulation.birthdayMultiplier)
+    bonusReasons.push("birthday_multiplier")
   }
 
   return { eligible: true, pointsToEarn, bonusReasons }
@@ -271,4 +257,59 @@ export function getNextTier(
     name: next.name,
     visitsNeeded: next.minVisits - totalVisits,
   }
+}
+
+// --- Birthday helpers ---
+
+type MonthDay = { month: number; day: number }
+
+function monthDayOf(value: Date | string): MonthDay | null {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime())
+      ? null
+      : { month: value.getMonth() + 1, day: value.getDate() }
+  }
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
+  if (!m) return null
+  return { month: Number(m[2]), day: Number(m[3]) }
+}
+
+function isLeapYear(y: number): boolean {
+  return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0
+}
+
+/**
+ * Is this visit happening on the client's birthday? Works with the birthday as
+ * a Date or as the "YYYY-MM-DD" string Postgres returns for `date` columns,
+ * and prefers the tenant-local visit date over the server clock. People born
+ * on Feb 29 count on Feb 28 in non-leap years so they are never skipped.
+ */
+export function isBirthdayVisit(context: {
+  visitDate: Date
+  visitDateLocal?: string
+  clientBirthday?: Date | string | null
+}): boolean {
+  if (context.clientBirthday == null) return false
+  const birthday = monthDayOf(context.clientBirthday)
+  if (!birthday) return false
+
+  let visit: MonthDay | null
+  let visitYear: number
+  if (context.visitDateLocal) {
+    visit = monthDayOf(context.visitDateLocal)
+    visitYear = Number(context.visitDateLocal.slice(0, 4))
+  } else {
+    visit = { month: context.visitDate.getMonth() + 1, day: context.visitDate.getDate() }
+    visitYear = context.visitDate.getFullYear()
+  }
+  if (!visit) return false
+
+  if (visit.month === birthday.month && visit.day === birthday.day) return true
+  return (
+    birthday.month === 2 &&
+    birthday.day === 29 &&
+    visit.month === 2 &&
+    visit.day === 28 &&
+    !isLeapYear(visitYear)
+  )
 }

@@ -312,6 +312,17 @@ Una tarjeta celeste al final de la pantalla de Analitica. Cuik te manda un resum
 
 Si tu comercio usa **puntos** en vez de sellos, la columna "Sellos" dice "Puntos" y "Premios canjeados" cuenta los canjes del catalogo.
 
+## 6b. Premios (`/panel/premios`) — solo programas de puntos
+
+Si tu programa es de **puntos**, en el menu aparece **Premios**: es tu catalogo de canje, y lo administras vos.
+
+- **Nuevo premio**: nombre, descripcion, costo en puntos, categoria (opcional, agrupa la pagina publica), orden y una **foto** (PNG o JPG, hasta 5 MB; ideal formato 16:9). La foto se ve en tu pagina de premios y en el cajero, y ayuda a que el cliente elija.
+- **Visible / Oculto**: el interruptor de cada tarjeta. Un premio oculto no se muestra a los clientes ni se puede canjear, pero conserva su historial (por eso no se borra).
+- **Editar**: cambia lo que quieras; los clientes lo ven al instante.
+- **Compartir tu pagina de premios**: arriba tenes el enlace publico `tu-comercio/premios` con botones Copiar, WhatsApp y Ver pagina. El diseno de esa pagina (colores, logo) lo define el equipo de Cuik en Branding; vos definis el contenido.
+
+Si tu promocion de puntos esta inactiva, la pagina te lo avisa: el catalogo no se muestra hasta que el equipo de Cuik la active.
+
 ## 7. Campanas (`/panel/campanas`)
 
 Crea y envia mensajes segmentados a tus clientes via notificaciones de Wallet.

@@ -1,3 +1,4 @@
+import { and, clients, db, eq } from "@cuik/db"
 import { redeemRewardSchema } from "@cuik/shared/validators"
 
 import {
@@ -9,6 +10,7 @@ import {
 } from "@/lib/api-utils"
 import { redeemReward } from "@/lib/loyalty"
 import { redeemPoints } from "@/lib/loyalty/redeem-points"
+import { triggerWalletUpdate } from "@/lib/wallet/trigger-wallet-update"
 
 export async function POST(request: Request, { params }: { params: Promise<{ tenant: string }> }) {
   try {
@@ -37,6 +39,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
         cashierId: session.user.id,
       })
 
+      // The balance changed: refresh the pass (ETag + Apple push + Google upsert),
+      // fire-and-forget like the visits route does. Without this the card kept
+      // showing the old balance until the next visit.
+      if (result.code === "OK") {
+        refreshPassAfterRedeem(parsed.data.qrCode, tenant.id, tenant.name).catch((err) => {
+          console.error("[POST /api/[tenant]/redeem] Wallet update failed:", err)
+        })
+      }
+
       return successResponse(result)
     }
 
@@ -52,4 +63,31 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     console.error("[POST /api/[tenant]/redeem]", error)
     return errorResponse("Internal server error", 500)
   }
+}
+
+async function refreshPassAfterRedeem(qrCode: string, tenantId: string, tenantName: string) {
+  const [client] = await db
+    .select({
+      id: clients.id,
+      name: clients.name,
+      lastName: clients.lastName,
+      totalVisits: clients.totalVisits,
+      pointsBalance: clients.pointsBalance,
+    })
+    .from(clients)
+    .where(and(eq(clients.qrCode, qrCode), eq(clients.tenantId, tenantId)))
+    .limit(1)
+  if (!client) return
+  await triggerWalletUpdate({
+    qrCode,
+    clientId: client.id,
+    clientName: `${client.name}${client.lastName ? ` ${client.lastName}` : ""}`,
+    tenantId,
+    tenantName,
+    stampsInCycle: 0,
+    maxVisits: 0,
+    totalVisits: client.totalVisits,
+    pendingRewards: 0,
+    pointsBalance: client.pointsBalance,
+  })
 }

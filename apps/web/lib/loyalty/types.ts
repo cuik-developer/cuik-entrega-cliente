@@ -18,8 +18,11 @@ export { DEFAULT_POINTS_CONFIG, DEFAULT_STAMPS_CONFIG } from "@cuik/shared/valid
 
 export type RulesEvaluationContext = {
   visitDate: Date
+  /** "YYYY-MM-DD" of the visit in the tenant timezone; preferred over visitDate for birthday checks. */
+  visitDateLocal?: string
   clientTotalVisits: number
-  clientBirthday?: Date | null
+  /** Date, or "YYYY-MM-DD" as the `date` column comes back from Postgres. */
+  clientBirthday?: Date | string | null
   visitAmount?: number | null
   locationId?: string | null
   todayVisitCount: number
@@ -139,8 +142,11 @@ export type ClientStatus = {
 
 export type PointsRulesContext = {
   visitDate: Date
+  /** "YYYY-MM-DD" of the visit in the tenant timezone; preferred over visitDate for birthday checks. */
+  visitDateLocal?: string
   clientTotalVisits: number
-  clientBirthday?: Date | null
+  /** Date, or "YYYY-MM-DD" as the `date` column comes back from Postgres. */
+  clientBirthday?: Date | string | null
   visitAmount: number
   locationId?: string | null
   todayVisitCount: number
@@ -162,6 +168,8 @@ export type PointsRedeemResultCode =
   | "CATALOG_ITEM_INACTIVE"
   | "CLIENT_NOT_FOUND"
   | "NO_ACTIVE_PROMOTION"
+  /** Same client + item redeemed seconds ago: a double click, not a second redemption. */
+  | "DUPLICATE_REDEEM"
 
 // --- Points Result Types ---
 

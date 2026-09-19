@@ -151,6 +151,8 @@ export default function BuscarPage() {
   const [selected, setSelected] = useState<ClientDetail | null>(null)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
+  const [confirmItemId, setConfirmItemId] = useState<string | null>(null)
+  const [redeemingItemId, setRedeemingItemId] = useState<string | null>(null)
   const [purchaseAmount, setPurchaseAmount] = useState("")
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null)
 
@@ -327,13 +329,25 @@ export default function BuscarPage() {
         return "Premio no encontrado"
       case "CATALOG_ITEM_INACTIVE":
         return "Premio no disponible"
+      case "DUPLICATE_REDEEM":
+        return "Este premio ya se canjeó hace un momento"
       default:
         return (json.error as string) || "Error al canjear"
     }
   }
 
+  // Two-step redeem: first click asks to confirm, second click redeems. While a
+  // request is in flight every catalog button is disabled, so a double click
+  // cannot spend the points twice (the server also rejects a repeat within seconds).
   const handleRedeemCatalogItem = async (catalogItemId: string) => {
-    if (!selected?.client.qrCode) return
+    if (!selected?.client.qrCode || redeemingItemId) return
+    if (confirmItemId !== catalogItemId) {
+      setConfirmItemId(catalogItemId)
+      setActionMsg(null)
+      return
+    }
+    setConfirmItemId(null)
+    setRedeemingItemId(catalogItemId)
     setActionMsg(null)
 
     try {
@@ -352,6 +366,8 @@ export default function BuscarPage() {
       }
     } catch {
       setActionMsg("Error de conexion")
+    } finally {
+      setRedeemingItemId(null)
     }
   }
 
@@ -392,10 +408,14 @@ export default function BuscarPage() {
           handleVisit={handleVisit}
           handleRedeem={handleRedeem}
           handleRedeemCatalogItem={handleRedeemCatalogItem}
+          confirmItemId={confirmItemId}
+          setConfirmItemId={setConfirmItemId}
+          redeemingItemId={redeemingItemId}
           onReset={() => {
             setSelected(null)
             setActionMsg(null)
             setSubmitting(false)
+            setConfirmItemId(null)
             setCatalogItems([])
             setPurchaseAmount("")
           }}
@@ -558,6 +578,9 @@ function ClientDetailView({
   handleVisit,
   handleRedeem,
   handleRedeemCatalogItem,
+  confirmItemId,
+  setConfirmItemId,
+  redeemingItemId,
   onReset,
 }: {
   selected: ClientDetail
@@ -573,6 +596,9 @@ function ClientDetailView({
   handleVisit: () => void
   handleRedeem: () => void
   handleRedeemCatalogItem: (id: string) => void
+  confirmItemId: string | null
+  setConfirmItemId: (id: string | null) => void
+  redeemingItemId: string | null
   onReset: () => void
 }) {
   return (
@@ -676,14 +702,36 @@ function ClientDetailView({
                     </span>
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  className="bg-amber-500 text-white text-xs h-8 shrink-0"
-                  disabled={!canAfford}
-                  onClick={() => handleRedeemCatalogItem(item.id)}
-                >
-                  Canjear
-                </Button>
+                {confirmItemId === item.id ? (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs h-8 text-gray-500"
+                      onClick={() => setConfirmItemId(null)}
+                      disabled={redeemingItemId !== null}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="bg-amber-600 text-white text-xs h-8"
+                      disabled={redeemingItemId !== null}
+                      onClick={() => handleRedeemCatalogItem(item.id)}
+                    >
+                      Confirmar canje
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    className="bg-amber-500 text-white text-xs h-8 shrink-0"
+                    disabled={!canAfford || redeemingItemId !== null}
+                    onClick={() => handleRedeemCatalogItem(item.id)}
+                  >
+                    {redeemingItemId === item.id ? "Canjeando…" : "Canjear"}
+                  </Button>
+                )}
               </div>
             )
           })}
