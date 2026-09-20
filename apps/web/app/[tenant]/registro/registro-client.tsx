@@ -40,6 +40,27 @@ interface RegistroClientProps {
   accentColor: string
   logoUrl: string | null
   registrationConfig: RegistrationConfig | null
+  /** Active promotion type; picks the bonus wording. Null = infer from the amounts. */
+  promotionType?: "stamps" | "points" | null
+}
+
+type MarketingBonusConfig = { enabled: boolean; stampsBonus: number; pointsBonus: number }
+
+/** Amount + unit of the bonus that really applies for this promotion type. */
+function resolveMarketingBonus(
+  mb: MarketingBonusConfig | undefined | null,
+  promotionType: "stamps" | "points" | null,
+): { amount: number; label: string } | null {
+  if (!mb?.enabled) return null
+  let unit: "sellos" | "puntos" | null = null
+  if (promotionType === "points") unit = "puntos"
+  else if (promotionType === "stamps") unit = "sellos"
+  else if (mb.stampsBonus > 0) unit = "sellos"
+  else if (mb.pointsBonus > 0) unit = "puntos"
+  if (!unit) return null
+  const amount = unit === "puntos" ? mb.pointsBonus : mb.stampsBonus
+  if (amount <= 0) return null
+  return { amount, label: unit === "sellos" && amount === 1 ? "sello" : unit }
 }
 
 const RESEND_COOLDOWN_SECONDS = 60
@@ -52,6 +73,7 @@ export default function RegistroClient({
   accentColor,
   logoUrl,
   registrationConfig,
+  promotionType = null,
 }: RegistroClientProps) {
   const router = useRouter()
   const tenantInitial = tenantName.charAt(0).toUpperCase()
@@ -423,14 +445,14 @@ export default function RegistroClient({
   }
 
   // --- Marketing bonus label ---
-  const _marketingBonusEnabled = registrationConfig?.marketingBonus?.enabled ?? false
-  const marketingBonusLabel = (() => {
-    if (!registrationConfig?.marketingBonus?.enabled) return null
-    const { stampsBonus, pointsBonus } = registrationConfig.marketingBonus
-    if (stampsBonus > 0) return `+${stampsBonus} ${stampsBonus === 1 ? "sello" : "sellos"} bonus!`
-    if (pointsBonus > 0) return `+${pointsBonus} puntos bonus!`
-    return "+1 visita bonus!"
-  })()
+  // The bonus that actually applies is the one matching the active promotion type:
+  // a points tenant never gives stamps even if stampsBonus was left configured.
+  const marketingBonus = resolveMarketingBonus(registrationConfig?.marketingBonus, promotionType)
+  const marketingBonusLabel = registrationConfig?.marketingBonus?.enabled
+    ? marketingBonus
+      ? `+${marketingBonus.amount} ${marketingBonus.label} bonus!`
+      : "+1 visita bonus!"
+    : null
 
   // --- Success screen (after registration) ---
   if (success) {
@@ -737,11 +759,9 @@ export default function RegistroClient({
                       </div>
                       {registrationConfig?.marketingBonus?.enabled && (
                         <p className="text-xs text-gray-400 mt-1">
-                          {registrationConfig.marketingBonus.stampsBonus > 0
-                            ? `Si aceptas, te regalamos ${registrationConfig.marketingBonus.stampsBonus} ${registrationConfig.marketingBonus.stampsBonus === 1 ? "sello" : "sellos"} como incentivo`
-                            : registrationConfig.marketingBonus.pointsBonus > 0
-                              ? `Si aceptas, te regalamos ${registrationConfig.marketingBonus.pointsBonus} puntos como incentivo`
-                              : "Si aceptas, recibes un incentivo de bienvenida"}
+                          {marketingBonus
+                            ? `Si aceptas, te regalamos ${marketingBonus.amount} ${marketingBonus.label} como incentivo`
+                            : "Si aceptas, recibes un incentivo de bienvenida"}
                         </p>
                       )}
                     </div>

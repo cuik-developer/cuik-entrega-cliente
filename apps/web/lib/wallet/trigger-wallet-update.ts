@@ -1,4 +1,13 @@
-import { and, appleDevices, db, eq, passDesigns, passInstances, promotions } from "@cuik/db"
+import {
+  and,
+  appleDevices,
+  clients,
+  db,
+  eq,
+  passDesigns,
+  passInstances,
+  promotions,
+} from "@cuik/db"
 import { buildGoogleClassId, getGoogleAccessToken } from "@cuik/wallet/google"
 import {
   generateETag,
@@ -79,11 +88,31 @@ export async function triggerWalletUpdate(ctx: {
         designFieldsRaw.secondaryFields?.length ||
         designFieldsRaw.backFields?.length)
     ) {
+      // Strategic fields ({{client.customData.x}}), phone, birthday, tier live on the
+      // client row; without them the Google upsert blanked those variables.
+      const [clientRow] = await db
+        .select({
+          lastName: clients.lastName,
+          phone: clients.phone,
+          email: clients.email,
+          birthday: clients.birthday,
+          tier: clients.tier,
+          customData: clients.customData,
+        })
+        .from(clients)
+        .where(eq(clients.id, ctx.clientId))
+        .limit(1)
       const templateContext: TemplateContext = {
         client: {
           name: ctx.clientName,
+          lastName: clientRow?.lastName ?? null,
+          phone: clientRow?.phone ?? null,
+          email: clientRow?.email ?? null,
+          birthday: clientRow?.birthday ?? null,
+          tier: clientRow?.tier ?? null,
           totalVisits: ctx.totalVisits,
           pointsBalance: ctx.pointsBalance,
+          customData: (clientRow?.customData as Record<string, unknown> | null) ?? null,
         },
         stamps: {
           current: ctx.stampsInCycle,

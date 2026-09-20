@@ -249,6 +249,82 @@ Google Wallet muestra `accountId` en el reverso como "ID de miembro". Hoy se man
 
 Efecto: pases nuevos y cada upsert (visita, canje) dejan de mostrar el codigo interno. No cambia el QR ni el `id` del objeto.
 
+
+## G. Variables personalizadas en Google Wallet tras registro y visitas — PENDIENTE DE APROBACION (2 archivos protegidos)
+
+Sintoma (19 set.): un campo estrategico del registro (p. ej. `{{client.customData.postre}}`) se ve vacio en el pase de Google. La ruta que genera el pase (`wallet/google/[clientId]`) si pasa `customData`, pero el objeto se crea en el registro y se reescribe en cada visita con un contexto que solo trae nombre, visitas y saldo, asi que la variable queda en blanco. `lib/wallet/trigger-wallet-update.ts` (no protegido) ya se corrigio; faltan estos dos:
+
+### G1. `apps/web/app/api/[tenant]/register-client/route.ts` — `resolveDesignFieldsForClient`
+
+```diff
+ function resolveDesignFieldsForClient(
+   fieldsRaw: unknown,
+-  client: { name: string; lastName: string | null; totalVisits: number; pointsBalance: number },
++  client: {
++    name: string
++    lastName: string | null
++    phone: string | null
++    email: string | null
++    birthday: string | null
++    tier: string | null
++    totalVisits: number
++    pointsBalance: number
++    customData: unknown
++  },
+   stamps: { current: number; max: number; total: number },
+   pendingRewards: number,
+   tenantName: string,
+ ) {
+   ...
+   const templateContext: TemplateContext = {
+     client: {
+       name: client.name,
+       lastName: client.lastName,
++      phone: client.phone,
++      email: client.email,
++      birthday: client.birthday,
++      tier: client.tier,
+       totalVisits: client.totalVisits,
+       pointsBalance: client.pointsBalance,
++      customData: (client.customData as Record<string, unknown> | null) ?? null,
+     },
+```
+
+(El llamador ya pasa la fila completa `client`, que tiene todas esas columnas; no cambia la llamada.)
+
+### G2. `apps/web/app/api/[tenant]/visits/route.ts` — contexto del upsert tras la visita
+
+Mismo bloque que en `trigger-wallet-update.ts`: antes de armar `templateContext`, leer `lastName, phone, email, birthday, tier, customData` de `clients` por `ctx.clientId` (agregar `clients` al import de `@cuik/db`) y pasarlos en `client`.
+
+```diff
++      const [clientRow] = await db
++        .select({
++          lastName: clients.lastName,
++          phone: clients.phone,
++          email: clients.email,
++          birthday: clients.birthday,
++          tier: clients.tier,
++          customData: clients.customData,
++        })
++        .from(clients)
++        .where(eq(clients.id, ctx.clientId))
++        .limit(1)
+       const templateContext: TemplateContext = {
+         client: {
+           name: ctx.clientName,
++          lastName: clientRow?.lastName ?? null,
++          phone: clientRow?.phone ?? null,
++          email: clientRow?.email ?? null,
++          birthday: clientRow?.birthday ?? null,
++          tier: clientRow?.tier ?? null,
+           totalVisits: ctx.totalVisits,
+           pointsBalance: ctx.pointsBalance,
++          customData: (clientRow?.customData as Record<string, unknown> | null) ?? null,
+         },
+```
+
+Efecto: el pase de Google conserva las variables personalizadas desde el registro y despues de cada visita. Apple no se ve afectado (regenera el pase desde su propia ruta, que ya incluye `customData`).
+
 ## Orden sugerido de aplicación
 
 1. **A + B** (2 archivos, defectos 2, 5, 6): 10 minutos, verificables en local con el seed convertido a puntos.
