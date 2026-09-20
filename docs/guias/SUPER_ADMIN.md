@@ -520,16 +520,22 @@ Grid de cards, cada una muestra:
 
 **URL**: `/admin/metricas`
 
-Dashboard con metricas globales de la plataforma basadas en datos reales.
+Tablero para decidir: arriba los filtros, y todo lo que ves debajo respeta esos filtros y se compara con el periodo anterior de la misma duracion.
 
-### Elementos
+### Filtros
 
-- **4 KPI cards**: Metricas globales de la plataforma.
-- **Actividad**: comercios con visitas en 7 y 30 dias, pases Apple instalados, canjes y clientes nuevos de 30 dias. Debajo, **Comercios sin visitas en 14 dias**: los que tienen clientes pero dejaron de registrar visitas; son los que conviene llamar. Cada nombre abre Tenants con la busqueda hecha.
-- **Selector de rango**: 30, 60 o 90 dias (afecta los graficos).
-- **Grafico de area**: Visitas diarias segun el rango seleccionado (Recharts AreaChart).
-- **Grafico de dona**: Distribucion de tenants por plan (Recharts PieChart).
-- **Ranking**: Top 5 tenants por visitas con barras de progreso.
+- **Periodo**: 7, 30 o 90 dias, este mes, mes pasado o un rango libre. La comparacion contra el periodo anterior es automatica.
+- **Estado** (activos y demos, solo activos, solo demos), **Programa** (sellos o puntos), **Plan** y **Comercios** (elegi uno o varios para compararlos).
+- **Exportar con estos filtros**: Excel con Resumen, Comercios e Insights tal como los ves. **Detalle por cliente**: el Excel de siempre, una hoja por comercio y una fila por visita.
+
+### Bloques
+
+1. **KPIs**: comercios con visitas, visitas, clientes nuevos, tasa de retorno, % de nuevos que instalan el pase, ticket promedio (o canjes si filtras sellos) e **ingreso mensual estimado** (comercios activos por el precio de su plan; es una estimacion, no un cobro real). Cada tarjeta muestra el cambio contra el periodo anterior y una mini tendencia.
+2. **Que esta pasando**: frases generadas de los datos, ordenadas por urgencia: comercios que dejaron de registrar visitas, demos por vencer sin uso, clientes con saldo para canjear que no canjean, instalacion del pase en caida, saltos de visitas y quien los explica. "Ver en la tabla" resalta esos comercios; "Abrir" te lleva a Tenants.
+3. **Tendencia**: elegi la metrica y la granularidad; la linea punteada es el periodo anterior.
+4. **Comercios**: la tabla para decidir. Ordena por cualquier columna, busca por nombre, y el nombre abre el tenant. La columna Demo muestra los dias que le quedan.
+5. **De solicitud a comercio que usa Cuik**: donde se cae un comercio nuevo y cuantos dias tarda cada paso.
+6. **Pases y campanas**: Apple vs Google, instalaciones por semana y tasa de entrega de las campanas del periodo.
 
 <!-- TODO: capture screenshot for dashboard de metricas SA -->
 

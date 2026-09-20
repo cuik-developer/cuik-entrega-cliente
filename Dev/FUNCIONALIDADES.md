@@ -118,15 +118,16 @@ Sidebar izquierdo con navegacion. Rol requerido: `super_admin`.
 
 ### 3.6 Metricas (`/admin/metricas`)
 
-**Proposito**: analytics platform-wide para el equipo Cuik.
+**Proposito**: responder en segundos "¿crece el negocio?", "¿quien necesita atencion?" y "¿que hago hoy?". Rehecha en sep-2026: pagina cliente (`metricas/dashboard/*`) que consume **una sola ruta** `GET /api/admin/metrics` (`lib/admin/platform-metrics.ts`, SQL en tz Lima, visitas sin `source='bonus'`, pase instalado = dispositivo Apple registrado o enlace Google). Todo se recalcula al tocar un filtro y **siempre se compara con el periodo anterior de igual largo**.
 
-- **KPI Cards**: total tenants, total clientes, visitas totales ultimos 30d, total planes.
-- **Actividad** (sep-2026, `getPlatformActivity` + `activity-panel.tsx`): comercios con visitas reales en 7 / 30 dias, pases Apple instalados en 7 / 30 dias (`apple_devices.created_at`), canjes de 30 dias (premios de sellos + canjes de puntos) y clientes nuevos de 30 dias; debajo, **Comercios sin visitas en 14 dias** (trial/active con clientes; hasta 20, los mas antiguos primero) con enlace a Tenants precargando la busqueda.
-- **Grafico de visitas diarias**: linea con granularidad dia, rango seleccionable.
-- **Distribucion de planes**: pie chart de tenants por plan.
-- **Top 5 tenants**: ranking por visitas ultimos 30d con clientCount.
-- **Selector de rango**: presets 7 / 30 / 90 dias **o Rango personalizado** (date range picker con minDate = primera visita de la plataforma).
-- **Boton Exportar Datos**: descarga Excel con una hoja por tenant (ver §10).
+- **Filtros globales**: periodo (7 / 30 / 90 dias, este mes, mes pasado, rango libre hasta 366 dias), estado (activos y demos / solo activos / solo demos), programa (sellos / puntos), plan y multiseleccion de comercios. Botones **Exportar con estos filtros** (`format=xlsx`: hojas Resumen, Comercios, Insights) y **Detalle por cliente** (el Excel anterior por tenant, `GET /api/admin/reports/export`).
+- **KPIs** (con delta y sparkline): comercios con visitas / comercios del filtro, visitas, clientes nuevos, tasa de retorno (% con 2+ visitas entre los que visitaron), % de clientes nuevos que instalaron el pase, ticket promedio (o canjes si el filtro es sellos) e **ingreso mensual estimado** (`plans.price` x comercios `active`; el anterior cuenta los activados hasta el fin del periodo previo: es una estimacion, no hay cobros registrados).
+- **Que esta pasando**: insights deterministas (`buildInsights`) ordenados por urgencia: comercios con clientes y 14+ dias sin visitas, demos que vencen en 7 dias sin diseno/clientes (o con uso: "momento de proponer plan"), tenants de puntos con 10+ clientes que ya pueden canjear, tasa de instalacion baja o en caida, variacion de visitas >= 15% con el comercio que mas aporta, dos promociones activas, pocos comercios activos, movimiento del ingreso estimado. Cada uno con "Ver en la tabla" (enfoca las filas) y/o enlace.
+- **Tendencia**: un grafico de area con selector de metrica (visitas, clientes nuevos, pases instalados, canjes) y granularidad (dia/semana/mes), periodo actual contra el anterior superpuesto.
+- **Comercios**: tabla ordenable y buscable, una fila por tenant del filtro: salud, clientes, nuevos, visitas y delta, retorno, % instalacion, canjes (y cuantos "pueden" en puntos), ultima visita, dias de demo; aviso si tiene 2 promociones activas. El nombre abre Tenants con la busqueda.
+- **De solicitud a comercio que usa Cuik**: embudo de ciclo de vida (no depende del rango): solicitudes → aprobadas → con primer cliente → con 10+ clientes → con visitas esta semana, con dias promedio entre pasos.
+- **Pases y campanas**: reparto Apple / Google / sin pase, instalaciones Apple por semana (8 semanas), campanas enviadas, notificaciones y tasa de entrega del periodo.
+- Se eliminaron las tarjetas planas, la dona por plan y el top 5 (redundantes con la tabla).
 
 ### 3.7 Configuracion (`/admin/configuracion`)
 
