@@ -132,6 +132,8 @@ Sidebar izquierdo con navegacion. Rol requerido: `super_admin`.
 
 Settings globales de la plataforma almacenados en `globalConfig` (key-value jsonb).
 
+**Correos de solicitudes** (sep-2026): tarjeta con dos pestanas, **Aprobacion** y **Rechazo**, cada una con asunto y mensaje editables (texto plano, linea en blanco = parrafo), chips de variables (`{{businessName}}`, `{{contactName}}`, `{{email}}`, `{{trialDays}}`, `{{reason}}`, `{{platformName}}`, `{{supportEmail}}`), boton **Enviarme una prueba** (manda la version sin guardar al super-admin logueado con datos de ejemplo) y **Volver al texto por defecto**. Rechazo tiene el interruptor **Enviar correo al rechazar** (apagado por defecto: hoy no se manda nada). Guardado en `global_config` `email_tpl_approval` / `email_tpl_rejection` (`solicitudEmailTemplatesSchema`). Render: `packages/email` `MensajePersonalizado` (layout Cuik + parrafos; en aprobacion se agregan siempre la caja de credenciales y el boton "Ingresar al panel"). Uso: `lib/admin/solicitud-emails.ts` (`buildApprovalEmail`, `buildRejectionEmail`) desde `PATCH /api/admin/solicitudes/{id}`; si no hay plantilla guardada se usa el texto por defecto (equivalente al correo anterior).
+
 ### 3.8 Office (`/admin/office`)
 
 > Temporalmente oculto del sidebar. Archivos preservados.
@@ -601,7 +603,7 @@ Tasks con `cronExpression` corren automaticamente via `POST /api/cron/office-tas
 
 **Ruta**: `GET /api/admin/reports/export?from=YYYY-MM-DD&to=YYYY-MM-DD` (rango opcional, en tz Lima).
 
-**Estructura**: un Excel con **una hoja por tenant activo**. Una fila por visita. Clientes con 0 visitas igual aparecen con "Sin visitas".
+**Estructura**: un Excel con dos hojas de plataforma al inicio (sep-2026) y luego **una hoja por tenant activo** (una fila por visita; clientes con 0 visitas igual aparecen con "Sin visitas"). **Resumen**: fecha, comercios total/activos/demo, comercios con visitas en 7 y 30 dias, clientes total y nuevos 30d, visitas total y 30d (sin bonos), pases Apple instalados 30d, canjes 30d (sellos + puntos). **Comercios**: una fila por tenant (todos los estados) con slug, estado, plan, programa, alta, vencimiento de demo, clientes, nuevos 30d, visitas, visitas 30d, ultima visita, pases instalados, canjes 30d y modo Apple. El rango de fechas del boton solo afecta a las hojas por tenant.
 
 **Columnas (dinamicas segun programa del tenant)**:
 ```

@@ -541,6 +541,16 @@ Dashboard con metricas globales de la plataforma basadas en datos reales.
 
 Configuracion de parametros globales de la plataforma Cuik.
 
+### Correos de solicitudes
+
+Debajo de los campos globales hay una tarjeta para editar los correos que reciben los comercios desde Solicitudes:
+
+- **Aprobacion**: asunto y mensaje del correo de bienvenida. Las credenciales y el boton "Ingresar al panel" se agregan solos debajo de tu texto; no hace falta escribirlos.
+- **Rechazo**: por defecto no se envia nada al rechazar. Si activas **Enviar correo al rechazar**, el comercio recibe este correo y el motivo que escribas al rechazar entra donde pongas `{{reason}}`.
+- Los chips debajo del mensaje insertan variables (nombre del comercio, contacto, dias de prueba, motivo, etc.) en la posicion del cursor.
+- **Enviarme una prueba** te manda el correo tal como esta en pantalla, con datos de ejemplo, a tu propio email. **Volver al texto por defecto** restaura el original.
+- El diseno del correo (logo, colores, pie) no cambia: solo editas el texto.
+
 ### Campos editables
 
 | Campo | Descripcion | Validacion |

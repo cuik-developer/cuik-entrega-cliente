@@ -52,6 +52,8 @@ Cubre los despliegues `e3b3561` y `442a3ba` (programa de puntos, panel Premios, 
 | 14d | Super-admin → Solicitudes → Rechazadas (tras aplicar la migracion 0019 en prod) | Solo las de 30 dias, con "rechazada hace N dias por X"; "Ver archivadas (N)" lista las viejas; Reabrir la devuelve a Pendientes | |
 | 14e | Super-admin → Tenants → ojo → Notas (tras aplicar la migracion 0020 en prod) | Crear nota con y sin seguimiento; la vencida sale en ambar; borrar la propia; el contador de la pestana se actualiza | |
 | 14f | Super-admin → Tenants → ojo → General → Ver como el comercio → Abrir panel | Se abre /panel del tenant con banner ambar; se navega todo; guardar algo (p. ej. configuracion) da "Modo solo lectura"; Salir vuelve a Tenants; queda una nota interna | |
+| 14g | Super-admin → Metricas → Exportar Datos | El Excel arranca con las hojas Resumen y Comercios (una fila por tenant con KPIs) y luego las hojas por tenant de siempre | |
+| 14h | Super-admin → Configuracion → Correos de solicitudes | Editar asunto/mensaje, insertar variables, Enviarme una prueba (llega con datos de ejemplo), Guardar; aprobar una solicitud manda el texto nuevo; con "Enviar correo al rechazar" activo, rechazar manda el correo con el motivo | |
 | 12 | Confirmar el schedule `reports` en Dokploy (`10 * * * *`, POST `https://cuik.org/api/cron/reports`) | Queda creado y activo | OK (19 set., prod) |
 | 13 | Con el reporte semanal activado en Analitica, esperar al lunes | Llega el correo con el Excel: encabezados azul Cuik, sin hoja de cumpleanos si esta vacia | OK (19 set., prod) |
 | 14 | Agregar un segundo destinatario en la tarjeta de reportes y usar "Enviarme una prueba" | Ambos correos reciben la prueba | |

@@ -76,6 +76,15 @@ export {
   designChangeRequestTypeEnum,
 } from "./design-change-request-schema"
 export {
+  DEFAULT_SOLICITUD_EMAIL_TEMPLATES,
+  emailBodyParagraphs,
+  renderEmailTemplateText,
+  SOLICITUD_EMAIL_VARIABLES,
+  type SolicitudEmailKind,
+  type SolicitudEmailTemplates,
+  solicitudEmailTemplatesSchema,
+} from "./email-templates-schema"
+export {
   canvasNodeSchema,
   getConfigVersion,
   imageNodePropsSchema,

@@ -14,6 +14,8 @@ export type { CredencialesProps } from "./templates/credenciales"
 export { Credenciales } from "./templates/credenciales"
 export type { InvitacionCajeroProps } from "./templates/invitacion-cajero"
 export { InvitacionCajero } from "./templates/invitacion-cajero"
+export type { MensajePersonalizadoProps } from "./templates/mensaje-personalizado"
+export { MensajePersonalizado } from "./templates/mensaje-personalizado"
 export type { ReporteAprobadoProps } from "./templates/reporte-aprobado"
 export { ReporteAprobado } from "./templates/reporte-aprobado"
 export type {

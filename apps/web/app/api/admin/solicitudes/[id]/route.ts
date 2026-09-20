@@ -1,6 +1,7 @@
 import { db, eq, passAssets, passDesigns, promotions, solicitudes, sql, tenants } from "@cuik/db"
-import { BienvenidaComercio, sendEmail } from "@cuik/email"
+import { sendEmail } from "@cuik/email"
 import { DEFAULT_STAMPS_CONFIG, updateSolicitudSchema } from "@cuik/shared/validators"
+import { buildApprovalEmail, buildRejectionEmail } from "@/lib/admin/solicitud-emails"
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
 import { auth } from "@/lib/auth"
 
@@ -56,6 +57,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         })
         .where(eq(solicitudes.id, id))
         .returning()
+
+      // Optional rejection email (Configuracion → Correos de solicitudes), fire-and-forget
+      buildRejectionEmail({
+        businessName: solicitud.businessName,
+        contactName: solicitud.contactName,
+        email: solicitud.email,
+        reason: parsed.data.rejectionReason,
+      })
+        .then((built) =>
+          built
+            ? sendEmail({ to: solicitud.email, subject: built.subject, template: built.template })
+            : null,
+        )
+        .catch((err) => console.error("[EMAIL] Failed to send rejection email:", err))
 
       return successResponse(updated)
     }
@@ -238,17 +253,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     // Step f) Send welcome email with credentials (fire-and-forget)
     const loginUrl = `${process.env.BETTER_AUTH_URL ?? "http://localhost:3000"}/login`
-    sendEmail({
-      to: solicitud.email,
-      subject: `Bienvenido a Cuik — ${solicitud.businessName}`,
-      template: BienvenidaComercio({
-        businessName: solicitud.businessName,
-        adminName: solicitud.contactName,
-        email: solicitud.email,
-        password: tempPassword,
-        loginUrl,
-      }),
-    }).catch((err) => console.error("[EMAIL] Failed to send welcome email:", err))
+    // Text comes from Configuracion → Correos de solicitudes (credentials + button always appended)
+    buildApprovalEmail({
+      businessName: solicitud.businessName,
+      contactName: solicitud.contactName,
+      email: solicitud.email,
+      password: tempPassword,
+      loginUrl,
+      trialDays: 7,
+    })
+      .then((built) =>
+        sendEmail({ to: solicitud.email, subject: built.subject, template: built.template }),
+      )
+      .catch((err) => console.error("[EMAIL] Failed to send welcome email:", err))
 
     return successResponse({
       solicitud: updatedSolicitud,

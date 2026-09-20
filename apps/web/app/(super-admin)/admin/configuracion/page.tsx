@@ -1,16 +1,23 @@
-import { DEFAULT_PLATFORM_CONFIG } from "@cuik/shared/validators"
+import { DEFAULT_PLATFORM_CONFIG, DEFAULT_SOLICITUD_EMAIL_TEMPLATES } from "@cuik/shared/validators"
 
 export const dynamic = "force-dynamic"
 
 import { Card, CardContent } from "@/components/ui/card"
 
-import { getGlobalConfig } from "./actions"
+import { getGlobalConfig, getSolicitudEmailTemplates } from "./actions"
 import { ConfigForm } from "./config-form"
+import { EmailTemplatesForm } from "./email-templates-form"
 
 export default async function SuperAdminConfigPage() {
-  const result = await getGlobalConfig()
+  const [result, templatesResult] = await Promise.all([
+    getGlobalConfig(),
+    getSolicitudEmailTemplates(),
+  ])
 
   const config = result.success ? result.data : DEFAULT_PLATFORM_CONFIG
+  const templates = templatesResult.success
+    ? templatesResult.data
+    : DEFAULT_SOLICITUD_EMAIL_TEMPLATES
 
   return (
     <div className="space-y-6">
@@ -32,6 +39,12 @@ export default async function SuperAdminConfigPage() {
       <Card>
         <CardContent className="pt-6">
           <ConfigForm initialData={config} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-6">
+          <EmailTemplatesForm initialData={templates} />
         </CardContent>
       </Card>
     </div>
