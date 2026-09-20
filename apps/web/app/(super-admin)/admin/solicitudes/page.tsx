@@ -7,9 +7,11 @@ import {
   ExternalLink,
   Loader2,
   RefreshCw,
+  RotateCcw,
   XCircle,
 } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
+import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -38,6 +40,8 @@ interface Solicitud {
   status: SolicitudStatus
   notes: string | null
   tenantId: string | null
+  reviewedAt: string | null
+  reviewedBy: string | null
   createdAt: string
 }
 
@@ -73,6 +77,9 @@ export default function SolicitudesAdminPage() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<SolicitudStatus | "all">("all")
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  // Rejections older than 30 days live behind this toggle.
+  const [showArchived, setShowArchived] = useState(false)
+  const [archivedCount, setArchivedCount] = useState(0)
 
   // Reject dialog state
   const [rejectTarget, setRejectTarget] = useState<Solicitud | null>(null)
@@ -89,6 +96,7 @@ export default function SolicitudesAdminPage() {
     try {
       const params = new URLSearchParams()
       if (filter !== "all") params.set("status", filter)
+      if (filter === "rejected" && showArchived) params.set("archived", "1")
       params.set("limit", "100")
 
       const res = await fetch(`/api/admin/solicitudes?${params.toString()}`)
@@ -96,16 +104,39 @@ export default function SolicitudesAdminPage() {
 
       const data = await res.json()
       setSolicitudes(data.data?.items ?? [])
+      setArchivedCount(Number(data.data?.archivedCount ?? 0))
     } catch (err) {
       console.error("Failed to fetch solicitudes:", err)
     } finally {
       setLoading(false)
     }
-  }, [filter])
+  }, [filter, showArchived])
 
   useEffect(() => {
     fetchSolicitudes()
   }, [fetchSolicitudes])
+
+  async function handleReopen(solicitud: Solicitud) {
+    setActionLoading(solicitud.id)
+    try {
+      const res = await fetch(`/api/admin/solicitudes/${solicitud.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "pending" }),
+      })
+      if (!res.ok) throw new Error("Failed to reopen")
+      toast.success("Solicitud reabierta: vuelve a Pendientes")
+      await fetchSolicitudes()
+    } catch {
+      toast.error("No se pudo reabrir la solicitud")
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  function daysAgo(iso: string): number {
+    return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
+  }
 
   async function handleApprove(solicitud: Solicitud) {
     setActionLoading(solicitud.id)
@@ -252,10 +283,46 @@ export default function SolicitudesAdminPage() {
                       {s.phone && <span>{s.phone}</span>}
                     </div>
                     <div className="text-xs text-gray-400">{formatDate(s.createdAt)}</div>
+                    {s.status === "rejected" && s.reviewedAt && (
+                      <p className="text-xs text-red-600/80">
+                        Rechazada{" "}
+                        {daysAgo(s.reviewedAt) === 0 ? "hoy" : `hace ${daysAgo(s.reviewedAt)} días`}
+                        {s.reviewedBy ? ` por ${s.reviewedBy}` : ""}
+                        {!showArchived &&
+                          ` · se archiva en ${Math.max(0, 30 - daysAgo(s.reviewedAt))} días`}
+                      </p>
+                    )}
+                    {s.status === "approved" && s.reviewedAt && (
+                      <p className="text-xs text-emerald-700/80">
+                        Aprobada {formatDate(s.reviewedAt)}
+                        {s.reviewedBy ? ` por ${s.reviewedBy}` : ""}
+                      </p>
+                    )}
                     {s.notes && (
-                      <p className="text-xs text-gray-500 italic mt-1">Nota: {s.notes}</p>
+                      <p className="text-xs text-gray-500 italic mt-1">
+                        {s.status === "rejected" ? "Motivo" : "Nota"}: {s.notes}
+                      </p>
                     )}
                   </div>
+
+                  {s.status === "rejected" && (
+                    <div className="flex gap-2 flex-shrink-0">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleReopen(s)}
+                        disabled={actionLoading === s.id}
+                        title="Vuelve a Pendientes sin que el comercio llene el formulario otra vez"
+                      >
+                        {actionLoading === s.id ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <RotateCcw className="size-3.5" />
+                        )}
+                        Reabrir
+                      </Button>
+                    </div>
+                  )}
 
                   {s.status === "pending" && (
                     <div className="flex gap-2 flex-shrink-0">
@@ -288,6 +355,19 @@ export default function SolicitudesAdminPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {filter === "rejected" && (archivedCount > 0 || showArchived) && (
+        <div className="flex items-center justify-between rounded-lg border border-dashed border-gray-200 px-4 py-2 text-xs text-gray-500">
+          <span>
+            {showArchived
+              ? "Mostrando rechazadas archivadas (más de 30 días)."
+              : `Las rechazadas se archivan a los 30 días. ${archivedCount} archivada(s).`}
+          </span>
+          <Button size="sm" variant="ghost" onClick={() => setShowArchived((v) => !v)}>
+            {showArchived ? "Ver recientes" : `Ver archivadas (${archivedCount})`}
+          </Button>
         </div>
       )}
 

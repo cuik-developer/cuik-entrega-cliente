@@ -68,6 +68,10 @@ export const updateSolicitudSchema = z.discriminatedUnion("status", [
     status: z.literal("rejected"),
     rejectionReason: z.string().trim().min(1, "Rejection reason is required"),
   }),
+  // Reopen a rejected request without making the business fill the form again.
+  z.object({
+    status: z.literal("pending"),
+  }),
 ])
 
 export type UpdateSolicitudInput = z.infer<typeof updateSolicitudSchema>

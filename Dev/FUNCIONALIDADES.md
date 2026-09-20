@@ -47,7 +47,7 @@ Sidebar izquierdo con navegacion. Rol requerido: `super_admin`.
 
 - Lista de solicitudes con estado (Pendiente, Aprobada, Rechazada).
 - Columnas: nombre comercio, tipo de negocio, contacto, email, telefono, ciudad.
-- Filtros por estado.
+- Filtros por estado. **Rechazadas** muestra solo las de los ultimos 30 dias desde el rechazo (`solicitudes.reviewed_at`, con `reviewed_by`; migracion 0019, legacy sin fecha usa `created_at`); al pie, "Ver archivadas (N)" (`?archived=1`). "Todas" tampoco lista las archivadas. Cada tarjeta muestra "Rechazada hace N dias por <quien> · se archiva en M dias" y el motivo; boton **Reabrir** (`PATCH { status: "pending" }`, solo desde rechazada) la devuelve a Pendientes sin que el comercio vuelva a llenar el formulario. Las aprobadas guardan tambien quien y cuando.
 
 **Acciones**:
 - **Aprobar**: crea automaticamente

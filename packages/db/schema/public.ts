@@ -89,6 +89,9 @@ export const solicitudes = pgTable("solicitudes", {
   status: solicitudStatusEnum("status").default("pending").notNull(),
   tenantId: uuid("tenant_id").references(() => tenants.id),
   notes: text("notes"),
+  // Who approved/rejected and when (audit + 30-day archiving of rejections).
+  reviewedAt: timestamp("reviewed_at"),
+  reviewedBy: text("reviewed_by").references(() => user.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 })
 

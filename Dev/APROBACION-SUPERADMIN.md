@@ -6,7 +6,7 @@ Aprobar con "apruebo H", "apruebo I", "apruebo J" (o varias).
 
 ---
 
-## H. Solicitudes rechazadas se archivan a los 30 dias (punto 1)
+## H. Solicitudes rechazadas se archivan a los 30 dias (punto 1) — APROBADO Y APLICADO (20 set.)
 
 Hoy `solicitudes` no guarda cuando ni quien la rechazo (solo `notes` con el motivo), asi que no hay forma de contar los 30 dias.
 

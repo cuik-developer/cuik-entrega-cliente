@@ -27,6 +27,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return errorResponse("Solicitud not found", 404)
     }
 
+    // --- REOPEN (rejected → pending) ---
+    if (parsed.data.status === "pending") {
+      if (solicitud.status !== "rejected") {
+        return errorResponse("Only rejected requests can be reopened", 409)
+      }
+      const [updated] = await db
+        .update(solicitudes)
+        .set({ status: "pending", reviewedAt: null, reviewedBy: null })
+        .where(eq(solicitudes.id, id))
+        .returning()
+      return successResponse(updated)
+    }
+
     if (solicitud.status !== "pending") {
       return errorResponse("Solicitud already processed", 409)
     }
@@ -38,6 +51,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         .set({
           status: "rejected",
           notes: parsed.data.rejectionReason ?? null,
+          reviewedAt: new Date(),
+          reviewedBy: session.user.id,
         })
         .where(eq(solicitudes.id, id))
         .returning()
@@ -86,6 +101,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         .set({
           status: "approved",
           tenantId: tenant.id,
+          reviewedAt: new Date(),
+          reviewedBy: session.user.id,
         })
         .where(eq(solicitudes.id, id))
         .returning()

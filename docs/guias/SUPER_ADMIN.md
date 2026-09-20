@@ -109,6 +109,10 @@ Las solicitudes llegan desde el formulario publico de la landing page. Aqui el S
 
 <!-- TODO: capture screenshot for dialog de aprobacion con credenciales temporales -->
 
+### Rechazadas: archivado a los 30 dias y reabrir
+
+La pestana **Rechazadas** muestra solo las rechazadas en los ultimos 30 dias, con quien la rechazo, hace cuanto, el motivo y en cuantos dias se archiva. Las mas antiguas no desaparecen: al pie hay **Ver archivadas (N)**. Cualquier rechazada (reciente o archivada) tiene **Reabrir**, que la devuelve a Pendientes sin que el comercio tenga que volver a llenar el formulario.
+
 ### Rechazar una solicitud
 
 1. Click en el boton rojo **"Rechazar"** en la card de la solicitud.

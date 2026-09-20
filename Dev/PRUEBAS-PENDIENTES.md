@@ -49,6 +49,7 @@ Cubre los despliegues `e3b3561` y `442a3ba` (programa de puntos, panel Premios, 
 | 14a | Super-admin → Tenants | Columna Salud con punto de color, ultima visita, nuevos/visitas de 30 dias y pases instalados; los tenants sin uso salen en rojo | |
 | 14b | Super-admin → Tenants → ojo → General | Bloque "Puesta en marcha" N/8 con atajos a Promocion / Registro / Apple / Disenos; avisa si hay dos promociones activas | |
 | 14c | Super-admin → Metricas | Fila Actividad (comercios con visitas 7/30, pases instalados, canjes, nuevos) y lista "Comercios sin visitas en 14 dias" con enlace a Tenants | |
+| 14d | Super-admin → Solicitudes → Rechazadas (tras aplicar la migracion 0019 en prod) | Solo las de 30 dias, con "rechazada hace N dias por X"; "Ver archivadas (N)" lista las viejas; Reabrir la devuelve a Pendientes | |
 | 12 | Confirmar el schedule `reports` en Dokploy (`10 * * * *`, POST `https://cuik.org/api/cron/reports`) | Queda creado y activo | OK (19 set., prod) |
 | 13 | Con el reporte semanal activado en Analitica, esperar al lunes | Llega el correo con el Excel: encabezados azul Cuik, sin hoja de cumpleanos si esta vacia | OK (19 set., prod) |
 | 14 | Agregar un segundo destinatario en la tarjeta de reportes y usar "Enviarme una prueba" | Ambos correos reciben la prueba | |
