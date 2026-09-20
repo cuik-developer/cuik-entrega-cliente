@@ -1,5 +1,5 @@
 import { Bell } from "lucide-react"
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useEditorStore } from "../../store/editor-store"
 import type { FieldSection, PromotionType } from "../../types"
 import type { CustomVariable } from "../../types-external"
@@ -94,29 +94,83 @@ function InsertVariableDropdown({
     })
   }
 
+  // The config panel scrolls and is narrow: an absolutely positioned menu got
+  // clipped and pushed off-screen. Anchor it to the viewport instead, aligned
+  // to the button's right edge, and open upward when there is no room below.
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const [pos, setPos] = useState<{
+    top?: number
+    bottom?: number
+    right: number
+    maxHeight: number
+  } | null>(null)
+
+  function toggle() {
+    if (open) {
+      setOpen(false)
+      return
+    }
+    const r = buttonRef.current?.getBoundingClientRect()
+    if (r) {
+      const desired = Math.min(allVars.length * 38 + 8, 320)
+      const spaceBelow = window.innerHeight - r.bottom - 8
+      const spaceAbove = r.top - 8
+      const below = spaceBelow >= desired || spaceBelow >= spaceAbove
+      const right = Math.max(8, window.innerWidth - r.right)
+      setPos(
+        below
+          ? { top: r.bottom + 4, right, maxHeight: Math.min(desired, spaceBelow) }
+          : {
+              bottom: window.innerHeight - r.top + 4,
+              right,
+              maxHeight: Math.min(desired, spaceAbove),
+            },
+      )
+    }
+    setOpen(true)
+  }
+
+  // Viewport-anchored: a scroll or resize would leave it floating in the wrong place.
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    window.addEventListener("resize", close)
+    window.addEventListener("scroll", close, true)
+    return () => {
+      window.removeEventListener("resize", close)
+      window.removeEventListener("scroll", close, true)
+    }
+  }, [open])
+
   return (
     <div className="relative">
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={toggle}
         className="px-2 py-0.5 rounded border border-gray-200 bg-gray-50 text-[10px] text-gray-600 hover:bg-gray-100 hover:border-gray-300 transition-colors whitespace-nowrap"
       >
         + Variable
       </button>
-      {open && (
+      {open && pos && (
         <>
           {/* biome-ignore lint/a11y/noStaticElementInteractions: backdrop overlay for dropdown dismiss */}
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} onKeyDown={() => {}} />
-          <div className="absolute left-0 top-full mt-1 z-50 w-56 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+          <div
+            className="fixed z-50 bg-white border border-gray-200 rounded-md shadow-lg overflow-y-auto py-1"
+            style={{ ...pos, width: 288, maxWidth: "calc(100vw - 1rem)" }}
+            role="menu"
+          >
             {allVars.map((v) => (
               <button
                 key={v.variable}
                 type="button"
+                role="menuitem"
                 onClick={() => handleSelect(v.variable)}
-                className="w-full text-left px-3 py-1.5 hover:bg-blue-50 transition-colors flex items-center gap-2"
+                className="w-full text-left px-3 py-1.5 hover:bg-blue-50 transition-colors flex flex-col gap-0.5"
               >
+                <span className="text-[11px] text-gray-800">{v.label}</span>
                 <span className="font-mono text-[10px] text-blue-600">{v.variable}</span>
-                <span className="text-[10px] text-gray-500">{v.label}</span>
               </button>
             ))}
           </div>
