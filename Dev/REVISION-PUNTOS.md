@@ -4,7 +4,7 @@ Fecha: 10 de setiembre de 2026. Método: lectura completa del código que toca p
 
 **Veredicto corto:** el núcleo (acumular por monto y canjear del catálogo) funciona y está bien protegido contra los errores obvios. Pero hay **seis defectos que hay que arreglar antes de ponerlo en producción con un comercio real**, el primero de los cuales hace que la configuración que carga el super-admin se pierda al crear la promoción.
 
-> **Estado: PENDIENTE (11 set. 2026).** Ninguna corrección aplicada todavía. Francesco va a probar el programa de puntos por su cuenta antes de decidir el orden de los arreglos. Guía de prueba manual en §0; defectos bloqueantes en §2; plan en §5. Las correcciones 3 y 4 tocan rutas de wallet protegidas (`.claude/PROTECTED.md`), así que requieren aprobación explícita antes de editar.
+> **Estado: CORRECCIONES APLICADAS (19 set. 2026).** Defectos 1 a 6 corregidos (1: `createPromotionSchema` con `.transform`; 2: cumpleanos + zona horaria en `register-visit`; 3: refresco del pase tras canje; 4: saldo en puntos en Google; 5: `cashierId`/`balanceAfter` en `metadata`; 6: bloqueo de doble canje de 10 s + confirmacion en el cajero). Ademas: bono de opt-in en puntos (elige la promocion de puntos y escribe visita `bonus`), strip de fondo en pases Apple de puntos, y panel Premios para el admin. Detalle y evidencia de la verificacion en `Dev/APROBACION-PUNTOS.md`. Pendiente: que `register-visit` elija la promocion por tipo cuando hay mas de una activa (mientras tanto, una sola promocion activa por tenant) y el backlog de §3/§5.
 
 ---
 

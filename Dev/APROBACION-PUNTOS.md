@@ -1,4 +1,10 @@
-# Cambios en archivos protegidos — programa de puntos (pendientes de aprobación)
+# Cambios en archivos protegidos — programa de puntos
+
+> **Estado: APLICADOS (19 set. 2026).** Francesco aprobo A, B, C, D y E; se aplicaron tal cual y se verificaron en local con una BD de prueba (registro con opt-in: +10 pts con visita `bonus` y transaccion enlazada; visita de S/ 20 en cumpleanos con x2: 40 pts; canje y reintento inmediato: `OK` y luego `DUPLICATE_REDEEM`; `metadata` con `cashierId` y `balanceAfter`; refresco del pase disparado tras el canje). Apple y Google no se pudieron ejercitar en local por falta de certificados: el strip de puntos queda cubierto por `points-strip.test.ts` y se valida en prod al publicar el diseno.
+>
+> Hallazgo nuevo al probar: `register-visit.ts` tambien elige la promocion activa con `LIMIT 1` sin `ORDER BY`. Con la de sellos por defecto todavia activa junto a la de puntos, una visita puede registrarse como sello. Mitigacion operativa: dejar una sola promocion activa por tenant (desactivar la de sellos). Arreglo de fondo pendiente de aprobacion (archivo protegido).
+
+(Texto original de la propuesta a continuacion.)
 
 Fecha: 19 de setiembre de 2026. Contexto: `Dev/REVISION-PUNTOS.md` (defectos 2, 3, 4, 5) más dos hallazgos de las pruebas de Francesco en su tenant de puntos (bono de registro que no llega y strip que no se ve).
 

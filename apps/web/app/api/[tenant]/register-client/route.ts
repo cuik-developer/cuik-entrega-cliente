@@ -2,6 +2,7 @@ import {
   and,
   clients,
   db,
+  desc,
   eq,
   passAssets,
   passDesigns,
@@ -182,14 +183,25 @@ async function applyMarketingBonus(ctx: {
 }) {
   const { client, tenantId, config } = ctx
 
-  // Find active promotion to determine type
-  const [promotion] = await db
+  // Pick the promotion by the bonus that is configured. More than one active
+  // promotion can exist (the default stamps one + a points one): the old
+  // `LIMIT 1` without ORDER BY picked one at random and could skip the bonus.
+  const active = await db
     .select({ id: promotions.id, type: promotions.type, maxVisits: promotions.maxVisits })
     .from(promotions)
     .where(and(eq(promotions.tenantId, tenantId), eq(promotions.active, true)))
-    .limit(1)
+    .orderBy(desc(promotions.createdAt))
+  const pointsPromo = active.find((p) => p.type === "points")
+  const stampsPromo = active.find((p) => p.type === "stamps")
+  const promotion =
+    config.pointsBonus > 0 && pointsPromo ? pointsPromo : (stampsPromo ?? pointsPromo)
 
-  if (!promotion) return
+  if (!promotion) {
+    console.warn(
+      `[register-client] marketing bonus skipped: no active promotion tenant=${tenantId}`,
+    )
+    return
+  }
 
   if (promotion.type === "stamps" && config.stampsBonus > 0) {
     // Insert bonus visit records
@@ -215,18 +227,37 @@ async function applyMarketingBonus(ctx: {
     const newTotalVisits = client.totalVisits + config.stampsBonus
     await db.update(clients).set({ totalVisits: newTotalVisits }).where(eq(clients.id, client.id))
   } else if (promotion.type === "points" && config.pointsBonus > 0) {
-    // Insert points transaction
+    // A bonus visit row (source 'bonus', points = bonus) so the timeline and
+    // reports see it, plus the points transaction — like a normal points visit.
+    const [visit] = await db
+      .insert(visits)
+      .values({
+        clientId: client.id,
+        tenantId,
+        visitNum: client.totalVisits + 1,
+        cycleNumber: 1,
+        points: config.pointsBonus,
+        source: "bonus",
+        amount: null,
+        locationId: null,
+      })
+      .returning({ id: visits.id })
     await db.insert(pointsTransactions).values({
       clientId: client.id,
       tenantId,
       amount: config.pointsBonus,
       type: "earn",
+      visitId: visit?.id ?? null,
       description: "Marketing opt-in bonus",
     })
 
     // Update client pointsBalance
     const newBalance = client.pointsBalance + config.pointsBonus
     await db.update(clients).set({ pointsBalance: newBalance }).where(eq(clients.id, client.id))
+  } else {
+    console.warn(
+      `[register-client] marketing bonus skipped: promotion=${promotion.type} stampsBonus=${config.stampsBonus} pointsBonus=${config.pointsBonus}`,
+    )
   }
 }
 
@@ -330,6 +361,7 @@ async function generateGoogleWalletUrl(ctx: {
       designFields: resolvedDesignFields,
       imageUrl: heroImageUrl,
       promotionType: activePromotion?.type,
+      pointsBalance: client.pointsBalance,
     })
 
     if (!upsertResult.ok) return null

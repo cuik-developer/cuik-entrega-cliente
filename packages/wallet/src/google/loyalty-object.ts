@@ -85,8 +85,14 @@ function buildLoyaltyObjectPayload(params: UpsertLoyaltyObjectParams) {
   // Google Wallet IDs only allow alphanumeric, dots, hyphens, and underscores
   const sanitizedSerial = serialNumber.replaceAll(":", "-")
   const objectId = `${issuerId}.${sanitizedSerial}`
-  const balanceText = buildBalanceText(stampsInCycle, maxVisits, hasReward, rewardRedeemed)
-  const statusText = buildStatusText(stampsInCycle, maxVisits, hasReward, rewardRedeemed)
+  // Points programs show the balance; the stamps text ("N de M visitas") makes no sense there.
+  const isPoints = promotionType === "points"
+  const balanceText = isPoints
+    ? `${params.pointsBalance ?? 0} puntos`
+    : buildBalanceText(stampsInCycle, maxVisits, hasReward, rewardRedeemed)
+  const statusText = isPoints
+    ? "Sumá puntos en cada compra y canjealos por premios."
+    : buildStatusText(stampsInCycle, maxVisits, hasReward, rewardRedeemed)
   const loyaltyLabel = buildLoyaltyPointsLabel(promotionType)
 
   // ─── Dynamic vs hard-coded fields ────────────────────────────────

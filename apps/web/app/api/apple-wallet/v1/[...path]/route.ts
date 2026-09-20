@@ -9,13 +9,13 @@ import {
   passAssets,
   passDesigns,
   passInstances,
+  promotions,
   rewards,
   tenants,
 } from "@cuik/db"
 import {
   createApplePass,
   generateAuthToken,
-  generateStripImage,
   handleGetPass,
   handleGetSerials,
   handleLog,
@@ -40,7 +40,7 @@ import {
   resolveTemplate,
   validateAppleEnv,
 } from "@cuik/wallet/shared"
-import sharp from "sharp"
+import { buildStripImages } from "@/lib/wallet/points-strip"
 import { getTenantAppleConfig, resolveClientTenantId } from "@/lib/wallet/tenant-apple-config"
 
 /**
@@ -446,7 +446,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
 
       const isAuthed = await verifyAuthForSerial(route.serialNumber, token)
       if (!isAuthed) {
-        console.warn(`[Wallet:GetPass] 401 bad token serial=${route.serialNumber} token=${token.slice(0, 8)}...`)
+        console.warn(
+          `[Wallet:GetPass] 401 bad token serial=${route.serialNumber} token=${token.slice(0, 8)}...`,
+        )
         return new Response(null, { status: 401, headers: { "Cache-Control": "no-store" } })
       }
 
@@ -478,14 +480,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
         }
       )?.passInstance
       if (!passData) {
-        console.error(`[Wallet:GetPass] serial=${route.serialNumber} status=500 (no passData in handleGetPass result)`)
+        console.error(
+          `[Wallet:GetPass] serial=${route.serialNumber} status=500 (no passData in handleGetPass result)`,
+        )
         return new Response("Internal Server Error", { status: 500 })
       }
 
       // Resolve tenant-specific Apple config for pass regeneration
       const appleConfigForPass = await resolveAppleConfigForSerial(route.serialNumber)
       if (!appleConfigForPass) {
-        console.error(`[Wallet:GetPass] serial=${route.serialNumber} status=503 (apple config not resolved)`)
+        console.error(
+          `[Wallet:GetPass] serial=${route.serialNumber} status=503 (apple config not resolved)`,
+        )
         return new Response("Apple Wallet not configured", { status: 503 })
       }
 
@@ -499,7 +505,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
       })
 
       if (!passBuffer) {
-        console.error(`[Wallet:GetPass] serial=${route.serialNumber} status=500 (regeneratePass returned null)`)
+        console.error(
+          `[Wallet:GetPass] serial=${route.serialNumber} status=500 (regeneratePass returned null)`,
+        )
         return new Response("Failed to regenerate pass", { status: 500 })
       }
 
@@ -515,9 +523,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
 
       // Convert Node.js Buffer to Uint8Array so the Web Response API
       // transmits raw bytes instead of a UTF-8-mangled string.
-      const body = passBuffer instanceof Uint8Array && !(passBuffer instanceof Buffer)
-        ? passBuffer
-        : new Uint8Array(passBuffer)
+      const body =
+        passBuffer instanceof Uint8Array && !(passBuffer instanceof Buffer)
+          ? passBuffer
+          : new Uint8Array(passBuffer)
 
       const responseHeaders = new Headers(result.headers ?? {})
       responseHeaders.set("Content-Type", APPLE_PASS_CONTENT_TYPE)
@@ -691,6 +700,13 @@ async function regeneratePass(ctx: {
     const design = designRows[0]
     if (!design) return null
 
+    // Program type decides how the strip is built (points: background only).
+    const [activePromo] = await db
+      .select({ type: promotions.type })
+      .from(promotions)
+      .where(and(eq(promotions.tenantId, design.tenantId), eq(promotions.active, true)))
+      .limit(1)
+
     // Fetch assets
     const assetRows = await db.select().from(passAssets).where(eq(passAssets.designId, designId))
 
@@ -732,58 +748,30 @@ async function regeneratePass(ctx: {
       stampUrl ? loadAssetBuffer(stampUrl) : null,
     ])
 
-    let stripImage2x: Buffer
-    let stripImage1x: Buffer
-
-    if (stripBgBuffer && stampBuffer) {
-      const bgDataUri = `data:image/png;base64,${stripBgBuffer.toString("base64")}`
-      const stampDataUri = `data:image/png;base64,${stampBuffer.toString("base64")}`
-
-      const stripResult = await generateStripImage({
-        backgroundImageDataUri: bgDataUri,
-        stampImageDataUri: stampDataUri,
-        stampsInCycle,
-        maxVisits,
-        gridLayout: stampsConfig
-          ? {
-              cols: stampsConfig.gridCols ?? 4,
-              rows: stampsConfig.gridRows ?? 2,
-              stampSize: stampsConfig.stampSize ?? 63,
-              offsetX: stampsConfig.offsetX ?? 197,
-              offsetY: stampsConfig.offsetY ?? 23,
-              gapX: stampsConfig.gapX ?? 98,
-              gapY: stampsConfig.gapY ?? 73,
-              filledOpacity: stampsConfig.filledOpacity ?? 1,
-              emptyOpacity: stampsConfig.emptyOpacity ?? 0.35,
-              fillOrder: stampsConfig.fillOrder ?? "row",
-              rowOffsets: stampsConfig.rowOffsets,
-            }
-          : undefined,
-      })
-      stripImage2x = stripResult.strip2x
-      stripImage1x = stripResult.strip1x
-    } else {
-      stripImage2x = await sharp({
-        create: {
-          width: 750,
-          height: 246,
-          channels: 4,
-          background: { r: 0, g: 0, b: 0, alpha: 0 },
-        },
-      })
-        .png()
-        .toBuffer()
-      stripImage1x = await sharp({
-        create: {
-          width: 375,
-          height: 123,
-          channels: 4,
-          background: { r: 0, g: 0, b: 0, alpha: 0 },
-        },
-      })
-        .png()
-        .toBuffer()
-    }
+    // Points passes: background only (no stamp grid). Stamps: grid as before.
+    // Real MIME sniffed from the bytes (a JPG used to be labelled PNG). See lib/wallet/points-strip.ts.
+    const { strip2x: stripImage2x, strip1x: stripImage1x } = await buildStripImages({
+      programType: activePromo?.type === "points" ? "points" : "stamps",
+      background: stripBgBuffer,
+      stamp: stampBuffer,
+      stampsInCycle,
+      maxVisits,
+      gridLayout: stampsConfig
+        ? {
+            cols: stampsConfig.gridCols ?? 4,
+            rows: stampsConfig.gridRows ?? 2,
+            stampSize: stampsConfig.stampSize ?? 63,
+            offsetX: stampsConfig.offsetX ?? 197,
+            offsetY: stampsConfig.offsetY ?? 23,
+            gapX: stampsConfig.gapX ?? 98,
+            gapY: stampsConfig.gapY ?? 73,
+            filledOpacity: stampsConfig.filledOpacity ?? 1,
+            emptyOpacity: stampsConfig.emptyOpacity ?? 0.35,
+            fillOrder: stampsConfig.fillOrder ?? "row",
+            rowOffsets: stampsConfig.rowOffsets,
+          }
+        : undefined,
+    })
 
     const logoAsset = assetMap.get("logo")
     const logoBuffer = logoAsset ? await loadAssetBuffer(logoAsset.url) : undefined

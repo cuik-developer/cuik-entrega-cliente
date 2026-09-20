@@ -183,6 +183,7 @@ export async function triggerWalletUpdate(ctx: {
     apple: appleParams,
     google: googleParams,
     promotionType: activePromotion?.type,
+    pointsBalance: ctx.pointsBalance,
     designFields: resolvedDesignFields,
   })
 

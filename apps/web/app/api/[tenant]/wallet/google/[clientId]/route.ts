@@ -220,6 +220,7 @@ export async function POST(
       designFields: resolvedDesignFields,
       imageUrl: heroImageUrl,
       promotionType: activePromotion?.type,
+      pointsBalance: client.pointsBalance,
     })
 
     if (!upsertResult.ok) {

@@ -7,9 +7,13 @@ import {
   promotions,
   rewardCatalog,
   rewards,
+  sql,
 } from "@cuik/db"
 
 import type { PointsRedeemResult } from "./types"
+
+/** Two redemptions of the same item by the same client closer than this are treated as one click. */
+export const DUPLICATE_REDEEM_WINDOW_SECONDS = 10
 
 export async function redeemPoints(params: {
   qrCode: string
@@ -17,7 +21,7 @@ export async function redeemPoints(params: {
   catalogItemId: string
   cashierId: string
 }): Promise<PointsRedeemResult> {
-  const { qrCode, tenantId, catalogItemId } = params
+  const { qrCode, tenantId, catalogItemId, cashierId } = params
 
   const result = await db.transaction(async (tx) => {
     // 1. Find client with FOR UPDATE lock
@@ -71,11 +75,28 @@ export async function redeemPoints(params: {
       return { code: "INSUFFICIENT_POINTS" as const }
     }
 
+    // 4b. Double-click guard: the client row is locked, so this check + insert are atomic.
+    const recent = await tx
+      .select({ id: pointsTransactions.id })
+      .from(pointsTransactions)
+      .where(
+        and(
+          eq(pointsTransactions.clientId, client.id),
+          eq(pointsTransactions.type, "redeem"),
+          eq(pointsTransactions.catalogItemId, catalogItem.id),
+          sql`${pointsTransactions.createdAt} > NOW() - make_interval(secs => ${DUPLICATE_REDEEM_WINDOW_SECONDS})`,
+        ),
+      )
+      .limit(1)
+    if (recent[0]) {
+      return { code: "DUPLICATE_REDEEM" as const }
+    }
+
     // 5. Deduct points from client balance
     const newBalance = client.pointsBalance - catalogItem.pointsCost
     await tx.update(clients).set({ pointsBalance: newBalance }).where(eq(clients.id, client.id))
 
-    // 6. Insert points transaction (redeem = negative amount)
+    // 6. Insert points transaction (redeem = negative amount). Who handed it over goes in metadata.
     await tx.insert(pointsTransactions).values({
       clientId: client.id,
       tenantId,
@@ -83,6 +104,7 @@ export async function redeemPoints(params: {
       type: "redeem",
       catalogItemId: catalogItem.id,
       description: catalogItem.name,
+      metadata: { cashierId, balanceAfter: newBalance },
     })
 
     // 7. Create reward record (immediately redeemed)

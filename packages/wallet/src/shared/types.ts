@@ -210,6 +210,9 @@ export type UpsertLoyaltyObjectParams = {
 
   // Optional image below QR code (imageModulesData)
   imageUrl?: string
+
+  // Points programs: the balance shown instead of "N de M visitas".
+  pointsBalance?: number
 }
 
 export type UpsertResult =
@@ -250,6 +253,8 @@ export type WalletUpdateParams = {
   } | null
   // Promotion type — affects loyaltyPoints label in Google Wallet. Defaults to "stamps".
   promotionType?: "stamps" | "points" | "discount" | "coupon" | "subscription"
+  // Points programs: current balance, forwarded to the Google loyalty object.
+  pointsBalance?: number
   // Resolved design fields for Google upsert (optional — when absent, hard-coded fallback used)
   designFields?: {
     headerFields: Array<{ key: string; label: string; value: string }>

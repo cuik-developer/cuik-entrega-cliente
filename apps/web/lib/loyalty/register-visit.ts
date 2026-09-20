@@ -1,15 +1,4 @@
-import {
-  and,
-  clients,
-  count,
-  db,
-  eq,
-  promotions,
-  rewards,
-  sql,
-  tenants,
-  visits,
-} from "@cuik/db"
+import { and, clients, count, db, eq, promotions, rewards, sql, tenants, visits } from "@cuik/db"
 import { pointsPromotionConfigSchema, stampsPromotionConfigSchema } from "@cuik/shared/validators"
 
 import { updateRewardsRedeemed, updateVisitsDaily } from "../analytics/update-visits-daily"
@@ -133,6 +122,7 @@ export async function registerVisit(params: {
           totalVisits: client.totalVisits,
           pointsBalance: client.pointsBalance,
           tier: client.tier ?? null,
+          birthday: client.birthday,
         },
         promotion,
         config: pointsConfig,
@@ -141,6 +131,7 @@ export async function registerVisit(params: {
         locationId: locationId || null,
         amount,
         todayVisitCount: todayVisitCountPts,
+        timezone: tenantTz,
         tx,
       })
     }
@@ -184,8 +175,9 @@ export async function registerVisit(params: {
     // 4. Evaluate stamp rules (max visits/day, location, min purchase, bonuses)
     const rulesContext: RulesEvaluationContext = {
       visitDate: new Date(),
+      visitDateLocal: new Date().toLocaleDateString("en-CA", { timeZone: tenantTz }),
       clientTotalVisits: client.totalVisits,
-      clientBirthday: null, // Phase 1: no birthday column yet
+      clientBirthday: client.birthday ?? null,
       visitAmount: amount ? Number(amount) : null,
       locationId: locationId || null,
       todayVisitCount,
@@ -355,12 +347,9 @@ export async function registerVisit(params: {
     }).catch((err) => console.error("[registerVisit] updateVisitsDaily failed:", err))
 
     if (analyticsCycleComplete) {
-      updateRewardsRedeemed(
-        tenantId,
-        analyticsLocationId,
-        new Date(),
-        analyticsTimezone,
-      ).catch((err) => console.error("[registerVisit] updateRewardsRedeemed failed:", err))
+      updateRewardsRedeemed(tenantId, analyticsLocationId, new Date(), analyticsTimezone).catch(
+        (err) => console.error("[registerVisit] updateRewardsRedeemed failed:", err),
+      )
     }
   }
 

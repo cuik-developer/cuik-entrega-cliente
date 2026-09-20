@@ -987,7 +987,7 @@ Rutas `app/api/[tenant]/catalog/route.ts` (GET/POST) y `.../catalog/[id]/route.t
 
 - Cajero (`(cajero)/cajero/buscar/page.tsx`): "Canjear" pasa a dos pasos (Canjear → Confirmar canje / Cancelar); todos los botones del catalogo se deshabilitan mientras hay un canje en vuelo. Codigo `DUPLICATE_REDEEM` (en `types.ts`) se muestra como "Este premio ya se canjeo hace un momento".
 - `app/api/[tenant]/redeem/route.ts`: tras un canje de puntos `OK` llama a `triggerWalletUpdate` (fire-and-forget) — helper extraido a `lib/wallet/trigger-wallet-update.ts` desde la ruta de visitas: bump de ETag en `pass_instances`, push APNs a los dispositivos registrados y upsert del objeto de Google. Antes el pase seguia mostrando el saldo viejo hasta la proxima visita.
-- Pendiente de aprobacion (archivos protegidos, ver `Dev/APROBACION-PUNTOS.md`): guardar `cashierId` en `points_transactions.metadata` y el bloqueo de doble canje de 10 s en `redeem-points.ts`; pasar cumpleanos y zona horaria en `register-visit.ts`; strip para puntos en las rutas Apple (`lib/wallet/points-strip.ts` ya existe); saldo real en Google.
+- Aplicado (19 set. 2026, ver `Dev/APROBACION-PUNTOS.md`): `redeem-points.ts` guarda `{ cashierId, balanceAfter }` en `points_transactions.metadata` y rechaza con `DUPLICATE_REDEEM` un segundo canje del mismo item por el mismo cliente dentro de 10 s; `register-visit.ts` pasa `birthday` y `timezone` (multiplicador de cumpleanos en fecha local del tenant); las tres rutas Apple construyen el strip con `buildStripImages` (puntos: solo fondo, MIME real); `register-client` elige la promocion de puntos para el bono de opt-in y escribe una visita `source='bonus'`; Google recibe `pointsBalance` y muestra "N puntos".
 
 ---
 

@@ -77,6 +77,7 @@ async function updateGoogle(
       qrValue: params.google.qrValue,
       accessToken: params.google.accessToken,
       promotionType: params.promotionType,
+      pointsBalance: params.pointsBalance,
       designFields: params.designFields,
     })
 

@@ -12,7 +12,7 @@ import {
   rewards,
   tenants,
 } from "@cuik/db"
-import { createApplePass, generateStripImage, verifyAuthToken } from "@cuik/wallet/apple"
+import { createApplePass, verifyAuthToken } from "@cuik/wallet/apple"
 import {
   APPLE_PASS_CONTENT_TYPE,
   APPLE_PASS_DEFAULT_DESCRIPTION,
@@ -23,8 +23,8 @@ import {
   resolvePassFields,
   type TemplateContext,
 } from "@cuik/wallet/shared"
-import sharp from "sharp"
 import { errorResponse, resolveTenant } from "@/lib/api-utils"
+import { buildStripImages } from "@/lib/wallet/points-strip"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 
 /**
@@ -108,7 +108,7 @@ export async function GET(
 
     // Try: find active promotion → its linked pass design
     const [activePromo] = await db
-      .select({ id: promotions.id })
+      .select({ id: promotions.id, type: promotions.type })
       .from(promotions)
       .where(and(eq(promotions.tenantId, tenant.id), eq(promotions.active, true)))
       .limit(1)
@@ -185,58 +185,30 @@ export async function GET(
       stampUrl ? loadAssetBuffer(stampUrl) : null,
     ])
 
-    let stripImage2x: Buffer
-    let stripImage1x: Buffer
-
-    if (stripBgAsset && stampAsset) {
-      const bgDataUri = `data:image/png;base64,${stripBgAsset.toString("base64")}`
-      const stampDataUri = `data:image/png;base64,${stampAsset.toString("base64")}`
-
-      const stripResult = await generateStripImage({
-        backgroundImageDataUri: bgDataUri,
-        stampImageDataUri: stampDataUri,
-        stampsInCycle,
-        maxVisits,
-        gridLayout: stampsConfig
-          ? {
-              cols: stampsConfig.gridCols ?? 4,
-              rows: stampsConfig.gridRows ?? 2,
-              stampSize: stampsConfig.stampSize ?? 63,
-              offsetX: stampsConfig.offsetX ?? 197,
-              offsetY: stampsConfig.offsetY ?? 23,
-              gapX: stampsConfig.gapX ?? 98,
-              gapY: stampsConfig.gapY ?? 73,
-              filledOpacity: stampsConfig.filledOpacity ?? 1,
-              emptyOpacity: stampsConfig.emptyOpacity ?? 0.35,
-              fillOrder: stampsConfig.fillOrder ?? "row",
-              rowOffsets: stampsConfig.rowOffsets,
-            }
-          : undefined,
-      })
-      stripImage2x = stripResult.strip2x
-      stripImage1x = stripResult.strip1x
-    } else {
-      stripImage2x = await sharp({
-        create: {
-          width: 750,
-          height: 246,
-          channels: 4,
-          background: { r: 0, g: 0, b: 0, alpha: 0 },
-        },
-      })
-        .png()
-        .toBuffer()
-      stripImage1x = await sharp({
-        create: {
-          width: 375,
-          height: 123,
-          channels: 4,
-          background: { r: 0, g: 0, b: 0, alpha: 0 },
-        },
-      })
-        .png()
-        .toBuffer()
-    }
+    // Points passes: background only (no stamp grid). Stamps: grid as before.
+    // Real MIME sniffed from the bytes (a JPG used to be labelled PNG). See lib/wallet/points-strip.ts.
+    const { strip2x: stripImage2x, strip1x: stripImage1x } = await buildStripImages({
+      programType: activePromo?.type === "points" ? "points" : "stamps",
+      background: stripBgAsset,
+      stamp: stampAsset,
+      stampsInCycle,
+      maxVisits,
+      gridLayout: stampsConfig
+        ? {
+            cols: stampsConfig.gridCols ?? 4,
+            rows: stampsConfig.gridRows ?? 2,
+            stampSize: stampsConfig.stampSize ?? 63,
+            offsetX: stampsConfig.offsetX ?? 197,
+            offsetY: stampsConfig.offsetY ?? 23,
+            gapX: stampsConfig.gapX ?? 98,
+            gapY: stampsConfig.gapY ?? 73,
+            filledOpacity: stampsConfig.filledOpacity ?? 1,
+            emptyOpacity: stampsConfig.emptyOpacity ?? 0.35,
+            fillOrder: stampsConfig.fillOrder ?? "row",
+            rowOffsets: stampsConfig.rowOffsets,
+          }
+        : undefined,
+    })
 
     const logoAsset = assetMap.get("logo")
     const logoBuffer = logoAsset ? await loadAssetBuffer(logoAsset.url) : undefined
@@ -409,7 +381,11 @@ export async function GET(
       console.error("[Apple Wallet] Pass generation failed:", passResult.error)
       return errorResponse("Failed to generate Apple pass", 500)
     }
-    console.log("[Apple Wallet] Pass generated successfully, size:", passResult.buffer.length, "bytes")
+    console.log(
+      "[Apple Wallet] Pass generated successfully, size:",
+      passResult.buffer.length,
+      "bytes",
+    )
 
     // 11. Update pass_instances
     const now = new Date()
