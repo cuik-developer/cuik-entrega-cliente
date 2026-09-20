@@ -1,6 +1,6 @@
 # Cambios en archivos protegidos — mejoras del panel super-admin
 
-> **Estado: H, I y J APLICADOS (20 set. 2026).** Migraciones 0019 y 0020 pendientes de aplicar a mano en prod. Los puntos 5 (checklist), 4 (salud) y 12 (actividad) ya estan en master sin tocar archivos protegidos. Los tres de abajo necesitan esquema de BD o autenticacion (`.claude/PROTECTED.md`), asi que van con diff previo. Las migraciones en prod se aplican a mano (ALTERs idempotentes), como siempre.
+> **Estado: H, I y J APLICADOS (20 set. 2026).** Migraciones 0019 y 0020 aplicadas en prod el 20 set. (via `docker exec` en el contenedor `cuik-loyalty-backend-*` con `psql -U $POSTGRES_USER -d $POSTGRES_DB`; el sufijo del contenedor cambia al recrearse). Los puntos 5 (checklist), 4 (salud) y 12 (actividad) ya estan en master sin tocar archivos protegidos. Los tres de abajo necesitan esquema de BD o autenticacion (`.claude/PROTECTED.md`), asi que van con diff previo. Las migraciones en prod se aplican a mano (ALTERs idempotentes), como siempre.
 
 Aprobar con "apruebo H", "apruebo I", "apruebo J" (o varias).
 
