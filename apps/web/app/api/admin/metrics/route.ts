@@ -14,6 +14,7 @@ const querySchema = z
     program: z.enum(["all", "stamps", "points"]).default("all"),
     planId: z.string().uuid().optional(),
     tenantIds: z.string().optional(),
+    includeInternal: z.enum(["0", "1"]).default("0"),
     format: z.enum(["json", "xlsx"]).default("json"),
   })
   .refine((q) => q.from <= q.to, { message: "from must be <= to", path: ["from"] })
@@ -46,6 +47,7 @@ export async function GET(request: Request) {
         .split(",")
         .map((s) => s.trim())
         .filter((s) => /^[0-9a-f-]{36}$/i.test(s)),
+      includeInternal: q.includeInternal === "1",
     }
     const data = await computePlatformMetrics(filters)
     if (q.format === "json") return successResponse(data)

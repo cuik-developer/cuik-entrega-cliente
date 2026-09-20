@@ -17,6 +17,7 @@ function toQuery(f: Filters): string {
   const p = new URLSearchParams({ from: f.from, to: f.to, status: f.status, program: f.program })
   if (f.planId) p.set("planId", f.planId)
   if (f.tenantIds.length > 0) p.set("tenantIds", f.tenantIds.join(","))
+  if (f.includeInternal) p.set("includeInternal", "1")
   return p.toString()
 }
 
@@ -28,6 +29,7 @@ export function MetricsDashboard() {
     program: "all",
     planId: null,
     tenantIds: [],
+    includeInternal: false,
   })
   const [data, setData] = useState<PlatformMetrics | null>(null)
   const [loading, setLoading] = useState(true)
@@ -109,6 +111,7 @@ export function MetricsDashboard() {
         loading={loading}
         onExport={exportXlsx}
         exporting={exporting}
+        internalExcluded={data?.internalExcluded ?? 0}
         onExportDetail={() => {
           window.location.href = `/api/admin/reports/export?from=${filters.from}&to=${filters.to}`
         }}

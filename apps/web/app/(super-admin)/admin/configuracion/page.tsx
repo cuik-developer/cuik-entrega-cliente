@@ -4,14 +4,16 @@ export const dynamic = "force-dynamic"
 
 import { Card, CardContent } from "@/components/ui/card"
 
-import { getGlobalConfig, getSolicitudEmailTemplates } from "./actions"
+import { getGlobalConfig, getInternalTenantsConfig, getSolicitudEmailTemplates } from "./actions"
 import { ConfigForm } from "./config-form"
 import { EmailTemplatesForm } from "./email-templates-form"
+import { InternalTenantsForm } from "./internal-tenants-form"
 
 export default async function SuperAdminConfigPage() {
-  const [result, templatesResult] = await Promise.all([
+  const [result, templatesResult, internalResult] = await Promise.all([
     getGlobalConfig(),
     getSolicitudEmailTemplates(),
+    getInternalTenantsConfig(),
   ])
 
   const config = result.success ? result.data : DEFAULT_PLATFORM_CONFIG
@@ -39,6 +41,15 @@ export default async function SuperAdminConfigPage() {
       <Card>
         <CardContent className="pt-6">
           <ConfigForm initialData={config} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-6">
+          <InternalTenantsForm
+            tenants={internalResult.success ? internalResult.data.tenants : []}
+            initialIds={internalResult.success ? internalResult.data.ids : []}
+          />
         </CardContent>
       </Card>
 

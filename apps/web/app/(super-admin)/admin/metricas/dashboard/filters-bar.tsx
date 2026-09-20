@@ -32,6 +32,7 @@ export type Filters = {
   program: "all" | "stamps" | "points"
   planId: string | null
   tenantIds: string[]
+  includeInternal: boolean
 }
 
 const TZ = "America/Lima"
@@ -88,6 +89,7 @@ export function FiltersBar({
   onExport,
   exporting,
   onExportDetail,
+  internalExcluded,
 }: {
   filters: Filters
   onChange: (next: Filters) => void
@@ -98,6 +100,7 @@ export function FiltersBar({
   exporting: boolean
   /** Old client-level workbook (one sheet per tenant, one row per visit). */
   onExportDetail: () => void
+  internalExcluded: number
 }) {
   const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined)
   const selectedTenants = new Set(filters.tenantIds)
@@ -225,6 +228,21 @@ export function FiltersBar({
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            className="accent-[#0e70db]"
+            checked={filters.includeInternal}
+            onChange={(e) => onChange({ ...filters, includeInternal: e.target.checked })}
+          />
+          Incluir demos internas
+          {!filters.includeInternal && internalExcluded > 0 && (
+            <span className="text-slate-400">
+              ({internalExcluded} excluida{internalExcluded > 1 ? "s" : ""})
+            </span>
+          )}
+        </label>
 
         {activeCount > 0 && (
           <Button

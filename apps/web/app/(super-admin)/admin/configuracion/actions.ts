@@ -1,6 +1,6 @@
 "use server"
 
-import { db, globalConfig } from "@cuik/db"
+import { db, globalConfig, tenants } from "@cuik/db"
 import { sendEmail } from "@cuik/email"
 import {
   DEFAULT_PLATFORM_CONFIG,
@@ -13,6 +13,7 @@ import {
 import { revalidatePath } from "next/cache"
 import { headers } from "next/headers"
 
+import { getInternalTenantIds, setInternalTenantIds } from "@/lib/admin/internal-tenants"
 import {
   buildApprovalEmail,
   buildRejectionEmail,
@@ -213,5 +214,43 @@ export async function sendSolicitudEmailTest(
   } catch (err) {
     console.error("[sendSolicitudEmailTest]", err)
     return { success: false, error: "No se pudo enviar la prueba" }
+  }
+}
+
+// ── Internal (Cuik-owned) tenants excluded from Métricas ────────────
+
+export async function getInternalTenantsConfig(): Promise<
+  ActionResult<{
+    ids: string[]
+    tenants: Array<{ id: string; name: string; slug: string; status: string }>
+  }>
+> {
+  const { error } = await requireSuperAdmin()
+  if (error) return { success: false, error }
+  try {
+    const [ids, rows] = await Promise.all([
+      getInternalTenantIds(),
+      db
+        .select({ id: tenants.id, name: tenants.name, slug: tenants.slug, status: tenants.status })
+        .from(tenants)
+        .orderBy(tenants.name),
+    ])
+    return { success: true, data: { ids, tenants: rows } }
+  } catch (err) {
+    console.error("[getInternalTenantsConfig]", err)
+    return { success: false, error: "Error al obtener los comercios internos" }
+  }
+}
+
+export async function saveInternalTenants(ids: string[]): Promise<ActionResult<void>> {
+  const { error } = await requireSuperAdmin()
+  if (error) return { success: false, error }
+  try {
+    await setInternalTenantIds(ids)
+    revalidatePath("/admin/configuracion")
+    return { success: true, data: undefined }
+  } catch (err) {
+    console.error("[saveInternalTenants]", err)
+    return { success: false, error: "Error al guardar los comercios internos" }
   }
 }

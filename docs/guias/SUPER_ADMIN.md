@@ -526,6 +526,7 @@ Tablero para decidir: arriba los filtros, y todo lo que ves debajo respeta esos 
 
 - **Periodo**: 7, 30 o 90 dias, este mes, mes pasado o un rango libre. La comparacion contra el periodo anterior es automatica.
 - **Estado** (activos y demos, solo activos, solo demos), **Programa** (sellos o puntos), **Plan** y **Comercios** (elegi uno o varios para compararlos).
+- **Incluir demos internas**: por defecto Metricas deja fuera los comercios que marcaste como internos en Configuracion (tus demos y pruebas), y te dice cuantos excluyo. Marca la casilla cuando quieras verlos.
 - **Exportar con estos filtros**: Excel con Resumen, Comercios e Insights tal como los ves. **Detalle por cliente**: el Excel de siempre, una hoja por comercio y una fila por visita.
 
 ### Bloques
@@ -546,6 +547,10 @@ Tablero para decidir: arriba los filtros, y todo lo que ves debajo respeta esos 
 **URL**: `/admin/configuracion`
 
 Configuracion de parametros globales de la plataforma Cuik.
+
+### Comercios internos
+
+Marca aqui los comercios que son demos o pruebas del equipo Cuik (por ejemplo retail-cuik, gradual-cafe o cuik). Metricas y su Excel los excluyen por defecto para que los numeros reflejen solo clientes reales; en Metricas podes incluirlos con la casilla **Incluir demos internas**. No afecta a Tenants ni a ninguna otra pantalla.
 
 ### Correos de solicitudes
 

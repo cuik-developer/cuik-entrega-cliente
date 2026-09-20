@@ -1,5 +1,7 @@
 import { db, sql } from "@cuik/db"
 
+import { getInternalTenantIds } from "./internal-tenants"
+
 /**
  * Data for the super-admin Métricas dashboard. One call, every block, all
  * scoped by the same filters and compared against the previous period of the
@@ -18,6 +20,8 @@ export type MetricsFilters = {
   program: "all" | "stamps" | "points"
   planId: string | null
   tenantIds: string[]
+  /** Include Cuik's own demo tenants (Configuración → Comercios internos). Default false. */
+  includeInternal: boolean
 }
 
 export type Pair = { cur: number; prev: number }
@@ -57,6 +61,8 @@ export type Insight = {
 
 export type PlatformMetrics = {
   range: { from: string; to: string; prevFrom: string; prevTo: string; days: number }
+  /** How many internal tenants were left out (0 when includeInternal). */
+  internalExcluded: number
   kpis: {
     activeTenants: Pair
     visits: Pair
@@ -129,6 +135,15 @@ export async function computePlatformMetrics(f: MetricsFilters): Promise<Platfor
   const days = daysBetween(f.from, f.to)
   const prevTo = shiftDays(f.from, -1)
   const prevFrom = shiftDays(prevTo, -(days - 1))
+  const internalIds = await getInternalTenantIds()
+  const excluded = f.includeInternal ? [] : internalIds
+  const internalCond =
+    excluded.length > 0
+      ? sql`AND t.id NOT IN (${sql.join(
+          excluded.map((id) => sql`${id}::uuid`),
+          sql`, `,
+        )})`
+      : sql``
 
   // ── Tenant scope (every other query joins this) ────────────────────
   const statusCond =
@@ -149,7 +164,7 @@ export async function computePlatformMetrics(f: MetricsFilters): Promise<Platfor
           sql`, `,
         )})`
       : sql``
-  const scope = sql`(SELECT t.id FROM tenants t WHERE true ${statusCond} ${programCond} ${planCond} ${tenantCond})`
+  const scope = sql`(SELECT t.id FROM tenants t WHERE true ${statusCond} ${programCond} ${planCond} ${tenantCond} ${internalCond})`
 
   const local = (col: string) =>
     sql.raw(`(${col} AT TIME ZONE 'UTC' AT TIME ZONE '${PLATFORM_TZ}')::date`)
@@ -191,9 +206,9 @@ export async function computePlatformMetrics(f: MetricsFilters): Promise<Platfor
           (SELECT avg(amount)::numeric(10,2) FROM v WHERE amount > 0 AND ${inPrev("v.created_at")}) AS ticket_prev,
           (SELECT count(*)::int FROM red WHERE ${inCur("red.at")}) AS red_cur,
           (SELECT count(*)::int FROM red WHERE ${inPrev("red.at")}) AS red_prev,
-          (SELECT coalesce(sum(p.price), 0)::int FROM tenants t JOIN plans p ON p.id = t.plan_id
+          (SELECT (coalesce(sum(p.price), 0) / 100.0)::numeric(12,2) FROM tenants t JOIN plans p ON p.id = t.plan_id
              WHERE t.id IN (SELECT id FROM s) AND t.status = 'active') AS mrr_cur,
-          (SELECT coalesce(sum(p.price), 0)::int FROM tenants t JOIN plans p ON p.id = t.plan_id
+          (SELECT (coalesce(sum(p.price), 0) / 100.0)::numeric(12,2) FROM tenants t JOIN plans p ON p.id = t.plan_id
              WHERE t.id IN (SELECT id FROM s) AND t.status = 'active'
                AND coalesce(t.activated_at, t.created_at) <= (${prevTo}::date + 1)) AS mrr_prev
       `),
@@ -233,7 +248,7 @@ export async function computePlatformMetrics(f: MetricsFilters): Promise<Platfor
           LEFT JOIN passes.apple_devices ad ON ad.serial_number = pi.serial_number
           WHERE ad.serial_number IS NOT NULL OR (pi.google_save_url IS NOT NULL AND pi.google_save_url <> '')
         )
-        SELECT t.id, t.name, t.slug, t.status, p.name AS plan, coalesce(p.price, 0)::int AS plan_price,
+        SELECT t.id, t.name, t.slug, t.status, p.name AS plan, (coalesce(p.price, 0) / 100.0)::numeric(12,2) AS plan_price,
           t.trial_ends_at,
           (SELECT pr.type FROM loyalty.promotions pr WHERE pr.tenant_id = t.id AND pr.active = true ORDER BY pr.created_at DESC LIMIT 1) AS program,
           (SELECT count(*)::int FROM loyalty.promotions pr WHERE pr.tenant_id = t.id AND pr.active = true) AS active_promotions,
@@ -267,11 +282,11 @@ export async function computePlatformMetrics(f: MetricsFilters): Promise<Platfor
         SELECT
           (SELECT count(*)::int FROM solicitudes) AS requests,
           (SELECT count(*)::int FROM solicitudes WHERE status = 'approved') AS approved,
-          (SELECT count(*)::int FROM tenants t WHERE t.status IN ('active','trial') AND EXISTS (SELECT 1 FROM loyalty.clients c WHERE c.tenant_id = t.id)) AS with_first,
-          (SELECT count(*)::int FROM tenants t WHERE t.status IN ('active','trial') AND (SELECT count(*) FROM loyalty.clients c WHERE c.tenant_id = t.id) >= 10) AS with_ten,
+          (SELECT count(*)::int FROM tenants t WHERE t.status IN ('active','trial') ${internalCond} AND EXISTS (SELECT 1 FROM loyalty.clients c WHERE c.tenant_id = t.id)) AS with_first,
+          (SELECT count(*)::int FROM tenants t WHERE t.status IN ('active','trial') ${internalCond} AND (SELECT count(*) FROM loyalty.clients c WHERE c.tenant_id = t.id) >= 10) AS with_ten,
           (SELECT count(DISTINCT v.tenant_id)::int FROM loyalty.visits v JOIN tenants t ON t.id = v.tenant_id
-             WHERE t.status IN ('active','trial') AND v.source <> 'bonus' AND v.created_at >= now() - interval '7 days') AS active_week,
-          (SELECT avg(EXTRACT(EPOCH FROM (fs.first_at - t.created_at)) / 86400)::numeric(10,1) FROM firsts fs JOIN tenants t ON t.id = fs.tenant_id) AS avg_to_first,
+             WHERE t.status IN ('active','trial') ${internalCond} AND v.source <> 'bonus' AND v.created_at >= now() - interval '7 days') AS active_week,
+          (SELECT avg(EXTRACT(EPOCH FROM (fs.first_at - t.created_at)) / 86400)::numeric(10,1) FROM firsts fs JOIN tenants t ON t.id = fs.tenant_id WHERE true ${internalCond}) AS avg_to_first,
           (SELECT avg(EXTRACT(EPOCH FROM (fs.tenth_at - fs.first_at)) / 86400)::numeric(10,1) FROM firsts fs WHERE fs.tenth_at IS NOT NULL) AS avg_first_to_ten
       `),
       // ── Wallet split + weekly Apple installs (last 8 weeks) ──
@@ -309,7 +324,7 @@ export async function computePlatformMetrics(f: MetricsFilters): Promise<Platfor
       db.execute<{ kind: string; id: string; name: string }>(sql`
         SELECT 'plan' AS kind, id::text, name FROM plans WHERE active = true
         UNION ALL
-        SELECT 'tenant', id::text, name FROM tenants WHERE status IN ('active','trial')
+        SELECT 'tenant', t.id::text, t.name FROM tenants t WHERE t.status IN ('active','trial') ${internalCond}
         ORDER BY kind, name
       `),
     ])
@@ -442,6 +457,7 @@ export async function computePlatformMetrics(f: MetricsFilters): Promise<Platfor
 
   return {
     range: { from: f.from, to: f.to, prevFrom, prevTo, days },
+    internalExcluded: excluded.length,
     kpis,
     daily,
     insights: buildInsights({ kpis, tenants, days }),

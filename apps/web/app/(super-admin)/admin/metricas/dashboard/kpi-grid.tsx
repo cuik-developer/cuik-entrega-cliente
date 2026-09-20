@@ -32,7 +32,8 @@ function deltaPct(cur: number, prev: number): number | null {
 }
 
 const fmt = (v: number) => v.toLocaleString("es-PE")
-const money = (v: number) => `S/ ${v.toLocaleString("es-PE", { maximumFractionDigits: 0 })}`
+const money = (v: number) =>
+  `S/ ${v.toLocaleString("es-PE", { minimumFractionDigits: Number.isInteger(v) ? 0 : 2, maximumFractionDigits: 2 })}`
 
 function Spark({ data }: { data: number[] }) {
   if (data.length < 2 || data.every((v) => v === 0)) return null
