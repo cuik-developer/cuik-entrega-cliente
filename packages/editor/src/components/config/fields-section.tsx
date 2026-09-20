@@ -130,15 +130,21 @@ function InsertVariableDropdown({
     setOpen(true)
   }
 
-  // Viewport-anchored: a scroll or resize would leave it floating in the wrong place.
+  // Viewport-anchored: a scroll of the panel/page or a resize would leave it
+  // floating in the wrong place. Scrolling inside the menu itself must not close it.
+  const menuRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open) return
     const close = () => setOpen(false)
+    const onScroll = (e: Event) => {
+      if (menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) return
+      setOpen(false)
+    }
     window.addEventListener("resize", close)
-    window.addEventListener("scroll", close, true)
+    window.addEventListener("scroll", onScroll, true)
     return () => {
       window.removeEventListener("resize", close)
-      window.removeEventListener("scroll", close, true)
+      window.removeEventListener("scroll", onScroll, true)
     }
   }, [open])
 
@@ -157,6 +163,7 @@ function InsertVariableDropdown({
           {/* biome-ignore lint/a11y/noStaticElementInteractions: backdrop overlay for dropdown dismiss */}
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} onKeyDown={() => {}} />
           <div
+            ref={menuRef}
             className="fixed z-50 bg-white border border-gray-200 rounded-md shadow-lg overflow-y-auto py-1"
             style={{ ...pos, width: 288, maxWidth: "calc(100vw - 1rem)" }}
             role="menu"
