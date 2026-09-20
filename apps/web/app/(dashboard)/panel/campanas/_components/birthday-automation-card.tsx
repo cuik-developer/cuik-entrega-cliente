@@ -130,6 +130,9 @@ export function BirthdayAutomationCard({ tenantSlug }: { tenantSlug: string }) {
   }
 
   const noBirthdays = data.coverage.withBirthday === 0
+  // A tenant that neither asks for birthdays nor has any loaded (e.g. a
+  // historical client base) never sees this card: it only confuses the admin.
+  if (noBirthdays && !data.asked && !data.config.enabled) return null
   const pct =
     data.coverage.total > 0
       ? Math.round((data.coverage.withBirthday / data.coverage.total) * 100)
@@ -166,8 +169,8 @@ export function BirthdayAutomationCard({ tenantSlug }: { tenantSlug: string }) {
         {noBirthdays && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-3 text-xs text-amber-800 dark:text-amber-300">
             {data.asked
-              ? "Todavía ningún cliente tiene cumpleaños cargado. Los nuevos lo dejan al registrarse; para los actuales podés cargarlo desde su ficha. Mientras tanto el saludo no tiene a quién enviarse, pero el resto de Campañas funciona normal."
-              : "Este comercio no pregunta el cumpleaños en el registro, así que el saludo automático no tiene a quién enviarse. Es opcional: el resto de Campañas funciona normal. Si querés activarlo, pedile al equipo de Cuik que habilite la pregunta y cargá los cumpleaños que tengas desde la ficha de cada cliente."}
+              ? "Todavía ningún cliente tiene cumpleaños cargado. Los nuevos lo dejan al registrarse; para los actuales podés cargarlo desde su ficha. Mientras tanto el saludo no tiene a quién enviarse."
+              : "Este comercio no pregunta el cumpleaños en el registro, así que el saludo automático no tiene a quién enviarse. Podés desactivarlo, o pedirle al equipo de Cuik que habilite la pregunta."}
           </div>
         )}
         <div className="space-y-1.5">

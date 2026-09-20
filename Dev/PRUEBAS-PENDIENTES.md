@@ -43,10 +43,10 @@ Cubre los despliegues `e3b3561` y `442a3ba` (programa de puntos, panel Premios, 
 | 11b | Analitica de un tenant de puntos | KPIs de puntos (otorgados, canjeados, vigentes, ticket), grafico Otorgados vs Canjeados, Premios mas canjeados, Quienes ya pueden canjear, embudo "Canjearon puntos"; los numeros cuadran con la ficha de los clientes | OK (19 set., prod) |
 | 11c | Ficha de un cliente de puntos → pestana Puntos | Saldo, ganados y canjeados; cada movimiento con saldo resultante, premio canjeado y cajero; en Actividad el canje aparece una sola vez ("Canjeo N pts: premio") y las visitas dicen "+N pts" | OK (19 set., prod) |
 | 11d | Analitica tras las observaciones del 19 set. | Vivinack con 1 visita en Top clientes (el bono no cuenta); embudo con "Visitaron 3+ veces" al final; Distribucion por plataforma 1 Apple / 2 Google; "pts extra por cumpleanos" ya no es 0 para la visita de Vivinack | OK (19 set., prod) |
-| 11e | Campanas del tenant "Cuik" (sin cumpleanos) | La pagina carga completa; la tarjeta del saludo muestra el aviso ambar y no bloquea nada | |
-| 11f | Super-admin → Registro → Cumpleanos → Texto de la pregunta = "Cumpleanos de tu engreid@" | El formulario publico muestra ese texto; el resumen de Registro lista el bloque Cumpleanos y la variable `{{client.birthday}}` | |
-| 12 | Confirmar el schedule `reports` en Dokploy (`10 * * * *`, POST `https://cuik.org/api/cron/reports`) | Queda creado y activo | |
-| 13 | Con el reporte semanal activado en Analitica, esperar al lunes | Llega el correo con el Excel: encabezados azul Cuik, sin hoja de cumpleanos si esta vacia | |
+| 11e | Campanas del tenant "Cuik" (sin cumpleanos: el registro no lo pregunta y nadie lo tiene cargado) | La tarjeta del saludo de cumpleanos no aparece; prevencion de abandono, campanas e historial siguen igual | |
+| 11f | Super-admin → Registro → Cumpleanos → Texto de la pregunta = "Cumpleanos de tu engreid@" | El formulario publico muestra ese texto; el resumen de Registro lista el bloque Cumpleanos y la variable `{{client.birthday}}` | OK (19 set., prod) |
+| 12 | Confirmar el schedule `reports` en Dokploy (`10 * * * *`, POST `https://cuik.org/api/cron/reports`) | Queda creado y activo | OK (19 set., prod) |
+| 13 | Con el reporte semanal activado en Analitica, esperar al lunes | Llega el correo con el Excel: encabezados azul Cuik, sin hoja de cumpleanos si esta vacia | OK (19 set., prod) |
 | 14 | Agregar un segundo destinatario en la tarjeta de reportes y usar "Enviarme una prueba" | Ambos correos reciben la prueba | |
 
 ## 5. Landing (repaso rapido en movil)
