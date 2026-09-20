@@ -42,6 +42,7 @@ export async function computeAnalyticsSummary(
         COUNT(DISTINCT "client_id")::int AS "uniqueClients"
       FROM loyalty.visits
       WHERE "tenant_id" = ${tenantId}
+        AND "source" <> 'bonus'
         AND ("created_at" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date >= ${fromDate}::date
         AND ("created_at" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date <= ${toDate}::date
         ${locationFilter}
@@ -111,6 +112,7 @@ export async function computeAnalyticsSummary(
       FROM loyalty.visits v
       INNER JOIN loyalty.clients c ON c."id" = v."client_id"
       WHERE v."tenant_id" = ${tenantId}
+        AND v."source" <> 'bonus'
       GROUP BY c."id", c."name", c."last_name", c."tier"
       ORDER BY "visitCount" DESC
       LIMIT 10

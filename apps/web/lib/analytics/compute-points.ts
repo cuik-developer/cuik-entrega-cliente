@@ -152,18 +152,32 @@ export async function computePointsAnalytics(
         FROM cat LEFT JOIN loyalty.clients c ON c.tenant_id = ${tenantId} AND c.status <> 'blocked'
         GROUP BY cat.cheapest, cat.most_expensive
       `),
-    // Incentives: opt-in bonus (bonus visits) and birthday extra (metadata, sep-2026+)
+    // Incentives: opt-in bonus (bonus visits) and birthday extra. Rows written
+    // since sep-2026 carry basePoints in metadata; older rows fall back to
+    // "visit on the client's birthday" and the promotion's points-per-currency.
     db.execute<{ bonus_points: Num; birthday_extra: Num }>(sql`
+        WITH promo AS (
+          SELECT COALESCE((config->'points'->>'pointsPerCurrency')::numeric, 1) AS ppc
+          FROM loyalty.promotions
+          WHERE tenant_id = ${tenantId} AND active = true AND type = 'points'
+          ORDER BY created_at DESC LIMIT 1
+        )
         SELECT
           COALESCE(SUM(pt.amount) FILTER (WHERE v.source = 'bonus'), 0)::int AS bonus_points,
           COALESCE(SUM(
-            CASE WHEN pt.metadata ? 'bonusReasons'
-                  AND pt.metadata->'bonusReasons' @> '["birthday_multiplier"]'::jsonb
-                  AND (pt.metadata->>'basePoints') ~ '^[0-9]+$'
-                 THEN pt.amount - (pt.metadata->>'basePoints')::int ELSE 0 END
+            CASE
+              WHEN pt.metadata ? 'bonusReasons' AND (pt.metadata->>'basePoints') ~ '^[0-9]+$'
+                THEN CASE WHEN pt.metadata->'bonusReasons' @> '["birthday_multiplier"]'::jsonb
+                          THEN pt.amount - (pt.metadata->>'basePoints')::int ELSE 0 END
+              WHEN c.birthday IS NOT NULL AND v.amount IS NOT NULL
+                   AND to_char(c.birthday, 'MM-DD') = to_char((${localVisit})::date, 'MM-DD')
+                THEN GREATEST(pt.amount - FLOOR(v.amount * (SELECT ppc FROM promo))::int, 0)
+              ELSE 0
+            END
           ), 0)::int AS birthday_extra
         FROM loyalty.points_transactions pt
         LEFT JOIN loyalty.visits v ON v.id = pt.visit_id
+        LEFT JOIN loyalty.clients c ON c.id = pt.client_id
         WHERE pt.tenant_id = ${tenantId} AND pt.type = 'earn'
           AND (${localTx})::date >= ${from} AND (${localTx})::date <= ${to}
           ${locEarn}

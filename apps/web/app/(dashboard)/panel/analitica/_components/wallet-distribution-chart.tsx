@@ -65,6 +65,10 @@ export function WalletDistributionChart({ data }: Props) {
           <CardTitle className="text-sm font-bold text-foreground">
             Distribución por plataforma
           </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Apple se detecta cuando el iPhone instala el pase; Google se asume por el enlace de
+            guardado.
+          </p>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground py-8 text-center">

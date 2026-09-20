@@ -195,7 +195,7 @@ Sidebar izquierdo. Rol requerido: `admin` o `super_admin`.
 
 ### 4.3 Analitica (`/panel/analitica`)
 
-**KPI Cards** (6): totalVisits, uniqueClients, newClients, rewardsRedeemed, redemptionRate, avgVisitsPerClient.
+**KPI Cards** (6): totalVisits, uniqueClients, newClients, rewardsRedeemed, redemptionRate, avgVisitsPerClient. Desde sep-2026 **ninguna metrica de visitas cuenta las filas `visits.source = 'bonus'`** (el bono de opt-in): KPIs, grafico, heatmap, top clientes, embudo, retencion, `visits_daily` y los reportes por correo filtran `source <> 'bonus'`; asi el conteo coincide con la ficha del cliente.
 
 **Programas de puntos** (sep-2026, `useTenant().promotionType === "points"`): la misma pagina agrega `GET /api/{tenant}/analytics/points?from&to&granularity&locationId` (`lib/analytics/compute-points.ts`, todo en tz del tenant) y cambia:
 - **KPIs**: Total visitas, Clientes nuevos, **Puntos otorgados** y **Puntos canjeados** (con % vs. el periodo anterior de igual largo), **Puntos vigentes** (suma de saldos de clientes no bloqueados: el pasivo en premios) y **Ticket promedio** (promedio de `visits.amount` > 0, con la cantidad de compras). Reemplazan a Tasa de canje / Premios canjeados / Promedio visitas.
@@ -211,7 +211,7 @@ Sidebar izquierdo. Rol requerido: `admin` o `super_admin`.
 
 **Visitas por dia y hora** (heatmap 7×24): en que momentos de la semana llegan los clientes. Filas Lun–Dom (ISO), columnas de 8am a 8pm en tz del tenant con etiquetas 9am · 11am · 1pm · 3pm · 5pm · 7pm, intensidad = cantidad de visitas. Debajo, "Pico: dia 4pm (N visitas) · Dia mas fuerte" y, si las hubo, "N visitas fuera de 8am–8pm" (la API devuelve las 24 h; la grilla solo muestra el horario comercial). Respeta rango y sucursal. Endpoint `GET /api/{tenant}/analytics/heatmap?from&to[&locationId]`.
 
-**Embudo de fidelizacion** (historico, todo el comercio): Registrados → Visitaron 1+ vez → Visitaron 3+ veces → Canjearon un premio. El pase instalado no es un paso (no es prerequisito para visitar y ya tiene su propio widget). Cada barra muestra cantidad, % sobre registrados y % sobre el paso anterior (oculto si el paso anterior es 0). Excluye bloqueados. No se filtra por rango ni sucursal a proposito: un cliente se registra una vez y se vuelve fiel a lo largo de meses. Endpoint `GET /api/{tenant}/analytics/funnel`.
+**Embudo de fidelizacion** (historico, todo el comercio): Registrados → Visitaron 1+ vez → Canjearon un premio → Visitaron 3+ veces (el paso mas exigente va al final; orden cambiado en sep-2026 a pedido del cliente). El pase instalado no es un paso (no es prerequisito para visitar y ya tiene su propio widget). Cada barra muestra cantidad, % sobre registrados y % sobre el paso anterior (oculto si el paso anterior es 0). Excluye bloqueados. No se filtra por rango ni sucursal a proposito: un cliente se registra una vez y se vuelve fiel a lo largo de meses. Endpoint `GET /api/{tenant}/analytics/funnel`.
 
 **Distribucion por segmento** (hoy, todo el comercio): donut con Nuevo / Frecuente / Esporadico / Regular / En riesgo / Una visita / Inactivo, calculado con `computeClientSegment` y los umbrales del tenant, es decir los mismos numeros que los chips de Clientes. Cada fila de la leyenda linkea a `/panel/clientes?segment=<key>` (la lista lee ese parametro al cargar). Endpoint `GET /api/{tenant}/analytics/segments`.
 
@@ -228,7 +228,7 @@ Sidebar izquierdo. Rol requerido: `admin` o `super_admin`.
 
 **Top clientes**: tabla de clientes mas activos (lifetime count, no scope a rango), columnas `#`, Nombre, Visitas.
 
-**Distribucion de wallets**: donut chart con Apple / Google / Sin wallet. Logica: prioridad Apple > Google, sin double-count.
+**Distribucion de wallets**: donut chart con Apple / Google / Sin wallet. Logica (sep-2026): **Apple** = el iPhone registro el serial en `passes.apple_devices` (callback real de instalacion; la URL del pase no sirve porque todos la reciben al registrarse); **Google** = tiene `google_save_url` y ningun dispositivo Apple (Google no avisa la instalacion, es el mejor proxy); **Sin wallet** = ninguna de las dos. Sin double-count.
 
 **Selector de rango**:
 - Presets: 7 / 30 / 90 dias

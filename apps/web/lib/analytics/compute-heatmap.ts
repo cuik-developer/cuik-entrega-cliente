@@ -30,6 +30,7 @@ export async function computeVisitsHeatmap(params: {
     .where(
       and(
         eq(visits.tenantId, tenantId),
+        sql`${visits.source} <> 'bonus'`,
         sql`(${local})::date >= ${from}::date`,
         sql`(${local})::date <= ${to}::date`,
         locationId ? eq(visits.locationId, locationId) : undefined,

@@ -244,8 +244,8 @@ export async function computeReport(params: {
       redeemed: number
     }>(sql`
       SELECT
-        (SELECT COUNT(*)::int FROM loyalty.visits v WHERE v.tenant_id = ${tenantId} AND ${within("v.created_at", p)}) AS visits,
-        (SELECT COUNT(DISTINCT v.client_id)::int FROM loyalty.visits v WHERE v.tenant_id = ${tenantId} AND ${within("v.created_at", p)}) AS unique_clients,
+        (SELECT COUNT(*)::int FROM loyalty.visits v WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' AND ${within("v.created_at", p)}) AS visits,
+        (SELECT COUNT(DISTINCT v.client_id)::int FROM loyalty.visits v WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' AND ${within("v.created_at", p)}) AS unique_clients,
         (SELECT COUNT(*)::int FROM loyalty.clients c WHERE c.tenant_id = ${tenantId} AND ${within("c.created_at", p)}) AS new_clients,
         ${redeemedWithin(p)} AS redeemed`)
     const r = res.rows[0]
@@ -284,7 +284,7 @@ export async function computeReport(params: {
     WITH pv AS (
       SELECT v.client_id, COUNT(*)::int AS period_visits, SUM(v.amount) AS amount
       FROM loyalty.visits v
-      WHERE v.tenant_id = ${tenantId} AND ${within("v.created_at", period)}
+      WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' AND ${within("v.created_at", period)}
       GROUP BY v.client_id
     ),
     stats AS (
@@ -293,7 +293,7 @@ export async function computeReport(params: {
         CASE WHEN COUNT(*) >= 2
           THEN EXTRACT(EPOCH FROM (MAX(v.created_at) - MIN(v.created_at))) / 86400.0 / NULLIF(COUNT(*) - 1, 0)
           ELSE NULL END AS avg_days
-      FROM loyalty.visits v WHERE v.tenant_id = ${tenantId} GROUP BY v.client_id
+      FROM loyalty.visits v WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' GROUP BY v.client_id
     )
     SELECT c.id, c.name, c.last_name, c.total_visits, c.points_balance, c.created_at,
       pv.period_visits, pv.amount, stats.last_visit_at, stats.avg_days,
@@ -406,9 +406,9 @@ export async function computeReport(params: {
     const weeks = weeksOf(daily)
     const lastYear = sameMonthLastYear(period)
     const lyRes = await db.execute<{ n: number }>(sql`
-      SELECT COUNT(*)::int AS n FROM loyalty.visits v WHERE v.tenant_id = ${tenantId} AND ${within("v.created_at", lastYear)}`)
+      SELECT COUNT(*)::int AS n FROM loyalty.visits v WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' AND ${within("v.created_at", lastYear)}`)
     const anyLastYear = await db.execute<{ n: number }>(sql`
-      SELECT COUNT(*)::int AS n FROM loyalty.visits v WHERE v.tenant_id = ${tenantId} AND ${local("v.created_at")} < ${period.start}::date - interval '11 months'`)
+      SELECT COUNT(*)::int AS n FROM loyalty.visits v WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' AND ${local("v.created_at")} < ${period.start}::date - interval '11 months'`)
     const lastYearVisits =
       Number(anyLastYear.rows[0]?.n ?? 0) > 0 ? Number(lyRes.rows[0]?.n ?? 0) : null
     const cumulative = await computeCumulative({
@@ -489,9 +489,9 @@ export async function computeCumulative(params: {
     redeemed: number
   }>(sql`
     SELECT
-      (SELECT COUNT(*)::int FROM loyalty.visits v WHERE v.tenant_id = ${tenantId} AND ${upTo("v.created_at")}) AS visits,
+      (SELECT COUNT(*)::int FROM loyalty.visits v WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' AND ${upTo("v.created_at")}) AS visits,
       (SELECT COUNT(*)::int FROM loyalty.clients c WHERE c.tenant_id = ${tenantId} AND ${upTo("c.created_at")}) AS clients,
-      (SELECT COUNT(DISTINCT v.client_id)::int FROM loyalty.visits v WHERE v.tenant_id = ${tenantId} AND ${upTo("v.created_at")}) AS active_clients,
+      (SELECT COUNT(DISTINCT v.client_id)::int FROM loyalty.visits v WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' AND ${upTo("v.created_at")}) AS active_clients,
       ${redeemedTotal} AS redeemed`)
   const t = totalsRes.rows[0]
   const visits = Number(t?.visits ?? 0)
@@ -499,7 +499,7 @@ export async function computeCumulative(params: {
 
   const monthsRes = await db.execute<{ ym: string; visits: number }>(sql`
     SELECT to_char(${local("v.created_at")}, 'YYYY-MM') AS ym, COUNT(*)::int AS visits
-    FROM loyalty.visits v WHERE v.tenant_id = ${tenantId} AND ${upTo("v.created_at")} GROUP BY 1`)
+    FROM loyalty.visits v WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' AND ${upTo("v.created_at")} GROUP BY 1`)
   const newMonthsRes = await db.execute<{ ym: string; n: number }>(sql`
     SELECT to_char(${local("c.created_at")}, 'YYYY-MM') AS ym, COUNT(*)::int AS n
     FROM loyalty.clients c WHERE c.tenant_id = ${tenantId} AND ${upTo("c.created_at")} GROUP BY 1`)
@@ -536,8 +536,8 @@ export async function computeCumulative(params: {
     cycle_visits: number
   }>(sql`
     SELECT c.id, c.name, c.last_name, c.points_balance,
-      (SELECT COUNT(*)::int FROM loyalty.visits v WHERE v.client_id = c.id AND ${upTo("v.created_at")}) AS total_visits,
-      (SELECT MAX(v.created_at) FROM loyalty.visits v WHERE v.client_id = c.id AND ${upTo("v.created_at")}) AS last_visit_at,
+      (SELECT COUNT(*)::int FROM loyalty.visits v WHERE v.client_id = c.id AND v.source <> 'bonus' AND ${upTo("v.created_at")}) AS total_visits,
+      (SELECT MAX(v.created_at) FROM loyalty.visits v WHERE v.client_id = c.id AND v.source <> 'bonus' AND ${upTo("v.created_at")}) AS last_visit_at,
       (SELECT COUNT(*)::int FROM loyalty.visits v3 WHERE v3.client_id = c.id AND v3.cycle_number = c.current_cycle) AS cycle_visits
     FROM loyalty.clients c
     WHERE c.tenant_id = ${tenantId} AND c.status <> 'blocked'
@@ -569,7 +569,7 @@ export async function computeCumulative(params: {
         CASE WHEN COUNT(*) >= 2
           THEN EXTRACT(EPOCH FROM (MAX(v.created_at) - MIN(v.created_at))) / 86400.0 / NULLIF(COUNT(*) - 1, 0)
           ELSE NULL END AS avg_days
-      FROM loyalty.visits v WHERE v.tenant_id = ${tenantId} GROUP BY v.client_id
+      FROM loyalty.visits v WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' GROUP BY v.client_id
     ) s ON s.client_id = c.id
     WHERE c.tenant_id = ${tenantId} AND c.status <> 'blocked'`)
   const tally = tallySegments(
@@ -647,7 +647,7 @@ async function dailyRows(params: {
       COUNT(*)::int AS visits,
       COUNT(DISTINCT v.client_id)::int AS unique_clients
     FROM loyalty.visits v
-    WHERE v.tenant_id = ${tenantId} AND ${within("v.created_at", period)}
+    WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' AND ${within("v.created_at", period)}
     GROUP BY 1`)
   // Peak hour per day: busiest local hour (ties → earliest), picked in JS.
   const hourlyRes = await db.execute<{ day: string; hour: number; n: number }>(sql`
@@ -656,7 +656,7 @@ async function dailyRows(params: {
       EXTRACT(HOUR FROM ${local("v.created_at")})::int AS hour,
       COUNT(*)::int AS n
     FROM loyalty.visits v
-    WHERE v.tenant_id = ${tenantId} AND ${within("v.created_at", period)}
+    WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' AND ${within("v.created_at", period)}
     GROUP BY 1, 2`)
   const peakByDay = new Map<string, { hour: number; n: number }>()
   for (const r of hourlyRes.rows) {

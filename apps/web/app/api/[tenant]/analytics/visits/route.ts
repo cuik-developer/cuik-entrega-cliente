@@ -75,6 +75,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       .where(
         and(
           eq(visits.tenantId, tenant.id),
+          // Opt-in bonus rows are points/stamps gifts, not visits.
+          sql`${visits.source} <> 'bonus'`,
           sql`(${localCreatedAt})::date >= ${from}`,
           sql`(${localCreatedAt})::date <= ${to}`,
           locationId ? eq(visits.locationId, locationId) : undefined,

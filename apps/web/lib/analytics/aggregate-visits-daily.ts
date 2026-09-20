@@ -54,6 +54,7 @@ export async function aggregateVisitsDaily(params: {
       FROM loyalty.visits v
       INNER JOIN loyalty.clients c ON c."id" = v."client_id"
       WHERE v."tenant_id" = ${tenantId}
+        AND v."source" <> 'bonus'
         AND ${localVisitDay} = ${date}::date
       GROUP BY ${locationExpr}
     `,

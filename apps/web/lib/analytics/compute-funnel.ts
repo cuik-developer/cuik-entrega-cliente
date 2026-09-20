@@ -4,7 +4,7 @@ import type { FunnelData } from "@cuik/shared/types/analytics"
 /**
  * Lifetime loyalty funnel for a tenant — how far the client base has travelled:
  *
- *   registered → 1+ visit → 3+ visits → reward redeemed
+ *   registered → 1+ visit → reward redeemed → 3+ visits
  *
  * Deliberately not scoped to a date range or a location: a client registers once and
  * becomes loyal over months, so a 7-day window would
@@ -34,7 +34,8 @@ export async function computeLoyaltyFunnel(
         SELECT
           c."id",
           (SELECT COUNT(*) FROM loyalty.visits v
-            WHERE v."client_id" = c."id" AND v."tenant_id" = c."tenant_id") AS "visit_count",
+            WHERE v."client_id" = c."id" AND v."tenant_id" = c."tenant_id"
+              AND v."source" <> 'bonus') AS "visit_count",
           ${hasRedeemed} AS "has_redeemed"
         FROM loyalty.clients c
         WHERE c."tenant_id" = ${tenantId}
@@ -57,8 +58,8 @@ export async function computeLoyaltyFunnel(
     steps: [
       { key: "registered", count: row.registered ?? 0 },
       { key: "visited", count: row.visited ?? 0 },
-      { key: "loyal", count: row.loyal ?? 0 },
       { key: "redeemed", count: row.redeemed ?? 0 },
+      { key: "loyal", count: row.loyal ?? 0 },
     ],
   }
 }

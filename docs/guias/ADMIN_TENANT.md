@@ -284,7 +284,7 @@ Una grilla de lunes a domingo por hora, de 8am a 8pm, donde el color mas intenso
 
 ### Embudo de fidelizacion
 
-Cuantos clientes llegan a cada etapa, de todo el historico del comercio: **Registrados → Visitaron al menos 1 vez → Visitaron 3+ veces → Canjearon un premio**. Cada barra muestra la cantidad, el porcentaje sobre los registrados y el porcentaje sobre el paso anterior. Te muestra donde se pierde a los clientes: por ejemplo, si muchos se registran pero pocos llegan a la tercera visita.
+Cuantos clientes llegan a cada etapa, de todo el historico del comercio: **Registrados → Visitaron al menos 1 vez → Canjearon un premio → Visitaron 3+ veces**. Cada barra muestra la cantidad, el porcentaje sobre los registrados y el porcentaje sobre el paso anterior. Te muestra donde se pierde a los clientes: por ejemplo, si muchos se registran pero pocos llegan a la tercera visita.
 
 ### Distribucion por segmento
 
@@ -296,7 +296,7 @@ Los clientes con mas visitas en todo el historico (no solo en el rango elegido),
 
 ### Distribucion por plataforma
 
-Donut con cuantos clientes tienen el pase en **Apple Wallet**, **Google Wallet** o **sin wallet**.
+Donut con cuantos clientes tienen el pase en **Apple Wallet**, **Google Wallet** o **sin wallet**. Apple se cuenta cuando el iPhone realmente instalo el pase (el telefono avisa); Google no avisa, asi que se asume por el enlace de guardado. Los bonos de registro no cuentan como visitas en ninguna metrica.
 
 ### Retencion por cohorte
 

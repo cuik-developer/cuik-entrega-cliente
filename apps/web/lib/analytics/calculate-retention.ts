@@ -66,6 +66,7 @@ export async function calculateRetentionCohorts(tenantId: string, opts?: { month
       INNER JOIN loyalty.clients c ON c."id" = v."client_id"
       WHERE c."tenant_id" = ${tenantId}
         AND v."tenant_id" = ${tenantId}
+        AND v."source" <> 'bonus'
         AND c."status" != 'blocked'
         ${cohortFilter}
       GROUP BY ${clientMonth}, ${visitMonth}

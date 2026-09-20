@@ -26,20 +26,24 @@ export function PointsBalanceCard({ balances, incentives }: Props) {
     {
       key: "below",
       label: hasCatalog
-        ? `Aún no llegan al premio más barato (${balances.cheapestCost} pts)`
+        ? `Todavía sin saldo para ningún premio (menos de ${balances.cheapestCost} pts)`
         : "Sin premios activos en el catálogo",
       count: balances.belowCheapest,
       tone: "color-mix(in srgb, var(--color-primary) 35%, transparent)",
     },
     {
       key: "cheapest",
-      label: hasCatalog ? `Ya pueden canjear algo (≥ ${balances.cheapestCost} pts)` : "—",
+      label: hasCatalog
+        ? `Ya alcanzan al menos un premio (${balances.cheapestCost} pts o más)`
+        : "—",
       count: balances.canRedeemCheapest,
       tone: "color-mix(in srgb, var(--color-primary) 70%, transparent)",
     },
     {
       key: "top",
-      label: hasCatalog ? `Alcanzan el premio más caro (≥ ${balances.mostExpensiveCost} pts)` : "—",
+      label: hasCatalog
+        ? `Incluso alcanzan el más caro (${balances.mostExpensiveCost} pts o más)`
+        : "—",
       count: balances.canRedeemMostExpensive,
       tone: "var(--color-primary)",
     },
@@ -53,6 +57,7 @@ export function PointsBalanceCard({ balances, incentives }: Props) {
         </CardTitle>
         <p className="text-xs text-muted-foreground">
           Saldos actuales de {total.toLocaleString("es-PE")} clientes activos frente a tu catálogo.
+          Las dos últimas filas se solapan: quien alcanza el más caro también alcanza el más barato.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
