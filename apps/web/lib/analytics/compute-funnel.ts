@@ -13,7 +13,21 @@ import type { FunnelData } from "@cuik/shared/types/analytics"
  * is deliberately not a step: it is not a prerequisite for visiting, and it
  * already has its own widget (Distribución por plataforma).
  */
-export async function computeLoyaltyFunnel(tenantId: string): Promise<FunnelData> {
+export async function computeLoyaltyFunnel(
+  tenantId: string,
+  programType: "stamps" | "points" = "stamps",
+): Promise<FunnelData> {
+  // Stamps: a redeemed loyalty.rewards row. Points: a redeem transaction.
+  const hasRedeemed =
+    programType === "points"
+      ? sql`EXISTS (
+            SELECT 1 FROM loyalty.points_transactions pt
+            WHERE pt."client_id" = c."id" AND pt."tenant_id" = c."tenant_id" AND pt."type" = 'redeem'
+          )`
+      : sql`EXISTS (
+            SELECT 1 FROM loyalty.rewards r
+            WHERE r."client_id" = c."id" AND r."tenant_id" = c."tenant_id" AND r."status" = 'redeemed'
+          )`
   const result = await db.execute(
     sql`
       WITH base AS (
@@ -21,10 +35,7 @@ export async function computeLoyaltyFunnel(tenantId: string): Promise<FunnelData
           c."id",
           (SELECT COUNT(*) FROM loyalty.visits v
             WHERE v."client_id" = c."id" AND v."tenant_id" = c."tenant_id") AS "visit_count",
-          EXISTS (
-            SELECT 1 FROM loyalty.rewards r
-            WHERE r."client_id" = c."id" AND r."tenant_id" = c."tenant_id" AND r."status" = 'redeemed'
-          ) AS "has_redeemed"
+          ${hasRedeemed} AS "has_redeemed"
         FROM loyalty.clients c
         WHERE c."tenant_id" = ${tenantId}
           AND c."status" <> 'blocked'

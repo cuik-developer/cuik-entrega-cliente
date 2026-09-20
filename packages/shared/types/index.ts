@@ -1,9 +1,12 @@
 export type {
   AnalyticsQueryParams,
   AnalyticsSummary,
+  PointsAnalytics,
+  PointsSeriesRow,
   RetentionCohortRow,
   RetentionQueryParams,
   TopClient,
+  TopRewardRow,
   VisitsDailyRow,
 } from "./analytics"
 export type {

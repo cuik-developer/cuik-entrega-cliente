@@ -34,7 +34,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
 
   const rows = await db
     .select({
-      firstVisit: sql<string | null>`TO_CHAR(MIN(${visits.createdAt}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz}, 'YYYY-MM-DD')`,
+      firstVisit: sql<
+        string | null
+      >`TO_CHAR(MIN(${visits.createdAt}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz}, 'YYYY-MM-DD')`,
     })
     .from(visits)
     .where(eq(visits.tenantId, tenant.id))

@@ -162,6 +162,7 @@ export function evaluatePointsRules(
   }
 
   const bonusReasons: string[] = []
+  const basePoints = pointsToEarn
 
   // 6. Apply day/hour multipliers (first match wins, no stacking)
   if (config.accumulation.pointsMultipliers.length > 0) {
@@ -183,7 +184,7 @@ export function evaluatePointsRules(
     bonusReasons.push("birthday_multiplier")
   }
 
-  return { eligible: true, pointsToEarn, bonusReasons }
+  return { eligible: true, pointsToEarn, basePoints, bonusReasons }
 }
 
 /**

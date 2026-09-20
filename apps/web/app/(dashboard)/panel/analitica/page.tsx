@@ -4,6 +4,7 @@ import type {
   AnalyticsSummary,
   FunnelData,
   HeatmapData,
+  PointsAnalytics,
   SegmentsData,
 } from "@cuik/shared/types/analytics"
 import { CalendarDays, Download, Loader2 } from "lucide-react"
@@ -19,12 +20,15 @@ import { FunnelChart } from "./_components/funnel-chart"
 import { KpiCards } from "./_components/kpi-cards"
 import type { LocationOption } from "./_components/location-select"
 import { ALL_LOCATIONS, LocationSelect } from "./_components/location-select"
+import { PointsBalanceCard } from "./_components/points-balance-card"
+import { PointsFlowChart } from "./_components/points-flow-chart"
 import { ReportsAutomationCard } from "./_components/reports-automation-card"
 import type { RetentionRow } from "./_components/retention-heatmap"
 import { RetentionHeatmap } from "./_components/retention-heatmap"
 import { SegmentsChart } from "./_components/segments-chart"
 import type { TopClientRow } from "./_components/top-clients-table"
 import { TopClientsTable } from "./_components/top-clients-table"
+import { TopRewardsTable } from "./_components/top-rewards-table"
 import type { VisitsChartRow } from "./_components/visits-chart"
 import { VisitsChart } from "./_components/visits-chart"
 import { VisitsHeatmap } from "./_components/visits-heatmap"
@@ -70,9 +74,11 @@ export default function AnaliticaPage() {
   const {
     tenantSlug,
     timezone: tenantTz,
+    promotionType,
     isLoading: tenantLoading,
     error: tenantError,
   } = useTenant()
+  const isPoints = promotionType === "points"
 
   const [rangeDays, setRangeDays] = useState<number | "custom">(30)
   const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined)
@@ -94,6 +100,7 @@ export default function AnaliticaPage() {
   const [heatmap, setHeatmap] = useState<HeatmapData>(EMPTY_HEATMAP)
   const [funnel, setFunnel] = useState<FunnelData>(EMPTY_FUNNEL)
   const [segments, setSegments] = useState<SegmentsData>(EMPTY_SEGMENTS)
+  const [points, setPoints] = useState<PointsAnalytics | null>(null)
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -162,6 +169,8 @@ export default function AnaliticaPage() {
           `${base}/heatmap?${range}${locationQuery}`,
           `${base}/funnel`,
           `${base}/segments`,
+          // Points widgets only exist for points programs; skip the call otherwise.
+          ...(isPoints ? [`${base}/points?${range}&granularity=${period}${locationQuery}`] : []),
         ].map((u) => fetch(u).then((r) => r.json())),
       )
       const [
@@ -172,6 +181,7 @@ export default function AnaliticaPage() {
         heatmapJson,
         funnelJson,
         segmentsJson,
+        pointsJson,
       ] = responses as Array<{ success: boolean; data?: unknown }>
 
       // `undefined` when that call failed — leave the previous value in place.
@@ -201,6 +211,10 @@ export default function AnaliticaPage() {
       if (f) setFunnel(f)
       const g = pick<SegmentsData>(segmentsJson, EMPTY_SEGMENTS)
       if (g) setSegments(g)
+      if (pointsJson) {
+        const pj = pick<PointsAnalytics | null>(pointsJson, null)
+        if (pj !== undefined) setPoints(pj)
+      }
 
       // Check if all failed
       if (!visitsJson.success && !retentionJson.success && !summaryJson.success) {
@@ -211,7 +225,7 @@ export default function AnaliticaPage() {
     } finally {
       setLoading(false)
     }
-  }, [tenantSlug, rangeFrom, rangeTo, period, locationQuery])
+  }, [tenantSlug, rangeFrom, rangeTo, period, locationQuery, isPoints])
 
   useEffect(() => {
     if (tenantSlug) {
@@ -336,17 +350,28 @@ export default function AnaliticaPage() {
       ) : (
         <>
           {/* KPI Cards */}
-          <KpiCards summary={summary} />
+          <KpiCards summary={summary} points={isPoints ? points?.kpis : null} />
 
           {/* Visits Chart */}
           <VisitsChart data={visits} period={period} onPeriodChange={setPeriod} />
+
+          {/* Points program: movement, top rewards, who can redeem */}
+          {isPoints && points && (
+            <>
+              <PointsFlowChart data={points.series} period={period} />
+              <div className="grid lg:grid-cols-2 gap-6">
+                <TopRewardsTable rewards={points.topRewards} timezone={tenantTz} />
+                <PointsBalanceCard balances={points.balances} incentives={points.incentives} />
+              </div>
+            </>
+          )}
 
           {/* When do clients come */}
           <VisitsHeatmap data={heatmap} scopeLabel={scopeLabel} />
 
           {/* Client base: funnel + segments */}
           <div className="grid lg:grid-cols-2 gap-6">
-            <FunnelChart data={funnel} />
+            <FunnelChart data={funnel} programType={promotionType} />
             <SegmentsChart data={segments} />
           </div>
 

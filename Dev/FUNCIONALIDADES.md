@@ -196,6 +196,14 @@ Sidebar izquierdo. Rol requerido: `admin` o `super_admin`.
 
 **KPI Cards** (6): totalVisits, uniqueClients, newClients, rewardsRedeemed, redemptionRate, avgVisitsPerClient.
 
+**Programas de puntos** (sep-2026, `useTenant().promotionType === "points"`): la misma pagina agrega `GET /api/{tenant}/analytics/points?from&to&granularity&locationId` (`lib/analytics/compute-points.ts`, todo en tz del tenant) y cambia:
+- **KPIs**: Total visitas, Clientes nuevos, **Puntos otorgados** y **Puntos canjeados** (con % vs. el periodo anterior de igual largo), **Puntos vigentes** (suma de saldos de clientes no bloqueados: el pasivo en premios) y **Ticket promedio** (promedio de `visits.amount` > 0, con la cantidad de compras). Reemplazan a Tasa de canje / Premios canjeados / Promedio visitas.
+- **Puntos por dia/semana/mes**: barras Otorgados vs Canjeados (`points_transactions`), misma granularidad que el grafico de visitas.
+- **Premios mas canjeados**: top 10 del rango desde `points_transactions.type='redeem'` + `reward_catalog` (canjes, puntos, ultimo).
+- **Quienes ya pueden canjear**: saldos actuales vs. catalogo activo: bajo el premio mas barato / alcanzan alguno / alcanzan el mas caro; al pie, puntos regalados por bono de registro (visitas `source='bonus'`) y puntos extra por cumpleanos (de `points_transactions.metadata.{basePoints,bonusReasons}`, que `register-points-visit` escribe desde sep-2026; visitas anteriores cuentan como normales).
+- **Embudo**: el ultimo paso pasa a "Canjearon puntos" leyendo `points_transactions` (`computeLoyaltyFunnel(tenantId, "points")`).
+- Filtro por sucursal: aplica a otorgados, ticket e incentivos (via la visita); canjes, saldos y catalogo son de todo el comercio.
+
 **Grafico de visitas**: BarChart con periodo seleccionable (Dia / Semana / Mes).
 - Eje X: fechas bucketeadas en tz del tenant. Eje Y solo enteros.
 - 3 series: Total visitas, Clientes unicos, Clientes nuevos.

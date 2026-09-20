@@ -13,13 +13,19 @@ const STEP_META: Record<FunnelStepKey, { label: string; hint: string }> = {
 
 type Props = {
   data: FunnelData
+  programType?: "stamps" | "points" | null
+}
+
+const POINTS_REDEEMED = {
+  label: "Canjearon puntos",
+  hint: "Cambiaron puntos por un premio del catálogo",
 }
 
 function pct(n: number, d: number): number {
   return d > 0 ? Math.round((n / d) * 100) : 0
 }
 
-export function FunnelChart({ data }: Props) {
+export function FunnelChart({ data, programType }: Props) {
   const steps = data.steps
   const base = steps[0]?.count ?? 0
 
@@ -39,7 +45,10 @@ export function FunnelChart({ data }: Props) {
         ) : (
           <ol className="space-y-3">
             {steps.map((step, i) => {
-              const meta = STEP_META[step.key]
+              const meta =
+                step.key === "redeemed" && programType === "points"
+                  ? POINTS_REDEEMED
+                  : STEP_META[step.key]
               const width = Math.max(pct(step.count, base), step.count > 0 ? 3 : 0)
               // Step-over-step conversion; hidden when the previous step is empty.
               const prev = i > 0 ? steps[i - 1].count : 0

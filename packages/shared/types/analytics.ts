@@ -76,3 +76,48 @@ export interface AnalyticsQueryParams {
 export interface RetentionQueryParams {
   months?: number
 }
+
+// ─── Points program ────────────────────────────────────────────────────
+
+export interface PointsSeriesRow {
+  date: string // YYYY-MM-DD (tenant-local bucket)
+  earned: number
+  redeemed: number
+}
+
+export interface TopRewardRow {
+  id: string
+  name: string
+  count: number
+  points: number
+  lastAt: string | null
+}
+
+export interface PointsAnalytics {
+  kpis: {
+    earned: number
+    earnedPrev: number
+    redeemed: number
+    redeemedPrev: number
+    /** Sum of balances of active clients: what the business owes in rewards. */
+    outstanding: number
+    avgTicket: number | null
+    ticketCount: number
+  }
+  series: PointsSeriesRow[]
+  topRewards: TopRewardRow[]
+  balances: {
+    activeClients: number
+    cheapestCost: number | null
+    mostExpensiveCost: number | null
+    belowCheapest: number
+    canRedeemCheapest: number
+    canRedeemMostExpensive: number
+  }
+  incentives: {
+    bonusPoints: number
+    birthdayExtraPoints: number
+  }
+  /** Lifetime: clients that redeemed points at least once (funnel last step). */
+  redeemers: number
+}

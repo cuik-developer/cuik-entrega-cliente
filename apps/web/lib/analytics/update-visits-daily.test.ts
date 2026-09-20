@@ -63,7 +63,10 @@ describe("updateVisitsDaily", () => {
   it("sets newClients to 0 when isNewClient is false", async () => {
     const date = new Date("2025-03-15T12:00:00Z")
 
-    await updateVisitsDaily("tenant-1", "loc-1", date, { isNewClient: false, tenantTimezone: "UTC" })
+    await updateVisitsDaily("tenant-1", "loc-1", date, {
+      isNewClient: false,
+      tenantTimezone: "UTC",
+    })
 
     expect(mockValues).toHaveBeenCalledWith(
       expect.objectContaining({

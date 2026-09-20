@@ -77,6 +77,15 @@ Una lista corta de cosas que piden una accion, cada una con un link a la pantall
 | **N clientes nuevos de esta semana todavia no visitaron** | Se registraron en los ultimos 7 dias y no tienen ninguna visita | Clientes, filtrado en Nuevos |
 | **Sin visitas registradas en 7 dias: (cajeros)** | Cajeros de tu equipo que no registraron ninguna visita en la semana | Cajeros |
 
+### Si tu programa es de puntos
+
+Las tarjetas cambian: **Puntos otorgados** y **Puntos canjeados** en el periodo (con el porcentaje de cambio contra el periodo anterior), **Puntos vigentes** (la suma de los saldos de tus clientes: lo que hoy "debes" en premios) y **Ticket promedio** (monto promedio por compra registrada). Debajo del grafico de visitas aparecen:
+
+- **Puntos por dia / semana / mes**: otorgados contra canjeados. Si las barras de canje no acompanan, tus clientes acumulan y no cobran: es momento de una campana.
+- **Premios mas canjeados**: cuales se llevan, cuantos puntos gastaron y cuando fue el ultimo canje. Lo que nadie canjea conviene revisarlo o quitarlo.
+- **Quienes ya pueden canjear**: cuantos clientes todavia no llegan a tu premio mas barato, cuantos ya alcanzan alguno y cuantos alcanzan el mas caro. "40 clientes ya pueden canjear y no lo hicieron" es una campana lista. Al pie ves cuantos puntos regalaste por el bono de registro y por cumpleanos.
+- El **embudo** termina en "Canjearon puntos".
+
 ### Grafico de visitas semanal
 
 Barras con las visitas de hoy y los 6 dias anteriores, siempre los 7 dias (un dia sin visitas muestra 0), con el nombre del dia en espanol.

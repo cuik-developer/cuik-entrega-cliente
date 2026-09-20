@@ -1,6 +1,6 @@
-import { and, db, eq, promotions } from "@cuik/db"
+import { analyticsQuerySchema } from "@cuik/shared/validators"
 
-import { computeLoyaltyFunnel } from "@/lib/analytics/compute-funnel"
+import { computePointsAnalytics } from "@/lib/analytics/compute-points"
 import {
   errorResponse,
   requireAuth,
@@ -11,9 +11,10 @@ import {
 } from "@/lib/api-utils"
 
 /**
- * GET /api/[tenant]/analytics/funnel
- * Lifetime loyalty funnel: registered → 1+ visit → 3+ visits → redeemed.
- * Not range/location scoped on purpose (see computeLoyaltyFunnel).
+ * GET /api/[tenant]/analytics/points?from&to&granularity&locationId
+ * Points-program widgets: earned/redeemed KPIs with deltas, outstanding
+ * balance, average ticket, earned-vs-redeemed series, top rewards, balance
+ * distribution against the catalog and incentive cost.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ tenant: string }> }) {
   try {
@@ -30,18 +31,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     const membershipError = await requireTenantMembership(session, tenant.id)
     if (membershipError) return membershipError
 
-    const [activePromotion] = await db
-      .select({ type: promotions.type })
-      .from(promotions)
-      .where(and(eq(promotions.tenantId, tenant.id), eq(promotions.active, true)))
-      .limit(1)
-    const data = await computeLoyaltyFunnel(
-      tenant.id,
-      activePromotion?.type === "points" ? "points" : "stamps",
-    )
+    const url = new URL(request.url)
+    const parsed = analyticsQuerySchema.safeParse(Object.fromEntries(url.searchParams))
+    if (!parsed.success) {
+      return errorResponse("Invalid query parameters", 400, parsed.error.flatten())
+    }
+
+    const data = await computePointsAnalytics(tenant.id, {
+      ...parsed.data,
+      timezone: tenant.timezone,
+    })
     return successResponse(data)
   } catch (error) {
-    console.error("[GET /api/[tenant]/analytics/funnel]", error)
+    console.error("[GET /api/[tenant]/analytics/points]", error)
     return errorResponse("Internal server error", 500)
   }
 }

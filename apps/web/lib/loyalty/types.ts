@@ -155,6 +155,8 @@ export type PointsRulesContext = {
 export type PointsRulesResult = {
   eligible: boolean
   pointsToEarn: number
+  /** Points before multipliers (day/hour, birthday). Lets analytics cost the incentives. */
+  basePoints?: number
   bonusReasons: string[]
   rejectionReason?: string
 }

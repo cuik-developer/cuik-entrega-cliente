@@ -116,6 +116,12 @@ export async function registerPointsVisit(params: PointsVisitParams): Promise<Po
     type: "earn",
     visitId: visit.id,
     description: `Earned ${pointsToEarn} points from visit`,
+    // Analytics reads this to cost the birthday/day multipliers.
+    metadata: {
+      basePoints: rulesResult.basePoints ?? pointsToEarn,
+      bonusReasons: rulesResult.bonusReasons,
+      ...(cashierId ? { cashierId } : {}),
+    },
   })
 
   // 6. Update client: pointsBalance, totalVisits, tier
