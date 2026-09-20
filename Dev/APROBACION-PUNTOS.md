@@ -250,7 +250,7 @@ Google Wallet muestra `accountId` en el reverso como "ID de miembro". Hoy se man
 Efecto: pases nuevos y cada upsert (visita, canje) dejan de mostrar el codigo interno. No cambia el QR ni el `id` del objeto.
 
 
-## G. Variables personalizadas en Google Wallet tras registro y visitas — PENDIENTE DE APROBACION (2 archivos protegidos)
+## G. Variables personalizadas en Google Wallet tras registro y visitas — APROBADO Y APLICADO (19 set.; verificado en local: registro con campo estrategico y visita posterior OK)
 
 Sintoma (19 set.): un campo estrategico del registro (p. ej. `{{client.customData.postre}}`) se ve vacio en el pase de Google. La ruta que genera el pase (`wallet/google/[clientId]`) si pasa `customData`, pero el objeto se crea en el registro y se reescribe en cada visita con un contexto que solo trae nombre, visitas y saldo, asi que la variable queda en blanco. `lib/wallet/trigger-wallet-update.ts` (no protegido) ya se corrigio; faltan estos dos:
 

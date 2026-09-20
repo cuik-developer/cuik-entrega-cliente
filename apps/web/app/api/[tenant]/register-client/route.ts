@@ -287,8 +287,13 @@ async function generateGoogleWalletUrl(ctx: {
     name: string
     lastName: string | null
     dni: string | null
+    phone: string | null
+    email: string | null
+    birthday: string | null
+    tier: string | null
     totalVisits: number
     pointsBalance: number
+    customData: unknown
   }
   tenant: { id: string; name: string }
   googleDesign: { id: string; fields: unknown; colors: unknown }
@@ -388,7 +393,17 @@ async function generateGoogleWalletUrl(ctx: {
 
 function resolveDesignFieldsForClient(
   fieldsRaw: unknown,
-  client: { name: string; lastName: string | null; totalVisits: number; pointsBalance: number },
+  client: {
+    name: string
+    lastName: string | null
+    phone: string | null
+    email: string | null
+    birthday: string | null
+    tier: string | null
+    totalVisits: number
+    pointsBalance: number
+    customData: unknown
+  },
   stamps: { current: number; max: number; total: number },
   pendingRewards: number,
   tenantName: string,
@@ -410,8 +425,15 @@ function resolveDesignFieldsForClient(
     client: {
       name: client.name,
       lastName: client.lastName,
+      phone: client.phone,
+      email: client.email,
+      birthday: client.birthday,
+      tier: client.tier,
       totalVisits: client.totalVisits,
       pointsBalance: client.pointsBalance,
+      // Strategic fields ({{client.customData.x}}) — without this the Google
+      // object was created with those variables blank.
+      customData: (client.customData as Record<string, unknown> | null) ?? null,
     },
     stamps: {
       current: stamps.current,
@@ -438,8 +460,13 @@ async function generateWalletUrls(ctx: {
     lastName: string | null
     qrCode: string | null
     dni: string | null
+    phone: string | null
+    email: string | null
+    birthday: string | null
+    tier: string | null
     totalVisits: number
     pointsBalance: number
+    customData: unknown
   }
   tenant: { id: string; name: string }
   slug: string

@@ -17,7 +17,7 @@ Cubre los despliegues `e3b3561` y `442a3ba` (programa de puntos, panel Premios, 
 | 7 | Super-admin: crear promocion de puntos con 2 pts/sol, minimo S/ 15, maximo 2/dia y reabrirla | Los valores se conservan | |
 | 7b | Super-admin: editar la promocion de puntos, poner **Multiplicador de cumpleanos = 2** y guardar; luego repetir la prueba 3 | El campo existe (antes no) y la visita del cumpleanero suma el doble | |
 | 7c | Super-admin: Registro → Bono de marketing en un tenant de puntos | Solo aparece el campo "Puntos bonus" (antes aparecian sellos y puntos y era facil cargar el equivocado) | |
-| 6c | Diseno con una variable de campo estrategico (p. ej. `{{client.customData.postre}}`) en el pase de Google, tras registrarse y tras una visita | La variable muestra el valor elegido (pendiente de aprobar hunk G para registro y visitas; el canje ya la conserva) | |
+| 6c | Diseno con una variable de campo estrategico (p. ej. `{{client.customData.postre}}`) en el pase de Google, tras registrarse y tras una visita | La variable muestra el valor elegido desde el registro y se conserva tras visitas y canjes (hunk G aplicado el 19 set.) | |
 | 6d | Pagina publica de registro de un tenant de puntos con bono activo | El aviso dice "te regalamos N puntos", nunca "sellos" | |
 | 6e | Dialogos altos: editar premio con foto (movil) y editar promocion en super-admin | Se puede hacer scroll dentro del dialogo hasta el boton Guardar | |
 | 6b | Reverso del pase de Google de un cliente registrado sin DNI | No aparece "ID de miembro" con el codigo `cuik:...`; con DNI muestra el DNI | |
