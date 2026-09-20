@@ -140,6 +140,37 @@ function TopBarTenantAvatar() {
   )
 }
 
+/** Shown while a super-admin is viewing the tenant read-only. */
+function SuperAdminViewBanner() {
+  const { readOnly, tenantName } = useTenant()
+  const [leaving, setLeaving] = useState(false)
+  if (!readOnly) return null
+  async function leave() {
+    setLeaving(true)
+    try {
+      await fetch("/api/admin/sa-view", { method: "DELETE" })
+    } finally {
+      window.location.href = "/admin/tenants"
+    }
+  }
+  return (
+    <div className="bg-amber-400 text-amber-950 text-sm px-4 py-2 flex items-center justify-between gap-3 flex-shrink-0">
+      <span>
+        Estás viendo <strong>{tenantName}</strong> como super-admin, en modo{" "}
+        <strong>solo lectura</strong>. Los cambios están bloqueados.
+      </span>
+      <button
+        type="button"
+        onClick={leave}
+        disabled={leaving}
+        className="rounded-md bg-amber-950 text-amber-50 px-3 py-1 text-xs font-semibold hover:bg-amber-900 disabled:opacity-60"
+      >
+        {leaving ? "Saliendo…" : "Salir"}
+      </button>
+    </div>
+  )
+}
+
 function SidebarNav({ onNavClick }: { onNavClick: () => void }) {
   const pathname = usePathname()
   const { branding, promotionType } = useTenant()
@@ -213,6 +244,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Main */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <SuperAdminViewBanner />
           {/* Top bar */}
           <header className="bg-white border-b border-slate-200 px-4 lg:px-6 py-3 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-3">

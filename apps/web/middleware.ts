@@ -2,6 +2,7 @@ import { ROLE_REDIRECTS, type Role } from "@cuik/shared"
 import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { SA_VIEW_COOKIE } from "@/lib/sa-view"
 
 export const config = {
   runtime: "nodejs",
@@ -56,6 +57,37 @@ function loginRedirect(baseUrl: string): NextResponse {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+
+  // "Ver como el comercio" is read-only: while the super-admin view cookie is
+  // present, any non-GET call to a tenant API and any Server Action of the
+  // tenant panel are refused. Super-admin routes (/api/admin, /admin), auth
+  // and /api/me stay untouched. Only costs a session lookup when the cookie exists.
+  const isTenantApiWrite =
+    pathname.startsWith("/api/") &&
+    !pathname.startsWith("/api/admin/") &&
+    !pathname.startsWith("/api/auth/") &&
+    !pathname.startsWith("/api/me/")
+  // Server Actions of the tenant panel arrive as POST with a `next-action` header.
+  const isServerAction =
+    Boolean(request.headers.get("next-action")) && !pathname.startsWith("/admin")
+  if (
+    request.method !== "GET" &&
+    request.method !== "HEAD" &&
+    (isTenantApiWrite || isServerAction) &&
+    request.cookies.get(SA_VIEW_COOKIE)
+  ) {
+    const saSession = await auth.api.getSession({ headers: request.headers })
+    const saRole = (saSession?.user as { role?: string } | undefined)?.role
+    if (saRole === "super_admin") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Modo solo lectura: estás viendo este comercio como super-admin.",
+        },
+        { status: 403 },
+      )
+    }
+  }
 
   if (isPublicPath(pathname)) {
     return NextResponse.next()

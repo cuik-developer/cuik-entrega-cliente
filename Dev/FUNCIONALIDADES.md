@@ -82,6 +82,7 @@ Sidebar izquierdo con navegacion. Rol requerido: `super_admin`.
 - Cambiar plan (modal con lista de planes)
 - Activar / reactivar / pausar / cancelar
 - Reset de contrasena del admin (genera nueva temporal)
+- **Ver como el comercio** (sep-2026): abre `/panel` del tenant en solo lectura por 1 hora. Cookie httpOnly `sa_view_tenant` cifrada (`lib/sa-view.ts`, `POST/DELETE /api/admin/sa-view`), honrada solo para `super_admin` (`requireAuth` → `session.saViewTenantId`; `requireRole("admin")` y `requireTenantMembership` la aceptan). El middleware devuelve 403 a todo no-GET de `/api/{tenant}/*` y a las Server Actions del panel mientras exista la cookie. `getTenantForUser` devuelve `readOnly: true` y el layout del panel muestra un banner ambar con **Salir**. Cada entrada queda como nota interna del tenant.
 - Ver diseno de pase vinculado (redirije a editor)
 
 ### 3.3 Pases (`/admin/pases`)

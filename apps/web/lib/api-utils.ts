@@ -1,5 +1,6 @@
 import { and, db, eq, inArray, member, organization, tenants } from "@cuik/db"
 import { auth } from "@/lib/auth"
+import { saViewTenantFromCookieHeader } from "@/lib/sa-view"
 
 // --- Response helpers ---
 
@@ -22,15 +23,27 @@ export async function requireAuth(request: Request) {
     return { session: null, error: errorResponse("Unauthorized", 401) }
   }
 
-  return { session, error: null }
+  // Super-admin "ver como el comercio": the tenant id comes from an encrypted,
+  // expiring cookie and is only trusted for super_admin sessions. Writes are
+  // blocked by the middleware (non-GET tenant API calls return 403), so the
+  // helpers below can treat it as admin membership for reads.
+  const saViewTenantId =
+    (session.user as { role?: string }).role === "super_admin"
+      ? saViewTenantFromCookieHeader(request.headers.get("cookie"))
+      : null
+
+  return { session: { ...session, saViewTenantId }, error: null }
 }
 
-export function requireRole(session: { user: { role?: string } }, role: string) {
+export function requireRole(
+  session: { user: { role?: string }; saViewTenantId?: string | null },
+  role: string,
+) {
   const userRole = session.user.role ?? "user"
-  if (userRole !== role) {
-    return errorResponse("Forbidden — insufficient role", 403)
-  }
-  return null
+  if (userRole === role) return null
+  // A super-admin viewing a tenant passes "admin" checks (read-only, see above).
+  if (role === "admin" && userRole === "super_admin" && session.saViewTenantId) return null
+  return errorResponse("Forbidden — insufficient role", 403)
 }
 
 // --- Tenant helpers ---
@@ -45,7 +58,15 @@ export async function resolveTenant(slug: string) {
   return results[0] ?? null
 }
 
-export async function requireTenantMembership(session: { user: { id: string } }, tenantId: string) {
+export async function requireTenantMembership(
+  session: { user: { id: string; role?: string }; saViewTenantId?: string | null },
+  tenantId: string,
+) {
+  // Super-admin viewing exactly this tenant (read-only, enforced by middleware).
+  if (session.user.role === "super_admin" && session.saViewTenantId === tenantId) {
+    return null
+  }
+
   // Find the tenant to get its slug and owner
   const tenantResults = await db
     .select({ slug: tenants.slug, ownerId: tenants.ownerId })

@@ -14,6 +14,8 @@ type TenantContextValue = {
   promotionType: "stamps" | "points" | null
   promotionId: string | null
   promotionConfig: Record<string, unknown> | null
+  /** Super-admin viewing this tenant: banner + no writes. */
+  readOnly: boolean
   isLoading: boolean
   error: string | null
 }
@@ -31,6 +33,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     promotionType: null,
     promotionId: null,
     promotionConfig: null,
+    readOnly: false,
     isLoading: true,
     error: null,
   })
@@ -68,12 +71,14 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           promotionType: json.data.promotionType ?? null,
           promotionId: json.data.promotionId ?? null,
           promotionConfig: json.data.promotionConfig ?? null,
+          readOnly: Boolean(json.data.readOnly),
           isLoading: false,
           error: null,
         })
 
-        // Set active organization for Better Auth — once only
-        if (orgId && !orgActivatedRef.current) {
+        // Set active organization for Better Auth — once only (not for a
+        // super-admin viewing: they are not a member of the organization)
+        if (orgId && !orgActivatedRef.current && !json.data.readOnly) {
           orgActivatedRef.current = true
           authClient.organization.setActive({ organizationId: orgId }).catch((err) => {
             console.error("[TenantProvider] Failed to set active organization:", err)

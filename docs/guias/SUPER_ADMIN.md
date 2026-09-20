@@ -178,6 +178,10 @@ Al hacer click en el icono del ojo se abre un modal con 6 tabs. El header del mo
 
 ---
 
+#### Ver como el comercio
+
+En la pestana General, **Ver como el comercio → Abrir panel** abre el panel del tenant en una pestana nueva, tal como lo ve su admin, durante una hora y en **solo lectura**: podes recorrer clientes, analitica, campanas y configuracion, pero cualquier intento de guardar devuelve "Modo solo lectura". Arriba se ve un banner ambar con **Salir**. Sirve para revisar lo que el comercio reporta sin pedirle su contrasena. Cada entrada queda registrada como nota interna del tenant.
+
 #### Tab: Notas
 
 Bitacora interna del equipo Cuik sobre ese comercio: llamadas, acuerdos, incidencias. El comercio no la ve. Cada nota guarda quien la escribio y cuando; opcionalmente una **fecha de seguimiento**, y cuando esa fecha llega la nota se resalta en ambar con "(vencido)". Solo podes borrar tus propias notas. La pestana muestra cuantas hay.

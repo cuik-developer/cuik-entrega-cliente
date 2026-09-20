@@ -827,6 +827,36 @@ function TenantDetailModal({
 
               {/* Contextual actions based on status */}
               <div className="space-y-2">
+                {/* Ver como el comercio (solo lectura, 1 hora) */}
+                <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">Ver como el comercio</p>
+                    <p className="text-xs text-slate-500">
+                      Abre su panel en solo lectura durante 1 hora, para ver lo mismo que ve el
+                      admin.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 shrink-0"
+                    onClick={async () => {
+                      const res = await fetch("/api/admin/sa-view", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ tenantId: tenant.id }),
+                      })
+                      if (!res.ok) {
+                        toast.error("No se pudo abrir la vista del comercio")
+                        return
+                      }
+                      window.open("/panel", "_blank")
+                    }}
+                  >
+                    <Eye className="w-3 h-3" /> Abrir panel
+                  </Button>
+                </div>
+
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
                   Acciones
                 </p>

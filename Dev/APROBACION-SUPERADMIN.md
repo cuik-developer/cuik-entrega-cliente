@@ -1,6 +1,6 @@
 # Cambios en archivos protegidos — mejoras del panel super-admin
 
-> **Estado: PENDIENTE DE APROBACION (20 set. 2026).** Los puntos 5 (checklist), 4 (salud) y 12 (actividad) ya estan en master sin tocar archivos protegidos. Los tres de abajo necesitan esquema de BD o autenticacion (`.claude/PROTECTED.md`), asi que van con diff previo. Las migraciones en prod se aplican a mano (ALTERs idempotentes), como siempre.
+> **Estado: H, I y J APLICADOS (20 set. 2026).** Migraciones 0019 y 0020 pendientes de aplicar a mano en prod. Los puntos 5 (checklist), 4 (salud) y 12 (actividad) ya estan en master sin tocar archivos protegidos. Los tres de abajo necesitan esquema de BD o autenticacion (`.claude/PROTECTED.md`), asi que van con diff previo. Las migraciones en prod se aplican a mano (ALTERs idempotentes), como siempre.
 
 Aprobar con "apruebo H", "apruebo I", "apruebo J" (o varias).
 
@@ -91,7 +91,9 @@ CREATE INDEX IF NOT EXISTS "tenant_notes_tenant_created_idx" ON "tenant_notes" (
 
 ---
 
-## J. Entrar al panel del comercio como super-admin (punto 7)
+## J. Entrar al panel del comercio como super-admin (punto 7) — APROBADO (solo lectura) Y APLICADO (20 set.)
+
+> Implementado: cookie `sa_view_tenant` (AES-GCM con `ENCRYPTION_KEY`, 1 hora) via `POST/DELETE /api/admin/sa-view`; `requireAuth` adjunta `saViewTenantId` a la sesion solo si el rol es `super_admin`, `requireRole("admin")` y `requireTenantMembership` lo aceptan para lecturas; el **middleware** rechaza con 403 cualquier llamada no-GET a `/api/{tenant}/*` y cualquier Server Action del panel mientras la cookie exista (no toca `/api/admin`, `/api/auth`, `/api/me`). `getTenantForUser` resuelve el tenant visto y devuelve `readOnly: true`; el panel muestra un banner ambar con **Salir**. No hizo falta tocar la regla de `/panel` del middleware: ya admitia `super_admin`. Cada entrada deja una nota interna en el tenant.
 
 Objetivo: ver exactamente lo que ve el admin del tenant cuando reporta un problema, sin pedirle la contrasena ni resetearla.
 
