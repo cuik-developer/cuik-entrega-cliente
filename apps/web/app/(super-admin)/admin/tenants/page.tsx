@@ -50,6 +50,7 @@ import { togglePromotionActive } from "./promotion-actions"
 import { PromotionFormDialog } from "./promotion-form-dialog"
 import { RegistrationConfigSection } from "./registration-config-section"
 import { type TenantHealth, TenantHealthCell } from "./tenant-health"
+import { TenantNotesSection } from "./tenant-notes-section"
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -200,6 +201,7 @@ function TenantDetailModal({
   const [editingPromo, setEditingPromo] = useState<TenantPromotion | null>(null)
   const [activeTab, setActiveTab] = useState(defaultTab)
   const [checklist, setChecklist] = useState<ChecklistData | null>(null)
+  const [notesCount, setNotesCount] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [regConfig, setRegConfig] = useState<unknown>(null)
   const [regConfigLoading, setRegConfigLoading] = useState(true)
@@ -620,6 +622,12 @@ function TenantDetailModal({
                 value="apple"
               >
                 Apple
+              </TabsTrigger>
+              <TabsTrigger
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-4 py-2.5 text-sm"
+                value="notas"
+              >
+                Notas{notesCount ? ` (${notesCount})` : ""}
               </TabsTrigger>
               <TabsTrigger
                 className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-4 py-2.5 text-sm"
@@ -1557,6 +1565,14 @@ function TenantDetailModal({
                 Guardar cambios
               </Button>
             </div>
+          </TabsContent>
+          {/* ── Tab: Notas internas ────────────────────────── */}
+          <TabsContent
+            value="notas"
+            forceMount
+            className="flex-1 overflow-y-auto data-[state=inactive]:hidden"
+          >
+            <TenantNotesSection tenantId={tenant.id} onCountChange={setNotesCount} />
           </TabsContent>
         </Tabs>
       </div>

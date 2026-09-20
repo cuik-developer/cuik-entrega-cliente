@@ -178,6 +178,10 @@ Al hacer click en el icono del ojo se abre un modal con 6 tabs. El header del mo
 
 ---
 
+#### Tab: Notas
+
+Bitacora interna del equipo Cuik sobre ese comercio: llamadas, acuerdos, incidencias. El comercio no la ve. Cada nota guarda quien la escribio y cuando; opcionalmente una **fecha de seguimiento**, y cuando esa fecha llega la nota se resalta en ambar con "(vencido)". Solo podes borrar tus propias notas. La pestana muestra cuantas hay.
+
 #### Tab: General
 
 Informacion principal del tenant y acciones de gestion.

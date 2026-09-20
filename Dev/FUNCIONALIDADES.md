@@ -76,6 +76,7 @@ Sidebar izquierdo con navegacion. Rol requerido: `super_admin`.
 - **Segmentacion**: umbrales custom (newClientDays, frequentMaxDays, oneTimeInactiveDays, riskMultiplier). Override del default del businessType.
 - **Registro**: que campos mostrar en el formulario publico `/registro` (DNI, email, phone, birthday) y cuales son requeridos.
 - **Catalogo** (solo si points): items canjeables con name, pointsCost, imageUrl, category.
+- **Notas** (sep-2026): bitacora interna del equipo Cuik sobre el tenant (tabla `tenant_notes`, migracion 0020; autor, contenido hasta 2000 chars, `follow_up_at` opcional). `GET/POST /api/admin/tenants/{id}/notes`, `DELETE .../notes/{noteId}` (solo el autor borra). La pestana muestra el contador; las notas con seguimiento vencido se resaltan en ambar. El tenant nunca las ve.
 
 **Acciones adicionales**:
 - Cambiar plan (modal con lista de planes)

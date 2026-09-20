@@ -45,7 +45,7 @@ UPDATE "solicitudes" SET "reviewed_at" = "created_at" WHERE "status" <> 'pending
 
 ---
 
-## I. Notas internas por tenant (punto 8)
+## I. Notas internas por tenant (punto 8) — APROBADO Y APLICADO (20 set.)
 
 Bitacora del equipo Cuik (llamadas, acuerdos, incidencias), separada de las notas de clientes y de las solicitudes. Necesita una tabla nueva.
 

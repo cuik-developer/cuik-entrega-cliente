@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -94,6 +95,23 @@ export const solicitudes = pgTable("solicitudes", {
   reviewedBy: text("reviewed_by").references(() => user.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 })
+
+// Internal notes of the Cuik team about a tenant (calls, agreements, incidents).
+// Not visible to the tenant. Optional follow-up date for reminders.
+export const tenantNotes = pgTable(
+  "tenant_notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    authorId: text("author_id").references(() => user.id),
+    content: text("content").notNull(),
+    followUpAt: timestamp("follow_up_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("tenant_notes_tenant_created_idx").on(table.tenantId, table.createdAt)],
+)
 
 export const globalConfig = pgTable("global_config", {
   key: text("key").primaryKey(),
