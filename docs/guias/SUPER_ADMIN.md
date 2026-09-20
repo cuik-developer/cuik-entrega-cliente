@@ -284,7 +284,7 @@ Configuracion de los campos estrategicos que aparecen en el formulario de regist
    - **Opciones**: Solo para tipo "Selector", las opciones disponibles (una por linea).
    - **Placeholder**: Texto de ayuda dentro del campo.
 3. Se pueden agregar multiples campos.
-4. Opcionalmente, activar **Cumpleanos**: agrega el campo "Fecha de cumpleanos" al formulario de registro, con la opcion **Obligatorio**. Es necesario para que el comercio pueda usar el **saludo de cumpleanos automatico** de Campanas (sin fecha, el saludo no tiene a quien llegar). El admin del comercio tambien puede cargar la fecha a mano desde la ficha de cada cliente.
+4. Opcionalmente, activar **Cumpleanos**: agrega el campo "Fecha de cumpleanos" al formulario de registro, con la opcion **Obligatorio** y un **Texto de la pregunta** opcional (hasta 60 caracteres) para adaptarla al rubro, p. ej. "Cumpleanos de tu engreid@" en una petshop; vacio = "Fecha de cumpleanos". Es opcional: un comercio sin cumpleanos usa Campanas igual, solo que el saludo automatico no tiene a quien enviarse (la tarjeta se lo explica). Es necesario para que el comercio pueda usar el **saludo de cumpleanos automatico** de Campanas (sin fecha, el saludo no tiene a quien llegar). El admin del comercio tambien puede cargar la fecha a mano desde la ficha de cada cliente.
 5. Opcionalmente, configurar **Bono de marketing**:
    - Sellos bonus por registrarse (ej: +1 sello gratis).
    - Puntos bonus por registrarse (ej: +50 puntos).

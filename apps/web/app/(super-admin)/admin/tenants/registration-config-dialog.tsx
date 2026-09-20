@@ -109,6 +109,7 @@ export function RegistrationConfigDialog({
   // -- Birthday field --
   const [birthdayEnabled, setBirthdayEnabled] = useState(false)
   const [birthdayRequired, setBirthdayRequired] = useState(false)
+  const [birthdayLabel, setBirthdayLabel] = useState("")
 
   // -- Marketing bonus --
   const [bonusEnabled, setBonusEnabled] = useState(false)
@@ -128,6 +129,7 @@ export function RegistrationConfigDialog({
         setPointsBonus(config.marketingBonus.pointsBonus)
         setBirthdayEnabled(config.birthday?.enabled ?? false)
         setBirthdayRequired(config.birthday?.required ?? false)
+        setBirthdayLabel(config.birthday?.label ?? "")
       } else {
         setFields([])
         setBirthdayEnabled(false)
@@ -259,7 +261,11 @@ export function RegistrationConfigDialog({
           stampsBonus: bonusEnabled && promotionType !== "points" ? stampsBonus : 0,
           pointsBonus: bonusEnabled && promotionType !== "stamps" ? pointsBonus : 0,
         },
-        birthday: { enabled: birthdayEnabled, required: birthdayEnabled && birthdayRequired },
+        birthday: {
+          enabled: birthdayEnabled,
+          required: birthdayEnabled && birthdayRequired,
+          ...(birthdayEnabled && birthdayLabel.trim() ? { label: birthdayLabel.trim() } : {}),
+        },
       }
 
       const result = await updateRegistrationConfig(tenantId, newConfig)
@@ -441,9 +447,25 @@ export function RegistrationConfigDialog({
             </p>
 
             {birthdayEnabled && (
-              <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between">
-                <Label className="text-xs">Obligatorio</Label>
-                <Switch checked={birthdayRequired} onCheckedChange={setBirthdayRequired} />
+              <div className="bg-slate-50 rounded-xl p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Obligatorio</Label>
+                  <Switch checked={birthdayRequired} onCheckedChange={setBirthdayRequired} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Texto de la pregunta (opcional)</Label>
+                  <Input
+                    value={birthdayLabel}
+                    onChange={(e) => setBirthdayLabel(e.target.value.slice(0, 60))}
+                    placeholder="Fecha de cumpleaños"
+                    className="h-8 text-sm"
+                    maxLength={60}
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    Como se le pregunta al cliente en el registro. Ej.: "Cumpleaños de tu engreid@"
+                    para una petshop. Vacío = "Fecha de cumpleaños".
+                  </p>
+                </div>
               </div>
             )}
           </div>

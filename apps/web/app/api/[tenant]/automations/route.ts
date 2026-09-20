@@ -1,5 +1,9 @@
 import { db, eq, tenants } from "@cuik/db"
-import { automationsConfigSchema, updateAutomationsSchema } from "@cuik/shared/validators"
+import {
+  automationsConfigSchema,
+  registrationConfigSchema,
+  updateAutomationsSchema,
+} from "@cuik/shared/validators"
 
 import {
   errorResponse,
@@ -38,12 +42,24 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
 
     const tz = tenant.timezone ?? "America/Lima"
     const date = todayLocal(tz)
+    // Each block degrades on its own: a failing query must not take the whole
+    // Campañas page down (the card, and the reports card in Analítica, read this).
+    const safe = async <T>(label: string, run: () => Promise<T>, fallback: T): Promise<T> => {
+      try {
+        return await run()
+      } catch (err) {
+        console.error(`[GET /api/[tenant]/automations] ${label} failed:`, err)
+        return fallback
+      }
+    }
     const [coverage, today, upcoming, recipients] = await Promise.all([
-      birthdayCoverage(tenant.id),
-      findBirthdayClients(tenant.id, date),
-      upcomingBirthdays(tenant.id, date, 7),
-      defaultRecipients(tenant.id),
+      safe("birthdayCoverage", () => birthdayCoverage(tenant.id), { withBirthday: 0, total: 0 }),
+      safe("findBirthdayClients", () => findBirthdayClients(tenant.id, date), []),
+      safe("upcomingBirthdays", () => upcomingBirthdays(tenant.id, date, 7), []),
+      safe("defaultRecipients", () => defaultRecipients(tenant.id), [] as string[]),
     ])
+    const regParsed = registrationConfigSchema.safeParse(tenant.registrationConfig ?? {})
+    const birthdayAsked = regParsed.success ? regParsed.data.birthday.enabled : false
 
     return successResponse({
       birthday: {
@@ -51,6 +67,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         coverage,
         today,
         upcoming,
+        /** Whether the public registration asks for the birthday (SA → Registro). */
+        asked: birthdayAsked,
       },
       reports: {
         config: getReportsConfig(tenant.automations),

@@ -26,6 +26,8 @@ type Data = {
   coverage: { withBirthday: number; total: number }
   today: Person[]
   upcoming: Upcoming[]
+  /** Registration asks for the birthday (configured by the Cuik team). */
+  asked?: boolean
 }
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h)
@@ -112,8 +114,22 @@ export function BirthdayAutomationCard({ tenantSlug }: { tenantSlug: string }) {
       </Card>
     )
   }
-  if (!data) return null
+  if (!data) {
+    return (
+      <Card className="border-pink-200 bg-pink-50/50 dark:border-pink-900 dark:bg-pink-950/20">
+        <CardContent className="flex items-center justify-between gap-3 py-4 text-sm">
+          <span className="text-muted-foreground">
+            No se pudo cargar el saludo de cumpleaños. El resto de Campañas funciona igual.
+          </span>
+          <Button size="sm" variant="outline" onClick={load}>
+            Reintentar
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
 
+  const noBirthdays = data.coverage.withBirthday === 0
   const pct =
     data.coverage.total > 0
       ? Math.round((data.coverage.withBirthday / data.coverage.total) * 100)
@@ -147,6 +163,13 @@ export function BirthdayAutomationCard({ tenantSlug }: { tenantSlug: string }) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {noBirthdays && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-3 text-xs text-amber-800 dark:text-amber-300">
+            {data.asked
+              ? "Todavía ningún cliente tiene cumpleaños cargado. Los nuevos lo dejan al registrarse; para los actuales podés cargarlo desde su ficha. Mientras tanto el saludo no tiene a quién enviarse, pero el resto de Campañas funciona normal."
+              : "Este comercio no pregunta el cumpleaños en el registro, así que el saludo automático no tiene a quién enviarse. Es opcional: el resto de Campañas funciona normal. Si querés activarlo, pedile al equipo de Cuik que habilite la pregunta y cargá los cumpleaños que tengas desde la ficha de cada cliente."}
+          </div>
+        )}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Mensaje</span>

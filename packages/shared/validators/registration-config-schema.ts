@@ -49,6 +49,8 @@ const marketingBonusSchema = z.object({
 const birthdayFieldSchema = z.object({
   enabled: z.boolean().default(false),
   required: z.boolean().default(false),
+  /** Custom question label, e.g. "Cumpleaños de tu engreid@" for a pet shop. Empty = default. */
+  label: z.string().trim().min(1).max(60).optional(),
 })
 
 export const registrationConfigSchema = z

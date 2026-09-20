@@ -701,7 +701,10 @@ export default function RegistroClient({
 
                 {/* Birthday (toggle in the registration config) */}
                 {birthdayConfig?.enabled &&
-                  renderBirthdayField("Fecha de cumpleaños", birthdayConfig.required)}
+                  renderBirthdayField(
+                    birthdayConfig.label ?? "Fecha de cumpleaños",
+                    birthdayConfig.required,
+                  )}
 
                 {/* Strategic fields (dynamic) */}
                 {strategicFields.length > 0 &&

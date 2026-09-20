@@ -345,7 +345,7 @@ Una tarjeta naranja arriba del historial con la cantidad de clientes **En riesgo
 
 ### Saludo de cumpleanos (automatico)
 
-Una tarjeta rosa que envia solo, cada dia, un push a los clientes que cumplen anos:
+Una tarjeta rosa que envia solo, cada dia, un push a los clientes que cumplen anos. Es opcional: si tu comercio no pregunta el cumpleanos en el registro o todavia nadie lo tiene cargado, la tarjeta te lo avisa y el resto de Campanas (prevencion de abandono, campanas manuales, historial) funciona igual. Para sumar cumpleanos de clientes antiguos, cargalos desde la ficha de cada uno.
 
 - **Activado / Desactivado**: el interruptor de la derecha.
 - **Mensaje**: hasta 150 caracteres, con variables. Por defecto: "¡Feliz cumpleanos, {{client.name}}! Pasa hoy por {{tenant.name}} y celebra con nosotros."

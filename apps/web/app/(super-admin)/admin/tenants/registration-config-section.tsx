@@ -1,7 +1,7 @@
 "use client"
 
 import type { RegistrationConfig } from "@cuik/shared/validators"
-import { ClipboardList, Loader2, Settings2, Sparkles } from "lucide-react"
+import { Cake, ClipboardList, Loader2, Settings2, Sparkles } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -138,6 +138,27 @@ export function RegistrationConfigSection({
             </div>
           )}
 
+          {/* Birthday question */}
+          {config.birthday?.enabled && (
+            <div className="bg-slate-50 rounded-xl p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Cake className="w-3.5 h-3.5 text-pink-500" />
+                <span className="text-xs font-medium text-slate-600">Cumpleaños</span>
+                <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border border-emerald-200">
+                  Se pregunta
+                </Badge>
+                {config.birthday.required && (
+                  <Badge className="text-[10px] bg-amber-100 text-amber-700 border border-amber-200">
+                    Obligatorio
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-slate-500">
+                Pregunta: "{config.birthday.label ?? "Fecha de cumpleaños"}"
+              </p>
+            </div>
+          )}
+
           {/* Marketing Bonus */}
           {hasBonus && (
             <div className="bg-slate-50 rounded-xl p-3">
@@ -189,6 +210,14 @@ export function RegistrationConfigSection({
                   {v}
                 </code>
               ))}
+              {config.birthday?.enabled && (
+                <code
+                  className="text-[10px] bg-pink-100 text-pink-600 px-1.5 py-0.5 rounded font-mono"
+                  title="Fecha AAAA-MM-DD"
+                >
+                  {"{{client.birthday}}"}
+                </code>
+              )}
               {config.strategicFields.map((f) => (
                 <code
                   key={f.key}
