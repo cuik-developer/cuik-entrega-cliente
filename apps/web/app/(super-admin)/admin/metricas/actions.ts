@@ -18,6 +18,25 @@ export type PlatformSummary = {
   totalVisits30d: number
   totalPlans: number
 }
+export type InactiveTenant = {
+  id: string
+  name: string
+  slug: string
+  status: string
+  clients: number
+  lastVisitAt: string | null
+}
+export type PlatformActivity = {
+  /** Tenants with at least one real visit in the window. */
+  activeTenants7d: number
+  activeTenants30d: number
+  /** Tenants (trial/active) with clients but no visit in 14 days. */
+  inactiveTenants: InactiveTenant[]
+  passesInstalled7d: number
+  passesInstalled30d: number
+  redemptions30d: number
+  newClients30d: number
+}
 
 // ── Auth ────────────────────────────────────────────────────────────
 
@@ -208,5 +227,86 @@ export async function getPlatformSummary(): Promise<ActionResult<PlatformSummary
   } catch (err) {
     console.error("[getPlatformSummary]", err)
     return { success: false, error: "Error al obtener resumen de plataforma" }
+  }
+}
+
+/**
+ * Is the platform growing or cooling down? Rolling windows over real visits
+ * (bonus rows excluded), pass installs (Apple device registrations — Google
+ * has no install callback) and redemptions (stamps rewards + points).
+ */
+export async function getPlatformActivity(): Promise<ActionResult<PlatformActivity>> {
+  const { error } = await requireSuperAdmin()
+  if (error) return { success: false, error }
+
+  try {
+    const [agg, inactive] = await Promise.all([
+      db.execute<{
+        active_7d: number
+        active_30d: number
+        installed_7d: number
+        installed_30d: number
+        redemptions_30d: number
+        new_clients_30d: number
+      }>(sql`
+        SELECT
+          (SELECT count(DISTINCT v.tenant_id)::int FROM loyalty.visits v
+            WHERE v.source <> 'bonus' AND v.created_at >= now() - interval '7 days') AS active_7d,
+          (SELECT count(DISTINCT v.tenant_id)::int FROM loyalty.visits v
+            WHERE v.source <> 'bonus' AND v.created_at >= now() - interval '30 days') AS active_30d,
+          (SELECT count(*)::int FROM passes.apple_devices ad WHERE ad.created_at >= now() - interval '7 days') AS installed_7d,
+          (SELECT count(*)::int FROM passes.apple_devices ad WHERE ad.created_at >= now() - interval '30 days') AS installed_30d,
+          (
+            (SELECT count(*)::int FROM loyalty.rewards r
+              WHERE r.status = 'redeemed' AND r.redeemed_at >= now() - interval '30 days')
+            + (SELECT count(*)::int FROM loyalty.points_transactions pt
+                WHERE pt.type = 'redeem' AND pt.created_at >= now() - interval '30 days')
+          ) AS redemptions_30d,
+          (SELECT count(*)::int FROM loyalty.clients c WHERE c.created_at >= now() - interval '30 days') AS new_clients_30d
+      `),
+      db.execute<{
+        id: string
+        name: string
+        slug: string
+        status: string
+        clients: number
+        last_visit_at: Date | string | null
+      }>(sql`
+        SELECT t.id, t.name, t.slug, t.status,
+               (SELECT count(*)::int FROM loyalty.clients c WHERE c.tenant_id = t.id) AS clients,
+               (SELECT max(v.created_at) FROM loyalty.visits v WHERE v.tenant_id = t.id AND v.source <> 'bonus') AS last_visit_at
+        FROM tenants t
+        WHERE t.status IN ('trial', 'active')
+          AND EXISTS (SELECT 1 FROM loyalty.clients c WHERE c.tenant_id = t.id)
+          AND NOT EXISTS (SELECT 1 FROM loyalty.visits v
+                            WHERE v.tenant_id = t.id AND v.source <> 'bonus'
+                              AND v.created_at >= now() - interval '14 days')
+        ORDER BY last_visit_at ASC NULLS FIRST
+        LIMIT 20
+      `),
+    ])
+    const a = agg.rows[0]
+    return {
+      success: true,
+      data: {
+        activeTenants7d: Number(a?.active_7d ?? 0),
+        activeTenants30d: Number(a?.active_30d ?? 0),
+        inactiveTenants: inactive.rows.map((r) => ({
+          id: r.id,
+          name: r.name,
+          slug: r.slug,
+          status: r.status,
+          clients: Number(r.clients),
+          lastVisitAt: r.last_visit_at ? new Date(r.last_visit_at).toISOString() : null,
+        })),
+        passesInstalled7d: Number(a?.installed_7d ?? 0),
+        passesInstalled30d: Number(a?.installed_30d ?? 0),
+        redemptions30d: Number(a?.redemptions_30d ?? 0),
+        newClients30d: Number(a?.new_clients_30d ?? 0),
+      },
+    }
+  } catch (err) {
+    console.error("[getPlatformActivity]", err)
+    return { success: false, error: "Error al obtener actividad de plataforma" }
   }
 }

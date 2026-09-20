@@ -65,11 +65,12 @@ Sidebar izquierdo con navegacion. Rol requerido: `super_admin`.
 **Proposito**: gestionar todos los comercios de la plataforma.
 
 - Tabla/grid de todos los tenants con KPIs: clientes activos, visitas, premios pendientes, tasa retorno.
-- Busqueda por nombre; filtros por estado (`pending | trial | active | expired | cancelled | paused`).
+- Busqueda por nombre; filtros por estado (`pending | trial | active | expired | cancelled | paused`). Deep link `?q=<nombre>` precarga la busqueda (lo usa Metricas).
+- **Columna Salud** (sep-2026): punto verde (visita real en los ultimos 7 dias) / ambar (8-30 dias) / rojo (mas de 30 o nunca, con clientes) / gris (sin clientes), con "ultima visita hace N d", clientes nuevos y visitas de 30 dias y pases instalados (Apple = dispositivo registrado en `passes.apple_devices`, Google = enlace de guardado). Viene en `GET /api/admin/tenants` como `health`; las filas `visits.source='bonus'` no cuentan.
 
 **Acciones (modal con 6 tabs):**
 
-- **General**: nombre, slug, plan, timezone, fechas trial/activacion, businessType, direccion, telefono, contactEmail.
+- **General**: nombre, slug, plan, timezone, fechas trial/activacion, businessType, direccion, telefono, contactEmail. **Puesta en marcha** (sep-2026, `onboarding-checklist.tsx`, datos en `GET /api/admin/tenants/{id}/details` → `checklist`): barra N/8 y lista con promocion activa (aviso ambar si hay mas de una), diseno publicado, Apple (demo / configurando / produccion), Google (credenciales del servidor), registro publico (bono, cumpleanos), equipo (admins y cajeros: miembros de la organizacion con rol distinto de owner/admin), sucursales activas y primer cliente. Cada pendiente tiene un atajo a la pestana o pantalla donde se resuelve.
 - **Promociones**: crear/editar la promo activa (stamps o points), vincular diseno de pase. Una sola promo activa por tenant define el tipo de programa.
 - **Apple Wallet**: wizard para cargar certificados Apple (passTypeId, teamId, signerCert, signerKey, wwdr). Modo: `configuring` | `demo` | `production`. En modo production, los certificados se encriptan con AES-256-GCM.
 - **Segmentacion**: umbrales custom (newClientDays, frequentMaxDays, oneTimeInactiveDays, riskMultiplier). Override del default del businessType.
@@ -118,6 +119,7 @@ Sidebar izquierdo con navegacion. Rol requerido: `super_admin`.
 **Proposito**: analytics platform-wide para el equipo Cuik.
 
 - **KPI Cards**: total tenants, total clientes, visitas totales ultimos 30d, total planes.
+- **Actividad** (sep-2026, `getPlatformActivity` + `activity-panel.tsx`): comercios con visitas reales en 7 / 30 dias, pases Apple instalados en 7 / 30 dias (`apple_devices.created_at`), canjes de 30 dias (premios de sellos + canjes de puntos) y clientes nuevos de 30 dias; debajo, **Comercios sin visitas en 14 dias** (trial/active con clientes; hasta 20, los mas antiguos primero) con enlace a Tenants precargando la busqueda.
 - **Grafico de visitas diarias**: linea con granularidad dia, rango seleccionable.
 - **Distribucion de planes**: pie chart de tenants por plan.
 - **Top 5 tenants**: ranking por visitas ultimos 30d con clientCount.

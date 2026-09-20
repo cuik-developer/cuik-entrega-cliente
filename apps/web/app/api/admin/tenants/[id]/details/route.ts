@@ -1,4 +1,4 @@
-import { db, desc, eq, locations, passDesigns, promotions, tenants } from "@cuik/db"
+import { db, desc, eq, locations, passDesigns, promotions, sql, tenants } from "@cuik/db"
 import { registrationConfigSchema } from "@cuik/shared/validators"
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
 
@@ -25,7 +25,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         .where(eq(promotions.tenantId, id))
         .orderBy(desc(promotions.createdAt)),
       db
-        .select({ registrationConfig: tenants.registrationConfig })
+        .select({
+          registrationConfig: tenants.registrationConfig,
+          appleConfig: tenants.appleConfig,
+          slug: tenants.slug,
+        })
         .from(tenants)
         .where(eq(tenants.id, id))
         .limit(1),
@@ -71,10 +75,40 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       ? (registrationConfigSchema.safeParse(rawConfig).data ?? null)
       : null
 
+    // Onboarding checklist: what the Cuik team still has to set up before
+    // handing the tenant over (mirrors "Fase 2" of the SA guide).
+    const slug = tenantRows[0]?.slug ?? ""
+    const teamRes = await db.execute<{ cashiers: number; admins: number; clients: number }>(sql`
+      SELECT
+        (SELECT count(*)::int FROM organization o JOIN member m ON m.organization_id = o.id
+          WHERE o.slug = ${slug} AND m.role NOT IN ('owner', 'admin')) AS cashiers,
+        (SELECT count(*)::int FROM organization o JOIN member m ON m.organization_id = o.id
+          WHERE o.slug = ${slug} AND m.role IN ('owner', 'admin')) AS admins,
+        (SELECT count(*)::int FROM loyalty.clients c WHERE c.tenant_id = ${id}) AS clients`)
+    const team = teamRes.rows[0]
+    const appleMode = (tenantRows[0]?.appleConfig as { mode?: string } | null)?.mode ?? null
+    const activePromo = promotionsList.find((p) => p.active) ?? null
+    const checklist = {
+      activePromotion: activePromo ? { type: activePromo.type } : null,
+      activePromotionCount: promotionsList.filter((p) => p.active).length,
+      designPublished: designRows.some((d) => d.isActive),
+      appleMode,
+      googleConfigured: Boolean(
+        process.env.GOOGLE_WALLET_ISSUER_ID && process.env.GOOGLE_WALLET_SA_JSON_B64,
+      ),
+      registrationBonus: regConfig?.marketingBonus?.enabled ?? false,
+      birthdayAsked: regConfig?.birthday?.enabled ?? false,
+      locations: locationRows.filter((l) => l.active).length,
+      cashiers: Number(team?.cashiers ?? 0),
+      admins: Number(team?.admins ?? 0),
+      clients: Number(team?.clients ?? 0),
+    }
+
     return successResponse({
       promotions: promotionsList,
       registrationConfig: regConfig,
       locations: locationRows,
+      checklist,
     })
   } catch (error) {
     console.error("[GET /api/admin/tenants/[id]/details]", error)

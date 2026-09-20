@@ -46,6 +46,9 @@ Cubre los despliegues `e3b3561` y `442a3ba` (programa de puntos, panel Premios, 
 | 11e | Campanas del tenant "Cuik" (sin cumpleanos: el registro no lo pregunta y nadie lo tiene cargado) | La tarjeta del saludo de cumpleanos no aparece; prevencion de abandono, campanas e historial siguen igual | |
 | 11f | Super-admin → Registro → Cumpleanos → Texto de la pregunta = "Cumpleanos de tu engreid@" | El formulario publico muestra ese texto; el resumen de Registro lista el bloque Cumpleanos y la variable `{{client.birthday}}` | OK (19 set., prod) |
 | 11g | Variables segun programa: Campanas → Insertar variable (tenant de sellos y tenant de puntos), Super-admin → Registro (resumen) y Super-admin → editor de pase → Campos | Sellos: sin "Balance de puntos"; puntos: sin contadores de sellos ni "Premios pendientes" | |
+| 14a | Super-admin → Tenants | Columna Salud con punto de color, ultima visita, nuevos/visitas de 30 dias y pases instalados; los tenants sin uso salen en rojo | |
+| 14b | Super-admin → Tenants → ojo → General | Bloque "Puesta en marcha" N/8 con atajos a Promocion / Registro / Apple / Disenos; avisa si hay dos promociones activas | |
+| 14c | Super-admin → Metricas | Fila Actividad (comercios con visitas 7/30, pases instalados, canjes, nuevos) y lista "Comercios sin visitas en 14 dias" con enlace a Tenants | |
 | 12 | Confirmar el schedule `reports` en Dokploy (`10 * * * *`, POST `https://cuik.org/api/cron/reports`) | Queda creado y activo | OK (19 set., prod) |
 | 13 | Con el reporte semanal activado en Analitica, esperar al lunes | Llega el correo con el Excel: encabezados azul Cuik, sin hoja de cumpleanos si esta vacia | OK (19 set., prod) |
 | 14 | Agregar un segundo destinatario en la tarjeta de reportes y usar "Enviarme una prueba" | Ambos correos reciben la prueba | |

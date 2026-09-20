@@ -150,7 +150,8 @@ Pantalla central del SA. Permite ver todos los comercios registrados, sus KPIs, 
 
 - **Buscador**: Busqueda por nombre con debounce de 300ms.
 - **Filtro por estado**: Todos, Activo, Demo, Pendiente, Vencido, Pausado, Cancelado.
-- **Columnas**: Tenant (nombre + slug), Estado (badge), Clientes, Visitas, Acciones.
+- **Columnas**: Tenant (nombre + slug), Estado (badge), **Salud**, Clientes, Visitas, Acciones.
+- **Salud**: un vistazo a si el comercio usa Cuik. Verde = registro visitas esta semana; ambar = la ultima fue hace entre 8 y 30 dias; rojo = mas de 30 dias sin visitas (o nunca, teniendo clientes); gris = todavia sin clientes. Debajo, cuantos clientes nuevos y visitas tuvo en 30 dias y cuantos pases estan instalados. Los bonos de registro no cuentan como visitas.
 - **Badges adicionales en la tabla**: Si un tenant tiene certificado Apple en produccion, muestra un badge "Apple" verde. Si esta en proceso de configuracion, muestra "Configurando" en ambar.
 - **Paginacion**: 20 tenants por pagina con botones anterior/siguiente.
 
@@ -176,6 +177,8 @@ Al hacer click en el icono del ojo se abre un modal con 6 tabs. El header del mo
 #### Tab: General
 
 Informacion principal del tenant y acciones de gestion.
+
+**Puesta en marcha**: lista de 8 pasos con barra de avance: promocion activa (avisa si hay mas de una), diseno publicado, Apple Wallet, Google Wallet, registro publico (bono y cumpleanos), equipo (admins y cajeros), sucursales y primer cliente. Cada pendiente tiene un boton que te lleva a la pestana o pantalla donde se resuelve. Cuando esta 8/8 la barra se pone verde: el tenant esta listo para entregar.
 
 **KPIs del tenant** (4 cards):
 
@@ -510,6 +513,7 @@ Dashboard con metricas globales de la plataforma basadas en datos reales.
 ### Elementos
 
 - **4 KPI cards**: Metricas globales de la plataforma.
+- **Actividad**: comercios con visitas en 7 y 30 dias, pases Apple instalados, canjes y clientes nuevos de 30 dias. Debajo, **Comercios sin visitas en 14 dias**: los que tienen clientes pero dejaron de registrar visitas; son los que conviene llamar. Cada nombre abre Tenants con la busqueda hecha.
 - **Selector de rango**: 30, 60 o 90 dias (afecta los graficos).
 - **Grafico de area**: Visitas diarias segun el rango seleccionado (Recharts AreaChart).
 - **Grafico de dona**: Distribucion de tenants por plan (Recharts PieChart).

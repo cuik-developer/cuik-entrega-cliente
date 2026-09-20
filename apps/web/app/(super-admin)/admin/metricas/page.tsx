@@ -2,7 +2,14 @@ import { Suspense } from "react"
 
 export const dynamic = "force-dynamic"
 
-import { getDailyVisits, getPlanDistribution, getPlatformSummary, getTopTenants } from "./actions"
+import {
+  getDailyVisits,
+  getPlanDistribution,
+  getPlatformActivity,
+  getPlatformSummary,
+  getTopTenants,
+} from "./actions"
+import { ActivityPanel } from "./components/activity-panel"
 import { DateRangeSelector } from "./components/date-range-selector"
 import { ExportButton } from "./components/export-button"
 import { KpiCards } from "./components/kpi-cards"
@@ -16,11 +23,12 @@ export default async function MetricasPage({ searchParams }: { searchParams: Sea
   const params = await searchParams
   const days = Math.min(Math.max(Number(params.days) || 30, 7), 365)
 
-  const [summaryResult, visitsResult, planResult, topResult] = await Promise.all([
+  const [summaryResult, visitsResult, planResult, topResult, activityResult] = await Promise.all([
     getPlatformSummary(),
     getDailyVisits(days),
     getPlanDistribution(),
     getTopTenants(5),
+    getPlatformActivity(),
   ])
 
   return (
@@ -38,6 +46,13 @@ export default async function MetricasPage({ searchParams }: { searchParams: Sea
       </div>
 
       {summaryResult.success && <KpiCards data={summaryResult.data} />}
+
+      {activityResult.success && (
+        <ActivityPanel
+          data={activityResult.data}
+          totalTenants={summaryResult.success ? summaryResult.data.totalTenants : 0}
+        />
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Always render VisitsChart — on query failure, pass empty data so

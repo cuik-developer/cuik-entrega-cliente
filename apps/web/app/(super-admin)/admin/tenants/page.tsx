@@ -42,9 +42,14 @@ import type { SegmentationThresholds } from "@/lib/loyalty/client-segments"
 import { getThresholds } from "@/lib/loyalty/client-segments"
 import { AppleCertWizard } from "./apple-cert-wizard"
 import { CatalogSection } from "./catalog-section"
+import {
+  type OnboardingChecklist as ChecklistData,
+  OnboardingChecklist,
+} from "./onboarding-checklist"
 import { togglePromotionActive } from "./promotion-actions"
 import { PromotionFormDialog } from "./promotion-form-dialog"
 import { RegistrationConfigSection } from "./registration-config-section"
+import { type TenantHealth, TenantHealthCell } from "./tenant-health"
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -65,6 +70,7 @@ interface ApiTenant {
   rewardCount: number
   returnRate: number
   planName: string | null
+  health?: TenantHealth
   businessType: string | null
   address: string | null
   phone: string | null
@@ -193,6 +199,7 @@ function TenantDetailModal({
   const [promoDialogOpen, setPromoDialogOpen] = useState(false)
   const [editingPromo, setEditingPromo] = useState<TenantPromotion | null>(null)
   const [activeTab, setActiveTab] = useState(defaultTab)
+  const [checklist, setChecklist] = useState<ChecklistData | null>(null)
   const [saving, setSaving] = useState(false)
   const [regConfig, setRegConfig] = useState<unknown>(null)
   const [regConfigLoading, setRegConfigLoading] = useState(true)
@@ -297,6 +304,7 @@ function TenantDetailModal({
         }
         setRegConfig(json?.data?.registrationConfig ?? null)
         setSaLocations(json?.data?.locations ?? [])
+        setChecklist((json?.data?.checklist as ChecklistData | undefined) ?? null)
       })
       .catch(() => {
         setPromotions([])
@@ -686,6 +694,15 @@ function TenantDetailModal({
                   <span className="font-medium text-slate-900 text-xs">{tenant.slug}</span>
                 </div>
               </div>
+
+              {/* Onboarding checklist */}
+              {checklist && (
+                <OnboardingChecklist
+                  checklist={checklist}
+                  tenantId={tenant.id}
+                  onOpenTab={setActiveTab}
+                />
+              )}
 
               {/* Quick access links */}
               <div className="space-y-2">
@@ -1722,6 +1739,11 @@ export default function TenantsPage() {
 
   // Search & filter state
   const [searchQuery, setSearchQuery] = useState("")
+  // Deep link from Metricas ("comercios sin visitas"): /admin/tenants?q=<nombre>
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q")
+    if (q) setSearchQuery(q)
+  }, [])
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [currentPage, setCurrentPage] = useState(1)
 
@@ -1950,6 +1972,7 @@ export default function TenantsPage() {
                   <tr className="text-xs text-slate-500 border-b border-slate-100">
                     <th className="pb-2 text-left font-semibold">Tenant</th>
                     <th className="pb-2 text-left font-semibold">Estado</th>
+                    <th className="pb-2 text-left font-semibold">Salud</th>
                     <th className="pb-2 text-right font-semibold">Clientes</th>
                     <th className="pb-2 text-right font-semibold">Visitas</th>
                     <th className="pb-2 text-right font-semibold">Acciones</th>
@@ -1958,7 +1981,7 @@ export default function TenantsPage() {
                 <tbody>
                   {tenants.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-sm text-slate-400">
+                      <td colSpan={6} className="py-8 text-center text-sm text-slate-400">
                         No se encontraron tenants con esos filtros.
                       </td>
                     </tr>
@@ -2002,6 +2025,16 @@ export default function TenantsPage() {
                                 </Badge>
                               ) : null}
                             </div>
+                          </td>
+                          <td className="py-2.5">
+                            {t.health ? (
+                              <TenantHealthCell
+                                health={t.health}
+                                clientCount={Number(t.clientCount)}
+                              />
+                            ) : (
+                              <span className="text-xs text-slate-300">—</span>
+                            )}
                           </td>
                           <td className="py-2.5 text-right font-medium">
                             {Number(t.clientCount).toLocaleString()}
