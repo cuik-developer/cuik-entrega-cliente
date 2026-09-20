@@ -235,6 +235,20 @@ Riesgo: nulo para sellos (rama sin cambios). Para puntos el pase de Google pasa 
 
 ---
 
+
+## F. `packages/wallet/src/google/loyalty-object.ts` — no mostrar el QR como "ID de miembro" (feedback 19 set.) — PENDIENTE DE APROBACION
+
+Google Wallet muestra `accountId` en el reverso como "ID de miembro". Hoy se manda `clientDni ?? serialNumber`: si el cliente se registro sin DNI (el registro dinamico lo hace opcional), el reverso muestra `cuik:retail-cuik:642d62c1a3c1`. Propuesta: mandar `accountId` solo cuando hay DNI; sin DNI, omitir el campo (en Google es opcional). Aplica a los dos payloads (dinamico y fallback).
+
+```diff
+-      accountName: clientName,
+-      accountId: clientDni ?? serialNumber,
++      accountName: clientName,
++      ...(clientDni ? { accountId: clientDni } : {}),
+```
+
+Efecto: pases nuevos y cada upsert (visita, canje) dejan de mostrar el codigo interno. No cambia el QR ni el `id` del objeto.
+
 ## Orden sugerido de aplicación
 
 1. **A + B** (2 archivos, defectos 2, 5, 6): 10 minutos, verificables en local con el seed convertido a puntos.

@@ -1,6 +1,6 @@
 "use client"
 
-import { ImagePlus, Loader2, Trash2 } from "lucide-react"
+import { Crop, ImagePlus, Loader2, Trash2 } from "lucide-react"
 import Image from "next/image"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -18,6 +18,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+
+import { PhotoAdjuster } from "./photo-adjuster"
 
 export type CatalogItem = {
   id: string
@@ -41,9 +43,9 @@ type Props = {
 const MAX_MB = 5
 
 /**
- * Create / edit a reward. The photo is uploaded on selection (PNG/JPG, 5 MB)
- * to the tenant asset store and referenced by URL; removing it only clears
- * the reference.
+ * Create / edit a reward. The photo is framed in the browser (drag + zoom,
+ * 16:9) and the cropped PNG is uploaded to the tenant asset store and
+ * referenced by URL; removing it only clears the reference.
  */
 export function RewardFormDialog({ open, onOpenChange, tenantSlug, item, onSaved }: Props) {
   const isEdit = Boolean(item)
@@ -56,7 +58,15 @@ export function RewardFormDialog({ open, onOpenChange, tenantSlug, item, onSaved
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
+  // Object URL of the photo being framed (null = not adjusting).
+  const [adjustSrc, setAdjustSrc] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    return () => {
+      if (adjustSrc?.startsWith("blob:")) URL.revokeObjectURL(adjustSrc)
+    }
+  }, [adjustSrc])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset the form every time the dialog opens for a (different) item
   useEffect(() => {
@@ -68,13 +78,36 @@ export function RewardFormDialog({ open, onOpenChange, tenantSlug, item, onSaved
     setSortOrder(String(item?.sortOrder ?? 0))
     setActive(item?.active ?? true)
     setImageUrl(item?.imageUrl ?? null)
+    setAdjustSrc(null)
   }, [open, item?.id])
 
-  async function upload(file: File) {
+  function startAdjust(file: File) {
     if (!["image/png", "image/jpeg"].includes(file.type)) {
       toast.error("Usá una imagen PNG o JPG")
       return
     }
+    if (file.size > MAX_MB * 1024 * 1024) {
+      toast.error(`La imagen supera ${MAX_MB} MB`)
+      return
+    }
+    setAdjustSrc(URL.createObjectURL(file))
+  }
+
+  /** Re-frame the photo already saved (same-origin asset, so the canvas stays clean). */
+  async function adjustExisting() {
+    if (!imageUrl) return
+    try {
+      const res = await fetch(imageUrl)
+      if (!res.ok) throw new Error()
+      const blob = await res.blob()
+      setAdjustSrc(URL.createObjectURL(blob))
+    } catch {
+      toast.error("No se pudo abrir la foto para ajustarla. Subí una nueva.")
+    }
+  }
+
+  async function upload(blob: Blob) {
+    const file = new File([blob], "premio.png", { type: "image/png" })
     if (file.size > MAX_MB * 1024 * 1024) {
       toast.error(`La imagen supera ${MAX_MB} MB`)
       return
@@ -87,6 +120,7 @@ export function RewardFormDialog({ open, onOpenChange, tenantSlug, item, onSaved
       const json = await res.json()
       if (!json.success) throw new Error(json.error)
       setImageUrl(json.data.url)
+      setAdjustSrc(null)
     } catch (err) {
       toast.error(err instanceof Error && err.message ? err.message : "No se pudo subir la foto")
     } finally {
@@ -153,47 +187,68 @@ export function RewardFormDialog({ open, onOpenChange, tenantSlug, item, onSaved
           {/* Photo */}
           <div className="space-y-2">
             <Label>Foto (opcional)</Label>
-            <div className="relative aspect-[16/9] rounded-xl border border-dashed bg-muted/40 overflow-hidden">
-              {imageUrl ? (
-                <Image src={imageUrl} alt="" fill className="object-cover" unoptimized />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-foreground"
-                  disabled={uploading}
-                >
-                  {uploading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <ImagePlus className="w-5 h-5" />
-                  )}
-                  <span className="text-xs">PNG o JPG · hasta {MAX_MB} MB · ideal 16:9</span>
-                </button>
-              )}
-              {imageUrl && (
-                <div className="absolute bottom-2 right-2 flex gap-1.5">
-                  <Button
+            {adjustSrc ? (
+              <PhotoAdjuster
+                src={adjustSrc}
+                busy={uploading}
+                onCancel={() => setAdjustSrc(null)}
+                onConfirm={upload}
+              />
+            ) : (
+              <div className="relative aspect-[16/9] rounded-xl border border-dashed bg-muted/40 overflow-hidden">
+                {imageUrl ? (
+                  <Image src={imageUrl} alt="" fill className="object-cover" unoptimized />
+                ) : (
+                  <button
                     type="button"
-                    size="sm"
-                    variant="secondary"
                     onClick={() => fileRef.current?.click()}
+                    className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-foreground"
                     disabled={uploading}
                   >
-                    {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Cambiar"}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => setImageUrl(null)}
-                    aria-label="Quitar foto"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              )}
-            </div>
+                    {uploading ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <ImagePlus className="w-5 h-5" />
+                    )}
+                    <span className="text-xs">
+                      PNG o JPG · hasta {MAX_MB} MB · después la encuadrás
+                    </span>
+                  </button>
+                )}
+                {imageUrl && (
+                  <div className="absolute bottom-2 right-2 flex gap-1.5">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={adjustExisting}
+                      disabled={uploading}
+                      aria-label="Ajustar encuadre"
+                    >
+                      <Crop className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => fileRef.current?.click()}
+                      disabled={uploading}
+                    >
+                      {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Cambiar"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setImageUrl(null)}
+                      aria-label="Quitar foto"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
             <input
               ref={fileRef}
               type="file"
@@ -201,7 +256,7 @@ export function RewardFormDialog({ open, onOpenChange, tenantSlug, item, onSaved
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0]
-                if (f) upload(f)
+                if (f) startAdjust(f)
               }}
             />
           </div>
