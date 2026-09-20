@@ -187,6 +187,7 @@ Visitas totales, sellos del ciclo actual (X/Y) o puntos, premios pendientes y ci
 #### 5 tabs
 
 1. **Actividad** (se abre por defecto): todo lo que paso con ese cliente en orden cronologico, de lo mas reciente a lo mas antiguo: cuando se registro, cada visita (sello, ciclo, sucursal y cajero que la registro), cada premio ganado (con su vencimiento), canjeado o vencido sin canjear, las notas con su autor, los bloqueos y desbloqueos, y cada campana que recibio con si se entrego o fallo. Arriba, filtros **Todo / Visitas / Premios / Notas / Campanas**. Es la pantalla para resolver reclamos ("yo vine la semana pasada", "nunca me dieron el premio").
+   - **Puntos** (solo si tu programa es de puntos): el estado de cuenta del cliente. Arriba, su saldo actual y cuanto gano y canjeo en total; abajo, cada movimiento con la fecha, el tipo (compra, bono de registro, cumpleanos, promocion, canje), el detalle (que premio canjeo, cuanto gasto), los puntos que sumo o resto, **el saldo que le quedo despues** y quien lo atendio. Sirve para responder "por que tengo 35 y no 50" sin calcular nada.
 2. **Informacion**: nombre, apellido, celular, email, DNI, fecha de registro, **cumpleanos** (con Agregar / Editar / Borrar, para completar los clientes que no lo cargaron al registrarse), estado y progreso del ciclo.
 3. **Notas**: notas internas sobre el cliente (ejemplo: "Prefiere turnos de tarde"), con fecha y autor.
 4. **Tags**: etiquetas para segmentar. Puedes crear tags nuevos con nombre y color.

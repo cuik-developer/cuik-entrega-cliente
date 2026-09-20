@@ -5,9 +5,12 @@ import {
   db,
   desc,
   eq,
+  inArray,
   locations,
   notifications,
+  pointsTransactions,
   promotions,
+  rewardCatalog,
   rewards,
   sql,
   user,
@@ -74,16 +77,42 @@ function visitEvent(v: VisitRow, isPointsProgram: boolean): TimelineEvent {
   if (v.locationName) bits.push(v.locationName)
   if (v.amount && Number(v.amount) > 0) bits.push(`S/ ${Number(v.amount).toFixed(2)}`)
   // visits.points is also written by stamp programs (1 per visit); only meaningful for points.
-  if (isPointsProgram && v.points && v.points > 0) bits.push(`+${v.points} pts`)
   if (v.source === "manual") bits.push("registro manual")
-  if (v.source === "bonus") bits.push("bonus")
+  // Points programs put the points and the bonus in the title (see below).
+  if (v.source === "bonus" && !isPointsProgram) bits.push("bonus")
+  // Points programs have no stamps/cycles: title by points instead.
+  const title = isPointsProgram
+    ? v.source === "bonus"
+      ? `Bono de registro · +${v.points ?? 0} pts`
+      : `Visita · +${v.points ?? 0} pts`
+    : `Visita · sello ${v.visitNum} (ciclo ${v.cycleNumber})`
   return {
     id: `visit-${v.id}`,
     type: "visit",
     at: v.at.toISOString(),
-    title: `Visita · sello ${v.visitNum} (ciclo ${v.cycleNumber})`,
+    title,
     detail: bits.length ? bits.join(" · ") : undefined,
     by: v.cashierName ?? undefined,
+  }
+}
+
+type PointsRedeemRow = {
+  id: string
+  at: Date
+  amount: number
+  rewardName: string | null
+  description: string | null
+  cashierName: string | null
+}
+
+/** Points redemptions live in points_transactions, not in loyalty.rewards. */
+function pointsRedeemEvent(r: PointsRedeemRow): TimelineEvent {
+  return {
+    id: `points-redeem-${r.id}`,
+    type: "reward_redeemed",
+    at: r.at.toISOString(),
+    title: `Canjeó ${Math.abs(r.amount)} pts: ${r.rewardName ?? r.description ?? "Premio"}`,
+    by: r.cashierName ?? undefined,
   }
 }
 
@@ -173,80 +202,111 @@ export async function getClientTimeline(params: {
   const { tenantId, clientId } = params
   const limit = Math.min(Math.max(params.limit ?? 100, 1), 500)
 
-  const [clientRows, promoRows, visitRows, rewardRows, noteRows, notifRows] = await Promise.all([
-    db
-      .select({ createdAt: clients.createdAt })
-      .from(clients)
-      .where(eq(clients.id, clientId))
-      .limit(1),
+  const [clientRows, promoRows, visitRows, rewardRows, noteRows, notifRows, pointsRedeemRows] =
+    await Promise.all([
+      db
+        .select({ createdAt: clients.createdAt })
+        .from(clients)
+        .where(eq(clients.id, clientId))
+        .limit(1),
 
-    db
-      .select({ type: promotions.type })
-      .from(promotions)
-      .where(sql`${promotions.tenantId} = ${tenantId} AND ${promotions.active} = true`)
-      .limit(1),
+      db
+        .select({ type: promotions.type })
+        .from(promotions)
+        .where(sql`${promotions.tenantId} = ${tenantId} AND ${promotions.active} = true`)
+        .limit(1),
 
-    db
-      .select({
-        id: visits.id,
-        at: visits.createdAt,
-        visitNum: visits.visitNum,
-        cycleNumber: visits.cycleNumber,
-        source: visits.source,
-        amount: visits.amount,
-        points: visits.points,
-        locationName: locations.name,
-        cashierName: user.name,
-      })
-      .from(visits)
-      .leftJoin(locations, eq(locations.id, visits.locationId))
-      .leftJoin(user, eq(user.id, visits.registeredBy))
-      .where(sql`${visits.clientId} = ${clientId} AND ${visits.tenantId} = ${tenantId}`)
-      .orderBy(desc(visits.createdAt))
-      .limit(PER_SOURCE_LIMIT),
+      db
+        .select({
+          id: visits.id,
+          at: visits.createdAt,
+          visitNum: visits.visitNum,
+          cycleNumber: visits.cycleNumber,
+          source: visits.source,
+          amount: visits.amount,
+          points: visits.points,
+          locationName: locations.name,
+          cashierName: user.name,
+        })
+        .from(visits)
+        .leftJoin(locations, eq(locations.id, visits.locationId))
+        .leftJoin(user, eq(user.id, visits.registeredBy))
+        .where(sql`${visits.clientId} = ${clientId} AND ${visits.tenantId} = ${tenantId}`)
+        .orderBy(desc(visits.createdAt))
+        .limit(PER_SOURCE_LIMIT),
 
-    db
-      .select({
-        id: rewards.id,
-        createdAt: rewards.createdAt,
-        redeemedAt: rewards.redeemedAt,
-        expiresAt: rewards.expiresAt,
-        status: rewards.status,
-        rewardType: rewards.rewardType,
-        cycleNumber: rewards.cycleNumber,
-      })
-      .from(rewards)
-      .where(sql`${rewards.clientId} = ${clientId} AND ${rewards.tenantId} = ${tenantId}`)
-      .orderBy(desc(rewards.createdAt))
-      .limit(PER_SOURCE_LIMIT),
+      db
+        .select({
+          id: rewards.id,
+          createdAt: rewards.createdAt,
+          redeemedAt: rewards.redeemedAt,
+          expiresAt: rewards.expiresAt,
+          status: rewards.status,
+          rewardType: rewards.rewardType,
+          cycleNumber: rewards.cycleNumber,
+        })
+        .from(rewards)
+        .where(sql`${rewards.clientId} = ${clientId} AND ${rewards.tenantId} = ${tenantId}`)
+        .orderBy(desc(rewards.createdAt))
+        .limit(PER_SOURCE_LIMIT),
 
-    db
-      .select({
-        id: clientNotes.id,
-        at: clientNotes.createdAt,
-        content: clientNotes.content,
-        author: user.name,
-      })
-      .from(clientNotes)
-      .leftJoin(user, eq(user.id, clientNotes.createdBy))
-      .where(sql`${clientNotes.clientId} = ${clientId} AND ${clientNotes.tenantId} = ${tenantId}`)
-      .orderBy(desc(clientNotes.createdAt))
-      .limit(PER_SOURCE_LIMIT),
+      db
+        .select({
+          id: clientNotes.id,
+          at: clientNotes.createdAt,
+          content: clientNotes.content,
+          author: user.name,
+        })
+        .from(clientNotes)
+        .leftJoin(user, eq(user.id, clientNotes.createdBy))
+        .where(sql`${clientNotes.clientId} = ${clientId} AND ${clientNotes.tenantId} = ${tenantId}`)
+        .orderBy(desc(clientNotes.createdAt))
+        .limit(PER_SOURCE_LIMIT),
 
-    db
-      .select({
-        id: notifications.id,
-        at: notifications.sentAt,
-        status: notifications.status,
-        campaignName: campaigns.name,
-        message: campaigns.message,
-      })
-      .from(notifications)
-      .innerJoin(campaigns, eq(campaigns.id, notifications.campaignId))
-      .where(sql`${notifications.clientId} = ${clientId} AND ${campaigns.tenantId} = ${tenantId}`)
-      .orderBy(desc(notifications.sentAt))
-      .limit(PER_SOURCE_LIMIT),
-  ])
+      db
+        .select({
+          id: notifications.id,
+          at: notifications.sentAt,
+          status: notifications.status,
+          campaignName: campaigns.name,
+          message: campaigns.message,
+        })
+        .from(notifications)
+        .innerJoin(campaigns, eq(campaigns.id, notifications.campaignId))
+        .where(sql`${notifications.clientId} = ${clientId} AND ${campaigns.tenantId} = ${tenantId}`)
+        .orderBy(desc(notifications.sentAt))
+        .limit(PER_SOURCE_LIMIT),
+
+      db
+        .select({
+          id: pointsTransactions.id,
+          at: pointsTransactions.createdAt,
+          amount: pointsTransactions.amount,
+          rewardName: rewardCatalog.name,
+          description: pointsTransactions.description,
+          cashierId: sql<string | null>`${pointsTransactions.metadata}->>'cashierId'`,
+        })
+        .from(pointsTransactions)
+        .leftJoin(rewardCatalog, eq(rewardCatalog.id, pointsTransactions.catalogItemId))
+        .where(
+          sql`${pointsTransactions.clientId} = ${clientId} AND ${pointsTransactions.tenantId} = ${tenantId} AND ${pointsTransactions.type} = 'redeem'`,
+        )
+        .orderBy(desc(pointsTransactions.createdAt))
+        .limit(PER_SOURCE_LIMIT),
+    ])
+
+  // Cashier names for points redemptions (id kept in metadata).
+  const redeemCashierIds = [
+    ...new Set(pointsRedeemRows.map((r) => r.cashierId).filter((id): id is string => Boolean(id))),
+  ]
+  const redeemCashierNames = new Map<string, string>()
+  if (redeemCashierIds.length > 0) {
+    const rows = await db
+      .select({ id: user.id, name: user.name })
+      .from(user)
+      .where(inArray(user.id, redeemCashierIds))
+    for (const r of rows) redeemCashierNames.set(r.id, r.name)
+  }
 
   const registeredAt = clientRows[0]?.createdAt
   const isPointsProgram = promoRows[0]?.type === "points"
@@ -262,9 +322,17 @@ export async function getClientTimeline(params: {
         ]
       : []),
     ...visitRows.map((v) => visitEvent(v, isPointsProgram)),
-    ...rewardRows.flatMap(rewardEvents),
+    // In points programs loyalty.rewards rows are a by-product of each points
+    // redeem; the transaction below is the real event, so skip them here.
+    ...(isPointsProgram ? [] : rewardRows.flatMap(rewardEvents)),
     ...noteRows.map(noteEvent),
     ...notifRows.flatMap((n) => (n.at ? [campaignEvent({ ...n, at: n.at })] : [])),
+    ...pointsRedeemRows.map((r) =>
+      pointsRedeemEvent({
+        ...r,
+        cashierName: r.cashierId ? (redeemCashierNames.get(r.cashierId) ?? null) : null,
+      }),
+    ),
   ]
 
   events.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))

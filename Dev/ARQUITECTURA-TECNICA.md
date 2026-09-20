@@ -963,6 +963,8 @@ Prioridad Apple > Google (nunca double-count).
 
 ### 8.11 Ficha del cliente: timeline y estado
 
+- `GET /api/[tenant]/clients/[id]/points` (`lib/crm/client-points.ts`, sep-2026): estado de cuenta de puntos. Une `points_transactions` con `reward_catalog` (premio), `visits` (monto, `source`, cajero de la visita) y resuelve `metadata.cashierId` (canjes) contra `user`; clasifica cada fila (purchase / bonus / birthday / multiplier / redeem / expire / adjust) con `visits.source` y `metadata.bonusReasons`, y recalcula `balanceAfter` hacia atras desde `clients.points_balance`. UI: pestana **Puntos** en `panel/clientes/[id]` (`_components/client-points-history.tsx`), solo si la promocion activa es de puntos.
+
 - `GET /api/[tenant]/clients/[id]/timeline` (`lib/crm/client-timeline.ts`): une visitas (con sucursal y cajero), rewards (ganado/canjeado/vencido), notas, notificaciones de campana y el registro, ordenados desc. `+N pts` solo si la promo activa es de puntos.
 - `PATCH /api/[tenant]/clients/[id]`: `{ status: active|blocked, reason? }` cambia el estado en transaccion y escribe una nota de auditoria "Cliente bloqueado. Motivo: …" (sin tabla nueva; el timeline la muestra como evento propio); `{ birthday }` setea/borra el cumpleanos.
 - Segmento en la ficha y en el listado: `computeClientSegment` (`lib/loyalty/client-segments.ts`; `regular` es el segmento por defecto, `nuevo` es solo por antiguedad). Badges compartidos en `apps/web/components/panel/badges.tsx`. El **tier** sigue calculandose (`register-visit.ts`) pero esta oculto en toda la UI desde sep-2026.

@@ -12,6 +12,7 @@ import { useTenant } from "@/hooks/use-tenant"
 import { formatDateTime } from "@/lib/format-date"
 
 import { ClientNotes } from "../_components/client-notes"
+import { ClientPointsHistory } from "../_components/client-points-history"
 import { ClientStatusDialog } from "../_components/client-status-dialog"
 import { ClientTags } from "../_components/client-tags"
 import { ClientTimeline } from "../_components/client-timeline"
@@ -222,6 +223,7 @@ export default function ClientDetailPage() {
       <Tabs defaultValue="activity">
         <TabsList>
           <TabsTrigger value="activity">Actividad</TabsTrigger>
+          {isPoints && <TabsTrigger value="points">Puntos</TabsTrigger>}
           <TabsTrigger value="info">Información</TabsTrigger>
           <TabsTrigger value="notes">Notas</TabsTrigger>
           <TabsTrigger value="tags">Tags</TabsTrigger>
@@ -233,6 +235,14 @@ export default function ClientDetailPage() {
             <ClientTimeline key={timelineKey} clientId={clientId} tenantSlug={tenantSlug} />
           )}
         </TabsContent>
+
+        {isPoints && (
+          <TabsContent value="points" className="mt-4">
+            {tenantSlug && (
+              <ClientPointsHistory key={timelineKey} clientId={clientId} tenantSlug={tenantSlug} />
+            )}
+          </TabsContent>
+        )}
 
         <TabsContent value="info" className="mt-4">
           <ClientInfoTab
