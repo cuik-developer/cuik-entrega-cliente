@@ -1,6 +1,6 @@
 "use client"
 
-import { Crop, ImagePlus, Loader2, Trash2 } from "lucide-react"
+import { ImagePlus, Trash2 } from "lucide-react"
 import Image from "next/image"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 
-import { PhotoAdjuster } from "./photo-adjuster"
+import { PhotoAdjuster, type PhotoAdjusterHandle } from "./photo-adjuster"
 
 export type CatalogItem = {
   id: string
@@ -43,9 +43,10 @@ type Props = {
 const MAX_MB = 5
 
 /**
- * Create / edit a reward. The photo is framed in the browser (drag + zoom,
- * 16:9) and the cropped PNG is uploaded to the tenant asset store and
- * referenced by URL; removing it only clears the reference.
+ * Create / edit a reward. The photo is always draggable in its 16:9 frame
+ * (drag + zoom, no edit mode); the crop is rendered and uploaded when the
+ * reward is saved, and only if the photo is new or was re-framed. Removing
+ * it only clears the reference.
  */
 export function RewardFormDialog({ open, onOpenChange, tenantSlug, item, onSaved }: Props) {
   const isEdit = Boolean(item)
@@ -58,15 +59,17 @@ export function RewardFormDialog({ open, onOpenChange, tenantSlug, item, onSaved
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
-  // Object URL of the photo being framed (null = not adjusting).
-  const [adjustSrc, setAdjustSrc] = useState<string | null>(null)
+  // Object URL of the photo shown in the frame; photoDirty = needs crop + upload on save.
+  const [photoSrc, setPhotoSrc] = useState<string | null>(null)
+  const [photoDirty, setPhotoDirty] = useState(false)
+  const adjusterRef = useRef<PhotoAdjusterHandle>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     return () => {
-      if (adjustSrc?.startsWith("blob:")) URL.revokeObjectURL(adjustSrc)
+      if (photoSrc?.startsWith("blob:")) URL.revokeObjectURL(photoSrc)
     }
-  }, [adjustSrc])
+  }, [photoSrc])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset the form every time the dialog opens for a (different) item
   useEffect(() => {
@@ -78,10 +81,26 @@ export function RewardFormDialog({ open, onOpenChange, tenantSlug, item, onSaved
     setSortOrder(String(item?.sortOrder ?? 0))
     setActive(item?.active ?? true)
     setImageUrl(item?.imageUrl ?? null)
-    setAdjustSrc(null)
+    setPhotoSrc(null)
+    setPhotoDirty(false)
+    // Load the saved photo into the frame so it can be re-framed right away.
+    if (item?.imageUrl) {
+      let cancelled = false
+      fetch(item.imageUrl)
+        .then((r) => (r.ok ? r.blob() : Promise.reject(new Error("fetch"))))
+        .then((blob) => {
+          if (!cancelled) setPhotoSrc(URL.createObjectURL(blob))
+        })
+        .catch(() => {
+          /* keep the static preview */
+        })
+      return () => {
+        cancelled = true
+      }
+    }
   }, [open, item?.id])
 
-  function startAdjust(file: File) {
+  function pickPhoto(file: File) {
     if (!["image/png", "image/jpeg"].includes(file.type)) {
       toast.error("Usá una imagen PNG o JPG")
       return
@@ -90,42 +109,33 @@ export function RewardFormDialog({ open, onOpenChange, tenantSlug, item, onSaved
       toast.error(`La imagen supera ${MAX_MB} MB`)
       return
     }
-    setAdjustSrc(URL.createObjectURL(file))
+    setPhotoSrc(URL.createObjectURL(file))
+    setPhotoDirty(true)
+    if (fileRef.current) fileRef.current.value = ""
   }
 
-  /** Re-frame the photo already saved (same-origin asset, so the canvas stays clean). */
-  async function adjustExisting() {
-    if (!imageUrl) return
-    try {
-      const res = await fetch(imageUrl)
-      if (!res.ok) throw new Error()
-      const blob = await res.blob()
-      setAdjustSrc(URL.createObjectURL(blob))
-    } catch {
-      toast.error("No se pudo abrir la foto para ajustarla. Subí una nueva.")
-    }
+  function removePhoto() {
+    setPhotoSrc(null)
+    setPhotoDirty(false)
+    setImageUrl(null)
   }
 
-  async function upload(blob: Blob) {
+  /** Crops the current framing and uploads it. Returns the asset URL. */
+  async function uploadFramedPhoto(): Promise<string> {
+    const blob = await adjusterRef.current?.getBlob()
+    if (!blob) throw new Error("La foto todavía no terminó de cargar")
     const file = new File([blob], "premio.png", { type: "image/png" })
-    if (file.size > MAX_MB * 1024 * 1024) {
-      toast.error(`La imagen supera ${MAX_MB} MB`)
-      return
-    }
+    if (file.size > MAX_MB * 1024 * 1024) throw new Error(`La imagen supera ${MAX_MB} MB`)
     setUploading(true)
     try {
       const fd = new FormData()
       fd.append("file", file)
       const res = await fetch(`/api/${tenantSlug}/assets/upload`, { method: "POST", body: fd })
       const json = await res.json()
-      if (!json.success) throw new Error(json.error)
-      setImageUrl(json.data.url)
-      setAdjustSrc(null)
-    } catch (err) {
-      toast.error(err instanceof Error && err.message ? err.message : "No se pudo subir la foto")
+      if (!json.success) throw new Error(json.error || "No se pudo subir la foto")
+      return json.data.url as string
     } finally {
       setUploading(false)
-      if (fileRef.current) fileRef.current.value = ""
     }
   }
 
@@ -140,16 +150,28 @@ export function RewardFormDialog({ open, onOpenChange, tenantSlug, item, onSaved
       return
     }
     const order = Number(sortOrder)
+    setSaving(true)
+    let finalImageUrl = imageUrl
+    if (photoSrc && photoDirty) {
+      try {
+        finalImageUrl = await uploadFramedPhoto()
+        setImageUrl(finalImageUrl)
+        setPhotoDirty(false)
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "No se pudo subir la foto")
+        setSaving(false)
+        return
+      }
+    }
     const payload = {
       name: name.trim(),
       description: description.trim() || null,
-      imageUrl,
+      imageUrl: finalImageUrl,
       pointsCost: cost,
       category: category.trim() || null,
       active,
       sortOrder: Number.isInteger(order) && order >= 0 ? order : 0,
     }
-    setSaving(true)
     try {
       const res = await fetch(
         isEdit && item ? `/api/${tenantSlug}/catalog/${item.id}` : `/api/${tenantSlug}/catalog`,
@@ -187,12 +209,12 @@ export function RewardFormDialog({ open, onOpenChange, tenantSlug, item, onSaved
           {/* Photo */}
           <div className="space-y-2">
             <Label>Foto (opcional)</Label>
-            {adjustSrc ? (
+            {photoSrc ? (
               <PhotoAdjuster
-                src={adjustSrc}
-                busy={uploading}
-                onCancel={() => setAdjustSrc(null)}
-                onConfirm={upload}
+                ref={adjusterRef}
+                src={photoSrc}
+                disabled={saving}
+                onDirty={() => setPhotoDirty(true)}
               />
             ) : (
               <div className="relative aspect-[16/9] rounded-xl border border-dashed bg-muted/40 overflow-hidden">
@@ -203,50 +225,37 @@ export function RewardFormDialog({ open, onOpenChange, tenantSlug, item, onSaved
                     type="button"
                     onClick={() => fileRef.current?.click()}
                     className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-foreground"
-                    disabled={uploading}
+                    disabled={saving}
                   >
-                    {uploading ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <ImagePlus className="w-5 h-5" />
-                    )}
+                    <ImagePlus className="w-5 h-5" />
                     <span className="text-xs">
                       PNG o JPG · hasta {MAX_MB} MB · después la encuadrás
                     </span>
                   </button>
                 )}
-                {imageUrl && (
-                  <div className="absolute bottom-2 right-2 flex gap-1.5">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={adjustExisting}
-                      disabled={uploading}
-                      aria-label="Ajustar encuadre"
-                    >
-                      <Crop className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => fileRef.current?.click()}
-                      disabled={uploading}
-                    >
-                      {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Cambiar"}
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => setImageUrl(null)}
-                      aria-label="Quitar foto"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                )}
+              </div>
+            )}
+            {(photoSrc || imageUrl) && (
+              <div className="flex justify-end gap-1.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={saving}
+                >
+                  Cambiar
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={removePhoto}
+                  disabled={saving}
+                  aria-label="Quitar foto"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
               </div>
             )}
             <input
@@ -256,7 +265,7 @@ export function RewardFormDialog({ open, onOpenChange, tenantSlug, item, onSaved
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0]
-                if (f) startAdjust(f)
+                if (f) pickPhoto(f)
               }}
             />
           </div>
@@ -332,8 +341,14 @@ export function RewardFormDialog({ open, onOpenChange, tenantSlug, item, onSaved
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancelar
           </Button>
-          <Button onClick={save} disabled={saving || uploading}>
-            {saving ? "Guardando…" : isEdit ? "Guardar cambios" : "Crear premio"}
+          <Button onClick={save} disabled={saving}>
+            {uploading
+              ? "Subiendo foto…"
+              : saving
+                ? "Guardando…"
+                : isEdit
+                  ? "Guardar cambios"
+                  : "Crear premio"}
           </Button>
         </DialogFooter>
       </DialogContent>

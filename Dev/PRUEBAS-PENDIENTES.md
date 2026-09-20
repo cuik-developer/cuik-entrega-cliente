@@ -15,13 +15,16 @@ Cubre los despliegues `e3b3561` y `442a3ba` (programa de puntos, panel Premios, 
 | 5 | Abrir el pase (Apple o Google) despues del canje | Muestra el saldo nuevo sin esperar otra visita | |
 | 6 | Pase de Google de un programa de puntos | Dice "N puntos", no "N de M visitas" | |
 | 7 | Super-admin: crear promocion de puntos con 2 pts/sol, minimo S/ 15, maximo 2/dia y reabrirla | Los valores se conservan | |
+| 7b | Super-admin: editar la promocion de puntos, poner **Multiplicador de cumpleanos = 2** y guardar; luego repetir la prueba 3 | El campo existe (antes no) y la visita del cumpleanero suma el doble | |
+| 7c | Super-admin: Registro → Bono de marketing en un tenant de puntos | Solo aparece el campo "Puntos bonus" (antes aparecian sellos y puntos y era facil cargar el equivocado) | |
+| 6b | Reverso del pase de Google de un cliente registrado sin DNI | No aparece "ID de miembro" con el codigo `cuik:...`; con DNI muestra el DNI | |
 
 ## 2. Panel Premios (nuevo, solo programas de puntos)
 
 | # | Que hacer | Que debe pasar | Estado |
 |---|---|---|---|
 | 8 | Entrar al panel del admin | Aparece **Premios** en el menu solo si el programa es de puntos | |
-| 9 | Crear un premio con foto PNG o JPG, editarlo, ocultarlo con el interruptor | La foto se ve en la tarjeta y en `tu-comercio/premios`; al ocultarlo desaparece de la pagina publica | |
+| 9 | Crear un premio con foto PNG o JPG (la foto se arrastra y se acerca con zoom directamente en el marco, sin boton de recorte; el encuadre se guarda al guardar el premio), editarlo, ocultarlo con el interruptor | La foto se ve en la tarjeta y en `tu-comercio/premios`; al ocultarlo desaparece de la pagina publica | |
 | 10 | Botones Copiar, WhatsApp y Ver pagina del enlace publico | Copian/abren la URL `tu-comercio/premios` | |
 
 ## 3. Strip del pase de puntos

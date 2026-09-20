@@ -1227,6 +1227,10 @@ function TenantDetailModal({
                 }
                 loading={regConfigLoading}
                 onRefresh={refreshTenantDetails}
+                promotionType={
+                  (promotions.find((p) => p.active)?.type as "stamps" | "points" | undefined) ??
+                  null
+                }
               />
             </div>
           </TabsContent>

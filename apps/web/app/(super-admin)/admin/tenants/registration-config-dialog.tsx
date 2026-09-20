@@ -33,6 +33,8 @@ interface RegistrationConfigDialogProps {
   onOpenChange: (open: boolean) => void
   tenantId: string
   config: RegistrationConfig | null
+  /** Active promotion type: shows only the matching bonus field. Unknown = both. */
+  promotionType?: "stamps" | "points" | null
 }
 
 type FieldDraft = {
@@ -97,6 +99,7 @@ export function RegistrationConfigDialog({
   onOpenChange,
   tenantId,
   config,
+  promotionType,
 }: RegistrationConfigDialogProps) {
   const [isPending, startTransition] = useTransition()
 
@@ -253,8 +256,8 @@ export function RegistrationConfigDialog({
         strategicFields: strategicFields as RegistrationConfig["strategicFields"],
         marketingBonus: {
           enabled: bonusEnabled,
-          stampsBonus: bonusEnabled ? stampsBonus : 0,
-          pointsBonus: bonusEnabled ? pointsBonus : 0,
+          stampsBonus: bonusEnabled && promotionType !== "points" ? stampsBonus : 0,
+          pointsBonus: bonusEnabled && promotionType !== "stamps" ? pointsBonus : 0,
         },
         birthday: { enabled: birthdayEnabled, required: birthdayEnabled && birthdayRequired },
       }
@@ -453,41 +456,50 @@ export function RegistrationConfigDialog({
             </div>
 
             <p className="text-xs text-slate-400">
-              Otorga sellos o puntos extra cuando el cliente acepta recibir marketing durante el
-              registro.
+              {promotionType === "points"
+                ? "Otorga puntos extra cuando el cliente acepta recibir marketing durante el registro."
+                : promotionType === "stamps"
+                  ? "Otorga sellos extra cuando el cliente acepta recibir marketing durante el registro."
+                  : "Otorga sellos o puntos extra cuando el cliente acepta recibir marketing durante el registro. Solo aplica el campo que coincide con el tipo de la promocion activa."}
             </p>
 
             {bonusEnabled && (
               <div className="bg-slate-50 rounded-xl p-3 space-y-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Sellos bonus</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={10}
-                    value={stampsBonus}
-                    onChange={(e) =>
-                      setStampsBonus(Math.max(0, Math.min(10, Number(e.target.value) || 0)))
-                    }
-                    className="h-8 text-sm"
-                  />
-                  <p className="text-[10px] text-slate-400">Sellos extra al registrarse (0-10)</p>
-                </div>
+                {promotionType !== "points" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Sellos bonus</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={10}
+                      value={stampsBonus}
+                      onChange={(e) =>
+                        setStampsBonus(Math.max(0, Math.min(10, Number(e.target.value) || 0)))
+                      }
+                      className="h-8 text-sm"
+                    />
+                    <p className="text-[10px] text-slate-400">Sellos extra al registrarse (0-10)</p>
+                  </div>
+                )}
 
-                <div className="space-y-1">
-                  <Label className="text-xs">Puntos bonus</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={1000}
-                    value={pointsBonus}
-                    onChange={(e) =>
-                      setPointsBonus(Math.max(0, Math.min(1000, Number(e.target.value) || 0)))
-                    }
-                    className="h-8 text-sm"
-                  />
-                  <p className="text-[10px] text-slate-400">Puntos extra al registrarse (0-1000)</p>
-                </div>
+                {promotionType !== "stamps" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Puntos bonus</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={1000}
+                      value={pointsBonus}
+                      onChange={(e) =>
+                        setPointsBonus(Math.max(0, Math.min(1000, Number(e.target.value) || 0)))
+                      }
+                      className="h-8 text-sm"
+                    />
+                    <p className="text-[10px] text-slate-400">
+                      Puntos extra al registrarse (0-1000)
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>

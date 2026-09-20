@@ -117,7 +117,8 @@ function buildLoyaltyObjectPayload(params: UpsertLoyaltyObjectParams) {
       classId,
       state: "ACTIVE",
       accountName: clientName,
-      accountId: clientDni ?? serialNumber,
+      // Google shows accountId as "ID de miembro" on the back: only the DNI, never the internal QR code.
+      ...(clientDni ? { accountId: clientDni } : {}),
       barcode: {
         type: "qrCode",
         value: qrValue,
@@ -152,7 +153,7 @@ function buildLoyaltyObjectPayload(params: UpsertLoyaltyObjectParams) {
     classId,
     state: "ACTIVE",
     accountName: clientName,
-    accountId: clientDni ?? serialNumber,
+    ...(clientDni ? { accountId: clientDni } : {}),
     barcode: {
       type: "QR_CODE",
       value: qrValue,

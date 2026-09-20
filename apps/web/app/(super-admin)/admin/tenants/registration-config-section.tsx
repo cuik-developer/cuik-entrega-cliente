@@ -16,6 +16,7 @@ interface RegistrationConfigSectionProps {
   initialConfig?: RegistrationConfig | null
   loading?: boolean
   onRefresh?: () => void
+  promotionType?: "stamps" | "points" | null
 }
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
@@ -31,6 +32,7 @@ export function RegistrationConfigSection({
   tenantId,
   initialConfig,
   loading: externalLoading,
+  promotionType,
   onRefresh,
 }: RegistrationConfigSectionProps) {
   const [config, setConfig] = useState<RegistrationConfig | null>(initialConfig ?? null)
@@ -208,6 +210,7 @@ export function RegistrationConfigSection({
         onOpenChange={handleDialogClose}
         tenantId={tenantId}
         config={config}
+        promotionType={promotionType}
       />
     </div>
   )

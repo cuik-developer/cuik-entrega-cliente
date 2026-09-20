@@ -316,7 +316,7 @@ Si tu comercio usa **puntos** en vez de sellos, la columna "Sellos" dice "Puntos
 
 Si tu programa es de **puntos**, en el menu aparece **Premios**: es tu catalogo de canje, y lo administras vos.
 
-- **Nuevo premio**: nombre, descripcion, costo en puntos, categoria (opcional, agrupa la pagina publica), orden y una **foto** (PNG o JPG, hasta 5 MB). Al elegirla, arrastrala para encuadrar la parte que queres mostrar y usa el control de zoom; se guarda en formato 16:9. Si despues queres cambiar el encuadre, el boton de recorte sobre la foto lo permite sin volver a subirla. La foto se ve en tu pagina de premios y en el cajero, y ayuda a que el cliente elija.
+- **Nuevo premio**: nombre, descripcion, costo en puntos, categoria (opcional, agrupa la pagina publica), orden y una **foto** (PNG o JPG, hasta 5 MB). La foto siempre se puede arrastrar dentro del marco para elegir la parte que se ve, y el control de zoom acerca o aleja; se guarda en formato 16:9 al guardar el premio. Al reabrir un premio, la foto vuelve a estar arrastrable sin subirla de nuevo. La foto se ve en tu pagina de premios y en el cajero, y ayuda a que el cliente elija.
 - **Visible / Oculto**: el interruptor de cada tarjeta. Un premio oculto no se muestra a los clientes ni se puede canjear, pero conserva su historial (por eso no se borra).
 - **Editar**: cambia lo que quieras; los clientes lo ven al instante.
 - **Compartir tu pagina de premios**: arriba tenes el enlace publico `tu-comercio/premios` con botones Copiar, WhatsApp y Ver pagina. El diseno de esa pagina (colores, logo) lo define el equipo de Cuik en Branding; vos definis el contenido.

@@ -69,6 +69,10 @@ const formSchema = z
       .positive("Debe ser mayor a 0")
       .nullable(),
     hasMinimumPurchaseForPoints: z.boolean(),
+    birthdayMultiplier: z
+      .number({ invalid_type_error: "Ingresa un numero valido" })
+      .min(1, "Minimo 1 (sin bono)")
+      .max(10, "Maximo 10"),
   })
   .superRefine((data, ctx) => {
     if (data.type === "stamps") {
@@ -160,23 +164,30 @@ function extractPointsConfigValues(config: unknown): {
   roundingMethod: "floor" | "round" | "ceil"
   minimumPurchaseForPoints: number | null
   maxVisitsPerDay: number
+  birthdayMultiplier: number
 } {
   const defaults: {
     pointsPerCurrency: number
     roundingMethod: "floor" | "round" | "ceil"
     minimumPurchaseForPoints: number | null
     maxVisitsPerDay: number
+    birthdayMultiplier: number
   } = {
     pointsPerCurrency: 1,
     roundingMethod: "floor",
     minimumPurchaseForPoints: null,
     maxVisitsPerDay: 1,
+    birthdayMultiplier: 1,
   }
 
   if (!config || typeof config !== "object") return defaults
 
   const c = config as Record<string, unknown>
   const points = c.points as Record<string, unknown> | undefined
+  const accumulation = c.accumulation as Record<string, unknown> | undefined
+  if (accumulation && typeof accumulation.birthdayMultiplier === "number") {
+    defaults.birthdayMultiplier = accumulation.birthdayMultiplier
+  }
 
   if (points) {
     if (typeof points.pointsPerCurrency === "number") {
@@ -247,6 +258,7 @@ export function PromotionFormDialog({
             roundingMethod: pointsConfig?.roundingMethod ?? "floor",
             minimumPurchaseForPoints: pointsConfig?.minimumPurchaseForPoints ?? null,
             hasMinimumPurchaseForPoints: pointsConfig?.minimumPurchaseForPoints !== null,
+            birthdayMultiplier: pointsConfig?.birthdayMultiplier ?? 1,
           }
         : {
             type: "stamps",
@@ -262,6 +274,7 @@ export function PromotionFormDialog({
             roundingMethod: "floor",
             minimumPurchaseForPoints: null,
             hasMinimumPurchaseForPoints: false,
+            birthdayMultiplier: 1,
           }
       : {
           type: "stamps",
@@ -277,6 +290,7 @@ export function PromotionFormDialog({
           roundingMethod: "floor",
           minimumPurchaseForPoints: null,
           hasMinimumPurchaseForPoints: false,
+          birthdayMultiplier: 1,
         },
   })
 
@@ -352,7 +366,7 @@ export function PromotionFormDialog({
           },
           accumulation: {
             pointsMultipliers: [],
-            birthdayMultiplier: 1,
+            birthdayMultiplier: values.birthdayMultiplier ?? 1,
             bonusPointsOnRegistration: 0,
           },
         }
@@ -522,6 +536,26 @@ export function PromotionFormDialog({
                 />
                 <p className="text-xs text-slate-400">
                   Como se redondean los puntos cuando el monto no es exacto.
+                </p>
+              </div>
+
+              {/* Birthday multiplier */}
+              <div className="space-y-2">
+                <Label htmlFor="birthdayMultiplier">Multiplicador de cumpleanos</Label>
+                <Input
+                  id="birthdayMultiplier"
+                  type="number"
+                  min={1}
+                  max={10}
+                  step={0.5}
+                  {...register("birthdayMultiplier", { valueAsNumber: true })}
+                />
+                {errors.birthdayMultiplier && (
+                  <p className="text-sm text-red-600">{errors.birthdayMultiplier.message}</p>
+                )}
+                <p className="text-xs text-slate-400">
+                  Cuantas veces se multiplican los puntos el dia del cumpleanos del cliente. 1 = sin
+                  bono, 2 = puntos dobles. Requiere que el registro pida la fecha de cumpleanos.
                 </p>
               </div>
 

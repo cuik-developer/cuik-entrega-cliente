@@ -1,38 +1,45 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react"
 
-import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 
 /** Output size of the cropped photo (16:9). Big enough for the public page and the cashier. */
 export const PHOTO_W = 1200
 export const PHOTO_H = 675
 
+export type PhotoAdjusterHandle = {
+  /** Renders the current framing to a 16:9 PNG. Null if the image is not loaded yet. */
+  getBlob: () => Promise<Blob | null>
+}
+
 type Props = {
   /** Object URL or same-origin URL of the source image. */
   src: string
-  onCancel: () => void
-  /** Receives the cropped 16:9 PNG. */
-  onConfirm: (blob: Blob) => void | Promise<void>
-  busy?: boolean
+  /** Fired the first time the user moves or zooms the photo. */
+  onDirty?: () => void
+  disabled?: boolean
 }
 
 /**
- * Drag to move, slider to zoom, always covering a 16:9 frame. The crop is
- * done on a canvas in the browser, so the server only ever receives the
- * final image. Pointer events (mouse + touch), no dependencies.
+ * Drag to move, slider to zoom, always covering a 16:9 frame. Always live:
+ * the photo is draggable as soon as it is shown, no edit mode. The crop is
+ * rendered on a canvas by `getBlob()` when the parent saves.
  */
-export function PhotoAdjuster({ src, onCancel, onConfirm, busy }: Props) {
+export const PhotoAdjuster = forwardRef<PhotoAdjusterHandle, Props>(function PhotoAdjuster(
+  { src, onDirty, disabled },
+  ref,
+) {
   const frameRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement | null>(null)
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null)
   const [zoom, setZoom] = useState(1) // 1 = cover exactly
   const [offset, setOffset] = useState({ x: 0, y: 0 }) // px, frame space
   const [frameW, setFrameW] = useState(0)
-  const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null)
+  const drag = useRef<{ x: number; y: number; ox: number; oy: number; moved: boolean } | null>(null)
 
   useEffect(() => {
+    setNatural(null)
     const img = new window.Image()
     img.onload = () => {
       imgRef.current = img
@@ -78,11 +85,16 @@ export function PhotoAdjuster({ src, onCancel, onConfirm, busy }: Props) {
   }, [maxX, maxY])
 
   function onPointerDown(e: React.PointerEvent) {
+    if (disabled) return
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    drag.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y }
+    drag.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y, moved: false }
   }
   function onPointerMove(e: React.PointerEvent) {
     if (!drag.current) return
+    if (!drag.current.moved) {
+      drag.current.moved = true
+      onDirty?.()
+    }
     setOffset(
       clamp({
         x: drag.current.ox + (e.clientX - drag.current.x),
@@ -94,28 +106,29 @@ export function PhotoAdjuster({ src, onCancel, onConfirm, busy }: Props) {
     drag.current = null
   }
 
-  async function confirm() {
-    const img = imgRef.current
-    if (!img || !natural || !frameW) return
-    const canvas = document.createElement("canvas")
-    canvas.width = PHOTO_W
-    canvas.height = PHOTO_H
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return
-    // Same geometry as the preview, scaled from frame px to output px.
-    const k = PHOTO_W / frameW
-    const dw = drawW * k
-    const dh = drawH * k
-    const dx = (PHOTO_W - dw) / 2 + offset.x * k
-    const dy = (PHOTO_H - dh) / 2 + offset.y * k
-    ctx.imageSmoothingQuality = "high"
-    ctx.drawImage(img, dx, dy, dw, dh)
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"))
-    if (blob) await onConfirm(blob)
-  }
+  useImperativeHandle(ref, () => ({
+    async getBlob() {
+      const img = imgRef.current
+      if (!img || !natural || !frameW) return null
+      const canvas = document.createElement("canvas")
+      canvas.width = PHOTO_W
+      canvas.height = PHOTO_H
+      const ctx = canvas.getContext("2d")
+      if (!ctx) return null
+      // Same geometry as the preview, scaled from frame px to output px.
+      const k = PHOTO_W / frameW
+      const dw = drawW * k
+      const dh = drawH * k
+      const dx = (PHOTO_W - dw) / 2 + offset.x * k
+      const dy = (PHOTO_H - dh) / 2 + offset.y * k
+      ctx.imageSmoothingQuality = "high"
+      ctx.drawImage(img, dx, dy, dw, dh)
+      return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"))
+    },
+  }))
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <div
         ref={frameRef}
         className="relative aspect-[16/9] w-full overflow-hidden rounded-xl border bg-muted cursor-grab active:cursor-grabbing select-none touch-none"
@@ -151,23 +164,18 @@ export function PhotoAdjuster({ src, onCancel, onConfirm, busy }: Props) {
           min={1}
           max={3}
           step={0.01}
-          onValueChange={(v) => setZoom(v[0] ?? 1)}
+          disabled={disabled}
+          onValueChange={(v) => {
+            onDirty?.()
+            setZoom(v[0] ?? 1)
+          }}
           aria-label="Zoom"
           className="flex-1"
         />
       </div>
       <p className="text-xs text-muted-foreground">
-        Arrastrá la foto para elegir qué parte se ve. Se guarda en 16:9.
+        Arrastrá la foto para elegir qué parte se ve. Se guarda en 16:9 al guardar el premio.
       </p>
-
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
-          Cancelar
-        </Button>
-        <Button type="button" size="sm" onClick={confirm} disabled={busy || !natural}>
-          {busy ? "Subiendo…" : "Usar esta foto"}
-        </Button>
-      </div>
     </div>
   )
-}
+})
