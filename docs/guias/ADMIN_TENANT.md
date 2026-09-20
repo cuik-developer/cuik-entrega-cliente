@@ -400,6 +400,8 @@ Hasta **150 caracteres**. El contador cambia de color al acercarse al limite. Co
 | `{{stamps.total}}` | Visitas totales del cliente |
 | `{{rewards.pending}}` | Premios pendientes |
 | `{{points.balance}}` | Balance de puntos |
+
+El menu muestra solo las variables de tu programa: en sellos no aparece el balance de puntos y en puntos no aparecen los contadores de sellos (evita mandar un "0" sin sentido).
 | `{{tenant.name}}` | Nombre de tu comercio |
 
 Ejemplo: `Hola {{client.name}}! Te faltan {{stamps.remaining}} sellos para tu premio en {{tenant.name}}. Te esperamos!`

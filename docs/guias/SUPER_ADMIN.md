@@ -402,7 +402,7 @@ El editor ocupa pantalla completa (sin padding del layout). Si el diseno tiene u
   - Opacidad de sellos no ganados.
 - **Colores**: Background, foreground (texto), label (etiquetas).
 - **Campos del pase**:
-  - **Header Fields**: Campo variable seleccionable desde dropdown.
+  - **Header Fields**: Campo variable seleccionable desde dropdown. Las variables ofrecidas dependen del tipo de promocion del tenant: sellos (`stamps.current/max/remaining`, `rewards.pending`) o puntos (`points.balance`); las comunes (nombre, apellido, nivel, telefono, email, cumpleanos, visitas totales, comercio) y los campos estrategicos aparecen siempre. Si un diseno trae una variable del otro programa, se muestra marcada como "no aplica a este programa" para que la cambies.
   - **Secondary Fields**: Campo variable seleccionable desde dropdown.
   - **Back Fields**: Texto libre que acepta variables de template.
 - **Variables de template disponibles**:

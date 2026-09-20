@@ -271,7 +271,7 @@ Visible en el menu solo cuando la promocion activa es de **puntos** (`useTenant(
   - `{{points.balance}}`
   - `{{rewards.pending}}`
   - `{{tenant.name}}`
-- Boton "Insertar variable" con dropdown.
+- Boton "Insertar variable" con dropdown, **filtrado por `useTenant().promotionType`** (sep-2026, `campaignVariablesFor`): comunes (`client.name`, `stamps.total`, `tenant.name`) + `stamps.*`/`rewards.pending` solo en sellos, `points.balance` solo en puntos; tipo desconocido = ambas. Mismo criterio en el resumen de Tenants → Registro y en el editor de pases (`packages/editor` `templateVariablesFor(promotionType)`, que ademas conserva visible un valor del otro programa como "(no aplica a este programa)" en vez de perderlo).
 - **Destinatarios**: tres pestanas mutuamente excluyentes (una campana tiene una sola audiencia):
   - **Segmento** — select con los presets: Todos / Activos / Inactivos / VIP / Nuevos / Frecuentes / Esporadicos / Una visita / En riesgo. La descripcion del preset elegido se muestra debajo. "Nuevos" usa el mismo criterio que el segmento **nuevo** de Clientes (registrado hace ≤ `newClientDays`).
   - **Filtros** — rango de visitas (min/max) y de ultima visita (despues de / antes de). Un campo vacio no filtra.

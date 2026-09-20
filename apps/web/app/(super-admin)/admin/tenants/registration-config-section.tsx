@@ -199,8 +199,12 @@ export function RegistrationConfigSection({
               {[
                 "{{client.name}}",
                 "{{client.lastName}}",
-                "{{stamps.current}}",
-                "{{points.balance}}",
+                // Only the counter of this tenant's program (both when the type is unknown).
+                ...(promotionType === "points"
+                  ? ["{{points.balance}}"]
+                  : promotionType === "stamps"
+                    ? ["{{stamps.current}}"]
+                    : ["{{stamps.current}}", "{{points.balance}}"]),
                 "{{client.tier}}",
               ].map((v) => (
                 <code

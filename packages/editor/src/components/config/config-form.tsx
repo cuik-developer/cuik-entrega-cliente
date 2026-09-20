@@ -33,7 +33,7 @@ export function ConfigForm({
         </div>
       )}
       <ColorsSection />
-      <FieldsSection customVariables={customVariables} />
+      <FieldsSection customVariables={customVariables} promotionType={promotionType} />
     </div>
   )
 }

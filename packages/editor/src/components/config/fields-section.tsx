@@ -1,24 +1,39 @@
 import { Bell } from "lucide-react"
 import { useRef, useState } from "react"
 import { useEditorStore } from "../../store/editor-store"
-import type { FieldSection } from "../../types"
+import type { FieldSection, PromotionType } from "../../types"
 import type { CustomVariable } from "../../types-external"
 import { CollapsibleSection } from "./collapsible-section"
 
-/** Map of template variables to human-readable labels */
-const TEMPLATE_VARIABLES: Record<string, string> = {
+/** Map of template variables to human-readable labels (all programs). */
+const COMMON_VARIABLES: Record<string, string> = {
   "{{client.name}}": "Nombre del cliente",
   "{{client.lastName}}": "Apellido del cliente",
   "{{client.tier}}": "Nivel del cliente",
   "{{client.phone}}": "Telefono",
   "{{client.email}}": "Email",
+  "{{client.birthday}}": "Cumpleanos",
+  "{{stamps.total}}": "Visitas totales",
+  "{{tenant.name}}": "Nombre del comercio",
+}
+const STAMPS_VARIABLES: Record<string, string> = {
   "{{stamps.current}}": "Sellos en ciclo",
   "{{stamps.max}}": "Sellos para premio",
   "{{stamps.remaining}}": "Sellos restantes",
-  "{{stamps.total}}": "Visitas totales",
-  "{{points.balance}}": "Balance de puntos",
   "{{rewards.pending}}": "Premios pendientes",
-  "{{tenant.name}}": "Nombre del comercio",
+}
+const POINTS_VARIABLES: Record<string, string> = {
+  "{{points.balance}}": "Balance de puntos",
+}
+
+/**
+ * Variables offered for a program. A stamps pass never sees points.balance
+ * (it would render "0") and a points pass never sees the stamp counters.
+ */
+function templateVariablesFor(promotionType: PromotionType): Record<string, string> {
+  return promotionType === "points"
+    ? { ...COMMON_VARIABLES, ...POINTS_VARIABLES }
+    : { ...COMMON_VARIABLES, ...STAMPS_VARIABLES }
 }
 
 /** Check if a value is a pure template variable */
@@ -43,15 +58,20 @@ function InsertVariableDropdown({
   textareaRef,
   onInsert,
   customVariables,
+  promotionType,
 }: {
   textareaRef: React.RefObject<HTMLTextAreaElement | null>
   onInsert: (newValue: string) => void
   customVariables?: CustomVariable[]
+  promotionType: PromotionType
 }) {
   const [open, setOpen] = useState(false)
 
   const allVars = [
-    ...Object.entries(TEMPLATE_VARIABLES).map(([variable, label]) => ({ variable, label })),
+    ...Object.entries(templateVariablesFor(promotionType)).map(([variable, label]) => ({
+      variable,
+      label,
+    })),
     ...(customVariables ?? []).map((cv) => ({ variable: cv.variable, label: cv.label })),
   ]
 
@@ -112,12 +132,14 @@ function FieldGroup({
   freeText,
   showChangeMessage,
   customVariables,
+  promotionType,
 }: {
   section: FieldSection
   label: string
   freeText?: boolean
   showChangeMessage?: boolean
   customVariables?: CustomVariable[]
+  promotionType: PromotionType
 }) {
   const fields = useEditorStore((s) => s.config.fields[section])
   const updateField = useEditorStore((s) => s.updateField)
@@ -180,6 +202,7 @@ function FieldGroup({
                       textareaRef={{ current: textareaRefs.current.get(index) ?? null }}
                       onInsert={(newValue) => updateField(section, index, { value: newValue })}
                       customVariables={customVariables}
+                      promotionType={promotionType}
                     />
                   </div>
                 </>
@@ -215,11 +238,19 @@ function FieldGroup({
                     <option value="" disabled>
                       Seleccionar variable
                     </option>
-                    {Object.entries(TEMPLATE_VARIABLES).map(([key, lbl]) => (
+                    {Object.entries(templateVariablesFor(promotionType)).map(([key, lbl]) => (
                       <option key={key} value={key}>
                         {lbl}
                       </option>
                     ))}
+                    {/* Keep a value from the other program visible so it is not silently lost. */}
+                    {isTemplateVariable(field.value) &&
+                      !(field.value in templateVariablesFor(promotionType)) &&
+                      !(customVariables ?? []).some((cv) => cv.variable === field.value) && (
+                        <option value={field.value}>
+                          {field.value} (no aplica a este programa)
+                        </option>
+                      )}
                     {customVariables && customVariables.length > 0 && (
                       <optgroup label="Campos estrategicos">
                         {customVariables.map((cv) => (
@@ -316,7 +347,13 @@ function FieldGroup({
   )
 }
 
-export function FieldsSection({ customVariables }: { customVariables?: CustomVariable[] }) {
+export function FieldsSection({
+  customVariables,
+  promotionType = "stamps",
+}: {
+  customVariables?: CustomVariable[]
+  promotionType?: PromotionType
+}) {
   return (
     <CollapsibleSection title="Campos">
       <FieldGroup
@@ -324,6 +361,7 @@ export function FieldsSection({ customVariables }: { customVariables?: CustomVar
         label="Header Fields"
         showChangeMessage
         customVariables={customVariables}
+        promotionType={promotionType}
       />
       <div className="border-t border-gray-200" />
       <FieldGroup
@@ -331,6 +369,7 @@ export function FieldsSection({ customVariables }: { customVariables?: CustomVar
         label="Secondary Fields"
         showChangeMessage
         customVariables={customVariables}
+        promotionType={promotionType}
       />
       <div className="border-t border-gray-200" />
       <FieldGroup
@@ -338,6 +377,7 @@ export function FieldsSection({ customVariables }: { customVariables?: CustomVar
         label="Back Fields (reverso del pase)"
         freeText
         customVariables={customVariables}
+        promotionType={promotionType}
       />
     </CollapsibleSection>
   )

@@ -8,17 +8,38 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useTenant } from "@/hooks/use-tenant"
 
-const CAMPAIGN_VARIABLES: { variable: string; label: string }[] = [
+type Variable = { variable: string; label: string }
+
+/** Variables that make sense for every program. */
+const COMMON: Variable[] = [
   { variable: "{{client.name}}", label: "Nombre del cliente" },
+  { variable: "{{stamps.total}}", label: "Visitas totales" },
+]
+const STAMPS: Variable[] = [
   { variable: "{{stamps.current}}", label: "Sellos en ciclo" },
   { variable: "{{stamps.max}}", label: "Sellos para premio" },
   { variable: "{{stamps.remaining}}", label: "Sellos restantes" },
-  { variable: "{{stamps.total}}", label: "Visitas totales" },
   { variable: "{{rewards.pending}}", label: "Premios pendientes" },
-  { variable: "{{points.balance}}", label: "Balance de puntos" },
-  { variable: "{{tenant.name}}", label: "Nombre del comercio" },
 ]
+const POINTS: Variable[] = [{ variable: "{{points.balance}}", label: "Balance de puntos" }]
+const TAIL: Variable[] = [{ variable: "{{tenant.name}}", label: "Nombre del comercio" }]
+
+/**
+ * Only the variables of the tenant's program: a stamps tenant never sees
+ * "Balance de puntos" (it would render 0) and a points tenant never sees
+ * the stamp counters. Unknown type → both, to be safe.
+ */
+export function campaignVariablesFor(promotionType: "stamps" | "points" | null): Variable[] {
+  const specific =
+    promotionType === "points"
+      ? POINTS
+      : promotionType === "stamps"
+        ? STAMPS
+        : [...STAMPS, ...POINTS]
+  return [...COMMON, ...specific, ...TAIL]
+}
 
 interface VariableInsertButtonProps {
   textareaRef: React.RefObject<HTMLTextAreaElement | null>
@@ -26,6 +47,9 @@ interface VariableInsertButtonProps {
 }
 
 export function VariableInsertButton({ textareaRef, onInsert }: VariableInsertButtonProps) {
+  const { promotionType } = useTenant()
+  const variables = campaignVariablesFor(promotionType)
+
   function handleInsert(variable: string) {
     const textarea = textareaRef.current
     if (!textarea) return
@@ -54,7 +78,7 @@ export function VariableInsertButton({ textareaRef, onInsert }: VariableInsertBu
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
-        {CAMPAIGN_VARIABLES.map((v) => (
+        {variables.map((v) => (
           <DropdownMenuItem key={v.variable} onClick={() => handleInsert(v.variable)}>
             <span className="font-mono text-xs text-blue-600 mr-2">{v.variable}</span>
             <span className="text-xs text-muted-foreground">{v.label}</span>
