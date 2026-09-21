@@ -2,6 +2,7 @@ import {
   ArrowRight,
   BarChart3,
   Gift,
+  Headset,
   MessageCircle,
   Palette,
   Percent,
@@ -25,7 +26,7 @@ import { ProblemFlip } from "./_components/problem-flip"
 export const metadata: Metadata = {
   title: "Sobre Cuik — Fidelización digital hecha en Lima",
   description:
-    "Cuik nace en Lima para que el comercio de barrio tenga clientes que vuelven: pases en Apple y Google Wallet, sin apps, sin cartón y con la data en tus manos.",
+    "Cuik nace en Lima para que los negocios locales tengan clientes que vuelven: pases en Apple y Google Wallet, sin apps, sin cartón y con la data en tus manos.",
 }
 
 const PROBLEMS = [
@@ -83,7 +84,7 @@ const BELIEFS: { icon: ReactNode; title: string; text: string }[] = [
   },
   {
     icon: <BarChart3 className="w-5 h-5" />,
-    title: "La data es del comercio",
+    title: "Tu data es tuya",
     text: "Quién volvió, cuándo y qué canjeó es información tuya. Te la mostramos clara, sin hojas de cálculo.",
   },
   {
@@ -144,9 +145,9 @@ export default function SobreCuikPage() {
                   nunca fue la idea. Fue el cartón.
                 </p>
                 <p>
-                  Un comercio pequeño no tiene un equipo de tecnología ni el presupuesto de una
-                  cadena, así que se queda con lo que hay: sellos de tinta, descuentos a ciegas y
-                  una app que nadie instala. Mientras tanto, no sabe quién volvió ni a quién perdió.
+                  Un negocio local no tiene un equipo de tecnología ni el presupuesto de una cadena,
+                  así que se queda con lo que hay: sellos de tinta, descuentos a ciegas y una app
+                  que nadie instala. Mientras tanto, no sabe quién volvió ni a quién perdió.
                 </p>
               </div>
             </Reveal>
@@ -189,9 +190,9 @@ export default function SobreCuikPage() {
           </Reveal>
           <Reveal delay={150}>
             <p className="mt-8 text-blue-100/90 text-lg max-w-2xl mx-auto leading-relaxed">
-              Construimos Cuik junto a los comercios que lo usan: cada semana hablamos con dueños y
-              cajeros, y lo que nos cuentan se convierte en producto. Por eso, cuando nos escribes,
-              te responde alguien que conoce tu pase, tu premio y tu negocio.
+              Hacemos Cuik junto a los negocios que lo usan: cada semana conversamos con dueños y
+              con quienes atienden en caja, y lo que nos cuentan termina en el producto. Por eso,
+              cuando nos escribes, te responde alguien que conoce tu pase, tu premio y tu negocio.
             </p>
           </Reveal>
         </div>
@@ -219,7 +220,7 @@ export default function SobreCuikPage() {
                   <div className="relative h-full rounded-3xl bg-white border border-gray-100 shadow-[0_30px_60px_-30px_rgba(15,23,42,0.35)] overflow-hidden">
                     <div className={`relative h-52 bg-gradient-to-br ${m.tint} overflow-hidden`}>
                       <div
-                        className={`absolute inset-x-0 mx-auto ${m.wide ? "w-[43%] -bottom-28" : "w-[60%] -bottom-16"}`}
+                        className={`absolute inset-x-0 mx-auto ${m.wide ? "w-[43%] -bottom-[69px]" : "w-[60%] -bottom-16"}`}
                       >
                         <Image
                           src={m.img}
@@ -325,25 +326,27 @@ export default function SobreCuikPage() {
               Quiénes somos
             </p>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-[-0.02em] leading-[1.08] text-balance">
-              Un equipo que atiende personalmente a cada comercio
+              Un equipo que atiende personalmente a cada negocio
             </h2>
             <p className="mt-5 text-gray-600 text-lg leading-relaxed">
-              Cuik nace en Lima, hecho por gente que conoce el mostrador. Cada comercio que se suma
-              tiene un contacto directo con el equipo: configuramos tu pase contigo, revisamos tus
-              números y ajustamos la mecánica cuando hace falta. Crecemos con negocios que nos
-              recomiendan, y eso solo pasa si tu programa funciona.
+              Cuik nace en Lima, hecho por gente que conoce a sus clientes. Cada negocio que se suma
+              tiene un contacto directo con el equipo: armamos tu pase contigo, revisamos tus
+              números juntos y ajustamos la mecánica cuando hace falta. Crecemos porque los negocios
+              nos recomiendan, y eso solo pasa si tu programa funciona.
             </p>
           </Reveal>
           <div className="grid gap-4">
             <Reveal delay={100}>
               <TiltCard max={6}>
                 <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-[0_30px_60px_-30px_rgba(15,23,42,0.3)] flex items-center gap-5">
-                  <span className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#0e70db] to-[#3b8ee8] text-white flex items-center justify-center text-2xl font-extrabold shrink-0">
-                    FL
+                  <span className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#0e70db] to-[#3b8ee8] text-white flex items-center justify-center shrink-0">
+                    <Headset className="w-7 h-7" />
                   </span>
                   <div>
-                    <div className="font-bold text-gray-900 text-lg">Francesco Leon</div>
-                    <div className="text-sm text-gray-500">Fundador · Lima, Perú</div>
+                    <div className="font-bold text-gray-900 text-lg">Atención directa</div>
+                    <div className="text-sm text-gray-500">
+                      Te responde quien armó tu pase. Sin call center ni tickets.
+                    </div>
                   </div>
                 </div>
               </TiltCard>

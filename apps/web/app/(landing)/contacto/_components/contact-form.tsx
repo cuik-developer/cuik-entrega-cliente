@@ -57,7 +57,7 @@ type Profile = (typeof PROFILES)[number]["value"]
 const SOURCES = [
   "Buscando en Google",
   "Me lo recomendaron",
-  "Lo vi en un comercio que usa Cuik",
+  "Lo vi en un negocio que usa Cuik",
   "Instagram",
   "TikTok",
   "Otro",

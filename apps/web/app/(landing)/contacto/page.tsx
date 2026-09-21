@@ -2,7 +2,6 @@ import { ArrowRight, Instagram, Mail, MessageCircle, Sparkles } from "lucide-rea
 import type { Metadata } from "next"
 import Link from "next/link"
 import { FxStyles, Reveal, TiltCard } from "@/components/landing/fx"
-import { LivePass } from "@/components/landing/live-pass"
 import {
   CONTACT_EMAIL,
   INSTAGRAM_URL,
@@ -10,6 +9,7 @@ import {
   WHATSAPP_URL,
 } from "@/components/landing/site-footer"
 import { SiteNav } from "@/components/landing/site-nav"
+import { AddToWalletScene } from "./_components/add-to-wallet-scene"
 import { ContactForm } from "./_components/contact-form"
 
 export const metadata: Metadata = {
@@ -38,7 +38,7 @@ const CHANNELS = [
   {
     label: "Instagram",
     value: "@cuik.ia",
-    note: "Novedades, pases reales y los comercios que ya usan Cuik.",
+    note: "Novedades, pases reales y los negocios que ya usan Cuik.",
     href: INSTAGRAM_URL,
     icon: <Instagram className="w-7 h-7" />,
     tint: "bg-gradient-to-br from-pink-500 to-orange-400 shadow-pink-500/30",
@@ -100,26 +100,12 @@ export default function ContactoPage() {
           {/* Live pass: what a reply feels like */}
           <div className="hidden lg:block lg:sticky lg:top-28">
             <Reveal delay={260}>
-              <TiltCard max={12} glare={false} className="w-[300px] mx-auto">
+              <TiltCard max={10} glare={false} className="w-[300px] mx-auto">
                 <div className="relative">
                   <div className="absolute -inset-12 rounded-full bg-[#0e70db]/[0.12] blur-3xl pointer-events-none" />
-                  <LivePass
-                    base="/landing/mockup-gradual-8.png"
-                    alt="Pase de Gradual Café con una notificación de Cuik"
-                    push={{
-                      title: "Cuik",
-                      body: "¡Hola, Ana! Recibimos tu mensaje. Te escribimos hoy mismo.",
-                      icon: <Sparkles />,
-                      color: "#0e70db",
-                    }}
-                    priority
-                  />
+                  <AddToWalletScene />
                 </div>
               </TiltCard>
-              <p className="mt-6 text-center text-sm text-gray-500 max-w-[280px] mx-auto">
-                Así llega una notificación de tu comercio al teléfono de tu cliente. Sin app, sin
-                SMS.
-              </p>
             </Reveal>
           </div>
         </div>
