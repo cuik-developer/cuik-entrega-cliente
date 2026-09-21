@@ -232,8 +232,8 @@ export function MechanicsShowcase({ active }: { active: boolean }) {
         </div>
 
         <div className="grid gap-8 lg:gap-6 lg:grid-cols-[minmax(0,300px)_auto_minmax(0,1fr)] items-center">
-          {/* Tabs */}
-          <div>
+          {/* Tabs: min-w-0 keeps the scrolling tab row from widening the column on phones */}
+          <div className="min-w-0">
             <div
               className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible -mx-4 px-4 lg:mx-0 lg:px-0 pb-2 lg:pb-0 snap-x"
               role="tablist"
@@ -285,7 +285,7 @@ export function MechanicsShowcase({ active }: { active: boolean }) {
           </div>
 
           {/* Pass */}
-          <div className="justify-self-center">
+          <div className="justify-self-center min-w-0">
             <div className="relative w-[280px] sm:w-[320px]">
               <div className="absolute -inset-10 rounded-full bg-[#0e70db]/[0.05] blur-3xl pointer-events-none" />
               <div className="mx-stack relative">
@@ -319,7 +319,7 @@ export function MechanicsShowcase({ active }: { active: boolean }) {
           </div>
 
           {/* Details */}
-          <div className="mx-stack">
+          <div className="mx-stack min-w-0">
             {MECHANICS.map((it, i) => {
               const on = i === tab
               return (
