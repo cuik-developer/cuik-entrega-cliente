@@ -5,11 +5,10 @@ import { errorResponse, successResponse } from "@/lib/api-utils"
 
 export const dynamic = "force-dynamic"
 
-const REASONS = {
-  demo: "Quiero una demo",
-  cliente: "Ya soy cliente y necesito ayuda",
-  alianza: "Prensa o alianzas",
-  otro: "Otro",
+const PROFILES = {
+  negocio: "Tengo un negocio",
+  cliente: "Ya uso Cuik",
+  otro: "Prensa o alianzas",
 } as const
 
 const contactSchema = z.object({
@@ -17,7 +16,9 @@ const contactSchema = z.object({
   business: z.string().trim().max(120).optional().or(z.literal("")),
   email: z.string().trim().email("Revisa el correo"),
   phone: z.string().trim().max(40).optional().or(z.literal("")),
-  reason: z.enum(["demo", "cliente", "alianza", "otro"]),
+  profile: z.enum(["negocio", "cliente", "otro"]).default("negocio"),
+  source: z.string().trim().max(80).optional().or(z.literal("")),
+  newsletter: z.boolean().optional().default(false),
   message: z.string().trim().min(10, "Cuéntanos un poco más").max(3000),
   // Honeypot: real people never fill it in.
   website: z.string().optional(),
@@ -41,16 +42,18 @@ export async function POST(request: Request) {
 
     const to = process.env.SA_EMAIL || "sa@cuik.app"
     const lines = [
+      `Perfil: ${PROFILES[d.profile]}`,
       `Nombre: ${d.name}`,
       d.business ? `Negocio: ${d.business}` : null,
       `Correo: ${d.email}`,
-      d.phone ? `Teléfono: ${d.phone}` : null,
-      `Motivo: ${REASONS[d.reason]}`,
+      d.phone ? `WhatsApp: ${d.phone}` : null,
+      d.source ? `Nos conoció: ${d.source}` : null,
+      `Novedades por correo: ${d.newsletter ? "sí" : "no"}`,
     ].filter((l): l is string => Boolean(l))
 
     await sendEmail({
       to,
-      subject: `Contacto web · ${REASONS[d.reason]} · ${d.name}`,
+      subject: `Contacto web · ${PROFILES[d.profile]} · ${d.name}`,
       template: MensajePersonalizado({
         preview: d.message.slice(0, 90),
         heading: "Nuevo mensaje desde cuik.org/contacto",

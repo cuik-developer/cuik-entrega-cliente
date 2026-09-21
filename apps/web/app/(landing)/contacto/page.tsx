@@ -1,15 +1,49 @@
-import { ArrowRight, Clock, Instagram, MapPin, MessageCircle, Sparkles } from "lucide-react"
+import { ArrowRight, Instagram, Mail, MessageCircle, Sparkles } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
-import { INSTAGRAM_URL, SiteFooter, WHATSAPP_URL } from "@/components/landing/site-footer"
+import { FxStyles, Reveal, TiltCard } from "@/components/landing/fx"
+import { LivePass } from "@/components/landing/live-pass"
+import {
+  CONTACT_EMAIL,
+  INSTAGRAM_URL,
+  SiteFooter,
+  WHATSAPP_URL,
+} from "@/components/landing/site-footer"
 import { SiteNav } from "@/components/landing/site-nav"
 import { ContactForm } from "./_components/contact-form"
 
 export const metadata: Metadata = {
   title: "Contáctanos — Cuik",
   description:
-    "Escríbenos por WhatsApp o déjanos un mensaje. Te respondemos en menos de un día hábil.",
+    "Escríbenos por WhatsApp, correo o desde el formulario. Te responde una persona del equipo en menos de un día hábil.",
 }
+
+const CHANNELS = [
+  {
+    label: "WhatsApp",
+    value: "+51 972 213 023",
+    note: "Lo más rápido. Lunes a viernes, 9:00 a 18:00 (Lima).",
+    href: WHATSAPP_URL,
+    icon: <MessageCircle className="w-7 h-7" />,
+    tint: "bg-emerald-500 shadow-emerald-500/30",
+  },
+  {
+    label: "Correo",
+    value: CONTACT_EMAIL,
+    note: "Para propuestas, prensa o cualquier cosa con adjuntos.",
+    href: `mailto:${CONTACT_EMAIL}`,
+    icon: <Mail className="w-7 h-7" />,
+    tint: "bg-[#0e70db] shadow-blue-500/30",
+  },
+  {
+    label: "Instagram",
+    value: "@cuik.ia",
+    note: "Novedades, pases reales y los comercios que ya usan Cuik.",
+    href: INSTAGRAM_URL,
+    icon: <Instagram className="w-7 h-7" />,
+    tint: "bg-gradient-to-br from-pink-500 to-orange-400 shadow-pink-500/30",
+  },
+]
 
 const FAQ = [
   {
@@ -29,135 +63,146 @@ const FAQ = [
 export default function ContactoPage() {
   return (
     <div className="min-h-screen bg-white font-sans antialiased">
+      <FxStyles />
       <SiteNav solid />
 
-      {/* Hero */}
-      <section className="relative overflow-hidden pt-14 pb-10 sm:pt-20 sm:pb-14">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-[-30%] left-[5%] w-[520px] h-[520px] rounded-full bg-[#0e70db]/[0.05] blur-3xl" />
-          <div className="absolute bottom-[-40%] right-[0%] w-[420px] h-[420px] rounded-full bg-[#ff4810]/[0.04] blur-3xl" />
-        </div>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 relative">
-          <p className="text-xs font-bold uppercase tracking-wider text-[#0e70db] mb-3">
-            Contáctanos
-          </p>
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-gray-900 tracking-tight leading-[1.08] max-w-2xl text-balance">
-            Hablemos de tus clientes
-          </h1>
-          <p className="mt-5 text-lg text-gray-500 max-w-xl">
-            Cuéntanos qué necesita tu negocio. Te respondemos en menos de un día hábil, y si
-            prefieres hablar ahora, estamos en WhatsApp.
-          </p>
+      {/* ── "Hola, soy:" band (be!'s tinted full-bleed opener) ── */}
+      <section className="relative overflow-hidden bg-[#eaf2fd]">
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(700px 500px at 85% 20%, rgba(14,112,219,0.18), transparent 60%), radial-gradient(500px 400px at 0% 100%, rgba(255,72,16,0.10), transparent 60%)",
+          }}
+          aria-hidden="true"
+        />
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-16 sm:pb-24 grid lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] gap-12 lg:gap-16 items-start">
+          <div>
+            <Reveal>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#0e70db] mb-4">
+                Contáctanos
+              </p>
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-gray-900 tracking-[-0.02em] leading-[1.04] text-balance">
+                Hablemos de tus clientes
+              </h1>
+              <p className="mt-5 text-lg text-gray-600 max-w-xl leading-relaxed">
+                Cuéntanos qué necesita tu negocio. Te responde una persona del equipo en menos de un
+                día hábil. Si prefieres hablar ahora, estamos en WhatsApp.
+              </p>
+            </Reveal>
+            <Reveal delay={140} className="mt-10">
+              <div className="relative rounded-[2rem] border border-white/70 bg-white/80 backdrop-blur-xl p-6 sm:p-8 shadow-[0_40px_80px_-40px_rgba(14,112,219,0.45)]">
+                <ContactForm />
+              </div>
+            </Reveal>
+          </div>
+
+          {/* Live pass: what a reply feels like */}
+          <div className="hidden lg:block lg:sticky lg:top-28">
+            <Reveal delay={260}>
+              <TiltCard max={12} glare={false} className="w-[300px] mx-auto">
+                <div className="relative">
+                  <div className="absolute -inset-12 rounded-full bg-[#0e70db]/[0.12] blur-3xl pointer-events-none" />
+                  <LivePass
+                    base="/landing/mockup-gradual-8.png"
+                    alt="Pase de Gradual Café con una notificación de Cuik"
+                    push={{
+                      title: "Cuik",
+                      body: "¡Hola, Ana! Recibimos tu mensaje. Te escribimos hoy mismo.",
+                      icon: <Sparkles />,
+                      color: "#0e70db",
+                    }}
+                    priority
+                  />
+                </div>
+              </TiltCard>
+              <p className="mt-6 text-center text-sm text-gray-500 max-w-[280px] mx-auto">
+                Así llega una notificación de tu comercio al teléfono de tu cliente. Sin app, sin
+                SMS.
+              </p>
+            </Reveal>
+          </div>
         </div>
       </section>
 
-      {/* Channels + form */}
-      <section className="pb-20 sm:pb-24">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 grid gap-10 lg:gap-14 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] items-start">
-          <div className="space-y-4">
-            <a
-              href={WHATSAPP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group block rounded-2xl bg-emerald-600 text-white p-6 shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-colors"
-            >
-              <div className="flex items-start gap-4">
-                <span className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
-                  <MessageCircle className="w-5 h-5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold uppercase tracking-wider text-emerald-100">
-                    Lo más rápido
-                  </div>
-                  <div className="text-xl font-extrabold mt-0.5">WhatsApp</div>
-                  <div className="text-emerald-50/90 text-sm mt-1">+51 972 213 023</div>
-                </div>
-                <ArrowRight className="w-5 h-5 mt-1 opacity-70 group-hover:translate-x-0.5 transition-transform" />
-              </div>
-            </a>
+      {/* ── Canales (be!'s three big icons) ── */}
+      <section className="py-20 sm:py-24">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <Reveal className="text-center max-w-xl mx-auto mb-12">
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-[-0.02em] leading-[1.08]">
+              Elige cómo hablar con nosotros
+            </h2>
+            <p className="mt-3 text-gray-500">
+              Somos un equipo pequeño: quien te responde es quien va a configurar tu pase.
+            </p>
+          </Reveal>
+          <div className="grid md:grid-cols-3 gap-5">
+            {CHANNELS.map((c, i) => (
+              <Reveal key={c.label} delay={i * 110}>
+                <TiltCard max={8} className="h-full">
+                  <a
+                    href={c.href}
+                    target={c.href.startsWith("http") ? "_blank" : undefined}
+                    rel={c.href.startsWith("http") ? "noopener noreferrer" : undefined}
+                    className="group block h-full rounded-3xl border border-gray-100 bg-white p-8 text-center shadow-[0_30px_60px_-30px_rgba(15,23,42,0.3)] hover:border-gray-200 transition-colors"
+                  >
+                    <span
+                      className={`mx-auto w-16 h-16 rounded-2xl text-white flex items-center justify-center shadow-lg ${c.tint} group-hover:scale-105 transition-transform duration-300`}
+                    >
+                      {c.icon}
+                    </span>
+                    <div className="mt-5 text-xs font-bold uppercase tracking-[0.18em] text-gray-400">
+                      {c.label}
+                    </div>
+                    <div className="mt-1.5 text-xl font-extrabold text-gray-900 tracking-tight break-all">
+                      {c.value}
+                    </div>
+                    <p className="mt-2 text-sm text-gray-500 leading-relaxed">{c.note}</p>
+                  </a>
+                </TiltCard>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
 
-            <div className="grid sm:grid-cols-2 lg:grid-cols-1 gap-4">
-              <a
-                href={INSTAGRAM_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm hover:shadow-md hover:border-gray-200 transition-all flex items-start gap-4"
-              >
-                <span className="w-10 h-10 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center shrink-0">
-                  <Instagram className="w-4.5 h-4.5" />
-                </span>
-                <div>
-                  <div className="font-bold text-gray-900">Instagram</div>
-                  <div className="text-sm text-gray-500">@cuik.ia · novedades y casos reales</div>
-                </div>
-              </a>
-
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm flex items-start gap-4">
-                <span className="w-10 h-10 rounded-xl bg-blue-50 text-[#0e70db] flex items-center justify-center shrink-0">
-                  <Clock className="w-4.5 h-4.5" />
-                </span>
-                <div>
-                  <div className="font-bold text-gray-900">Horario de atención</div>
-                  <div className="text-sm text-gray-500">
-                    Lunes a viernes, 9:00 a 18:00 (hora de Lima)
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm flex items-start gap-4 sm:col-span-2 lg:col-span-1">
-                <span className="w-10 h-10 rounded-xl bg-orange-50 text-[#ff4810] flex items-center justify-center shrink-0">
-                  <MapPin className="w-4.5 h-4.5" />
-                </span>
-                <div>
-                  <div className="font-bold text-gray-900">Lima, Perú</div>
-                  <div className="text-sm text-gray-500">
-                    Atendemos comercios en todo el Perú y LATAM, 100 % en línea.
-                  </div>
-                </div>
-              </div>
-            </div>
-
+      {/* ── Atajo a la demo + FAQ ── */}
+      <section className="bg-gray-50 py-20 sm:py-24">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <Reveal>
             <Link
               href="/login?view=demo"
-              className="group block rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5 hover:border-blue-200 transition-colors"
+              className="group flex flex-col sm:flex-row sm:items-center gap-5 rounded-[2rem] bg-[#0b1220] text-white p-7 sm:p-9 shadow-[0_40px_80px_-40px_rgba(11,18,32,0.7)] hover:-translate-y-0.5 transition-transform duration-300"
             >
-              <div className="flex items-start gap-4">
-                <span className="w-10 h-10 rounded-xl bg-[#0e70db] text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-200/60">
-                  <Sparkles className="w-4.5 h-4.5" />
-                </span>
-                <div className="flex-1">
-                  <div className="font-bold text-gray-900">¿Buscas una demo?</div>
-                  <div className="text-sm text-gray-500">
-                    Pídela directo y la activamos en 24 horas, gratis por 7 días.
-                  </div>
+              <span className="w-14 h-14 rounded-2xl bg-[#0e70db] flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/30">
+                <Sparkles className="w-6 h-6" />
+              </span>
+              <div className="flex-1">
+                <div className="text-xl font-extrabold tracking-tight">¿Solo quieres probarlo?</div>
+                <div className="text-blue-100/80 mt-1">
+                  Pide tu demo directo y la activamos en 24 horas. Gratis por 7 días, sin tarjeta.
                 </div>
-                <ArrowRight className="w-4 h-4 mt-1 text-[#0e70db] group-hover:translate-x-0.5 transition-transform" />
               </div>
+              <span className="inline-flex items-center gap-2 font-semibold text-blue-200">
+                Solicitar demo
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </span>
             </Link>
-          </div>
+          </Reveal>
 
-          <div className="relative rounded-3xl border border-gray-100 bg-white p-6 sm:p-8 shadow-xl shadow-gray-200/40">
-            <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight">
-              Déjanos un mensaje
+          <Reveal className="mt-16 mb-8" delay={80}>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-[-0.02em]">
+              Lo que más nos preguntan
             </h2>
-            <p className="text-sm text-gray-500 mt-1 mb-6">Los campos con * son obligatorios.</p>
-            <ContactForm />
-          </div>
-        </div>
-      </section>
-
-      {/* FAQ */}
-      <section className="bg-gray-50 py-16 sm:py-20">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight mb-8">
-            Lo que más nos preguntan
-          </h2>
+          </Reveal>
           <div className="grid md:grid-cols-3 gap-4">
-            {FAQ.map((f) => (
-              <div key={f.q} className="rounded-2xl bg-white border border-gray-100 p-6">
-                <div className="font-bold text-gray-900 mb-2">{f.q}</div>
-                <p className="text-sm text-gray-600 leading-relaxed">{f.a}</p>
-              </div>
+            {FAQ.map((f, i) => (
+              <Reveal key={f.q} delay={120 + i * 90}>
+                <div className="h-full rounded-3xl bg-white border border-gray-100 p-6">
+                  <div className="font-bold text-gray-900 mb-2">{f.q}</div>
+                  <p className="text-sm text-gray-600 leading-relaxed">{f.a}</p>
+                </div>
+              </Reveal>
             ))}
           </div>
         </div>
