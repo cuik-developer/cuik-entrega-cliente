@@ -66,6 +66,8 @@ Cubre los despliegues `e3b3561` y `442a3ba` (programa de puntos, panel Premios, 
 |---|---|---|---|
 | 15 | Hero: tocar los telefonos del fondo | Pasan al frente | |
 | 16 | Secciones "El antes y el ahora" y "4 formas de fidelizar" | Animaciones fluidas; el boton de pausa detiene la de 4 formas | |
+| 16c | "El antes y el ahora": esperar a que termine la escena | Se queda en el pase digital con 3 visitas; ya no vuelve al carton | |
+| 16d | "4 formas de fidelizar" en celular | Debajo de las pestanas hay un riel gris con pulgar azul y el texto "Desliza para ver las 4 mecanicas"; el pulgar se mueve al deslizar y la fila se desplaza sola cuando la rotacion cambia de mecanica | |
 | 17 | Footer | Instagram y WhatsApp abren; TikTok y LinkedIn no aparecen | |
 | 16b | "4 formas de fidelizar" en celular vertical | Las pestanas se deslizan de lado, el telefono queda centrado y la tarjeta "Como funciona" ocupa el ancho de la pantalla (antes el telefono quedaba fuera de la vista y la tarjeta se cortaba) | |
 

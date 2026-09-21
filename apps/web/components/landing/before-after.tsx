@@ -12,11 +12,13 @@ import { LivePass, type PushContent } from "./live-pass"
  * problems get struck through; once the pass is up, its advantages appear one
  * by one and the pass plays its loop (2 → 3 visits, visit push).
  *
- * Auto-plays and loops while in view. Transform + opacity only; the flip is a
- * single rotateY on a wrapper with two backface-hidden faces.
+ * Plays once when it comes into view and stays on the digital pass: the
+ * "after" is the point, so it never flips back to the cardboard. Transform +
+ * opacity only; the flip is a single rotateY on a wrapper with two
+ * backface-hidden faces.
  */
 
-type Phase = "card" | "lift" | "flip" | "pass" | "visit" | "push" | "hold" | "reset"
+type Phase = "card" | "lift" | "flip" | "pass" | "visit" | "push" | "hold"
 
 const TIMELINE: { phase: Phase; ms: number }[] = [
   { phase: "card", ms: 2200 },
@@ -25,8 +27,7 @@ const TIMELINE: { phase: Phase; ms: number }[] = [
   { phase: "pass", ms: 1100 },
   { phase: "visit", ms: 1200 },
   { phase: "push", ms: 2800 },
-  { phase: "hold", ms: 1800 },
-  { phase: "reset", ms: 420 },
+  { phase: "hold", ms: 0 }, // final state: stays here
 ]
 
 const FLIPPED: Phase[] = ["flip", "pass", "visit", "push", "hold"]
@@ -53,25 +54,21 @@ export function BeforeAfter({ active }: { active: boolean }) {
   const [step, setStep] = useState(0)
 
   useEffect(() => {
-    if (!active) return
-    const t = setTimeout(() => setStep((s) => (s + 1) % TIMELINE.length), TIMELINE[step].ms)
+    if (!active || step >= TIMELINE.length - 1) return
+    const t = setTimeout(() => setStep((s) => s + 1), TIMELINE[step].ms)
     return () => clearTimeout(t)
   }, [active, step])
 
   const phase = TIMELINE[step].phase
   const flipped = FLIPPED.includes(phase)
   const prosOn = PROS_ON.includes(phase)
-  const resetting = phase === "reset"
 
   return (
-    <div className={`ba relative ${resetting ? "no-anim" : ""}`}>
+    <div className="ba relative">
       <style>{`
         .ba { --ba-ease-out: cubic-bezier(0.23, 1, 0.32, 1); --ba-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1); }
 
-        /* Loop reset: the stage fades out, then everything snaps back without transitions */
-        .ba-stage { perspective: 1400px; transition: opacity 380ms var(--ba-ease-out); }
-        .ba-stage.is-reset { opacity: 0; }
-        .ba.no-anim .ba-flip, .ba.no-anim .ba-lift, .ba.no-anim .ba-pro, .ba.no-anim .ba-con, .ba.no-anim .ba-con i, .ba.no-anim .ba-cap > span { transition: none !important; }
+        .ba-stage { perspective: 1400px; }
 
         /* Lift: the card rises before flipping */
         .ba-lift { transform: translateY(0) scale(1); transition: transform 450ms var(--ba-ease-out); }
@@ -128,7 +125,9 @@ export function BeforeAfter({ active }: { active: boolean }) {
         <div className="grid gap-10 lg:gap-8 items-center lg:grid-cols-[1fr_auto_1fr]">
           {/* Antes — cons */}
           <div className="order-2 lg:order-1 lg:justify-self-end">
-            <div className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">Antes</div>
+            <div className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">
+              Antes
+            </div>
             <ul className="space-y-3">
               {CONS.map((c, i) => (
                 <li key={c}>
@@ -146,7 +145,7 @@ export function BeforeAfter({ active }: { active: boolean }) {
 
           {/* Stage */}
           <div className="order-1 lg:order-2 justify-self-center">
-            <div className={`ba-stage relative w-[300px] sm:w-[360px] ${resetting ? "is-reset" : ""}`}>
+            <div className="ba-stage relative w-[300px] sm:w-[360px]">
               {/* glow, same language as the hero */}
               <div className="absolute -inset-10 rounded-full bg-[#0e70db]/[0.06] blur-3xl pointer-events-none" />
               <div className={`ba-lift relative ${phase === "lift" ? "is-up" : ""}`}>

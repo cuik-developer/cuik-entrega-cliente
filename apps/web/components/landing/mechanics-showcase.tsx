@@ -19,7 +19,7 @@ import {
   UtensilsCrossed,
 } from "lucide-react"
 import type { CSSProperties, ReactNode } from "react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { LivePass, type PassFrame, type PushContent } from "./live-pass"
 
 /**
@@ -28,6 +28,9 @@ import { LivePass, type PassFrame, type PushContent } from "./live-pass"
  * concrete example. Auto-rotates every TAB_MS while in view (progress bar on
  * the active tab); a click jumps to that mechanic and restarts the timer.
  * Each pass plays a two-beat micro-scene while active (visit, then push).
+ * On phones the tabs are a horizontal strip: the native scrollbar is hidden
+ * (iOS never shows it at rest) and a rail underneath tracks the scroll so it
+ * is obvious there are more mechanics; the strip follows the active tab.
  */
 
 const TAB_MS = 5600
@@ -163,6 +166,38 @@ export function MechanicsShowcase({ active }: { active: boolean }) {
   const [sceneStep, setSceneStep] = useState(0)
   const [paused, setPaused] = useState(false)
   const running = active && !paused
+  const listRef = useRef<HTMLDivElement>(null)
+  const [rail, setRail] = useState({ size: 1, pos: 0 }) // thumb width / offset as fractions
+
+  // Rail under the tab strip (phones): thumb = visible fraction, offset = scroll fraction.
+  useEffect(() => {
+    const el = listRef.current
+    if (!el) return
+    const measure = () => {
+      const max = el.scrollWidth - el.clientWidth
+      setRail({
+        size: el.scrollWidth > 0 ? el.clientWidth / el.scrollWidth : 1,
+        pos: max > 0 ? el.scrollLeft / max : 0,
+      })
+    }
+    measure()
+    el.addEventListener("scroll", measure, { passive: true })
+    window.addEventListener("resize", measure)
+    return () => {
+      el.removeEventListener("scroll", measure)
+      window.removeEventListener("resize", measure)
+    }
+  }, [])
+
+  // Keep the active tab in view when the strip scrolls (no-op when it doesn't overflow).
+  useEffect(() => {
+    const el = listRef.current
+    if (!el || el.scrollWidth <= el.clientWidth) return
+    const item = el.children[tab] as HTMLElement | undefined
+    if (!item) return
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    el.scrollTo({ left: item.offsetLeft - 16, behavior: reduce ? "auto" : "smooth" })
+  }, [tab])
 
   // Auto-advance tabs (not while paused).
   // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` intentionally restarts the timer on manual clicks
@@ -196,6 +231,10 @@ export function MechanicsShowcase({ active }: { active: boolean }) {
         @media (hover: hover) and (pointer: fine) { .mx-tab:hover { opacity: 0.85; } .mx-tab.is-on:hover { opacity: 1; } }
         .mx-tile { transform: scale(0.94); transition: transform 200ms var(--mx-ease-out); }
         .mx-tab.is-on .mx-tile { transform: scale(1); }
+        .mx-list { scrollbar-width: none; }
+        .mx-list::-webkit-scrollbar { display: none; }
+        .mx-rail { height: 6px; border-radius: 9999px; background: #e5e7eb; overflow: hidden; }
+        .mx-rail > i { display: block; height: 100%; border-radius: 9999px; background: #0e70db; transform-origin: left; will-change: transform; }
         .mx-bar { height: 3px; border-radius: 9999px; background: #e5e7eb; overflow: hidden; }
         .mx-bar > i { display: block; height: 100%; background: #0e70db; transform: scaleX(0); transform-origin: left; }
         .mx-tab.is-on.is-running .mx-bar > i { animation: mx-fill ${TAB_MS}ms linear forwards; }
@@ -235,7 +274,8 @@ export function MechanicsShowcase({ active }: { active: boolean }) {
           {/* Tabs: min-w-0 keeps the scrolling tab row from widening the column on phones */}
           <div className="min-w-0">
             <div
-              className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible -mx-4 px-4 lg:mx-0 lg:px-0 pb-2 lg:pb-0 snap-x"
+              ref={listRef}
+              className="mx-list flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible -mx-4 px-4 lg:mx-0 lg:px-0 pb-2 lg:pb-0 snap-x scroll-pl-4"
               role="tablist"
               aria-label="Mecánicas de fidelización"
             >
@@ -272,6 +312,20 @@ export function MechanicsShowcase({ active }: { active: boolean }) {
                   </button>
                 )
               })}
+            </div>
+            {/* Scroll rail: phones only (the strip stacks vertically from lg) */}
+            <div className="lg:hidden mt-2" aria-hidden="true">
+              <div className="mx-rail">
+                <i
+                  style={{
+                    width: `${Math.max(rail.size * 100, 18)}%`,
+                    transform: `translateX(${rail.pos * (100 / Math.max(rail.size, 0.18) - 100)}%)`,
+                  }}
+                />
+              </div>
+              <div className="mt-2 text-xs font-medium text-gray-400">
+                Desliza para ver las 4 mecánicas →
+              </div>
             </div>
             <button
               type="button"
