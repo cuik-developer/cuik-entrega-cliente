@@ -9,8 +9,8 @@ import {
   WHATSAPP_URL,
 } from "@/components/landing/site-footer"
 import { SiteNav } from "@/components/landing/site-nav"
-import { AddToWalletScene } from "./_components/add-to-wallet-scene"
 import { ContactForm } from "./_components/contact-form"
+import { SignupScene } from "./_components/signup-scene"
 
 export const metadata: Metadata = {
   title: "Contáctanos — Cuik",
@@ -103,7 +103,7 @@ export default function ContactoPage() {
               <TiltCard max={10} glare={false} className="w-[300px] mx-auto">
                 <div className="relative">
                   <div className="absolute -inset-12 rounded-full bg-[#0e70db]/[0.12] blur-3xl pointer-events-none" />
-                  <AddToWalletScene />
+                  <SignupScene />
                 </div>
               </TiltCard>
             </Reveal>

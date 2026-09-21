@@ -34,7 +34,6 @@ const PROBLEMS = [
   "Cualquiera puede falsificar un sello de tinta.",
   "Nunca sabes quién volvió, cuántas veces ni cuándo dejó de venir.",
   "Las apps de fidelización nadie las descarga para un café.",
-  "Los descuentos se regalan a ciegas, sin saber si funcionaron.",
 ]
 
 const MECHANICS: {
@@ -168,7 +167,7 @@ export default function SobreCuikPage() {
         </div>
       </section>
 
-      {/* ── Manifiesto (be!'s brand-colour quote band), honest version ── */}
+      {/* ── Lo que creemos + las cuatro reglas, en una sola banda ── */}
       <section className="relative bg-[#0e70db] text-white py-20 sm:py-24 overflow-hidden">
         <div
           className="absolute inset-0 opacity-30"
@@ -178,23 +177,29 @@ export default function SobreCuikPage() {
           }}
           aria-hidden="true"
         />
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 text-center">
-          <Reveal>
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6">
+          <Reveal className="max-w-4xl mx-auto text-center">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-100 mb-6">
               Lo que creemos
             </p>
             <blockquote className="text-2xl sm:text-3xl lg:text-[2.6rem] font-extrabold tracking-[-0.02em] leading-[1.15] text-balance">
               “La solución ya estaba en el bolsillo de cada cliente: su Wallet. Solo faltaba que un
-              negocio de barrio pudiera usarla sin un equipo de tecnología. Eso es Cuik.”
+              negocio local pudiera usarla sin un equipo de tecnología. Eso es Cuik.”
             </blockquote>
           </Reveal>
-          <Reveal delay={150}>
-            <p className="mt-8 text-blue-100/90 text-lg max-w-2xl mx-auto leading-relaxed">
-              Hacemos Cuik junto a los negocios que lo usan: cada semana conversamos con dueños y
-              con quienes atienden en caja, y lo que nos cuentan termina en el producto. Por eso,
-              cuando nos escribes, te responde alguien que conoce tu pase, tu premio y tu negocio.
-            </p>
-          </Reveal>
+          <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {BELIEFS.map((b, i) => (
+              <Reveal key={b.title} delay={120 + i * 80}>
+                <div className="h-full rounded-2xl bg-white/[0.08] border border-white/15 p-5 backdrop-blur">
+                  <span className="w-9 h-9 rounded-xl bg-white/15 text-white flex items-center justify-center mb-3">
+                    {b.icon}
+                  </span>
+                  <div className="font-bold tracking-tight">{b.title}</div>
+                  <p className="mt-1 text-sm text-blue-100/85 leading-relaxed">{b.text}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -218,9 +223,10 @@ export default function SobreCuikPage() {
               <Reveal key={m.title} delay={i * 90}>
                 <TiltCard max={10} className="h-full">
                   <div className="relative h-full rounded-3xl bg-white border border-gray-100 shadow-[0_30px_60px_-30px_rgba(15,23,42,0.35)] overflow-hidden">
-                    <div className={`relative h-52 bg-gradient-to-br ${m.tint} overflow-hidden`}>
+                    <div className={`relative h-72 bg-gradient-to-br ${m.tint} overflow-hidden`}>
+                      {/* Same visual phone size on every card: the El Patrón photo is a tighter crop, so its box is narrower */}
                       <div
-                        className={`absolute inset-x-0 mx-auto ${m.wide ? "w-[43%] -bottom-[69px]" : "w-[60%] -bottom-16"}`}
+                        className={`absolute inset-x-0 mx-auto ${m.wide ? "w-[58%] -bottom-[96px]" : "w-[82%] -bottom-[92px]"}`}
                       >
                         <Image
                           src={m.img}
@@ -228,7 +234,7 @@ export default function SobreCuikPage() {
                           width={564}
                           height={1002}
                           className="w-full h-auto drop-shadow-2xl"
-                          sizes="220px"
+                          sizes="260px"
                         />
                       </div>
                     </div>
@@ -258,34 +264,7 @@ export default function SobreCuikPage() {
         </div>
       </section>
 
-      {/* ── Principios ── */}
-      <section className="py-20 sm:py-28">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <Reveal className="max-w-2xl mb-12">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#0e70db] mb-4">
-              Cómo lo construimos
-            </p>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-[-0.02em] leading-[1.08] text-balance">
-              Cuatro reglas que no negociamos
-            </h2>
-          </Reveal>
-          <div className="grid sm:grid-cols-2 gap-5">
-            {BELIEFS.map((b, i) => (
-              <Reveal key={b.title} delay={i * 80}>
-                <div className="h-full rounded-3xl border border-gray-100 bg-white p-7 shadow-sm hover:shadow-[0_30px_60px_-30px_rgba(15,23,42,0.3)] hover:-translate-y-0.5 transition-[box-shadow,transform] duration-300">
-                  <span className="w-11 h-11 rounded-2xl bg-blue-50 text-[#0e70db] flex items-center justify-center mb-5">
-                    {b.icon}
-                  </span>
-                  <div className="font-bold text-gray-900 text-xl tracking-tight">{b.title}</div>
-                  <p className="mt-2 text-gray-600 leading-relaxed">{b.text}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Cómo trabajamos contigo ── */}
+      {/* ── Cómo trabajamos contigo + quiénes somos + CTA, en una sola banda ── */}
       <section className="py-20 sm:py-28 bg-[#0b1220] text-white overflow-hidden relative">
         <div
           className="absolute inset-0"
@@ -296,87 +275,67 @@ export default function SobreCuikPage() {
           aria-hidden="true"
         />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6">
-          <Reveal className="max-w-2xl mb-12">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-300 mb-4">
-              Cómo trabajamos contigo
-            </p>
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-[-0.02em] leading-[1.08] text-balance">
-              De la primera charla a tu primer cliente fiel, en una semana
-            </h2>
-          </Reveal>
-          <ol className="grid md:grid-cols-3 gap-5">
-            {STEPS.map((s, i) => (
-              <Reveal as="li" key={s.n} delay={i * 110}>
-                <div className="h-full rounded-3xl bg-white/[0.05] border border-white/10 p-7 backdrop-blur">
-                  <div className="text-sm font-mono font-bold text-blue-300">{s.n}</div>
-                  <div className="mt-3 text-xl font-bold tracking-tight">{s.title}</div>
-                  <p className="mt-2 text-blue-100/75 leading-relaxed">{s.text}</p>
-                </div>
-              </Reveal>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      {/* ── Quiénes somos, sin adornos ── */}
-      <section className="py-20 sm:py-28">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 grid lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)] gap-12 items-center">
-          <Reveal>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#0e70db] mb-4">
-              Quiénes somos
-            </p>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-[-0.02em] leading-[1.08] text-balance">
-              Un equipo que atiende personalmente a cada negocio
-            </h2>
-            <p className="mt-5 text-gray-600 text-lg leading-relaxed">
-              Cuik nace en Lima, hecho por gente que conoce a sus clientes. Cada negocio que se suma
-              tiene un contacto directo con el equipo: armamos tu pase contigo, revisamos tus
-              números juntos y ajustamos la mecánica cuando hace falta. Crecemos porque los negocios
-              nos recomiendan, y eso solo pasa si tu programa funciona.
-            </p>
-          </Reveal>
-          <div className="grid gap-4">
-            <Reveal delay={100}>
-              <TiltCard max={6}>
-                <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-[0_30px_60px_-30px_rgba(15,23,42,0.3)] flex items-center gap-5">
-                  <span className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#0e70db] to-[#3b8ee8] text-white flex items-center justify-center shrink-0">
-                    <Headset className="w-7 h-7" />
+          <div className="grid lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)] gap-10 lg:gap-16 items-start">
+            <Reveal>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-300 mb-4">
+                Cómo trabajamos contigo
+              </p>
+              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-[-0.02em] leading-[1.08] text-balance">
+                Un equipo que atiende personalmente a cada negocio
+              </h2>
+              <p className="mt-5 text-blue-100/80 text-lg leading-relaxed">
+                Cuik nace en Lima, hecho por gente que conoce a sus clientes. Cada negocio que se
+                suma tiene un contacto directo con el equipo: armamos tu pase contigo, revisamos tus
+                números juntos y ajustamos la mecánica cuando hace falta. Crecemos porque los
+                negocios nos recomiendan, y eso solo pasa si tu programa funciona.
+              </p>
+              <div className="mt-8 grid sm:grid-cols-2 gap-4">
+                <div className="rounded-2xl bg-white/[0.06] border border-white/10 p-5 flex items-start gap-4">
+                  <span className="w-11 h-11 rounded-xl bg-[#0e70db] text-white flex items-center justify-center shrink-0">
+                    <Headset className="w-5 h-5" />
                   </span>
-                  <div>
-                    <div className="font-bold text-gray-900 text-lg">Atención directa</div>
-                    <div className="text-sm text-gray-500">
+                  <span>
+                    <span className="block font-bold">Atención directa</span>
+                    <span className="block text-sm text-blue-100/75">
                       Te responde quien armó tu pase. Sin call center ni tickets.
+                    </span>
+                  </span>
+                </div>
+                <a
+                  href={WHATSAPP_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group rounded-2xl bg-white/[0.06] border border-white/10 p-5 flex items-start gap-4 hover:bg-white/[0.1] transition-colors"
+                >
+                  <span className="w-11 h-11 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0">
+                    <MessageCircle className="w-5 h-5" />
+                  </span>
+                  <span>
+                    <span className="block font-bold">Escríbenos directo</span>
+                    <span className="block text-sm text-blue-100/75">
+                      WhatsApp, lunes a viernes
+                    </span>
+                  </span>
+                </a>
+              </div>
+            </Reveal>
+            <ol className="grid gap-4">
+              {STEPS.map((s, i) => (
+                <Reveal as="li" key={s.n} delay={120 + i * 110}>
+                  <div className="rounded-2xl bg-white/[0.05] border border-white/10 p-6 backdrop-blur flex gap-5">
+                    <div className="text-sm font-mono font-bold text-blue-300 pt-1">{s.n}</div>
+                    <div>
+                      <div className="text-lg font-bold tracking-tight">{s.title}</div>
+                      <p className="mt-1 text-blue-100/75 leading-relaxed">{s.text}</p>
                     </div>
                   </div>
-                </div>
-              </TiltCard>
-            </Reveal>
-            <Reveal delay={200}>
-              <a
-                href={WHATSAPP_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group rounded-3xl border border-dashed border-gray-200 p-6 flex items-center gap-5 hover:border-emerald-300 hover:bg-emerald-50/40 transition-colors"
-              >
-                <span className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                  <MessageCircle className="w-7 h-7" />
-                </span>
-                <div className="flex-1">
-                  <div className="font-bold text-gray-900 text-lg">Escríbenos directo</div>
-                  <div className="text-sm text-gray-500">WhatsApp, lunes a viernes</div>
-                </div>
-                <ArrowRight className="w-5 h-5 text-emerald-600 group-hover:translate-x-0.5 transition-transform" />
-              </a>
-            </Reveal>
+                </Reveal>
+              ))}
+            </ol>
           </div>
-        </div>
-      </section>
 
-      {/* ── CTA ── */}
-      <section className="pb-20 sm:pb-28">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <Reveal>
-            <div className="rounded-[2rem] bg-gradient-to-br from-[#0e70db] to-[#0a4fa8] text-white p-8 sm:p-12 flex flex-col md:flex-row md:items-center gap-6 shadow-[0_40px_80px_-30px_rgba(14,112,219,0.6)]">
+          <Reveal delay={200} className="mt-14">
+            <div className="rounded-[2rem] bg-gradient-to-br from-[#0e70db] to-[#0a4fa8] p-8 sm:p-10 flex flex-col md:flex-row md:items-center gap-6 shadow-[0_40px_80px_-30px_rgba(14,112,219,0.6)]">
               <div className="flex-1">
                 <h2 className="text-2xl sm:text-3xl font-extrabold tracking-[-0.02em] text-balance">
                   ¿Quieres ver tu negocio en la Wallet de tus clientes?
