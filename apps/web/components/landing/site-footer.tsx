@@ -4,8 +4,8 @@ import { CuikLogo } from "@/components/cuik-logo"
 
 export const WHATSAPP_URL = "https://wa.me/51972213023"
 export const INSTAGRAM_URL = "https://www.instagram.com/cuik.ia/"
-// Public inbox shown on /contacto. Confirm before launch.
-export const CONTACT_EMAIL = "hola@cuik.org"
+// Public inbox shown on /contacto.
+export const CONTACT_EMAIL = "francesco.leon@cuik.org"
 
 const COLUMNS = [
   {

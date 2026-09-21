@@ -133,7 +133,7 @@ export default function ContactoPage() {
               Elige cómo hablar con nosotros
             </h2>
             <p className="mt-3 text-gray-500">
-              Somos un equipo pequeño: quien te responde es quien va a configurar tu pase.
+              Quien te responde es quien va a configurar tu pase. Sin call center ni tickets.
             </p>
           </Reveal>
           <div className="grid md:grid-cols-3 gap-5">

@@ -185,8 +185,8 @@ export function AboutHero() {
               La fidelización que usan las grandes cadenas, ahora en la Wallet de tus clientes
             </h1>
             <p className="mt-6 text-lg sm:text-xl text-blue-100/80 max-w-2xl mx-auto leading-relaxed">
-              Somos un equipo pequeño en Lima con una obsesión: que el negocio de barrio tenga
-              clientes que vuelven, sin apps, sin cartón y con la data en sus manos.
+              Nacimos en Lima con una obsesión: que el negocio de barrio tenga clientes que vuelven,
+              sin apps, sin cartón y con la data en sus manos.
             </p>
             <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
               <Link href="/login?view=demo">

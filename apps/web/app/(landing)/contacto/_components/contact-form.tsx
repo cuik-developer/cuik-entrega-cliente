@@ -47,7 +47,7 @@ export const PROFILES = [
     short: "Prensa",
     icon: <Building2 className="w-4 h-4" />,
     business: "Empresa u organización",
-    hint: "Medios, integraciones, proveedores, inversión.",
+    hint: "Medios, integraciones, proveedores y alianzas.",
     placeholder: "Cuéntanos de qué se trata y cómo podemos ayudarnos.",
   },
 ] as const

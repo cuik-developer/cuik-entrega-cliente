@@ -25,7 +25,7 @@ import { ProblemFlip } from "./_components/problem-flip"
 export const metadata: Metadata = {
   title: "Sobre Cuik — Fidelización digital hecha en Lima",
   description:
-    "Somos un equipo pequeño en Lima. Cuik existe para que el comercio de barrio tenga clientes que vuelven: pases en Apple y Google Wallet, sin apps, sin cartón y con la data en tus manos.",
+    "Cuik nace en Lima para que el comercio de barrio tenga clientes que vuelven: pases en Apple y Google Wallet, sin apps, sin cartón y con la data en tus manos.",
 }
 
 const PROBLEMS = [
@@ -42,6 +42,7 @@ const MECHANICS: {
   text: string
   img: string
   tint: string
+  wide?: boolean // El Patrón's photo is a tighter crop; scale it so every phone reads the same size
 }[] = [
   {
     icon: <Stamp className="w-4 h-4" />,
@@ -56,6 +57,7 @@ const MECHANICS: {
     text: "Cada sol suma. El cliente acumula y canjea del catálogo que tú defines.",
     img: "/landing/mockup-elpatron.png",
     tint: "from-amber-500 to-amber-400",
+    wide: true,
   },
   {
     icon: <Percent className="w-4 h-4" />,
@@ -187,9 +189,9 @@ export default function SobreCuikPage() {
           </Reveal>
           <Reveal delay={150}>
             <p className="mt-8 text-blue-100/90 text-lg max-w-2xl mx-auto leading-relaxed">
-              No somos una cadena ni una multinacional. Somos un equipo pequeño en Lima que
-              construye Cuik hablando cada semana con los comercios que lo usan. Lo decimos con
-              orgullo: cuando nos escribes, te responde alguien que conoce tu pase.
+              Construimos Cuik junto a los comercios que lo usan: cada semana hablamos con dueños y
+              cajeros, y lo que nos cuentan se convierte en producto. Por eso, cuando nos escribes,
+              te responde alguien que conoce tu pase, tu premio y tu negocio.
             </p>
           </Reveal>
         </div>
@@ -216,7 +218,9 @@ export default function SobreCuikPage() {
                 <TiltCard max={10} className="h-full">
                   <div className="relative h-full rounded-3xl bg-white border border-gray-100 shadow-[0_30px_60px_-30px_rgba(15,23,42,0.35)] overflow-hidden">
                     <div className={`relative h-52 bg-gradient-to-br ${m.tint} overflow-hidden`}>
-                      <div className="absolute inset-x-0 -bottom-16 mx-auto w-[60%]">
+                      <div
+                        className={`absolute inset-x-0 -bottom-16 mx-auto ${m.wide ? "w-[43%]" : "w-[60%]"}`}
+                      >
                         <Image
                           src={m.img}
                           alt=""
@@ -321,13 +325,13 @@ export default function SobreCuikPage() {
               Quiénes somos
             </p>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-[-0.02em] leading-[1.08] text-balance">
-              Un equipo chico que atiende personalmente a cada comercio
+              Un equipo que atiende personalmente a cada comercio
             </h2>
             <p className="mt-5 text-gray-600 text-lg leading-relaxed">
-              Cuik es una empresa joven de Lima. No tenemos oficinas en seis países ni miles de
-              clientes, y no vamos a decirte que sí. Tenemos comercios reales usando Cuik todos los
-              días, un producto que mejora cada semana con lo que nos cuentan, y la intención de
-              crecer con negocios que nos recomienden.
+              Cuik nace en Lima, hecho por gente que conoce el mostrador. Cada comercio que se suma
+              tiene un contacto directo con el equipo: configuramos tu pase contigo, revisamos tus
+              números y ajustamos la mecánica cuando hace falta. Crecemos con negocios que nos
+              recomiendan, y eso solo pasa si tu programa funciona.
             </p>
           </Reveal>
           <div className="grid gap-4">
