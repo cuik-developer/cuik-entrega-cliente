@@ -100,7 +100,7 @@ export default function ContactoPage() {
           {/* Live pass: what a reply feels like */}
           <div className="hidden lg:block lg:sticky lg:top-28">
             <Reveal delay={260}>
-              <TiltCard max={10} glare={false} className="w-[300px] mx-auto">
+              <TiltCard max={10} glare={false} className="w-[340px] mx-auto">
                 <div className="relative">
                   <div className="absolute -inset-12 rounded-full bg-[#0e70db]/[0.12] blur-3xl pointer-events-none" />
                   <SignupScene />

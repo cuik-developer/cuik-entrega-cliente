@@ -126,224 +126,231 @@ export function SignupScene() {
         }
       `}</style>
 
-      {/* The real photo: pass in Apple Wallet. Push plays on it once the web screens are gone. */}
-      <LivePass
-        base="/landing/mockup-gradual-7.png"
-        alt="Pase de Gradual Café en Apple Wallet"
-        push={ph === "push" ? WELCOME_PUSH : null}
-        priority
-      />
+      {/* Photo + overlay share one box, so the screen percentages refer to the image only. */}
+      <div className="relative">
+        {/* The real photo: pass in Apple Wallet. Push plays on it once the web screens are gone. */}
+        <LivePass
+          base="/landing/mockup-gradual-7.png"
+          alt="Pase de Gradual Café en Apple Wallet"
+          push={ph === "push" ? WELCOME_PUSH : null}
+          priority
+        />
 
-      {/* Web screens over the phone's display */}
-      <div className={`ss-screen ${webOn ? "" : "is-off"}`} aria-hidden="true">
-        <div className="ss-status">
-          <span>9:41</span>
-          <i />
-        </div>
-        <div className="ss-url">cuik.org/gradual-cafe/{onWelcome ? "bienvenido" : "registro"}</div>
+        {/* Web screens over the phone's display */}
+        <div className={`ss-screen ${webOn ? "" : "is-off"}`} aria-hidden="true">
+          <div className="ss-status">
+            <span>9:41</span>
+            <i />
+          </div>
+          <div className="ss-url">
+            cuik.org/gradual-cafe/{onWelcome ? "bienvenido" : "registro"}
+          </div>
 
-        <div className="ss-pages">
-          {/* /registro — email step */}
-          <div className={`ss-page ${!onWelcome ? "is-on" : "is-past"}`}>
-            <div className="ss-head">
-              <div className="ss-logo">G</div>
-              <div style={{ fontWeight: 700, fontSize: "3.2cqw" }}>Gradual Café</div>
-              <div style={{ marginTop: "1cqw", fontSize: "2.3cqw", opacity: 0.9 }}>
-                Registrate y obtene tu tarjeta de fidelizacion digital
+          <div className="ss-pages">
+            {/* /registro — email step */}
+            <div className={`ss-page ${!onWelcome ? "is-on" : "is-past"}`}>
+              <div className="ss-head">
+                <div className="ss-logo">G</div>
+                <div style={{ fontWeight: 700, fontSize: "3.2cqw" }}>Gradual Café</div>
+                <div style={{ marginTop: "1cqw", fontSize: "2.3cqw", opacity: 0.9 }}>
+                  Registrate y obtene tu tarjeta de fidelizacion digital
+                </div>
               </div>
-            </div>
-            <div className="ss-card">
-              <div className="ss-label">
-                <Mail style={{ width: "2.4cqw", height: "2.4cqw" }} /> Email
+              <div className="ss-card">
+                <div className="ss-label">
+                  <Mail style={{ width: "2.4cqw", height: "2.4cqw" }} /> Email
+                </div>
+                <div className="ss-input">
+                  {typed === 0 ? (
+                    <span className="ph">juan@email.com</span>
+                  ) : (
+                    <span className="ss-typed">{EMAIL}</span>
+                  )}
+                  {ph === "typing" && <span className="ss-caret" />}
+                </div>
+                <div style={{ marginTop: "1cqw", fontSize: "2.1cqw", color: "#6b7280" }}>
+                  Ingresa tu email para empezar. Si ya tienes cuenta, te enviamos tu pase.
+                </div>
+                <div
+                  className={`ss-btn ${ph === "tapContinue" ? "is-pressed" : ""}`}
+                  style={{ background: PRIMARY }}
+                >
+                  Continuar
+                </div>
               </div>
-              <div className="ss-input">
-                {typed === 0 ? (
-                  <span className="ph">juan@email.com</span>
-                ) : (
-                  <span className="ss-typed">{EMAIL}</span>
-                )}
-                {ph === "typing" && <span className="ss-caret" />}
-              </div>
-              <div style={{ marginTop: "1cqw", fontSize: "2.1cqw", color: "#6b7280" }}>
-                Ingresa tu email para empezar. Si ya tienes cuenta, te enviamos tu pase.
-              </div>
-              <div
-                className={`ss-btn ${ph === "tapContinue" ? "is-pressed" : ""}`}
-                style={{ background: PRIMARY }}
-              >
-                Continuar
-              </div>
-            </div>
-            <div className="ss-dashed">
-              <span
-                style={{
-                  width: "6.5cqw",
-                  height: "6.5cqw",
-                  borderRadius: "1.6cqw",
-                  background: `${PRIMARY}15`,
-                  display: "grid",
-                  placeItems: "center",
-                  flex: "none",
-                }}
-              >
-                <Smartphone style={{ width: "3.2cqw", height: "3.2cqw", color: PRIMARY }} />
-              </span>
-              <span>
+              <div className="ss-dashed">
                 <span
-                  style={{ display: "block", fontSize: "2.3cqw", fontWeight: 600, color: "#111" }}
+                  style={{
+                    width: "6.5cqw",
+                    height: "6.5cqw",
+                    borderRadius: "1.6cqw",
+                    background: `${PRIMARY}15`,
+                    display: "grid",
+                    placeItems: "center",
+                    flex: "none",
+                  }}
                 >
-                  Tu pase digital en Apple Wallet y Google Wallet
+                  <Smartphone style={{ width: "3.2cqw", height: "3.2cqw", color: PRIMARY }} />
                 </span>
-                <span style={{ display: "block", fontSize: "2cqw", color: "#6b7280" }}>
-                  Sin descargar apps • Siempre en tu billetera digital
-                </span>
-              </span>
-            </div>
-          </div>
-
-          {/* /bienvenido — pass preview + wallet buttons */}
-          <div className={`ss-page ${onWelcome ? "is-on" : ""}`}>
-            <div style={{ padding: "4cqw 3cqw 0", textAlign: "center" }}>
-              <div
-                style={{
-                  fontWeight: 800,
-                  fontSize: "3.6cqw",
-                  color: "#111",
-                  letterSpacing: "-0.01em",
-                }}
-              >
-                ¡Bienvenida, Ana!
-              </div>
-              <div style={{ marginTop: "0.8cqw", fontSize: "2.3cqw", color: "#6b7280" }}>
-                Tu pase de Gradual Café está listo
-              </div>
-            </div>
-            {/* pass preview, same look as the real pass */}
-            <div
-              style={{
-                margin: "3cqw 3cqw 0",
-                borderRadius: "2.4cqw",
-                overflow: "hidden",
-                boxShadow: "0 12px 30px -14px rgba(15,23,42,0.45)",
-                background: "#1c2a44",
-                color: "#fff",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  padding: "2.2cqw 2.6cqw",
-                }}
-              >
-                <span style={{ fontWeight: 800, fontSize: "3.2cqw", letterSpacing: "-0.02em" }}>
-                  gradual
-                </span>
-                <span style={{ textAlign: "right" }}>
+                <span>
                   <span
-                    style={{
-                      display: "block",
-                      fontSize: "1.8cqw",
-                      opacity: 0.8,
-                      textTransform: "uppercase",
-                    }}
+                    style={{ display: "block", fontSize: "2.3cqw", fontWeight: 600, color: "#111" }}
                   >
-                    # de visitas
+                    Tu pase digital en Apple Wallet y Google Wallet
                   </span>
-                  <span style={{ display: "block", fontSize: "3cqw", fontWeight: 700 }}>0</span>
-                </span>
-              </div>
-              <div
-                style={{
-                  background: "#efe6d6",
-                  padding: "2.2cqw 2.6cqw",
-                  display: "grid",
-                  gridTemplateColumns: "repeat(4, 1fr)",
-                  gap: "1.4cqw",
-                }}
-              >
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <span
-                    // biome-ignore lint/suspicious/noArrayIndexKey: static decorative row
-                    key={i}
-                    style={{
-                      aspectRatio: "1",
-                      borderRadius: "9999px",
-                      border: `0.4cqw solid ${PRIMARY}`,
-                      opacity: 0.55,
-                    }}
-                  />
-                ))}
-              </div>
-              <div
-                style={{
-                  padding: "2.2cqw 2.6cqw",
-                  display: "flex",
-                  justifyContent: "space-between",
-                }}
-              >
-                <span>
-                  <span style={{ display: "block", fontSize: "1.8cqw", opacity: 0.8 }}>Nombre</span>
-                  <span style={{ display: "block", fontSize: "2.6cqw" }}>Ana Torres</span>
-                </span>
-                <span>
-                  <span style={{ display: "block", fontSize: "1.8cqw", opacity: 0.8 }}>
-                    Bebida favorita
+                  <span style={{ display: "block", fontSize: "2cqw", color: "#6b7280" }}>
+                    Sin descargar apps • Siempre en tu billetera digital
                   </span>
-                  <span style={{ display: "block", fontSize: "2.6cqw" }}>Latte</span>
                 </span>
               </div>
             </div>
-            <div
-              style={{
-                margin: "3cqw 3cqw 0",
-                textAlign: "center",
-                fontSize: "2.3cqw",
-                fontWeight: 600,
-                color: "#374151",
-              }}
-            >
-              Guarda tu pase en el celular
-            </div>
-            <div style={{ margin: "1.6cqw 3cqw 0" }}>
-              <div
-                className={`ss-btn ${ph === "tapApple" ? "is-pressed" : ""}`}
-                style={{ background: "#000", marginTop: 0 }}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  style={{ width: "3.2cqw", height: "3.2cqw" }}
-                  aria-hidden="true"
+
+            {/* /bienvenido — pass preview + wallet buttons */}
+            <div className={`ss-page ${onWelcome ? "is-on" : ""}`}>
+              <div style={{ padding: "4cqw 3cqw 0", textAlign: "center" }}>
+                <div
+                  style={{
+                    fontWeight: 800,
+                    fontSize: "3.6cqw",
+                    color: "#111",
+                    letterSpacing: "-0.01em",
+                  }}
                 >
-                  <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
-                </svg>
-                Agregar a Apple Wallet
+                  ¡Bienvenida, Ana!
+                </div>
+                <div style={{ marginTop: "0.8cqw", fontSize: "2.3cqw", color: "#6b7280" }}>
+                  Tu pase de Gradual Café está listo
+                </div>
               </div>
+              {/* pass preview, same look as the real pass */}
               <div
-                className="ss-btn"
                 style={{
-                  background: "#fff",
-                  color: "#111",
-                  border: "1px solid #e5e7eb",
-                  marginTop: "1.4cqw",
+                  margin: "3cqw 3cqw 0",
+                  borderRadius: "2.4cqw",
+                  overflow: "hidden",
+                  boxShadow: "0 12px 30px -14px rgba(15,23,42,0.45)",
+                  background: "#1c2a44",
+                  color: "#fff",
                 }}
               >
-                Agregar a Google Wallet
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    padding: "2.2cqw 2.6cqw",
+                  }}
+                >
+                  <span style={{ fontWeight: 800, fontSize: "3.2cqw", letterSpacing: "-0.02em" }}>
+                    gradual
+                  </span>
+                  <span style={{ textAlign: "right" }}>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "1.8cqw",
+                        opacity: 0.8,
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      # de visitas
+                    </span>
+                    <span style={{ display: "block", fontSize: "3cqw", fontWeight: 700 }}>0</span>
+                  </span>
+                </div>
+                <div
+                  style={{
+                    background: "#efe6d6",
+                    padding: "2.2cqw 2.6cqw",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(4, 1fr)",
+                    gap: "1.4cqw",
+                  }}
+                >
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <span
+                      // biome-ignore lint/suspicious/noArrayIndexKey: static decorative row
+                      key={i}
+                      style={{
+                        aspectRatio: "1",
+                        borderRadius: "9999px",
+                        border: `0.4cqw solid ${PRIMARY}`,
+                        opacity: 0.55,
+                      }}
+                    />
+                  ))}
+                </div>
+                <div
+                  style={{
+                    padding: "2.2cqw 2.6cqw",
+                    display: "flex",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <span>
+                    <span style={{ display: "block", fontSize: "1.8cqw", opacity: 0.8 }}>
+                      Nombre
+                    </span>
+                    <span style={{ display: "block", fontSize: "2.6cqw" }}>Ana Torres</span>
+                  </span>
+                  <span>
+                    <span style={{ display: "block", fontSize: "1.8cqw", opacity: 0.8 }}>
+                      Bebida favorita
+                    </span>
+                    <span style={{ display: "block", fontSize: "2.6cqw" }}>Latte</span>
+                  </span>
+                </div>
+              </div>
+              <div
+                style={{
+                  margin: "3cqw 3cqw 0",
+                  textAlign: "center",
+                  fontSize: "2.3cqw",
+                  fontWeight: 600,
+                  color: "#374151",
+                }}
+              >
+                Guarda tu pase en el celular
+              </div>
+              <div style={{ margin: "1.6cqw 3cqw 0" }}>
+                <div
+                  className={`ss-btn ${ph === "tapApple" ? "is-pressed" : ""}`}
+                  style={{ background: "#000", marginTop: 0 }}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    style={{ width: "3.2cqw", height: "3.2cqw" }}
+                    aria-hidden="true"
+                  >
+                    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+                  </svg>
+                  Agregar a Apple Wallet
+                </div>
+                <div
+                  className="ss-btn"
+                  style={{
+                    background: "#fff",
+                    color: "#111",
+                    border: "1px solid #e5e7eb",
+                    marginTop: "1.4cqw",
+                  }}
+                >
+                  Agregar a Google Wallet
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Finger taps */}
-        <div
-          className={`ss-finger ${ph === "tapContinue" ? "is-on" : ""}`}
-          style={{ left: "50%", top: "55%" }}
-        />
-        <div
-          className={`ss-finger ${ph === "tapApple" ? "is-on" : ""}`}
-          style={{ left: "50%", top: "77%" }}
-        />
+          {/* Finger taps */}
+          <div
+            className={`ss-finger ${ph === "tapContinue" ? "is-on" : ""}`}
+            style={{ left: "50%", top: "55%" }}
+          />
+          <div
+            className={`ss-finger ${ph === "tapApple" ? "is-on" : ""}`}
+            style={{ left: "50%", top: "77%" }}
+          />
+        </div>
       </div>
 
       <div className="ss-cap" aria-live="polite">
