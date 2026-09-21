@@ -219,7 +219,7 @@ export default function SobreCuikPage() {
                   <div className="relative h-full rounded-3xl bg-white border border-gray-100 shadow-[0_30px_60px_-30px_rgba(15,23,42,0.35)] overflow-hidden">
                     <div className={`relative h-52 bg-gradient-to-br ${m.tint} overflow-hidden`}>
                       <div
-                        className={`absolute inset-x-0 -bottom-16 mx-auto ${m.wide ? "w-[43%]" : "w-[60%]"}`}
+                        className={`absolute inset-x-0 mx-auto ${m.wide ? "w-[43%] -bottom-28" : "w-[60%] -bottom-16"}`}
                       >
                         <Image
                           src={m.img}
