@@ -11,8 +11,6 @@ import {
   Coffee,
   Dumbbell,
   Gift,
-  Instagram,
-  Menu,
   MessageCircle,
   PawPrint,
   QrCode,
@@ -35,6 +33,8 @@ import { BeforeAfter } from "@/components/landing/before-after"
 import { DemoWalkthrough } from "@/components/landing/demo-walkthrough"
 import { HeroCarousel } from "@/components/landing/hero-carousel"
 import { MechanicsShowcase } from "@/components/landing/mechanics-showcase"
+import { SiteFooter } from "@/components/landing/site-footer"
+import { SiteNav } from "@/components/landing/site-nav"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -337,15 +337,7 @@ function AnimatedNumber({ target, suffix = "" }: { target: number; suffix?: stri
 
 export default function HomePage() {
   const [billing, setBilling] = useState<BillingCycle>("monthly")
-  const [mobileMenu, setMobileMenu] = useState(false)
-  const [scrolled, setScrolled] = useState(false)
   const [plans, setPlans] = useState<PlanCard[]>(FALLBACK_PLANS)
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20)
-    window.addEventListener("scroll", onScroll, { passive: true })
-    return () => window.removeEventListener("scroll", onScroll)
-  }, [])
 
   useEffect(() => {
     fetch("/api/public/plans")
@@ -398,99 +390,7 @@ export default function HomePage() {
         .grain::after { content: ''; position: absolute; inset: 0; opacity: 0.025; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); pointer-events: none; }
       `}</style>
 
-      {/* ─── Navbar ──────────────────────────────────── */}
-      <nav
-        className={`sticky top-0 z-50 transition-all duration-300 ${scrolled ? "bg-white/90 backdrop-blur-xl shadow-sm border-b border-gray-100" : "bg-transparent"}`}
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <CuikLogo />
-            <span className="text-xl font-extrabold text-gray-900 tracking-tight">Cuik</span>
-          </Link>
-
-          <div className="hidden md:flex items-center gap-1">
-            {[
-              { href: "#beneficios", label: "Beneficios" },
-              { href: "#demo", label: "Demo" },
-              { href: "#precios", label: "Precios" },
-              { href: "#casos", label: "Casos de uso" },
-            ]
-              .filter((link) => SHOW_USE_CASES || link.href !== "#casos")
-              .map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-[#0e70db] rounded-lg hover:bg-blue-50/60 transition-all"
-                >
-                  {link.label}
-                </a>
-              ))}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Link href="/login">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="hidden md:inline-flex text-gray-700 font-medium hover:text-[#0e70db] hover:bg-blue-50/60"
-              >
-                Iniciar sesión
-              </Button>
-            </Link>
-            <Link href="/login?view=demo">
-              <Button
-                size="sm"
-                className="hidden md:inline-flex bg-[#0e70db] hover:bg-[#0c5fc0] text-white font-semibold shadow-md shadow-blue-200/50 hover:shadow-lg hover:shadow-blue-200/60 transition-all"
-              >
-                Agenda una demo
-              </Button>
-            </Link>
-            <button
-              type="button"
-              className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
-              onClick={() => setMobileMenu(!mobileMenu)}
-              aria-label="Menu"
-            >
-              {mobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
-          </div>
-        </div>
-
-        {mobileMenu && (
-          <div className="md:hidden bg-white/95 backdrop-blur-xl border-t border-gray-100 px-4 py-5 space-y-1 anim-fade-in">
-            {[
-              { href: "#beneficios", label: "Beneficios" },
-              { href: "#demo", label: "Demo" },
-              { href: "#precios", label: "Precios" },
-              { href: "#casos", label: "Casos de uso" },
-            ]
-              .filter((link) => SHOW_USE_CASES || link.href !== "#casos")
-              .map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setMobileMenu(false)}
-                  className="block px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg"
-                >
-                  {link.label}
-                </a>
-              ))}
-            <div className="pt-3 border-t border-gray-100 space-y-2">
-              <Link
-                href="/login"
-                className="block px-3 py-2.5 text-sm font-semibold text-[#0e70db]"
-              >
-                Iniciar sesión
-              </Link>
-              <Link href="/login?view=demo">
-                <Button className="w-full bg-[#0e70db] hover:bg-[#0c5fc0] text-white font-semibold">
-                  Agenda una demo
-                </Button>
-              </Link>
-            </div>
-          </div>
-        )}
-      </nav>
+      <SiteNav />
 
       {/* ─── Hero ────────────────────────────────────── */}
       <section ref={hero.ref} className="relative overflow-hidden pt-12 pb-24 sm:pt-20 sm:pb-32">
@@ -1047,98 +947,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ─── Footer ──────────────────────────────────── */}
-      <footer className="bg-[#0f172a] text-gray-400 py-14">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
-            <div className="col-span-2 md:col-span-1 space-y-4">
-              <Link href="/" className="flex items-center gap-2.5">
-                <CuikLogo size="sm" />
-                <span className="text-white font-extrabold text-lg tracking-tight">Cuik</span>
-              </Link>
-              <p className="text-sm leading-relaxed">
-                Fidelización digital para comercios físicos en LATAM.
-              </p>
-              <div className="flex gap-2">
-                {/* TikTok y LinkedIn ocultos hasta tener cuentas */}
-                {[
-                  {
-                    label: "Instagram de Cuik",
-                    href: "https://www.instagram.com/cuik.ia/",
-                    icon: <Instagram className="w-4 h-4" />,
-                  },
-                  {
-                    label: "Escríbenos por WhatsApp",
-                    href: "https://wa.me/51972213023",
-                    icon: <MessageCircle className="w-4 h-4" />,
-                  },
-                ].map((s) => (
-                  <a
-                    key={s.href}
-                    href={s.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={s.label}
-                    title={s.label}
-                    className="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
-                  >
-                    {s.icon}
-                  </a>
-                ))}
-              </div>
-            </div>
-            {[
-              {
-                title: "Producto",
-                links: [
-                  { label: "Beneficios", href: "#beneficios" },
-                  { label: "Precios", href: "#precios" },
-                  { label: "Casos de uso", href: "#casos" },
-                ].filter((l) => SHOW_USE_CASES || l.href !== "#casos"),
-              },
-              {
-                title: "Recursos",
-                links: [
-                  { label: "Blog", href: "#" },
-                  { label: "Guías", href: "#" },
-                  { label: "API Docs", href: "#" },
-                ],
-              },
-              {
-                title: "Empresa",
-                links: [
-                  { label: "Sobre nosotros", href: "#" },
-                  { label: "Contacto", href: "/contacto" },
-                  { label: "Términos", href: "#" },
-                  { label: "Privacidad", href: "#" },
-                ],
-              },
-            ].map((col) => (
-              <div key={col.title} className="space-y-3">
-                <div className="text-white font-semibold text-sm">{col.title}</div>
-                {col.links.map((l) => (
-                  <a
-                    key={l.label}
-                    href={l.href}
-                    className="block text-sm hover:text-white transition-colors"
-                  >
-                    {l.label}
-                  </a>
-                ))}
-              </div>
-            ))}
-          </div>
-          <div className="border-t border-white/5 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm">
-            <span>© 2026 Cuik. Hecho con amor en Lima, Perú</span>
-            <Link
-              href="/login?view=demo"
-              className="text-[#0e70db] hover:text-blue-400 font-semibold transition-colors"
-            >
-              Empieza gratis →
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }
