@@ -3,35 +3,21 @@
 import { BarChart3, Palette, PawPrint, RefreshCw, Smartphone, Wallet } from "lucide-react"
 import Image from "next/image"
 import type { CSSProperties, ReactNode } from "react"
-import { useEffect, useState } from "react"
+import { useRef } from "react"
+import { useScrollProgress } from "./fx"
 import { LivePass, type PushContent } from "./live-pass"
 
 /**
- * "El antes y el ahora": the worn cardboard card lifts, flips in 3D and comes
- * back as the digital pass in Apple Wallet. While it flips, the cardboard's
- * problems get struck through; once the pass is up, its advantages appear one
- * by one and the pass plays its loop (2 → 3 visits, visit push).
+ * "El antes y el ahora", driven by the scroll like the flip on Sobre Cuik:
+ * as the section travels up the screen the cardboard card lifts, flips in
+ * 3D and lands as the pass in the Wallet. By the time the section sits in
+ * the middle of the viewport it is fully turned; further down the pass
+ * registers a visit and the push arrives. Scrolling back reverses it.
  *
- * Plays once when it comes into view and stays on the digital pass: the
- * "after" is the point, so it never flips back to the cardboard. Transform +
- * opacity only; the flip is a single rotateY on a wrapper with two
- * backface-hidden faces.
+ *   --p 0.00–0.15  cardboard at rest
+ *   --p 0.15–0.50  lift + flip (rotateY 0 → 180); cons get struck, pros rise
+ *   --p 0.58+      visit registered (2 → 3), then the push (0.66+)
  */
-
-type Phase = "card" | "lift" | "flip" | "pass" | "visit" | "push" | "hold"
-
-const TIMELINE: { phase: Phase; ms: number }[] = [
-  { phase: "card", ms: 2200 },
-  { phase: "lift", ms: 450 },
-  { phase: "flip", ms: 900 },
-  { phase: "pass", ms: 1100 },
-  { phase: "visit", ms: 1200 },
-  { phase: "push", ms: 2800 },
-  { phase: "hold", ms: 0 }, // final state: stays here
-]
-
-const FLIPPED: Phase[] = ["flip", "pass", "visit", "push", "hold"]
-const PROS_ON: Phase[] = ["pass", "visit", "push", "hold"]
 
 const CONS = ["Se pierde o se moja", "Cualquiera falsifica el sello", "No sabes quién volvió"]
 
@@ -50,64 +36,47 @@ const VISIT_PUSH: PushContent = {
   color: "#d9542b",
 }
 
-export function BeforeAfter({ active }: { active: boolean }) {
-  const [step, setStep] = useState(0)
-
-  useEffect(() => {
-    if (!active || step >= TIMELINE.length - 1) return
-    const t = setTimeout(() => setStep((s) => s + 1), TIMELINE[step].ms)
-    return () => clearTimeout(t)
-  }, [active, step])
-
-  const phase = TIMELINE[step].phase
-  const flipped = FLIPPED.includes(phase)
-  const prosOn = PROS_ON.includes(phase)
+export function BeforeAfter({ active: _active }: { active?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null)
+  // Progress of the whole section through the viewport; 0.5 ≈ centred on screen.
+  useScrollProgress(ref, { start: 0.08, end: 0.92 })
 
   return (
-    <div className="ba relative">
+    <div ref={ref} className="ba relative" style={{ "--p": 0 } as CSSProperties}>
       <style>{`
-        .ba { --ba-ease-out: cubic-bezier(0.23, 1, 0.32, 1); --ba-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1); }
-
+        .ba {
+          --p: 0;
+          --ba-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+          --f: clamp(0, calc((var(--p) - 0.15) / 0.35), 1);          /* flip */
+          --lift: clamp(0, calc((var(--p) - 0.12) / 0.15), 1);       /* rise before the turn */
+          --settle: clamp(0, calc((var(--p) - 0.42) / 0.12), 1);     /* land after the turn */
+          --pros: clamp(0, calc((var(--p) - 0.34) / 0.2), 1);
+        }
         .ba-stage { perspective: 1400px; }
-
-        /* Lift: the card rises before flipping */
-        .ba-lift { transform: translateY(0) scale(1); transition: transform 450ms var(--ba-ease-out); }
-        .ba-lift.is-up { transform: translateY(-10px) scale(1.04); }
-
-        /* Flip: one rotateY on the wrapper; both faces backface-hidden */
-        .ba-flip { position: relative; transform-style: preserve-3d; transform: rotateY(0deg); transition: transform 900ms var(--ba-ease-in-out); will-change: transform; }
-        .ba-flip.is-flipped { transform: rotateY(180deg); }
+        .ba-lift { transform: translateY(calc((var(--lift) - var(--settle)) * -10px)) scale(calc(1 + (var(--lift) - var(--settle)) * 0.04)); will-change: transform; }
+        .ba-flip { position: relative; transform-style: preserve-3d; transform: rotateY(calc(var(--f) * 180deg)); will-change: transform; }
         .ba-face { position: absolute; inset: 0; display: grid; place-items: center; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
         .ba-face-back { transform: rotateY(180deg); }
-
-        /* Cardboard: zoomed crop of the photo, warm shadow */
         .ba-card { width: 80%; aspect-ratio: 1.62; border-radius: 14px; overflow: hidden; box-shadow: 0 30px 50px -22px rgba(60, 40, 20, 0.6), 0 0 0 1px rgba(60, 40, 20, 0.08); transform: rotate(-3deg); }
         .ba-card img { transform: scale(1.42); transform-origin: 50% 48%; }
 
-        /* Cons: strike-through draws left → right, text dims */
-        .ba-con { position: relative; transition: opacity 320ms var(--ba-ease-out); }
-        .ba-con.is-struck { opacity: 0.45; }
-        .ba-con i { position: absolute; left: 0; right: 0; top: 50%; height: 2px; background: #b4432a; transform: scaleX(0); transform-origin: left center; transition: transform 320ms var(--ba-ease-out); transition-delay: calc(var(--i) * 90ms); }
-        .ba-con.is-struck i { transform: scaleX(1); }
+        /* Cons: struck through as the card turns (each a little later) */
+        .ba-con { position: relative; opacity: calc(1 - var(--f) * 0.55); }
+        .ba-con i { position: absolute; left: 0; right: 0; top: 50%; height: 2px; background: #b4432a; transform: scaleX(clamp(0, calc(var(--f) * 1.6 - var(--i) * 0.25), 1)); transform-origin: left center; }
 
-        /* Pros: rise in one by one */
-        .ba-pro { opacity: 0; transform: translateY(10px); transition: opacity 320ms var(--ba-ease-out), transform 320ms var(--ba-ease-out); }
-        .ba-pro.is-on { opacity: 1; transform: translateY(0); transition-delay: calc(var(--i) * 140ms); }
+        /* Pros: rise one by one once the pass is up */
+        .ba-pro { opacity: clamp(0, calc(var(--pros) * 2 - var(--i) * 0.3), 1); transform: translateY(calc((1 - clamp(0, calc(var(--pros) * 2 - var(--i) * 0.3), 1)) * 10px)); }
 
         /* Caption under the stage */
         .ba-cap { display: grid; }
-        .ba-cap > span { grid-area: 1 / 1; opacity: 0; transform: translateY(6px); transition: opacity 260ms var(--ba-ease-out), transform 260ms var(--ba-ease-out); }
-        .ba-cap > span.is-on { opacity: 1; transform: translateY(0); }
+        .ba-cap > span { grid-area: 1 / 1; transition: opacity 260ms var(--ba-ease-out); }
+        .ba-cap .a { opacity: calc(1 - var(--f)); }
+        .ba-cap .b { opacity: var(--f); }
 
         @media (prefers-reduced-motion: reduce) {
-          .ba-lift, .ba-lift.is-up { transform: none; transition: none; }
-          .ba-flip, .ba-flip.is-flipped { transform: none; transition: none; }
-          .ba-face { transition: opacity 300ms ease; }
-          .ba-flip.is-flipped .ba-face-front { opacity: 0; }
-          .ba-face-back { transform: none; opacity: 0; }
-          .ba-flip.is-flipped .ba-face-back { opacity: 1; }
-          .ba-pro, .ba-cap > span { transform: none; }
-          .ba-con i { transition: none; }
+          .ba-lift { transform: none; }
+          .ba-flip { transform: rotateY(calc(round(var(--f)) * 180deg)); }
+          .ba-pro { transform: none; }
         }
       `}</style>
 
@@ -132,7 +101,7 @@ export function BeforeAfter({ active }: { active: boolean }) {
               {CONS.map((c, i) => (
                 <li key={c}>
                   <span
-                    className={`ba-con inline-block text-lg text-gray-700 ${flipped ? "is-struck" : ""}`}
+                    className="ba-con inline-block text-lg text-gray-700"
                     style={{ "--i": i } as CSSProperties}
                   >
                     {c}
@@ -146,10 +115,9 @@ export function BeforeAfter({ active }: { active: boolean }) {
           {/* Stage */}
           <div className="order-1 lg:order-2 justify-self-center">
             <div className="ba-stage relative w-[300px] sm:w-[360px]">
-              {/* glow, same language as the hero */}
               <div className="absolute -inset-10 rounded-full bg-[#0e70db]/[0.06] blur-3xl pointer-events-none" />
-              <div className={`ba-lift relative ${phase === "lift" ? "is-up" : ""}`}>
-                <div className={`ba-flip aspect-[4/5] ${flipped ? "is-flipped" : ""}`}>
+              <div className="ba-lift relative">
+                <div className="ba-flip aspect-[4/5]">
                   <div className="ba-face ba-face-front">
                     <div className="ba-card relative">
                       <Image
@@ -162,22 +130,14 @@ export function BeforeAfter({ active }: { active: boolean }) {
                   </div>
                   <div className="ba-face ba-face-back">
                     <div className="w-full">
-                      <LivePass
-                        base="/landing/mockup-mascotaveloz-2.png"
-                        next="/landing/mockup-mascotaveloz-3.png"
-                        alt="Pase de fidelización Mascota Veloz en Apple Wallet"
-                        crossfade={phase === "visit" || phase === "push" || phase === "hold"}
-                        push={phase === "push" ? VISIT_PUSH : null}
-                      />
+                      <BackPass />
                     </div>
                   </div>
                 </div>
               </div>
               <div className="ba-cap text-center mt-2 text-sm font-medium">
-                <span className={`text-gray-400 ${flipped ? "" : "is-on"}`}>Tarjeta de cartón</span>
-                <span className={`text-[#0e70db] ${flipped ? "is-on" : ""}`}>
-                  Pase digital en Apple Wallet
-                </span>
+                <span className="a text-gray-400">Tarjeta de cartón</span>
+                <span className="b text-[#0e70db]">Pase digital en Apple Wallet</span>
               </div>
             </div>
           </div>
@@ -191,7 +151,7 @@ export function BeforeAfter({ active }: { active: boolean }) {
               {PROS.map((p, i) => (
                 <li
                   key={p.text}
-                  className={`ba-pro flex items-center gap-3 ${prosOn ? "is-on" : ""}`}
+                  className="ba-pro flex items-center gap-3"
                   style={{ "--i": i } as CSSProperties}
                 >
                   <span className="w-8 h-8 rounded-lg bg-blue-50 text-[#0e70db] flex items-center justify-center flex-shrink-0">
@@ -204,6 +164,32 @@ export function BeforeAfter({ active }: { active: boolean }) {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+/**
+ * The pass on the back face. The visit and the push follow the scroll too:
+ * they read --p from the section through a tiny observer on the CSS var.
+ */
+function BackPass() {
+  const ref = useRef<HTMLDivElement>(null)
+  return (
+    <div ref={ref} className="ba-back">
+      <style>{`
+        /* The crossfade and the push are class-driven inside LivePass; the section
+           toggles them from --p with two thresholds via these container-level hooks. */
+        .ba-back { --visit: clamp(0, calc((var(--p) - 0.58) / 0.04), 1); --push: clamp(0, calc((var(--p) - 0.66) / 0.04), 1); }
+        .ba-back .lp-next { opacity: var(--visit) !important; transition: none; }
+        .ba-back .lp-push { opacity: var(--push) !important; transform: translateY(calc((1 - var(--push)) * -140%)) !important; transition: none; }
+      `}</style>
+      <LivePass
+        base="/landing/mockup-mascotaveloz-2.png"
+        next="/landing/mockup-mascotaveloz-3.png"
+        alt="Pase de fidelización Mascota Veloz en Apple Wallet"
+        crossfade={false}
+        push={VISIT_PUSH}
+      />
     </div>
   )
 }

@@ -433,7 +433,7 @@ export default function HomePage() {
           </Link>
         </div>
         <div className="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-2">
-          {["Listo para tu negocio", "Setup en 10 min", "Sin tarjeta de crédito"].map((b) => (
+          {["Listo para tu negocio", "Setup en 10 min", "Sin descargar una aplicación"].map((b) => (
             <div key={b} className="flex items-center gap-1.5 text-sm text-blue-100/75">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
               <span>{b}</span>

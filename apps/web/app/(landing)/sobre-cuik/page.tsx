@@ -237,7 +237,9 @@ export default function SobreCuikPage() {
                         </span>
                         {m.title}
                       </div>
-                      <p className="mt-2 text-sm text-gray-600 leading-relaxed">{m.text}</p>
+                      <p className="mt-2 text-sm text-gray-600 leading-relaxed min-h-[3.75rem]">
+                        {m.text}
+                      </p>
                     </div>
                   </div>
                 </TiltCard>
