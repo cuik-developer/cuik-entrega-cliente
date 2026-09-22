@@ -83,11 +83,11 @@ const PHONES: Phone[] = [
 
 // x in cqw of the stage, z in px, ry in deg, w = width in cqw (standard frame), d = entrance delay
 const SLOTS: Slot[] = [
-  { x: 0, z: 40, ry: 0, w: 36, d: 120 },
-  { x: -28, z: -120, ry: 22, w: 32, d: 320 },
-  { x: 28, z: -120, ry: -22, w: 32, d: 420 },
-  { x: -50, z: -300, ry: 34, w: 27, d: 560 },
-  { x: 50, z: -300, ry: -34, w: 27, d: 640 },
+  { x: 0, z: 40, ry: 0, w: 42, d: 120 },
+  { x: -30, z: -120, ry: 22, w: 37, d: 320 },
+  { x: 30, z: -120, ry: -22, w: 37, d: 420 },
+  { x: -54, z: -300, ry: 34, w: 31, d: 560 },
+  { x: 54, z: -300, ry: -34, w: 31, d: 640 },
 ]
 
 // The El Patrón photo is a tighter crop (phone = 78% of the width vs 55%): scale its box down.
@@ -293,7 +293,7 @@ export function FanHero({
         {/* 3D stage */}
         <div
           ref={stage}
-          className="ah-stage relative mx-auto mt-2 w-full max-w-4xl h-[220px] sm:h-[270px] lg:h-[310px]"
+          className="ah-stage relative mx-auto mt-2 w-full max-w-4xl h-[250px] sm:h-[310px] lg:h-[360px]"
         >
           <div className="ah-floor" aria-hidden="true" />
           <div className="ah-world">
@@ -316,7 +316,7 @@ export function FanHero({
                       "--ry0": `${s.ry}deg`,
                       "--d": `${s.d}ms`,
                       width: `${w}cqw`,
-                      maxWidth: p.wide ? 250 * WIDE_SCALE : 250,
+                      maxWidth: p.wide ? 300 * WIDE_SCALE : 300,
                       zIndex: 10 - slot,
                     } as CSSProperties
                   }
