@@ -125,13 +125,13 @@ export default function SobreCuikPage() {
 
       {/* ── El problema (be!'s long two-column block, told with the object) ── */}
       <section className="relative py-20 sm:py-28 overflow-hidden">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 grid lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)] gap-14 lg:gap-20 items-center">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 grid lg:grid-cols-[minmax(0,7fr)_minmax(0,4fr)] gap-14 lg:gap-16 items-center">
           <div>
             <Reveal>
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#0e70db] mb-4">
                 El problema
               </p>
-              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-[-0.02em] leading-[1.08] text-balance text-gray-900 max-w-xl">
+              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-[-0.02em] leading-[1.08] text-balance text-gray-900 max-w-2xl">
                 Los clientes que vuelven son los que sostienen un negocio. Y casi nadie sabe quiénes
                 son.
               </h2>
@@ -182,7 +182,7 @@ export default function SobreCuikPage() {
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-100 mb-6">
               Lo que creemos
             </p>
-            <blockquote className="text-3xl sm:text-4xl font-extrabold tracking-[-0.02em] leading-[1.08] text-balance max-w-3xl mx-auto">
+            <blockquote className="text-3xl sm:text-4xl font-extrabold tracking-[-0.02em] leading-[1.08] text-balance max-w-5xl mx-auto">
               “La solución ya estaba en el bolsillo de cada cliente: su Wallet. Solo faltaba que un
               negocio local pudiera usarla sin un equipo de tecnología. Eso es Cuik.”
             </blockquote>

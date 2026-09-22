@@ -197,7 +197,7 @@ export function AboutHero() {
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-0 text-center">
           <div className="ah-copy max-w-3xl mx-auto">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-300">Sobre Cuik</p>
-            <h1 className="mt-4 text-3xl sm:text-4xl font-extrabold tracking-[-0.02em] leading-[1.08] text-balance max-w-2xl mx-auto">
+            <h1 className="mt-4 text-3xl sm:text-4xl font-extrabold tracking-[-0.02em] leading-[1.08] text-balance max-w-4xl mx-auto">
               La fidelización que usan las grandes cadenas, ahora en la Wallet de tus clientes
             </h1>
             <p className="mt-6 text-lg sm:text-xl text-blue-100/80 max-w-2xl mx-auto leading-relaxed">
