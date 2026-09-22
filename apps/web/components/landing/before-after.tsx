@@ -65,7 +65,7 @@ export function BeforeAfter({ active: _active }: { active?: boolean }) {
         .ba-con i { position: absolute; left: 0; right: 0; top: 50%; height: 2px; background: #b4432a; transform: scaleX(clamp(0, calc(var(--f) * 1.6 - var(--i) * 0.25), 1)); transform-origin: left center; }
 
         /* Pros: rise one by one once the pass is up */
-        .ba-pro { opacity: clamp(0, calc(var(--pros) * 2 - var(--i) * 0.3), 1); transform: translateY(calc((1 - clamp(0, calc(var(--pros) * 2 - var(--i) * 0.3), 1)) * 10px)); }
+        .ba-pro { --k: clamp(0, calc(var(--pros) * 2.5 - var(--i) * 0.3), 1); opacity: var(--k); transform: translateY(calc((1 - var(--k)) * 10px)); }
 
         /* Caption under the stage */
         .ba-cap { display: grid; }
