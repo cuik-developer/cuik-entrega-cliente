@@ -47,14 +47,14 @@ const MECHANICS: {
   {
     icon: <Stamp className="w-4 h-4" />,
     title: "Estampillas",
-    text: "Compra 8, llévate 1. El clásico, ahora en la Wallet y con push al completar.",
+    text: "Compra 8, llévate 1. El clásico, ahora en la Wallet del cliente.",
     img: "/landing/mockup-gradual-8.png",
     tint: "from-[#0e70db] to-[#3b8ee8]",
   },
   {
     icon: <Star className="w-4 h-4" />,
     title: "Puntos",
-    text: "Cada sol suma. El cliente acumula y canjea del catálogo que tú defines.",
+    text: "Cada sol suma puntos que se canjean por lo que tú elijas.",
     img: "/landing/mockup-elpatron.png",
     tint: "from-amber-500 to-amber-400",
     wide: true,
@@ -237,7 +237,7 @@ export default function SobreCuikPage() {
                         </span>
                         {m.title}
                       </div>
-                      <p className="mt-2 text-sm text-gray-600 leading-relaxed min-h-[3.75rem]">
+                      <p className="mt-2 text-sm text-gray-600 leading-relaxed min-h-[2.5rem]">
                         {m.text}
                       </p>
                     </div>
