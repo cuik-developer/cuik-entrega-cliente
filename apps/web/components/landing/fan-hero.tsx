@@ -34,11 +34,11 @@ const PHONES: Phone[] = [
 
 // x in cqw of the stage, z in px, ry in deg, w = width in cqw (standard frame), d = entrance delay
 const SLOTS: Slot[] = [
-  { x: 0, z: 40, ry: 0, w: 42, d: 120 },
-  { x: -30, z: -120, ry: 22, w: 37, d: 320 },
-  { x: 30, z: -120, ry: -22, w: 37, d: 420 },
-  { x: -54, z: -300, ry: 34, w: 31, d: 560 },
-  { x: 54, z: -300, ry: -34, w: 31, d: 640 },
+  { x: 0, z: 40, ry: 0, w: 36, d: 120 },
+  { x: -28, z: -120, ry: 22, w: 32, d: 320 },
+  { x: 28, z: -120, ry: -22, w: 32, d: 420 },
+  { x: -50, z: -300, ry: 34, w: 27, d: 560 },
+  { x: 50, z: -300, ry: -34, w: 27, d: 640 },
 ]
 
 // The El Patrón photo is a tighter crop (phone = 78% of the width vs 55%): scale its box down.
@@ -207,14 +207,14 @@ export function FanHero({
         <div className="ah-bg" aria-hidden="true" />
         <div className="ah-grid" aria-hidden="true" />
 
-        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-10 sm:pt-12 pb-0 text-center">
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-8 sm:pt-10 pb-0 text-center">
           <div className="ah-copy max-w-4xl mx-auto flex flex-col items-center">{children}</div>
         </div>
 
         {/* 3D stage */}
         <div
           ref={stage}
-          className="ah-stage relative mx-auto mt-2 sm:mt-3 w-full max-w-4xl h-[260px] sm:h-[320px] lg:h-[380px]"
+          className="ah-stage relative mx-auto mt-2 w-full max-w-4xl h-[220px] sm:h-[270px] lg:h-[310px]"
         >
           <div className="ah-floor" aria-hidden="true" />
           <div className="ah-world">
@@ -237,7 +237,7 @@ export function FanHero({
                       "--ry0": `${s.ry}deg`,
                       "--d": `${s.d}ms`,
                       width: `${w}cqw`,
-                      maxWidth: p.wide ? 300 * WIDE_SCALE : 300,
+                      maxWidth: p.wide ? 250 * WIDE_SCALE : 250,
                       zIndex: 10 - slot,
                     } as CSSProperties
                   }
@@ -250,7 +250,8 @@ export function FanHero({
           </div>
         </div>
 
-        <div className="relative pb-6 flex flex-col items-center gap-2 text-blue-200/70">
+        {/* One line: which pass is in front · hint · scroll cue */}
+        <div className="relative pb-5 px-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-blue-200/60">
           <div className="ah-label text-sm font-semibold text-blue-100/90" aria-live="polite">
             {PHONES.map((p, i) => (
               <span key={p.key} className={order[0] === i ? "is-on" : ""}>
@@ -258,9 +259,9 @@ export function FanHero({
               </span>
             ))}
           </div>
-          <span className="text-xs text-blue-200/60">Toca un pase para verlo al frente</span>
-          <span className="ah-cue inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider">
-            <ArrowDown className="w-4 h-4" /> {cue}
+          <span className="hidden sm:inline">· Toca un pase para verlo al frente</span>
+          <span className="ah-cue inline-flex items-center gap-1.5 font-semibold uppercase tracking-wider text-blue-200/70">
+            <ArrowDown className="w-3.5 h-3.5" /> {cue}
           </span>
         </div>
       </div>
