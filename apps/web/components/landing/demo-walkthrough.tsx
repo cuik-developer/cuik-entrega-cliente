@@ -16,7 +16,8 @@ import { LivePass, type PushContent } from "./live-pass"
  *      38.19%, top 1.30%, width 30.57%, height 67.04%), so the finger and the
  *      bezel overlap it naturally: the sign, iOS's yellow frame locking onto
  *      the QR, and the link chip. The sign itself stands top-left, behind.
- *   2. The cashier scans the pass (7 visits) at the register.
+ *   2. The cashier scans the pass (7 visits): sweep → lock (green brackets,
+ *      check, haptic pulse) → "+1 sello" pill rising from the strip.
  *   3. The 8th stamp lands and the reward push arrives, with a short burst
  *      of confetti from behind the phone: 26 pieces in brand colours, one
  *      second, once per visit to the step. Reduced motion: none.
@@ -105,6 +106,20 @@ export function DemoWalkthrough({ active }: { active: boolean }) {
   const [tick, setTick] = useState(0)
   const [paused, setPaused] = useState(false)
   const running = active && !paused
+  // Step 2 micro-scene: 0 sweep, 1 locked, 2 "+1 sello"
+  const [scanPhase, setScanPhase] = useState(0)
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` replays the scene on manual clicks
+  useEffect(() => {
+    setScanPhase(0)
+    if (step !== 1) return
+    const t1 = window.setTimeout(() => setScanPhase(1), 1250)
+    const t2 = window.setTimeout(() => setScanPhase(2), 1650)
+    return () => {
+      clearTimeout(t1)
+      clearTimeout(t2)
+    }
+  }, [step, tick])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` intentionally restarts the timer on manual clicks
   useEffect(() => {
@@ -277,6 +292,8 @@ export function DemoWalkthrough({ active }: { active: boolean }) {
                 next="/landing/mockup-gradual-8.png"
                 alt="Pase de fidelización Gradual Café en Apple Wallet"
                 scan={step === 1}
+                locked={step === 1 && scanPhase >= 1}
+                chip={step === 1 && scanPhase >= 2 ? "+1 sello" : null}
                 crossfade={step >= 2}
                 push={step === 2 ? REWARD_PUSH : null}
               />

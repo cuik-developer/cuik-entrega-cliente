@@ -1,5 +1,6 @@
 "use client"
 
+import { Check } from "lucide-react"
 import Image from "next/image"
 import type { CSSProperties, ReactNode } from "react"
 import { useRef } from "react"
@@ -10,6 +11,9 @@ import { useRef } from "react"
  *
  *   - crossfade: fades `next` (the same pass with one more stamp) over `base`
  *   - scan:      scanning frame + sweeping line over the QR (standard frame only)
+ *   - locked:    the scan caught the code: brackets turn green and tighten, a
+ *                check pops in the middle and the phone gives a haptic pulse
+ *   - chip:      a small pill ("+1 sello") that rises from the stamp strip
  *   - push:      iOS-style banner sliding down over the screen
  *
  * Two photo frames exist: "standard" (2250×2813, phone ≈ 54% of width) and
@@ -40,6 +44,8 @@ export function LivePass({
   frame = "standard",
   crossfade = false,
   scan = false,
+  locked = false,
+  chip = null,
   push = null,
   priority = false,
 }: {
@@ -49,6 +55,8 @@ export function LivePass({
   frame?: PassFrame
   crossfade?: boolean
   scan?: boolean
+  locked?: boolean
+  chip?: string | null
   push?: PushContent | null
   priority?: boolean
 }) {
@@ -59,7 +67,7 @@ export function LivePass({
   const f = FRAME[frame]
 
   return (
-    <div className="lp-root relative w-full">
+    <div className={`lp-root relative w-full ${locked ? "is-pulse" : ""}`}>
       <style>{`
         .lp-root { container-type: inline-size; --lp-ease-out: cubic-bezier(0.23, 1, 0.32, 1); --lp-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1); }
 
@@ -78,6 +86,19 @@ export function LivePass({
         .lp-scanline { position: absolute; left: 6%; right: 6%; top: 0; height: 0.5cqw; border-radius: 9999px; background: #0e70db; box-shadow: 0 0 1.2cqw rgba(14, 112, 219, 0.7); }
         .lp-scan.is-on .lp-scanline { animation: lp-sweep 1.4s linear infinite; }
         @keyframes lp-sweep { from { transform: translateY(0); } to { transform: translateY(14.4cqw); } }
+        /* Lock: brackets tighten and turn green, the line stops, a check pops in; the phone pulses like a haptic */
+        .lp-scan.is-locked { transform: scale(0.92); }
+        .lp-scan.is-locked i { border-color: #10b981; }
+        .lp-scan.is-locked .lp-scanline { animation: none; opacity: 0; }
+        .lp-check { position: absolute; left: 50%; top: 50%; width: 5.6cqw; height: 5.6cqw; border-radius: 9999px; background: #10b981; color: #fff; display: grid; place-items: center; box-shadow: 0 0.6cqw 1.8cqw rgba(16,185,129,0.45); opacity: 0; transform: translate(-50%, -50%) scale(0.4); transition: opacity 180ms var(--lp-ease-out), transform 380ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .lp-check svg { width: 3.4cqw; height: 3.4cqw; }
+        .lp-scan.is-locked .lp-check { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        .lp-root.is-pulse { animation: lp-pulse 320ms ease-out both; }
+        @keyframes lp-pulse { 0% { transform: scale(1); } 35% { transform: scale(1.015); } 100% { transform: scale(1); } }
+        /* "+1 sello" pill rising from the stamp strip */
+        .lp-chip { position: absolute; left: 50%; top: 39%; padding: 1.1cqw 2.4cqw; border-radius: 9999px; background: #fff; color: #111827; font-size: 2.6cqw; font-weight: 700; white-space: nowrap; box-shadow: 0 1.2cqw 3cqw rgba(15,23,42,0.22), 0 0 0 1px rgba(15,23,42,0.06); opacity: 0; transform: translate(-50%, 0); pointer-events: none; }
+        .lp-chip.is-on { animation: lp-chip 900ms var(--lp-ease-out) both; }
+        @keyframes lp-chip { 0% { opacity: 0; transform: translate(-50%, 5cqw) scale(0.9); } 20% { opacity: 1; transform: translate(-50%, 0) scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -9cqw) scale(1); } }
 
         /* Screen clip so the banner enters/leaves through the top of the screen, never over the bezel */
         .lp-screen { position: absolute; overflow: hidden; pointer-events: none; }
@@ -94,6 +115,11 @@ export function LivePass({
         @media (prefers-reduced-motion: reduce) {
           .lp-scan { transform: scale(1); transition: opacity 200ms ease; }
           .lp-scan.is-on .lp-scanline { animation: none; top: 50%; }
+          .lp-scan.is-locked { transform: scale(1); }
+          .lp-root.is-pulse { animation: none; }
+          .lp-check { transition: opacity 200ms ease; transform: translate(-50%, -50%); }
+          .lp-chip.is-on { animation: lp-chip-fade 900ms ease both; }
+          @keyframes lp-chip-fade { 0%, 100% { opacity: 0; } 25%, 70% { opacity: 1; } }
           .lp-push { transform: translateY(0); transition: opacity 200ms ease; }
         }
       `}</style>
@@ -121,13 +147,24 @@ export function LivePass({
       )}
 
       {/* QR scan frame */}
-      <div className={`lp-scan ${scan ? "is-on" : ""}`} aria-hidden="true">
+      <div
+        className={`lp-scan ${scan ? "is-on" : ""} ${locked ? "is-locked" : ""}`}
+        aria-hidden="true"
+      >
         <i />
         <i />
         <i />
         <i />
         <div className="lp-scanline" />
+        <div className="lp-check">
+          <Check strokeWidth={3} />
+        </div>
       </div>
+      {chip && (
+        <div key={chip} className="lp-chip is-on" aria-hidden="true">
+          {chip}
+        </div>
+      )}
 
       {/* Push banner */}
       <div className="lp-screen" style={f.screen} aria-hidden="true">
