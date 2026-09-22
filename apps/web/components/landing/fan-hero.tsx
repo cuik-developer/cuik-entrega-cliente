@@ -1,34 +1,83 @@
 "use client"
 
-import { ArrowDown } from "lucide-react"
-import Image from "next/image"
+import { ArrowDown, Cake, Gift, PawPrint, Percent } from "lucide-react"
 import type { CSSProperties, ReactNode } from "react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { stepSpring, useReducedMotion } from "@/components/landing/fx"
+import { LivePass, type PassFrame, type PushContent } from "@/components/landing/live-pass"
 
 /**
  * Full-bleed dark hero: five real Wallet passes fan out in 3D under the
  * copy. They rise into place one after another on load; the stage then
  * tilts with the pointer on a critically-damped spring and drifts slowly on
- * its own. Tapping any pass swaps it with the front one.
+ * its own. Tapping any pass swaps it with the front one, and whichever pass
+ * is in front plays its push notification (the same banners used across the
+ * site): it arrives shortly after the pass settles, stays a moment, leaves,
+ * and returns while that pass stays in front. Back passes never notify.
  *
  * The copy is passed in (`children`), so the home and Sobre Cuik can share
  * the scene with their own message.
  */
 
-type Phone = { key: string; src: string; label: string; wide?: boolean }
+type Phone = { key: string; src: string; label: string; wide?: boolean; push: PushContent }
 type Slot = { x: number; z: number; ry: number; w: number; d: number }
 
 const PHONES: Phone[] = [
-  { key: "gradual", src: "/landing/mockup-gradual-7.png", label: "Estampillas · Gradual Café" },
-  { key: "mascota", src: "/landing/mockup-mascotaveloz-3.png", label: "Sellos · Mascota Veloz" },
-  { key: "lumi", src: "/landing/mockup-lumi-descuento.png", label: "Descuento · Lumi Nail Bar" },
-  { key: "aroma", src: "/landing/mockup-aroma-regalo.png", label: "Cupón de regalo · Aroma Spa" },
+  {
+    key: "gradual",
+    src: "/landing/mockup-gradual-7.png",
+    label: "Estampillas · Gradual Café",
+    push: {
+      title: "Gradual Café",
+      body: "¡Visita registrada, Vito! ☕ Te falta 1 café para el gratis.",
+      icon: <Gift />,
+      color: "#e26534",
+    },
+  },
+  {
+    key: "mascota",
+    src: "/landing/mockup-mascotaveloz-3.png",
+    label: "Sellos · Mascota Veloz",
+    push: {
+      title: "Mascota Veloz",
+      body: "¡Visita registrada, Diego! 🐾 Te faltan 3 visitas para tu premio.",
+      icon: <PawPrint />,
+      color: "#d9542b",
+    },
+  },
+  {
+    key: "lumi",
+    src: "/landing/mockup-lumi-descuento.png",
+    label: "Descuento · Lumi Nail Bar",
+    push: {
+      title: "Lumi Nail Bar",
+      body: "Hoy es martes, Valeria 💅 Tu 20 % off te espera hasta las 6 pm.",
+      icon: <Percent />,
+      color: "#5a2d6e",
+    },
+  },
+  {
+    key: "aroma",
+    src: "/landing/mockup-aroma-regalo.png",
+    label: "Cupón de regalo · Aroma Spa",
+    push: {
+      title: "Aroma Spa",
+      body: "Lucía, alguien te regaló un masaje 🎁 Válido hasta el 31 de diciembre.",
+      icon: <Gift />,
+      color: "#144442",
+    },
+  },
   {
     key: "elpatron",
     src: "/landing/mockup-elpatron.png",
     label: "Puntos · El Patrón Barber",
     wide: true,
+    push: {
+      title: "El Patrón Barber",
+      body: "¡Feliz cumpleaños, Carlos! 🎂 Hoy tu corte va por nuestra cuenta.",
+      icon: <Cake />,
+      color: "#b8923a",
+    },
   },
 ]
 
@@ -62,7 +111,39 @@ export function FanHero({
   const [phase, setPhase] = useState<"static" | "pending" | "ready" | "done">("static")
   // order[slot] = phone index
   const [order, setOrder] = useState<number[]>([0, 1, 2, 3, 4])
+  const [pushOn, setPushOn] = useState(false)
+  const [inView, setInView] = useState(true)
   const reduce = useReducedMotion()
+  const front = order[0]
+
+  // Pause the notification cycle when the hero is off screen.
+  useEffect(() => {
+    const el = stage.current
+    if (!el) return
+    const io = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { threshold: 0.2 })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+
+  // Push cycle for the front pass: arrive → stay → leave → pause → again. Restarts on every swap.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `front` restarts the cycle on purpose
+  useEffect(() => {
+    setPushOn(false)
+    if (!inView || phase === "pending") return
+    const timers: number[] = []
+    const at = (ms: number, fn: () => void) => timers.push(window.setTimeout(fn, ms))
+    const firstDelay = phase === "ready" ? 2600 : 1400
+    let t = firstDelay
+    // three cycles is plenty; a swap or scrolling back restarts it
+    for (let i = 0; i < 3; i++) {
+      at(t, () => setPushOn(true))
+      at(t + 3200, () => setPushOn(false))
+      t += 3200 + 4200
+    }
+    return () => {
+      for (const id of timers) clearTimeout(id)
+    }
+  }, [front, inView, phase])
 
   useLayoutEffect(() => {
     if (performance.now() > 2500) {
@@ -240,7 +321,13 @@ export function FanHero({
                     } as CSSProperties
                   }
                 >
-                  <Image src={p.src} alt="" width={564} height={1002} priority={slot === 0} />
+                  <LivePass
+                    base={p.src}
+                    alt=""
+                    frame={(p.wide ? "wide" : "standard") as PassFrame}
+                    push={slot === 0 && pushOn ? p.push : null}
+                    priority={slot === 0}
+                  />
                   <span className={`ah-hit ${p.wide ? "is-wide" : ""}`} aria-hidden="true" />
                 </button>
               )
