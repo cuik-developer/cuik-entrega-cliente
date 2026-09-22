@@ -31,7 +31,7 @@ import { useEffect, useRef, useState } from "react"
 import { CuikLogo } from "@/components/cuik-logo"
 import { BeforeAfter } from "@/components/landing/before-after"
 import { DemoWalkthrough } from "@/components/landing/demo-walkthrough"
-import { HeroCarousel } from "@/components/landing/hero-carousel"
+import { FanHero } from "@/components/landing/fan-hero"
 import { MechanicsShowcase } from "@/components/landing/mechanics-showcase"
 import { SiteFooter } from "@/components/landing/site-footer"
 import { SiteNav } from "@/components/landing/site-nav"
@@ -352,7 +352,6 @@ export default function HomePage() {
       })
   }, [])
 
-  const hero = useInView(0.1)
   const benefits = useInView()
   const demo = useInView()
   const beforeAfter = useInView()
@@ -390,82 +389,58 @@ export default function HomePage() {
         .grain::after { content: ''; position: absolute; inset: 0; opacity: 0.025; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); pointer-events: none; }
       `}</style>
 
-      <SiteNav />
+      <SiteNav solid />
 
-      {/* ─── Hero ────────────────────────────────────── */}
-      <section ref={hero.ref} className="relative overflow-hidden pt-12 pb-24 sm:pt-20 sm:pb-32">
-        {/* Background: subtle radial glow */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-[-20%] left-[10%] w-[600px] h-[600px] rounded-full bg-[#0e70db]/[0.04] blur-3xl" />
-          <div className="absolute bottom-[-10%] right-[5%] w-[500px] h-[500px] rounded-full bg-[#ff4810]/[0.03] blur-3xl" />
+      {/* ─── Hero: five real passes in 3D (shared scene with Sobre Cuik) ── */}
+      <FanHero cue="Descubre cómo funciona">
+        <div>
+          <Badge className="bg-white/10 text-blue-100 border-white/15 font-semibold px-3.5 py-1.5 text-xs tracking-wide uppercase backdrop-blur">
+            <Zap className="w-3 h-3 mr-1.5" />
+            Plataforma #1 de fidelización en LATAM
+          </Badge>
         </div>
-
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 relative">
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-            <div
-              className={`space-y-7 ${hero.inView ? "anim-stagger is-visible" : "anim-stagger"}`}
+        <h1 className="mt-5 text-4xl sm:text-5xl lg:text-[3.75rem] font-extrabold leading-[1.06] tracking-[-0.02em] text-balance max-w-3xl">
+          Convierte visitas en{" "}
+          <span className="relative inline-block">
+            <span className="relative z-10 bg-gradient-to-r from-[#5aa2f0] to-[#9cc8f7] bg-clip-text text-transparent">
+              clientes fieles
+            </span>
+            <span className="absolute bottom-1 left-0 right-0 h-3 bg-[#ff4810]/30 -rotate-1 rounded" />
+          </span>
+        </h1>
+        <p className="mt-6 text-lg sm:text-xl text-blue-100/80 leading-relaxed max-w-xl">
+          Tarjetas de lealtad digitales en Apple y Google Wallet. Sin apps. Sin cartón. Tu cliente
+          solo escanea y listo.
+        </p>
+        <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center w-full sm:w-auto">
+          <Link href="/login?view=demo">
+            <Button
+              size="lg"
+              className="bg-[#ff4810] hover:bg-[#e03f0d] text-white font-bold text-base px-8 h-12 rounded-full shadow-lg shadow-orange-500/20 group w-full sm:w-auto"
             >
-              <div>
-                <Badge className="bg-gradient-to-r from-blue-50 to-blue-100 text-[#0e70db] border-blue-200/60 font-semibold px-3.5 py-1.5 text-xs tracking-wide uppercase">
-                  <Zap className="w-3 h-3 mr-1.5" />
-                  Plataforma #1 de fidelización en LATAM
-                </Badge>
-              </div>
-              <div>
-                <h1 className="text-5xl sm:text-6xl lg:text-[4.25rem] font-extrabold text-gray-900 leading-[1.08] tracking-tight">
-                  Convierte visitas en{" "}
-                  <span className="relative inline-block">
-                    <span className="relative z-10 bg-gradient-to-r from-[#0e70db] to-[#3b8ee8] bg-clip-text text-transparent">
-                      clientes fieles
-                    </span>
-                    <span className="absolute bottom-1 left-0 right-0 h-3 bg-[#ff4810]/15 -rotate-1 rounded" />
-                  </span>
-                </h1>
-              </div>
-              <div>
-                <p className="text-lg sm:text-xl text-gray-500 leading-relaxed max-w-lg">
-                  Tarjetas de lealtad digitales en Apple y Google Wallet. Sin apps. Sin cartón. Tu
-                  cliente solo escanea y listo.
-                </p>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-3 pt-1">
-                <Link href="/login?view=demo">
-                  <Button
-                    size="lg"
-                    className="bg-[#ff4810] hover:bg-[#e03f0d] text-white font-bold text-base px-8 h-13 rounded-xl shadow-lg shadow-orange-200/50 hover:shadow-xl hover:shadow-orange-200/60 transition-all group w-full sm:w-auto"
-                  >
-                    Empieza gratis
-                    <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                  </Button>
-                </Link>
-                <Link href="/login?view=demo">
-                  <Button
-                    size="lg"
-                    className="border-2 border-gray-200 bg-white text-gray-700 font-semibold h-13 rounded-xl hover:border-[#0e70db]/40 hover:bg-blue-50 hover:text-[#0e70db] transition-all w-full sm:w-auto"
-                  >
-                    Prueba 7 días gratis
-                  </Button>
-                </Link>
-              </div>
-              <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1">
-                {["Listo para tu negocio", "Setup en 10 min", "Sin tarjeta de crédito"].map((b) => (
-                  <div key={b} className="flex items-center gap-1.5 text-sm text-gray-500">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                    <span>{b}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div
-              className="relative flex items-center justify-center h-[440px] lg:h-[520px]"
-              style={{ perspective: "1200px" }}
+              Empieza gratis
+              <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+            </Button>
+          </Link>
+          <Link href="/login?view=demo">
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-12 rounded-full px-6 font-semibold border-white/25 bg-white/5 text-white hover:bg-white/10 hover:text-white backdrop-blur w-full sm:w-auto"
             >
-              <HeroCarousel active={hero.inView} />
-            </div>
-          </div>
+              Prueba 7 días gratis
+            </Button>
+          </Link>
         </div>
-      </section>
+        <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-2">
+          {["Listo para tu negocio", "Setup en 10 min", "Sin tarjeta de crédito"].map((b) => (
+            <div key={b} className="flex items-center gap-1.5 text-sm text-blue-100/75">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              <span>{b}</span>
+            </div>
+          ))}
+        </div>
+      </FanHero>
 
       {/* ─── Verticals Marquee ───────────────────────── */}
       <section className="py-6 bg-gray-50/80 border-y border-gray-100/80 overflow-hidden">

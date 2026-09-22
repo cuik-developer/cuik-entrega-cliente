@@ -20,7 +20,7 @@ import { FxStyles, Reveal, TiltCard } from "@/components/landing/fx"
 import { SiteFooter, WHATSAPP_URL } from "@/components/landing/site-footer"
 import { SiteNav } from "@/components/landing/site-nav"
 import { Button } from "@/components/ui/button"
-import { AboutHero } from "./_components/about-hero"
+import { AboutIntro } from "./_components/about-intro"
 import { ProblemFlip } from "./_components/problem-flip"
 
 export const metadata: Metadata = {
@@ -121,7 +121,7 @@ export default function SobreCuikPage() {
     <div className="min-h-screen bg-white font-sans antialiased">
       <FxStyles />
       <SiteNav solid />
-      <AboutHero />
+      <AboutIntro />
 
       {/* ── El problema (be!'s long two-column block, told with the object) ── */}
       <section className="relative py-20 sm:py-28 overflow-hidden">
@@ -226,7 +226,7 @@ export default function SobreCuikPage() {
                     <div className={`relative h-80 bg-gradient-to-br ${m.tint} overflow-hidden`}>
                       {/* Same visual phone size on every card: the El Patrón photo is a tighter crop, so its box is narrower */}
                       <div
-                        className={`absolute inset-x-0 mx-auto ${m.wide ? "w-[81%] -bottom-[63px]" : "w-[115%] -bottom-[60px]"}`}
+                        className={`absolute left-1/2 -translate-x-1/2 ${m.wide ? "w-[81%] -bottom-[63px]" : "w-[115%] -bottom-[60px]"}`}
                       >
                         <Image
                           src={m.img}

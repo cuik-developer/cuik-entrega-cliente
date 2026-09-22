@@ -1,19 +1,19 @@
 "use client"
 
-import { ArrowDown, ArrowRight } from "lucide-react"
+import { ArrowDown } from "lucide-react"
 import Image from "next/image"
-import Link from "next/link"
-import type { CSSProperties } from "react"
+import type { CSSProperties, ReactNode } from "react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { stepSpring, useReducedMotion } from "@/components/landing/fx"
-import { Button } from "@/components/ui/button"
 
 /**
- * Full-bleed dark hero: five real Wallet passes fan out in 3D behind the
- * headline. They rise into place one after another on load; the stage then
+ * Full-bleed dark hero: five real Wallet passes fan out in 3D under the
+ * copy. They rise into place one after another on load; the stage then
  * tilts with the pointer on a critically-damped spring and drifts slowly on
- * its own. Tapping any pass swaps it with the front one, so visitors can
- * browse the five mechanics.
+ * its own. Tapping any pass swaps it with the front one.
+ *
+ * The copy is passed in (`children`), so the home and Sobre Cuik can share
+ * the scene with their own message.
  */
 
 type Phone = { key: string; src: string; label: string; wide?: boolean }
@@ -44,7 +44,17 @@ const SLOTS: Slot[] = [
 // The El Patrón photo is a tighter crop (phone = 78% of the width vs 55%): scale its box down.
 const WIDE_SCALE = 0.55 / 0.78
 
-export function AboutHero() {
+export function FanHero({
+  children,
+  cue,
+  className = "",
+}: {
+  /** Eyebrow, title, subtitle and actions. Rendered centered over the dark background. */
+  children: ReactNode
+  /** Label of the scroll cue under the stage. */
+  cue: string
+  className?: string
+}) {
   const stage = useRef<HTMLDivElement>(null)
   const hero = useRef<HTMLDivElement>(null)
   // "static": server HTML as-is (no JS yet, or JS arrived late — no entrance then, no flash).
@@ -68,7 +78,8 @@ export function AboutHero() {
     }
   }, [])
 
-  // Pointer tilt + idle drift, one rAF loop, spring-smoothed.
+  // Pointer tilt + idle drift, one rAF loop, spring-smoothed. The listener lives on the
+  // whole hero because the stage itself ignores the pointer (see .ah-stage).
   useEffect(() => {
     const el = stage.current
     const host = hero.current
@@ -141,7 +152,7 @@ export function AboutHero() {
           : ""
 
   return (
-    <section className="relative overflow-hidden bg-[#0b1220] text-white">
+    <section className={`relative overflow-hidden bg-[#0b1220] text-white ${className}`}>
       <style>{`
         .ah { --ah-ease: cubic-bezier(0.23, 1, 0.32, 1); --ah-move: cubic-bezier(0.77, 0, 0.175, 1); }
         .ah-bg { position: absolute; inset: 0; background:
@@ -150,6 +161,7 @@ export function AboutHero() {
           radial-gradient(600px 400px at 90% 10%, rgba(255,72,16,0.16), transparent 60%);
         }
         .ah-grid { position: absolute; inset: 0; opacity: 0.35; background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 64px 64px; mask-image: radial-gradient(ellipse at 50% 60%, #000 30%, transparent 75%); }
+        /* The stage plane would sit in front of the passes with translateZ < 0 and swallow their clicks: it ignores the pointer. */
         .ah-stage { container-type: inline-size; perspective: 1600px; --rx: 0deg; --ry: 0deg; pointer-events: none; }
         .ah-world { position: relative; height: 100%; transform-style: preserve-3d; transform: rotateX(var(--rx)) rotateY(var(--ry)); will-change: transform; }
         /* Resting pose is the default (what the server renders). */
@@ -175,6 +187,7 @@ export function AboutHero() {
         .ah.is-ready .ah-copy > :nth-child(2) { transition-delay: 180ms; }
         .ah.is-ready .ah-copy > :nth-child(3) { transition-delay: 300ms; }
         .ah.is-ready .ah-copy > :nth-child(4) { transition-delay: 420ms; }
+        .ah.is-ready .ah-copy > :nth-child(5) { transition-delay: 520ms; }
         .ah-label { display: grid; }
         .ah-label > span { grid-area: 1 / 1; opacity: 0; transform: translateY(4px); transition: opacity 300ms var(--ah-ease), transform 300ms var(--ah-ease); }
         .ah-label > span.is-on { opacity: 1; transform: none; }
@@ -195,36 +208,7 @@ export function AboutHero() {
         <div className="ah-grid" aria-hidden="true" />
 
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-0 text-center">
-          <div className="ah-copy max-w-3xl mx-auto">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-300">Sobre Cuik</p>
-            <h1 className="mt-4 text-3xl sm:text-4xl font-extrabold tracking-[-0.02em] leading-[1.08] text-balance max-w-4xl mx-auto">
-              La fidelización que usan las grandes cadenas, ahora en la Wallet de tus clientes
-            </h1>
-            <p className="mt-6 text-lg sm:text-xl text-blue-100/80 max-w-2xl mx-auto leading-relaxed">
-              Nacimos en Lima con una obsesión: que los negocios locales tengan clientes que
-              vuelven, sin apps, sin cartón y con la data en sus manos.
-            </p>
-            <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-              <Link href="/login?view=demo">
-                <Button
-                  size="lg"
-                  className="w-full sm:w-auto bg-white text-[#0b1220] hover:bg-blue-50 font-bold h-12 rounded-full px-6 group"
-                >
-                  Agenda una demo
-                  <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                </Button>
-              </Link>
-              <Link href="/contacto">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="w-full sm:w-auto h-12 rounded-full px-6 font-semibold border-white/25 bg-white/5 text-white hover:bg-white/10 hover:text-white backdrop-blur"
-                >
-                  Contáctanos
-                </Button>
-              </Link>
-            </div>
-          </div>
+          <div className="ah-copy max-w-4xl mx-auto flex flex-col items-center">{children}</div>
         </div>
 
         {/* 3D stage */}
@@ -276,7 +260,7 @@ export function AboutHero() {
           </div>
           <span className="text-xs text-blue-200/60">Toca un pase para verlo al frente</span>
           <span className="ah-cue inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider">
-            <ArrowDown className="w-4 h-4" /> El problema que resolvemos
+            <ArrowDown className="w-4 h-4" /> {cue}
           </span>
         </div>
       </div>
