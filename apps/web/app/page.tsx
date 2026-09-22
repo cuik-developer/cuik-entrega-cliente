@@ -361,7 +361,7 @@ export default function HomePage() {
   const pricing = useInView()
 
   return (
-    <div className="site-zoom min-h-screen bg-white font-sans antialiased">
+    <div className="min-h-screen bg-white font-sans antialiased">
       {/* ─── Styles ──────────────────────────────────── */}
       <style>{`
         @keyframes marquee { from { transform: translateX(0) } to { transform: translateX(-50%) } }
@@ -399,7 +399,7 @@ export default function HomePage() {
             Plataforma #1 de fidelización en LATAM
           </Badge>
         </div>
-        <h1 className="mt-5 text-5xl sm:text-6xl lg:text-[4.25rem] font-extrabold leading-[1.08] tracking-tight text-balance max-w-3xl">
+        <h1 className="mt-4 text-4xl sm:text-5xl font-extrabold leading-[1.08] tracking-tight text-balance max-w-2xl">
           Convierte visitas en{" "}
           <span className="relative inline-block">
             <span className="relative z-10 bg-gradient-to-r from-[#5aa2f0] to-[#9cc8f7] bg-clip-text text-transparent">
@@ -408,11 +408,11 @@ export default function HomePage() {
             <span className="absolute bottom-1 left-0 right-0 h-3 bg-[#ff4810]/30 -rotate-1 rounded" />
           </span>
         </h1>
-        <p className="mt-6 text-lg sm:text-xl text-blue-100/80 leading-relaxed max-w-xl">
+        <p className="mt-4 text-lg text-blue-100/80 leading-relaxed max-w-lg">
           Tarjetas de lealtad digitales en Apple y Google Wallet. Sin apps. Sin cartón. Tu cliente
           solo escanea y listo.
         </p>
-        <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center w-full sm:w-auto">
+        <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center w-full sm:w-auto">
           <Link href="/login?view=demo">
             <Button
               size="lg"
@@ -432,7 +432,7 @@ export default function HomePage() {
             </Button>
           </Link>
         </div>
-        <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-2">
+        <div className="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-2">
           {["Listo para tu negocio", "Setup en 10 min", "Sin tarjeta de crédito"].map((b) => (
             <div key={b} className="flex items-center gap-1.5 text-sm text-blue-100/75">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />

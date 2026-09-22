@@ -135,11 +135,3 @@
     @apply bg-background text-foreground;
   }
 }
-
-/* Public site (home, Sobre Cuik, Contactanos): designed to read at 75% browser zoom
-   on desktop, so that scale is baked in. Phones and tablets keep 100%. */
-@media (min-width: 1024px) {
-  .site-zoom {
-    zoom: 0.75;
-  }
-}
