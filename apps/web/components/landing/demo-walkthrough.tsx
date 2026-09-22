@@ -14,8 +14,8 @@ import { LivePass, type PushContent } from "./live-pass"
  *      (the site's real iPhone photo) shows that same sign through the
  *      camera, with iOS's yellow frame locking onto the QR and the link
  *      chip. Nothing else is drawn.
- *   2. The cashier scans the pass at the register → the visit is stamped.
- *   3. The card is complete → the reward push.
+ *   2. The cashier scans the pass (7 visits) at the register.
+ *   3. The 8th stamp lands and the reward push arrives.
  *
  * Auto-advances every STEP_MS while in view; clicking a step jumps to it.
  */
@@ -217,7 +217,7 @@ export function DemoWalkthrough({ active }: { active: boolean }) {
                 next="/landing/mockup-gradual-8.png"
                 alt="Pase de fidelización Gradual Café en Apple Wallet"
                 scan={step === 1}
-                crossfade={step >= 1}
+                crossfade={step >= 2}
                 push={step === 2 ? REWARD_PUSH : null}
               />
             </div>
