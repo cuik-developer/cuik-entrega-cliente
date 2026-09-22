@@ -3,13 +3,14 @@
 import { CheckCircle2, Gift, QrCode } from "lucide-react"
 import type { CSSProperties, ReactNode } from "react"
 import { useEffect, useState } from "react"
+import { CuikLogo } from "@/components/cuik-logo"
 import { LivePass, type PushContent } from "./live-pass"
 
 /**
  * "Mira cómo funciona tu pase": three steps synchronized with the live pass.
  *
- *   1. The pass arrives: the phone rises into place in one quick motion,
- *      with a small "ready in seconds" pill. Nothing else on stage.
+ *   1. A counter sign — "Escanea aquí y obtén tu pase" with a QR — stands
+ *      on the stage. That is the whole invitation. No pass yet.
  *   2. The cashier scans the pass at the register → the visit is stamped.
  *   3. The card is complete → the reward push.
  *
@@ -29,7 +30,7 @@ const STEPS: { icon: ReactNode; title: string; desc: string }[] = [
   {
     icon: <QrCode className="w-7 h-7" />,
     title: "Escanea el QR de tu local",
-    desc: "Tu cliente escanea el QR del mostrador y en segundos tiene su pase en la Wallet. Sin apps, sin formularios.",
+    desc: "Tu cliente escanea el cartel del mostrador y en segundos tiene su pase en la Wallet. Sin apps, sin formularios.",
   },
   {
     icon: <CheckCircle2 className="w-7 h-7" />,
@@ -42,6 +43,34 @@ const STEPS: { icon: ReactNode; title: string; desc: string }[] = [
     desc: "Al completar todos los sellos, el premio se desbloquea y le llega una notificación.",
   },
 ]
+
+// Deterministic QR-looking pattern (finder squares + timing lines + noise), crisp squares
+const QR_N = 25
+function finderCell(x: number, y: number): boolean | null {
+  const inFinder = (x < 7 && y < 7) || (x >= QR_N - 7 && y < 7) || (x < 7 && y >= QR_N - 7)
+  if (!inFinder) return null
+  const fx = x < 7 ? x : x - (QR_N - 7)
+  const fy = y < 7 ? y : y - (QR_N - 7)
+  const ring = fx === 0 || fy === 0 || fx === 6 || fy === 6
+  const core = fx >= 2 && fx <= 4 && fy >= 2 && fy <= 4
+  return ring || core
+}
+const QR = (() => {
+  const cells: boolean[] = []
+  let seed = 11
+  const rnd = () => {
+    seed = (seed * 9301 + 49297) % 233280
+    return seed / 233280
+  }
+  for (let y = 0; y < QR_N; y++) {
+    for (let x = 0; x < QR_N; x++) {
+      const f = finderCell(x, y)
+      const timing = (x === 7 && y < QR_N - 7) || (y === 7 && x < QR_N - 7)
+      cells.push(f ?? (timing ? false : rnd() > 0.52))
+    }
+  }
+  return cells
+})()
 
 export function DemoWalkthrough({ active }: { active: boolean }) {
   const [step, setStep] = useState(0)
@@ -69,37 +98,68 @@ export function DemoWalkthrough({ active }: { active: boolean }) {
         .dw-step.is-on.is-running .dw-bar > i { animation: dw-fill ${STEP_MS}ms linear forwards; }
         @keyframes dw-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
- /* Stage: just the phone. Step 1 plays its arrival; the pill confirms the speed. */
+        /* Stage: the sign (step 1) and the phone (steps 2–3) share the same box and crossfade */
         .dw-stage { container-type: inline-size; }
-        .dw-passphone { position: relative; width: 100%; transform-origin: 50% 100%; }
-        .dw-passphone.is-arrive { animation: dw-arrive 900ms var(--dw-drawer) both; }
-        @keyframes dw-arrive { from { opacity: 0; transform: translateY(28px) scale(0.96); } to { opacity: 1; transform: none; } }
-        .dw-cap { position: absolute; left: 50%; bottom: 4%; z-index: 3; transform: translateX(-50%) translateY(6px); display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.85rem; border-radius: 9999px; background: rgba(255,255,255,0.94); color: #0f172a; font-size: 0.75rem; font-weight: 700; white-space: nowrap; box-shadow: 0 10px 30px -12px rgba(15,23,42,0.4), 0 0 0 1px rgba(15,23,42,0.06); opacity: 0; transition: opacity 300ms var(--dw-out), transform 400ms var(--dw-out); transition-delay: 750ms; }
+        .dw-layer { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; transition: opacity 420ms var(--dw-out), transform 700ms var(--dw-drawer); }
+        .dw-layer.is-off { opacity: 0; transform: translateY(16px) scale(0.97); pointer-events: none; }
+        .dw-passphone { width: 100%; }
+        /* Counter sign: white card on a slim stand */
+        .dw-sign { width: 78%; border-radius: 1.25rem; background: #fff; box-shadow: 0 40px 80px -36px rgba(15,23,42,0.45), 0 0 0 1px rgba(15,23,42,0.06); padding: 1.5rem 1.5rem 1.25rem; text-align: center; position: relative; }
+        .dw-sign::before { content: ''; position: absolute; left: 12%; right: 12%; bottom: -14px; height: 14px; border-radius: 0 0 10px 10px; background: linear-gradient(180deg, #cbd5e1, #94a3b8); }
+        .dw-sign::after { content: ''; position: absolute; left: 4%; right: 4%; bottom: -22px; height: 8px; border-radius: 9999px; background: #0f172a; opacity: 0.9; }
+        .dw-qr { display: grid; grid-template-columns: repeat(25, 1fr); gap: 0; margin: 1.1rem auto 0; width: 100%; aspect-ratio: 1; padding: 0.35rem; border-radius: 0.75rem; background: #fff; box-shadow: inset 0 0 0 1px #eef2f7; }
+        .dw-qr i { display: block; background: #0f172a; }
+        .dw-qr i.o { background: transparent; }
+        .dw-cap { position: absolute; left: 50%; bottom: 4%; z-index: 3; transform: translateX(-50%) translateY(6px); display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.85rem; border-radius: 9999px; background: rgba(255,255,255,0.94); color: #0f172a; font-size: 0.75rem; font-weight: 700; white-space: nowrap; box-shadow: 0 10px 30px -12px rgba(15,23,42,0.4), 0 0 0 1px rgba(15,23,42,0.06); opacity: 0; transition: opacity 300ms var(--dw-out), transform 400ms var(--dw-out); transition-delay: 500ms; }
         .dw-cap.is-on { opacity: 1; transform: translateX(-50%); }
         .dw-cap i { width: 0.5rem; height: 0.5rem; border-radius: 9999px; background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.2); }
 
         @media (prefers-reduced-motion: reduce) {
           .dw-icon { transform: none; transition: none; }
           .dw-step.is-on.is-running .dw-bar > i { animation: none; transform: scaleX(1); }
+          .dw-layer { transition: opacity 250ms ease; transform: none !important; }
           .dw-cap { transition: opacity 250ms ease; transform: translateX(-50%) !important; }
-          .dw-passphone.is-arrive { animation: none; }
         }
       `}</style>
 
       {/* Stage */}
       <div className="relative flex-shrink-0">
         <div className="absolute -inset-8 bg-[#0e70db]/[0.04] rounded-full blur-2xl" />
-        <div className="dw-stage relative w-[300px] sm:w-[320px]">
-          {/* The pass in the Wallet */}
-          <div className={`dw-passphone ${step === 0 ? "is-arrive" : ""}`}>
-            <LivePass
-              base="/landing/mockup-gradual-7.png"
-              next="/landing/mockup-gradual-8.png"
-              alt="Pase de fidelización Gradual Café en Apple Wallet"
-              scan={step === 1}
-              crossfade={step >= 1}
-              push={step === 2 ? REWARD_PUSH : null}
-            />
+        <div className="dw-stage relative w-[300px] sm:w-[320px] aspect-[564/1002]">
+          {/* Step 1: the counter sign */}
+          <div className={`dw-layer ${step === 0 ? "" : "is-off"}`} aria-hidden={step !== 0}>
+            <div className="dw-sign">
+              <div className="flex items-center justify-center gap-2">
+                <CuikLogo size="sm" />
+                <span className="text-sm font-extrabold text-gray-900 tracking-tight">Cuik</span>
+              </div>
+              <div className="mt-4 text-[1.35rem] font-extrabold text-gray-900 tracking-tight leading-[1.15] text-balance">
+                Escanea aquí y obtén tu pase
+              </div>
+              <div className="dw-qr" role="img" aria-label="Código QR de registro">
+                {QR.map((on, i) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: static pattern
+                  <i key={i} className={on ? "" : "o"} />
+                ))}
+              </div>
+              <div className="mt-3 text-xs font-medium text-gray-500">
+                Apple Wallet · Google Wallet · Sin apps
+              </div>
+            </div>
+          </div>
+
+          {/* Steps 2–3: the pass in the Wallet */}
+          <div className={`dw-layer ${step === 0 ? "is-off" : ""}`} aria-hidden={step === 0}>
+            <div className="dw-passphone">
+              <LivePass
+                base="/landing/mockup-gradual-7.png"
+                next="/landing/mockup-gradual-8.png"
+                alt="Pase de fidelización Gradual Café en Apple Wallet"
+                scan={step === 1}
+                crossfade={step >= 1}
+                push={step === 2 ? REWARD_PUSH : null}
+              />
+            </div>
           </div>
           <div className={`dw-cap ${step === 0 ? "is-on" : ""}`} aria-hidden="true">
             <i /> Pase listo en segundos
