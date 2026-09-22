@@ -1,6 +1,6 @@
 "use client"
 
-import { CheckCircle2, Gift, QrCode } from "lucide-react"
+import { CheckCircle2, Gift, Pause, Play, QrCode } from "lucide-react"
 import Image from "next/image"
 import type { CSSProperties, ReactNode } from "react"
 import { useEffect, useState } from "react"
@@ -79,13 +79,15 @@ export function DemoWalkthrough({ active }: { active: boolean }) {
   const [step, setStep] = useState(0)
   // Bumped on manual clicks so the auto-advance timer restarts from the click.
   const [tick, setTick] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const running = active && !paused
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` intentionally restarts the timer on manual clicks
   useEffect(() => {
-    if (!active) return
+    if (!running) return
     const t = setTimeout(() => setStep((s) => (s + 1) % STEPS.length), STEP_MS)
     return () => clearTimeout(t)
-  }, [active, step, tick])
+  }, [running, step, tick])
 
   return (
     <div className="dw flex flex-col lg:flex-row items-center gap-14">
@@ -100,6 +102,8 @@ export function DemoWalkthrough({ active }: { active: boolean }) {
         .dw-bar > i { display: block; height: 100%; background: #0e70db; transform: scaleX(0); transform-origin: left; }
         .dw-step.is-on.is-running .dw-bar > i { animation: dw-fill ${STEP_MS}ms linear forwards; }
         @keyframes dw-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+        /* Pause freezes the bar where it is (same specificity as the rule above, declared after it) */
+        .dw-step.is-on.is-running.is-paused .dw-bar > i { animation-play-state: paused; }
 
         /* Stage: the sign (step 1) and the phone (steps 2–3) share the same box and crossfade */
         .dw-stage { container-type: inline-size; }
@@ -229,39 +233,50 @@ export function DemoWalkthrough({ active }: { active: boolean }) {
       </div>
 
       {/* Steps */}
-      <div className="flex-1 grid sm:grid-cols-3 gap-8">
-        {STEPS.map((item, i) => {
-          const n = i + 1
-          const on = step === i
-          return (
-            <button
-              key={item.title}
-              type="button"
-              onClick={() => {
-                setStep(i)
-                setTick((t) => t + 1)
-              }}
-              aria-pressed={on}
-              className={`dw-step text-center lg:text-left space-y-3 rounded-xl cursor-pointer ${on ? "is-on" : ""} ${active ? "is-running" : ""}`}
-              style={{ "--i": i } as CSSProperties}
-            >
-              <div className="dw-icon w-12 h-12 rounded-xl bg-[#0e70db] text-white flex items-center justify-center mx-auto lg:mx-0 shadow-lg shadow-blue-200/40">
-                {item.icon}
-              </div>
-              <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0e70db] uppercase tracking-wider">
-                <span className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-[10px]">
-                  {n}
-                </span>
-                Paso {n}
-              </div>
-              <h3 className="text-lg font-bold text-gray-900">{item.title}</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">{item.desc}</p>
-              <div className="dw-bar max-w-[160px] mx-auto lg:mx-0" aria-hidden="true">
-                <i key={`${item.title}-${tick}`} />
-              </div>
-            </button>
-          )
-        })}
+      <div className="flex-1">
+        <div className="grid sm:grid-cols-3 gap-8">
+          {STEPS.map((item, i) => {
+            const n = i + 1
+            const on = step === i
+            return (
+              <button
+                key={item.title}
+                type="button"
+                onClick={() => {
+                  setStep(i)
+                  setTick((t) => t + 1)
+                }}
+                aria-pressed={on}
+                className={`dw-step text-center lg:text-left space-y-3 rounded-xl cursor-pointer ${on ? "is-on" : ""} ${active ? "is-running" : ""} ${paused ? "is-paused" : ""}`}
+                style={{ "--i": i } as CSSProperties}
+              >
+                <div className="dw-icon w-12 h-12 rounded-xl bg-[#0e70db] text-white flex items-center justify-center mx-auto lg:mx-0 shadow-lg shadow-blue-200/40">
+                  {item.icon}
+                </div>
+                <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0e70db] uppercase tracking-wider">
+                  <span className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-[10px]">
+                    {n}
+                  </span>
+                  Paso {n}
+                </div>
+                <h3 className="text-lg font-bold text-gray-900">{item.title}</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">{item.desc}</p>
+                <div className="dw-bar max-w-[160px] mx-auto lg:mx-0" aria-hidden="true">
+                  <i key={`${item.title}-${tick}`} />
+                </div>
+              </button>
+            )
+          })}
+        </div>
+        <button
+          type="button"
+          onClick={() => setPaused((p) => !p)}
+          aria-pressed={paused}
+          className="mt-6 inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors mx-auto lg:mx-0"
+        >
+          {paused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+          {paused ? "Reanudar rotación" : "Pausar rotación"}
+        </button>
       </div>
     </div>
   )

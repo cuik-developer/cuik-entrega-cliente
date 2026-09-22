@@ -238,7 +238,8 @@ export function MechanicsShowcase({ active }: { active: boolean }) {
         .mx-bar { height: 3px; border-radius: 9999px; background: #e5e7eb; overflow: hidden; }
         .mx-bar > i { display: block; height: 100%; background: #0e70db; transform: scaleX(0); transform-origin: left; }
         .mx-tab.is-on.is-running .mx-bar > i { animation: mx-fill ${TAB_MS}ms linear forwards; }
-        .mx-tab.is-paused .mx-bar > i { animation-play-state: paused; }
+        /* Same specificity as the rule above (the shorthand resets play-state), declared after it */
+        .mx-tab.is-on.is-running.is-paused .mx-bar > i { animation-play-state: paused; }
         @keyframes mx-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
         /* Stacked layers (passes, details): crossfade + short rise */
