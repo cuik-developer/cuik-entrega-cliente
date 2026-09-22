@@ -16,37 +16,41 @@ import { stepSpring, useReducedMotion } from "@/components/landing/fx"
 import { CONTACT_EMAIL, WHATSAPP_URL } from "@/components/landing/site-footer"
 
 /**
- * Contáctanos as a conversation, not a form.
+ * Contáctanos as a conversation, in the home's visual language: white field
+ * with the same soft blue/orange glows and grain the home uses, 16px-radius
+ * cards with a hairline border, orange primary action.
  *
- *  1. Opener: "Hablemos" writes itself (kinetic, variable weight) over a
- *     dark field with drifting light. One question — ¿Qué te trae por aquí? —
- *     and three glass cards that tilt and catch the light.
- *  2. Pick one: the others fall away, the camera pushes into the chosen card
- *     and the conversation opens inside it.
- *  3. One question per screen. Enter advances, the thread of answers stacks
- *     above, a hairline shows progress. Springs, not keyframes, on the slide.
- *  4. Sent: the panel turns Cuik blue with one line. WhatsApp stays one tap
+ *  1. "Hablemos" writes itself (variable weight). One question — ¿Qué te
+ *     trae por aquí? — and three cards that tilt toward the pointer.
+ *  2. Pick one: the others fall away, the camera pushes in and the
+ *     conversation opens in a card.
+ *  3. One question per screen. Enter advances, answers thread above, a
+ *     hairline shows progress.
+ *  4. Sent: the card turns Cuik blue with one line. WhatsApp stays one tap
  *     away the whole time.
  */
 
 type Profile = "negocio" | "cliente" | "otro"
 
-const PROFILES: { value: Profile; icon: ReactNode; title: string; text: string }[] = [
+const PROFILES: { value: Profile; icon: ReactNode; tile: string; title: string; text: string }[] = [
   {
     value: "negocio",
-    icon: <Store className="w-6 h-6" />,
+    icon: <Store className="w-5 h-5" />,
+    tile: "bg-[#0e70db]",
     title: "Tengo un negocio",
     text: "Quiero que mis clientes vuelvan más.",
   },
   {
     value: "cliente",
-    icon: <Users className="w-6 h-6" />,
+    icon: <Users className="w-5 h-5" />,
+    tile: "bg-emerald-600",
     title: "Ya uso Cuik",
     text: "Necesito ayuda con mi pase o mi cuenta.",
   },
   {
     value: "otro",
-    icon: <Building2 className="w-6 h-6" />,
+    icon: <Building2 className="w-5 h-5" />,
+    tile: "bg-[#ff4810]",
     title: "Prensa o alianzas",
     text: "Medios, integraciones, proveedores.",
   },
@@ -131,8 +135,8 @@ export function ContactExperience() {
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
   const questions = profile ? questionsFor(profile) : []
   const q = questions[qi]
+  const current = PROFILES.find((p) => p.value === profile)
 
-  // Pick a card: the others fall away, the camera pushes in, the chat opens.
   const pick = (p: Profile) => {
     setProfile(p)
     setStage("leaving")
@@ -140,6 +144,7 @@ export function ContactExperience() {
   }
 
   // Focus the current answer field on each step.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refocus on every question change
   useEffect(() => {
     if (stage !== "chat") return
     const t = setTimeout(() => inputRef.current?.focus(), 60)
@@ -199,127 +204,79 @@ export function ContactExperience() {
     }
   }
 
-  const progress = questions.length ? (qi + (stage === "sent" ? 1 : 0)) / questions.length : 0
+  const progress = questions.length ? qi / questions.length : 0
 
   return (
-    <section className="ce relative overflow-hidden bg-[#070b14] text-white min-h-[calc(100dvh-4rem)] flex flex-col">
+    <section className="ce relative overflow-hidden grain min-h-[calc(100dvh-4rem)] flex flex-col">
       <style>{`
         .ce { --out: cubic-bezier(0.23, 1, 0.32, 1); --io: cubic-bezier(0.77, 0, 0.175, 1); }
-        /* Field: deep navy with slow drifting light. Transform-only motion, very low frequency. */
-        .ce-bg { position: absolute; inset: 0; background: radial-gradient(1200px 700px at 50% 110%, rgba(14,112,219,0.35), transparent 60%); }
-        .ce-orb { position: absolute; border-radius: 9999px; filter: blur(60px); opacity: 0.55; will-change: transform; animation: ce-drift var(--t) ease-in-out infinite alternate; animation-delay: var(--dl); }
-        @keyframes ce-drift { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(var(--dx), var(--dy), 0) scale(1.15); } }
-        .ce-grain { position: absolute; inset: 0; opacity: 0.05; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); pointer-events: none; }
+        .grain::after { content: ''; position: absolute; inset: 0; opacity: 0.025; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); pointer-events: none; }
 
         /* Kinetic title: each glyph rises and thickens (variable font weight) */
         .ce-title span { display: inline-block; opacity: 0; transform: translateY(0.35em); font-weight: 300; animation: ce-glyph 900ms var(--out) forwards; animation-delay: calc(var(--i) * 70ms + 150ms); }
         @keyframes ce-glyph { to { opacity: 1; transform: none; font-weight: 800; } }
-        .ce-sub { opacity: 0; transform: translateY(12px); animation: ce-rise 800ms var(--out) forwards; animation-delay: 820ms; }
+        .ce-rise { opacity: 0; transform: translateY(12px); animation: ce-rise 800ms var(--out) forwards; animation-delay: var(--d, 820ms); }
         @keyframes ce-rise { to { opacity: 1; transform: none; } }
 
-        /* Glass cards */
+        /* Choice cards: the home's card, tilting toward the pointer */
         .ce-cards { display: grid; gap: 1rem; transition: transform 560ms var(--io), opacity 420ms var(--out), filter 560ms var(--io); transform-origin: 50% 40%; }
-        .ce-cards.is-leaving { transform: scale(1.28); opacity: 0; filter: blur(8px); pointer-events: none; }
-        .ce-card { position: relative; text-align: left; border-radius: 1.5rem; padding: 1.5rem; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); backdrop-filter: blur(18px) saturate(160%); -webkit-backdrop-filter: blur(18px) saturate(160%); box-shadow: 0 30px 80px -40px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.18); transform: perspective(1000px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform 120ms linear, background-color 300ms var(--out), border-color 300ms var(--out), opacity 420ms var(--out); opacity: 0; animation: ce-rise 900ms var(--out) forwards; animation-delay: calc(1000ms + var(--i) * 110ms); will-change: transform; cursor: pointer; }
-        .ce-card::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(360px circle at var(--gx, 50%) var(--gy, 50%), rgba(255,255,255,0.16), transparent 60%); opacity: 0; transition: opacity 300ms var(--out); pointer-events: none; }
+        .ce-cards.is-leaving { transform: scale(1.22); opacity: 0; filter: blur(8px); pointer-events: none; }
+        .ce-card { position: relative; text-align: left; border-radius: 1rem; padding: 1.5rem; background: #fff; border: 1px solid #f3f4f6; box-shadow: 0 1px 2px rgba(15,23,42,0.04); transform: perspective(1000px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform 120ms linear, box-shadow 300ms var(--out), border-color 300ms var(--out); opacity: 0; animation: ce-rise 900ms var(--out) forwards; animation-delay: calc(1000ms + var(--i) * 110ms); will-change: transform; cursor: pointer; }
+        .ce-card::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(360px circle at var(--gx, 50%) var(--gy, 50%), rgba(14,112,219,0.08), transparent 60%); opacity: 0; transition: opacity 300ms var(--out); pointer-events: none; }
         @media (hover: hover) and (pointer: fine) {
-          .ce-card:hover { background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.22); }
+          .ce-card:hover { border-color: rgba(14,112,219,0.35); box-shadow: 0 30px 60px -30px rgba(15,23,42,0.35); }
           .ce-card:hover::after { opacity: 1; }
         }
         .ce-card:active { transform: perspective(1000px) scale(0.985); }
-        .ce-card:focus-visible { outline: 2px solid #5aa2f0; outline-offset: 4px; }
-        .ce-cards.is-leaving .ce-card.is-picked { background: rgba(14,112,219,0.35); border-color: rgba(120,180,255,0.6); }
+        .ce-card:focus-visible { outline: 2px solid #0e70db; outline-offset: 4px; }
+        .ce-cards.is-leaving .ce-card.is-picked { border-color: rgba(14,112,219,0.6); background: #eaf2fd; }
 
-        /* Conversation panel: arrives as if the camera had landed inside the card */
-        .ce-panel { position: relative; border-radius: 1.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%); box-shadow: 0 40px 100px -50px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.16); overflow: hidden; animation: ce-land 700ms var(--out) both; }
+        /* Conversation card lands where the chosen card was */
+        .ce-panel { position: relative; border-radius: 1rem; background: #fff; border: 1px solid #f3f4f6; box-shadow: 0 30px 60px -30px rgba(15,23,42,0.3); overflow: hidden; animation: ce-land 700ms var(--out) both; }
         @keyframes ce-land { from { opacity: 0; transform: scale(0.94) translateY(16px); } to { opacity: 1; transform: none; } }
-        .ce-panel.is-sent { background: linear-gradient(135deg, rgba(14,112,219,0.85), rgba(10,79,168,0.9)); border-color: rgba(120,180,255,0.5); }
-        .ce-bar { position: absolute; left: 0; top: 0; height: 2px; background: linear-gradient(90deg, #5aa2f0, #9cc8f7); transform-origin: left; transform: scaleX(var(--p)); transition: transform 600ms var(--io); }
+        .ce-panel.is-sent { background: #0c3d7a; border-color: #0c3d7a; color: #fff; }
+        .ce-bar { position: absolute; left: 0; top: 0; height: 3px; width: 100%; background: #0e70db; transform-origin: left; transform: scaleX(var(--p)); transition: transform 600ms var(--io); }
 
-        /* Thread of answers above the live question */
         .ce-thread { display: flex; flex-direction: column; gap: 0.35rem; }
-        .ce-thread > div { display: flex; align-items: baseline; gap: 0.6rem; font-size: 0.875rem; color: rgba(191,219,254,0.7); animation: ce-rise 400ms var(--out) both; }
-        .ce-thread b { color: #fff; font-weight: 600; }
+        .ce-thread > div { display: flex; align-items: baseline; gap: 0.6rem; font-size: 0.875rem; color: #6b7280; animation: ce-rise 400ms var(--out) both; --d: 0ms; }
+        .ce-thread b { color: #111827; font-weight: 600; }
 
-        /* The live question slides along its baseline */
         .ce-q { animation: ce-in 520ms var(--out) both; }
         .ce-q.is-back { animation-name: ce-in-back; }
         @keyframes ce-in { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: none; } }
         @keyframes ce-in-back { from { opacity: 0; transform: translateY(-28px); } to { opacity: 1; transform: none; } }
-        .ce-input { width: 100%; background: transparent; border: 0; border-bottom: 1px solid rgba(255,255,255,0.22); color: #fff; font-size: clamp(1.25rem, 2.4vw, 1.75rem); font-weight: 600; letter-spacing: -0.01em; padding: 0.6rem 0; outline: none; transition: border-color 200ms var(--out); resize: none; line-height: 1.3; }
-        .ce-input::placeholder { color: rgba(255,255,255,0.28); font-weight: 500; }
-        .ce-input:focus { border-color: #5aa2f0; }
-
-        .ce-cta { display: inline-flex; align-items: center; gap: 0.5rem; height: 3rem; padding: 0 1.4rem; border-radius: 9999px; background: #fff; color: #0b1220; font-weight: 700; transition: transform 160ms var(--out), background-color 200ms var(--out); }
-        .ce-cta:hover { background: #eaf2fd; }
-        .ce-cta:active { transform: scale(0.97); }
-        .ce-cta:disabled { opacity: 0.6; }
-        .ce-ghost { display: inline-flex; align-items: center; gap: 0.4rem; height: 3rem; padding: 0 0.9rem; border-radius: 9999px; color: rgba(191,219,254,0.85); font-weight: 600; transition: background-color 200ms var(--out), color 200ms var(--out); }
-        .ce-ghost:hover { background: rgba(255,255,255,0.08); color: #fff; }
+        .ce-input { width: 100%; background: transparent; border: 0; border-bottom: 2px solid #e5e7eb; color: #111827; font-size: clamp(1.25rem, 2.2vw, 1.6rem); font-weight: 600; letter-spacing: -0.01em; padding: 0.6rem 0; outline: none; transition: border-color 200ms var(--out); resize: none; line-height: 1.3; }
+        .ce-input::placeholder { color: #9ca3af; font-weight: 500; }
+        .ce-input:focus { border-color: #0e70db; }
 
         /* WhatsApp, always one tap away */
-        .ce-wa { position: fixed; right: 1rem; bottom: 1rem; z-index: 40; display: inline-flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.9rem 0.55rem 0.55rem; border-radius: 9999px; background: rgba(255,255,255,0.9); color: #0b1220; backdrop-filter: blur(16px); box-shadow: 0 20px 50px -20px rgba(0,0,0,0.5), 0 0 0 1px rgba(15,23,42,0.06); transition: transform 200ms var(--out), box-shadow 200ms var(--out); animation: ce-rise 700ms var(--out) both; animation-delay: 1400ms; }
-        .ce-wa:hover { transform: translateY(-2px); box-shadow: 0 26px 60px -20px rgba(0,0,0,0.55), 0 0 0 1px rgba(15,23,42,0.08); }
+        .ce-wa { position: fixed; right: 1rem; bottom: 1rem; z-index: 40; display: inline-flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.9rem 0.55rem 0.55rem; border-radius: 0.875rem; background: #fff; color: #111827; border: 1px solid #f3f4f6; box-shadow: 0 20px 50px -20px rgba(15,23,42,0.35); transition: transform 200ms var(--out), box-shadow 200ms var(--out); animation: ce-rise 700ms var(--out) both; --d: 1400ms; }
+        .ce-wa:hover { transform: translateY(-2px); box-shadow: 0 26px 60px -20px rgba(15,23,42,0.4); }
         .ce-wa:active { transform: scale(0.98); }
 
         @media (prefers-reduced-motion: reduce) {
-          .ce-orb { animation: none; }
-          .ce-title span, .ce-sub, .ce-card, .ce-panel, .ce-q, .ce-thread > div, .ce-wa { animation: ce-fade 300ms ease forwards !important; animation-delay: 0ms !important; transform: none !important; }
+          .ce-title span, .ce-rise, .ce-card, .ce-panel, .ce-q, .ce-thread > div, .ce-wa { animation: ce-fade 300ms ease forwards !important; animation-delay: 0ms !important; transform: none !important; }
           @keyframes ce-fade { to { opacity: 1; } }
           .ce-cards.is-leaving { transform: none; filter: none; }
           .ce-card { transform: none !important; }
         }
       `}</style>
 
-      {/* Field */}
-      <div className="ce-bg" aria-hidden="true" />
-      <Orb
-        style={{
-          "--t": "22s",
-          "--dl": "0s",
-          "--dx": "8vw",
-          "--dy": "-6vh",
-          left: "8%",
-          top: "10%",
-          width: 420,
-          height: 420,
-          background: "#0e70db",
-        }}
-      />
-      <Orb
-        style={{
-          "--t": "28s",
-          "--dl": "-9s",
-          "--dx": "-10vw",
-          "--dy": "8vh",
-          right: "6%",
-          top: "0%",
-          width: 360,
-          height: 360,
-          background: "#3b8ee8",
-          opacity: 0.35,
-        }}
-      />
-      <Orb
-        style={{
-          "--t": "26s",
-          "--dl": "-15s",
-          "--dx": "6vw",
-          "--dy": "-10vh",
-          left: "45%",
-          bottom: "-10%",
-          width: 520,
-          height: 520,
-          background: "#ff4810",
-          opacity: 0.18,
-        }}
-      />
-      <div className="ce-grain" aria-hidden="true" />
+      {/* The home's background: subtle radial glows */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+        <div className="absolute top-[-20%] left-[10%] w-[600px] h-[600px] rounded-full bg-[#0e70db]/[0.05] blur-3xl" />
+        <div className="absolute bottom-[-10%] right-[5%] w-[500px] h-[500px] rounded-full bg-[#ff4810]/[0.04] blur-3xl" />
+      </div>
 
-      <div className="relative flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-28 flex flex-col">
-        {/* Kinetic title */}
+      <div className="relative flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 pt-12 sm:pt-20 pb-24 flex flex-col">
+        <p
+          className="ce-rise text-xs font-bold uppercase tracking-wider text-gray-400"
+          style={{ "--d": "0ms" } as CSSProperties}
+        >
+          Contáctanos
+        </p>
         <h1
-          className="ce-title text-[3.25rem] sm:text-7xl lg:text-[6.5rem] leading-[0.95] tracking-[-0.03em]"
+          className="ce-title mt-4 text-5xl sm:text-6xl lg:text-[4.25rem] font-extrabold text-gray-900 leading-[1.08] tracking-tight"
           aria-label="Hablemos"
         >
           {"Hablemos".split("").map((ch, i) => (
@@ -333,50 +290,61 @@ export function ContactExperience() {
             </span>
           ))}
         </h1>
-        <p className="ce-sub mt-5 text-lg sm:text-xl text-blue-100/75 max-w-xl">
+        <p className="ce-rise mt-5 text-lg sm:text-xl text-gray-500 leading-relaxed max-w-lg">
           Te responde una persona del equipo en menos de un día hábil. Sin call center, sin tickets.
         </p>
 
-        <div className="mt-12 sm:mt-16 flex-1 flex flex-col justify-center">
+        <div className="mt-12 sm:mt-14 flex-1 flex flex-col justify-center">
           {(stage === "pick" || stage === "leaving") && (
             <div>
               <p
-                className="ce-sub text-xs font-bold uppercase tracking-[0.2em] text-blue-300 mb-5"
-                style={{ animationDelay: "900ms" }}
+                className="ce-rise text-xs font-bold uppercase tracking-wider text-gray-400 mb-4"
+                style={{ "--d": "900ms" } as CSSProperties}
               >
                 ¿Qué te trae por aquí?
               </p>
               <div className={`ce-cards sm:grid-cols-3 ${stage === "leaving" ? "is-leaving" : ""}`}>
                 {PROFILES.map((p, i) => (
-                  <GlassCard
+                  <ChoiceCard
                     key={p.value}
                     index={i}
                     picked={profile === p.value}
                     onPick={() => pick(p.value)}
                     disabled={stage === "leaving"}
                   >
-                    <span className="w-12 h-12 rounded-2xl bg-white/10 text-blue-100 flex items-center justify-center mb-5">
+                    <span
+                      className={`w-11 h-11 rounded-xl ${p.tile} text-white flex items-center justify-center mb-5 shadow-md`}
+                    >
                       {p.icon}
                     </span>
-                    <span className="block text-xl font-bold tracking-tight">{p.title}</span>
-                    <span className="block mt-1 text-sm text-blue-100/70">{p.text}</span>
-                    <ArrowRight className="absolute right-6 top-6 w-5 h-5 text-blue-200/50" />
-                  </GlassCard>
+                    <span className="block text-lg font-bold text-gray-900 tracking-tight">
+                      {p.title}
+                    </span>
+                    <span className="block mt-1 text-sm text-gray-500">{p.text}</span>
+                    <ArrowRight className="absolute right-5 top-5 w-4 h-4 text-gray-300" />
+                  </ChoiceCard>
                 ))}
               </div>
             </div>
           )}
 
-          {stage === "chat" && q && (
-            <div className="ce-panel max-w-3xl w-full mx-auto sm:mx-0 p-6 sm:p-10">
+          {stage === "chat" && q && current && (
+            <div className="ce-panel max-w-3xl w-full p-6 sm:p-10">
               <div
                 className="ce-bar"
                 style={{ "--p": progress } as CSSProperties}
                 aria-hidden="true"
               />
 
-              <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.18em] text-blue-300">
-                <span>{PROFILES.find((p) => p.value === profile)?.title}</span>
+              <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-gray-400">
+                <span className="inline-flex items-center gap-2">
+                  <span
+                    className={`w-6 h-6 rounded-md ${current.tile} text-white flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5`}
+                  >
+                    {current.icon}
+                  </span>
+                  {current.title}
+                </span>
                 <span>
                   {qi + 1} / {questions.length}
                 </span>
@@ -387,7 +355,7 @@ export function ContactExperience() {
                   {questions.slice(0, qi).map((prev) =>
                     answers[prev.field].trim() ? (
                       <div key={prev.field}>
-                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 translate-y-0.5" />
+                        <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0 translate-y-0.5" />
                         <span>
                           <b>{answers[prev.field]}</b>
                         </span>
@@ -400,11 +368,11 @@ export function ContactExperience() {
               <div key={q.field} className={`ce-q mt-8 ${dir < 0 ? "is-back" : ""}`}>
                 <label
                   htmlFor={`ce-${q.field}`}
-                  className="block text-2xl sm:text-3xl font-extrabold tracking-[-0.02em] leading-tight text-balance"
+                  className="block text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight leading-tight text-balance"
                 >
                   {q.ask(answers)}
                   {q.optional && (
-                    <span className="ml-2 text-sm font-medium text-blue-200/60 align-middle">
+                    <span className="ml-2 text-sm font-medium text-gray-400 align-middle">
                       opcional
                     </span>
                   )}
@@ -442,9 +410,9 @@ export function ContactExperience() {
                       }
                     />
                   )}
-                  {error && <p className="mt-2 text-sm text-orange-300">{error}</p>}
+                  {error && <p className="mt-2 text-sm text-[#c2380c]">{error}</p>}
                   {failed && (
-                    <p className="mt-2 text-sm text-orange-300">
+                    <p className="mt-2 text-sm text-[#c2380c]">
                       {failed}{" "}
                       <a
                         href={WHATSAPP_URL}
@@ -460,9 +428,9 @@ export function ContactExperience() {
                 <div className="mt-8 flex flex-wrap items-center gap-3">
                   <button
                     type="button"
-                    className="ce-cta"
                     onClick={() => void next()}
                     disabled={sending}
+                    className="inline-flex items-center gap-2 h-13 px-7 rounded-xl bg-[#ff4810] hover:bg-[#e03f0d] text-white font-bold shadow-lg shadow-orange-200/50 hover:shadow-xl transition-all active:scale-[0.97] disabled:opacity-60 group"
                   >
                     {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                     {qi === questions.length - 1
@@ -472,12 +440,18 @@ export function ContactExperience() {
                       : q.optional && !answers[q.field].trim()
                         ? "Saltar"
                         : "Continuar"}
-                    {!sending && <ArrowRight className="w-4 h-4" />}
+                    {!sending && (
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                    )}
                   </button>
-                  <button type="button" className="ce-ghost" onClick={back}>
+                  <button
+                    type="button"
+                    onClick={back}
+                    className="inline-flex items-center gap-2 h-13 px-4 rounded-xl text-gray-600 font-semibold hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                  >
                     <ArrowLeft className="w-4 h-4" /> Atrás
                   </button>
-                  <span className="ml-auto text-xs text-blue-200/50 hidden sm:inline">
+                  <span className="ml-auto text-xs text-gray-400 hidden sm:inline">
                     Enter ↵ para continuar
                     {q.type === "textarea" ? " · Shift+Enter para otra línea" : ""}
                   </span>
@@ -487,15 +461,14 @@ export function ContactExperience() {
           )}
 
           {stage === "sent" && (
-            <div className="ce-panel is-sent max-w-3xl w-full mx-auto sm:mx-0 p-8 sm:p-12">
-              <div className="ce-bar" style={{ "--p": 1 } as CSSProperties} aria-hidden="true" />
-              <span className="w-12 h-12 rounded-full bg-white/15 flex items-center justify-center mb-6">
+            <div className="ce-panel is-sent max-w-3xl w-full p-8 sm:p-12">
+              <span className="w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center mb-6">
                 <Check className="w-6 h-6" />
               </span>
-              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-[-0.02em] leading-tight text-balance">
+              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight text-balance">
                 Listo, {first(answers.name)}. Te escribimos hoy.
               </h2>
-              <p className="mt-3 text-blue-100/85">
+              <p className="mt-3 text-blue-100">
                 Respondemos a <b className="text-white">{answers.email.trim()}</b> en menos de un
                 día hábil. Si es urgente, WhatsApp.
               </p>
@@ -503,7 +476,7 @@ export function ContactExperience() {
                 href={WHATSAPP_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="ce-cta mt-8"
+                className="mt-8 inline-flex items-center gap-2 h-13 px-7 rounded-xl bg-white text-[#0c3d7a] font-bold hover:bg-blue-50 transition-colors active:scale-[0.97]"
               >
                 <MessageCircle className="w-4 h-4" /> Abrir WhatsApp
               </a>
@@ -511,11 +484,11 @@ export function ContactExperience() {
           )}
         </div>
 
-        <p className="mt-12 text-sm text-blue-200/50">
+        <p className="mt-12 text-sm text-gray-400">
           ¿Prefieres el correo?{" "}
           <a
             href={`mailto:${CONTACT_EMAIL}`}
-            className="text-blue-100/80 hover:text-white underline-offset-4 hover:underline"
+            className="text-gray-600 hover:text-[#0e70db] underline-offset-4 hover:underline"
           >
             {CONTACT_EMAIL}
           </a>
@@ -523,7 +496,7 @@ export function ContactExperience() {
       </div>
 
       <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="ce-wa">
-        <span className="w-9 h-9 rounded-full bg-emerald-500 text-white flex items-center justify-center">
+        <span className="w-9 h-9 rounded-lg bg-emerald-500 text-white flex items-center justify-center shadow-md">
           <MessageCircle className="w-4.5 h-4.5" />
         </span>
         <span className="text-sm leading-tight">
@@ -535,12 +508,8 @@ export function ContactExperience() {
   )
 }
 
-function Orb({ style }: { style: Record<string, string | number> }) {
-  return <div className="ce-orb" style={style as CSSProperties} aria-hidden="true" />
-}
-
-/** Glass card that tilts toward the pointer on a critically-damped spring and catches the light. */
-function GlassCard({
+/** The home's card, tilting toward the pointer on a critically-damped spring. */
+function ChoiceCard({
   children,
   index,
   picked,
@@ -585,8 +554,8 @@ function GlassCard({
       const r = el.getBoundingClientRect()
       const px = (e.clientX - r.left) / r.width
       const py = (e.clientY - r.top) / r.height
-      ty = (px - 0.5) * 12
-      tx = -(py - 0.5) * 10
+      ty = (px - 0.5) * 10
+      tx = -(py - 0.5) * 8
       el.style.setProperty("--gx", `${(px * 100).toFixed(1)}%`)
       el.style.setProperty("--gy", `${(py * 100).toFixed(1)}%`)
       kick()

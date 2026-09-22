@@ -32,10 +32,8 @@ export function AboutIntro() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 relative">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           <div className={`space-y-6 ${inView ? "anim-stagger is-visible" : "anim-stagger"}`}>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#0e70db]">
-              Sobre Cuik
-            </p>
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-[-0.02em] leading-[1.08] text-balance">
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Sobre Cuik</p>
+            <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight leading-[1.08] text-balance">
               La fidelización que usan las grandes cadenas, ahora en la Wallet de tus clientes
             </h1>
             <p className="text-lg sm:text-xl text-gray-500 leading-relaxed max-w-lg">
@@ -46,7 +44,7 @@ export function AboutIntro() {
               <Link href="/login?view=demo">
                 <Button
                   size="lg"
-                  className="w-full sm:w-auto bg-[#0e70db] hover:bg-[#0c5fc0] text-white font-bold h-12 rounded-full px-6 shadow-md shadow-blue-200/50 group"
+                  className="w-full sm:w-auto bg-[#ff4810] hover:bg-[#e03f0d] text-white font-bold text-base px-8 h-13 rounded-xl shadow-lg shadow-orange-200/50 hover:shadow-xl hover:shadow-orange-200/60 transition-all group"
                 >
                   Agenda una demo
                   <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
@@ -56,7 +54,7 @@ export function AboutIntro() {
                 <Button
                   size="lg"
                   variant="outline"
-                  className="w-full sm:w-auto h-12 rounded-full px-6 font-semibold border-gray-200 text-gray-700 hover:text-[#0e70db] hover:border-blue-200 hover:bg-blue-50/50"
+                  className="w-full sm:w-auto border-2 border-gray-200 bg-white text-gray-700 font-semibold h-13 rounded-xl hover:border-[#0e70db]/40 hover:bg-blue-50 hover:text-[#0e70db] transition-all"
                 >
                   Contáctanos
                 </Button>

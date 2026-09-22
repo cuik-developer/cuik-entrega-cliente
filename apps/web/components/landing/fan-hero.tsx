@@ -152,7 +152,7 @@ export function FanHero({
           : ""
 
   return (
-    <section className={`relative overflow-hidden bg-[#0b1220] text-white ${className}`}>
+    <section className={`relative overflow-hidden bg-[#0f172a] text-white ${className}`}>
       <style>{`
         .ah { --ah-ease: cubic-bezier(0.23, 1, 0.32, 1); --ah-move: cubic-bezier(0.77, 0, 0.175, 1); }
         .ah-bg { position: absolute; inset: 0; background:

@@ -399,7 +399,7 @@ export default function HomePage() {
             Plataforma #1 de fidelización en LATAM
           </Badge>
         </div>
-        <h1 className="mt-5 text-4xl sm:text-5xl lg:text-[3.75rem] font-extrabold leading-[1.06] tracking-[-0.02em] text-balance max-w-3xl">
+        <h1 className="mt-5 text-5xl sm:text-6xl lg:text-[4.25rem] font-extrabold leading-[1.08] tracking-tight text-balance max-w-3xl">
           Convierte visitas en{" "}
           <span className="relative inline-block">
             <span className="relative z-10 bg-gradient-to-r from-[#5aa2f0] to-[#9cc8f7] bg-clip-text text-transparent">
@@ -416,7 +416,7 @@ export default function HomePage() {
           <Link href="/login?view=demo">
             <Button
               size="lg"
-              className="bg-[#ff4810] hover:bg-[#e03f0d] text-white font-bold text-base px-8 h-12 rounded-full shadow-lg shadow-orange-500/20 group w-full sm:w-auto"
+              className="bg-[#ff4810] hover:bg-[#e03f0d] text-white font-bold text-base px-8 h-13 rounded-xl shadow-lg shadow-orange-500/20 hover:shadow-xl transition-all group w-full sm:w-auto"
             >
               Empieza gratis
               <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
@@ -426,7 +426,7 @@ export default function HomePage() {
             <Button
               size="lg"
               variant="outline"
-              className="h-12 rounded-full px-6 font-semibold border-white/25 bg-white/5 text-white hover:bg-white/10 hover:text-white backdrop-blur w-full sm:w-auto"
+              className="h-13 rounded-xl px-8 font-semibold border-2 border-white/25 bg-white/5 text-white hover:bg-white/10 hover:text-white backdrop-blur transition-all w-full sm:w-auto"
             >
               Prueba 7 días gratis
             </Button>

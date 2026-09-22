@@ -128,10 +128,10 @@ export default function SobreCuikPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 grid lg:grid-cols-[minmax(0,7fr)_minmax(0,4fr)] gap-14 lg:gap-16 items-center">
           <div>
             <Reveal>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#0e70db] mb-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">
                 El problema
               </p>
-              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-[-0.02em] leading-[1.08] text-balance text-gray-900 max-w-2xl">
+              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-[1.08] text-balance text-gray-900 max-w-2xl">
                 Los clientes que vuelven son los que sostienen un negocio. Y casi nadie sabe quiénes
                 son.
               </h2>
@@ -168,21 +168,13 @@ export default function SobreCuikPage() {
       </section>
 
       {/* ── Lo que creemos + las cuatro reglas, en una sola banda ── */}
-      <section className="relative bg-[#0e70db] text-white py-20 sm:py-24 overflow-hidden">
-        <div
-          className="absolute inset-0 opacity-30"
-          style={{
-            background:
-              "radial-gradient(800px 400px at 80% 0%, rgba(255,255,255,0.35), transparent 60%), radial-gradient(600px 400px at 10% 100%, rgba(255,72,16,0.5), transparent 60%)",
-          }}
-          aria-hidden="true"
-        />
+      <section className="relative bg-white py-20 sm:py-24 overflow-hidden">
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6">
           <Reveal className="max-w-4xl mx-auto text-center">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-100 mb-6">
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-6">
               Lo que creemos
             </p>
-            <blockquote className="text-3xl sm:text-4xl font-extrabold tracking-[-0.02em] leading-[1.08] text-balance max-w-5xl mx-auto">
+            <blockquote className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight leading-[1.08] text-balance max-w-5xl mx-auto">
               “La solución ya estaba en el bolsillo de cada cliente: su Wallet. Solo faltaba que un
               negocio local pudiera usarla sin un equipo de tecnología. Eso es Cuik.”
             </blockquote>
@@ -190,12 +182,12 @@ export default function SobreCuikPage() {
           <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {BELIEFS.map((b, i) => (
               <Reveal key={b.title} delay={120 + i * 80}>
-                <div className="h-full rounded-2xl bg-white/[0.08] border border-white/15 p-5 backdrop-blur">
-                  <span className="w-9 h-9 rounded-xl bg-white/15 text-white flex items-center justify-center mb-3">
+                <div className="h-full rounded-2xl bg-white border border-gray-100 p-5 shadow-sm">
+                  <span className="w-9 h-9 rounded-xl bg-blue-50 text-[#0e70db] flex items-center justify-center mb-3">
                     {b.icon}
                   </span>
-                  <div className="font-bold tracking-tight">{b.title}</div>
-                  <p className="mt-1 text-sm text-blue-100/85 leading-relaxed">{b.text}</p>
+                  <div className="font-bold tracking-tight text-gray-900">{b.title}</div>
+                  <p className="mt-1 text-sm text-gray-500 leading-relaxed">{b.text}</p>
                 </div>
               </Reveal>
             ))}
@@ -204,13 +196,13 @@ export default function SobreCuikPage() {
       </section>
 
       {/* ── Lo que hacemos hoy: 4 mechanics as tilting 3D cards ── */}
-      <section className="py-20 sm:py-28 bg-gray-50">
+      <section className="relative py-20 sm:py-28 grain overflow-hidden">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <Reveal className="max-w-2xl mb-12">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#0e70db] mb-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">
               Lo que hacemos hoy
             </p>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-[-0.02em] leading-[1.08] text-balance">
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight leading-[1.08] text-balance">
               Cuatro mecánicas, un solo pase en la Wallet
             </h2>
             <p className="mt-4 text-gray-600 text-lg">
@@ -222,7 +214,7 @@ export default function SobreCuikPage() {
             {MECHANICS.map((m, i) => (
               <Reveal key={m.title} delay={i * 90}>
                 <TiltCard max={10} className="h-full">
-                  <div className="relative h-full rounded-3xl bg-white border border-gray-100 shadow-[0_30px_60px_-30px_rgba(15,23,42,0.35)] overflow-hidden">
+                  <div className="relative h-full rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
                     <div className={`relative h-80 bg-gradient-to-br ${m.tint} overflow-hidden`}>
                       {/* Same visual phone size on every card: the El Patrón photo is a tighter crop, so its box is narrower */}
                       <div
@@ -265,25 +257,17 @@ export default function SobreCuikPage() {
       </section>
 
       {/* ── Cómo trabajamos contigo + quiénes somos + CTA, en una sola banda ── */}
-      <section className="py-20 sm:py-28 bg-[#0b1220] text-white overflow-hidden relative">
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(900px 500px at 50% 0%, rgba(14,112,219,0.35), transparent 60%)",
-          }}
-          aria-hidden="true"
-        />
+      <section className="py-20 sm:py-28 bg-[#0c3d7a] text-white overflow-hidden relative">
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6">
           <div className="grid lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)] gap-10 lg:gap-16 items-start">
             <Reveal>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-300 mb-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-200/70 mb-4">
                 Cómo trabajamos contigo
               </p>
-              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-[-0.02em] leading-[1.08] text-balance">
+              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-[1.08] text-balance">
                 Un equipo que atiende personalmente a cada negocio
               </h2>
-              <p className="mt-5 text-blue-100/80 text-lg leading-relaxed">
+              <p className="mt-5 text-blue-100 text-lg leading-relaxed">
                 Cuik nace en Lima, hecho por gente que conoce a sus clientes. Cada negocio que se
                 suma tiene un contacto directo con el equipo: armamos tu pase contigo, revisamos tus
                 números juntos y ajustamos la mecánica cuando hace falta. Crecemos porque los
@@ -296,7 +280,7 @@ export default function SobreCuikPage() {
                   </span>
                   <span>
                     <span className="block font-bold">Atención directa</span>
-                    <span className="block text-sm text-blue-100/75">
+                    <span className="block text-sm text-blue-200/80">
                       Te responde quien armó tu pase. Sin call center ni tickets.
                     </span>
                   </span>
@@ -312,7 +296,7 @@ export default function SobreCuikPage() {
                   </span>
                   <span>
                     <span className="block font-bold">Escríbenos directo</span>
-                    <span className="block text-sm text-blue-100/75">
+                    <span className="block text-sm text-blue-200/80">
                       WhatsApp, lunes a viernes
                     </span>
                   </span>
@@ -323,10 +307,10 @@ export default function SobreCuikPage() {
               {STEPS.map((s, i) => (
                 <Reveal as="li" key={s.n} delay={120 + i * 110}>
                   <div className="rounded-2xl bg-white/[0.05] border border-white/10 p-6 backdrop-blur flex gap-5">
-                    <div className="text-sm font-mono font-bold text-blue-300 pt-1">{s.n}</div>
+                    <div className="text-sm font-mono font-bold text-blue-200 pt-1">{s.n}</div>
                     <div>
                       <div className="text-lg font-bold tracking-tight">{s.title}</div>
-                      <p className="mt-1 text-blue-100/75 leading-relaxed">{s.text}</p>
+                      <p className="mt-1 text-blue-200/80 leading-relaxed">{s.text}</p>
                     </div>
                   </div>
                 </Reveal>
@@ -335,9 +319,9 @@ export default function SobreCuikPage() {
           </div>
 
           <Reveal delay={200} className="mt-14">
-            <div className="rounded-[2rem] bg-gradient-to-br from-[#0e70db] to-[#0a4fa8] p-8 sm:p-10 flex flex-col md:flex-row md:items-center gap-6 shadow-[0_40px_80px_-30px_rgba(14,112,219,0.6)]">
+            <div className="rounded-2xl bg-white/[0.06] border border-white/10 p-8 sm:p-10 flex flex-col md:flex-row md:items-center gap-6">
               <div className="flex-1">
-                <h2 className="text-2xl sm:text-3xl font-extrabold tracking-[-0.02em] text-balance">
+                <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-balance">
                   ¿Quieres ver tu negocio en la Wallet de tus clientes?
                 </h2>
                 <p className="mt-2 text-blue-100">
@@ -347,7 +331,7 @@ export default function SobreCuikPage() {
               <Link href="/login?view=demo">
                 <Button
                   size="lg"
-                  className="w-full md:w-auto bg-[#ff4810] hover:bg-[#e03f0d] text-white font-bold h-12 rounded-full px-6 shadow-lg shadow-orange-500/20 group"
+                  className="w-full md:w-auto bg-[#ff4810] hover:bg-[#e03f0d] text-white font-bold h-13 rounded-xl px-8 shadow-lg shadow-orange-500/20 group"
                 >
                   Solicitar demo gratis
                   <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-0.5 transition-transform" />

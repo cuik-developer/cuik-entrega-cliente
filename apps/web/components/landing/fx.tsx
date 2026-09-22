@@ -278,6 +278,9 @@ export function FxStyles() {
       .fx-reveal { transition: opacity 700ms cubic-bezier(0.23, 1, 0.32, 1), transform 900ms cubic-bezier(0.23, 1, 0.32, 1); transition-delay: var(--fx-delay, 0ms); will-change: transform, opacity; }
       .fx-js .fx-reveal:not(.is-on) { opacity: 0; transform: translateY(var(--fx-y, 28px)); }
 
+      /* The home's paper grain, for any section that uses the .grain class */
+      .grain::after { content: ''; position: absolute; inset: 0; opacity: 0.025; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); pointer-events: none; }
+
       .fx-tilt { perspective: var(--fx-persp, 1200px); --rx: 0deg; --ry: 0deg; --gx: 50%; --gy: 50%; }
       .fx-tilt-inner { position: relative; transform: rotateX(var(--rx)) rotateY(var(--ry)); transform-style: preserve-3d; will-change: transform; }
       .fx-glare { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: radial-gradient(420px circle at var(--gx) var(--gy), rgba(255,255,255,0.28), rgba(255,255,255,0) 60%); mix-blend-mode: soft-light; opacity: 0.9; }
