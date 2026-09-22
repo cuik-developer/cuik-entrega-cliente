@@ -1,7 +1,6 @@
 "use client"
 
 import { CheckCircle2, Gift, QrCode } from "lucide-react"
-import Image from "next/image"
 import type { CSSProperties, ReactNode } from "react"
 import { useEffect, useState } from "react"
 import { LivePass, type PushContent } from "./live-pass"
@@ -9,8 +8,8 @@ import { LivePass, type PushContent } from "./live-pass"
 /**
  * "Mira cómo funciona tu pase": three steps synchronized with the live pass.
  *
- *   1. A real moment at the counter (photo): the customer holds up their
- *      phone; the pass phone rises into the scene. Nothing drawn.
+ *   1. The pass arrives: the phone rises into place in one quick motion,
+ *      with a small "ready in seconds" pill. Nothing else on stage.
  *   2. The cashier scans the pass at the register → the visit is stamped.
  *   3. The card is complete → the reward push.
  *
@@ -70,25 +69,19 @@ export function DemoWalkthrough({ active }: { active: boolean }) {
         .dw-step.is-on.is-running .dw-bar > i { animation: dw-fill ${STEP_MS}ms linear forwards; }
         @keyframes dw-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
-        /* Stage: the counter photo behind, the pass phone in front. Steps 2–3 keep the phone alone. */
+ /* Stage: just the phone. Step 1 plays its arrival; the pill confirms the speed. */
         .dw-stage { container-type: inline-size; }
-        .dw-photo { position: absolute; inset: 0; border-radius: 1.5rem; overflow: hidden; box-shadow: 0 30px 60px -30px rgba(15,23,42,0.35), 0 0 0 1px rgba(15,23,42,0.06); transform: scale(1); opacity: 1; transition: opacity 500ms var(--dw-out), transform 800ms var(--dw-drawer); }
-        .dw-photo img { object-fit: cover; object-position: 46% 42%; }
-        .dw-photo::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15,23,42,0) 55%, rgba(15,23,42,0.35) 100%); }
-        .dw-photo.is-off { opacity: 0; transform: scale(0.96); }
-        .dw-passphone { position: absolute; right: 0; bottom: -6%; width: 54%; z-index: 2; transform-origin: 50% 100%; transition: transform 800ms var(--dw-drawer), width 800ms var(--dw-drawer), right 800ms var(--dw-drawer), bottom 800ms var(--dw-drawer); }
-        .dw-passphone.is-arrive { animation: dw-arrive 900ms var(--dw-drawer) both; animation-delay: 250ms; }
-        @keyframes dw-arrive { from { opacity: 0; transform: translateY(24px) scale(0.96); } to { opacity: 1; transform: none; } }
-        .dw-passphone.is-solo { right: 16%; bottom: 2%; width: 68%; }
-        .dw-cap { position: absolute; left: 1.25rem; bottom: 1.25rem; z-index: 3; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.75rem; border-radius: 9999px; background: rgba(255,255,255,0.92); color: #0f172a; font-size: 0.75rem; font-weight: 700; box-shadow: 0 10px 30px -12px rgba(15,23,42,0.4); opacity: 0; transform: translateY(6px); transition: opacity 300ms var(--dw-out), transform 400ms var(--dw-out); transition-delay: 700ms; }
-        .dw-cap.is-on { opacity: 1; transform: none; }
+        .dw-passphone { position: relative; width: 100%; transform-origin: 50% 100%; }
+        .dw-passphone.is-arrive { animation: dw-arrive 900ms var(--dw-drawer) both; }
+        @keyframes dw-arrive { from { opacity: 0; transform: translateY(28px) scale(0.96); } to { opacity: 1; transform: none; } }
+        .dw-cap { position: absolute; left: 50%; bottom: 4%; z-index: 3; transform: translateX(-50%) translateY(6px); display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.85rem; border-radius: 9999px; background: rgba(255,255,255,0.94); color: #0f172a; font-size: 0.75rem; font-weight: 700; white-space: nowrap; box-shadow: 0 10px 30px -12px rgba(15,23,42,0.4), 0 0 0 1px rgba(15,23,42,0.06); opacity: 0; transition: opacity 300ms var(--dw-out), transform 400ms var(--dw-out); transition-delay: 750ms; }
+        .dw-cap.is-on { opacity: 1; transform: translateX(-50%); }
         .dw-cap i { width: 0.5rem; height: 0.5rem; border-radius: 9999px; background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.2); }
 
         @media (prefers-reduced-motion: reduce) {
           .dw-icon { transform: none; transition: none; }
           .dw-step.is-on.is-running .dw-bar > i { animation: none; transform: scaleX(1); }
-          .dw-photo, .dw-passphone, .dw-cap { transition: opacity 250ms ease; }
-          .dw-photo.is-off { transform: none; }
+          .dw-cap { transition: opacity 250ms ease; transform: translateX(-50%) !important; }
           .dw-passphone.is-arrive { animation: none; }
         }
       `}</style>
@@ -96,22 +89,9 @@ export function DemoWalkthrough({ active }: { active: boolean }) {
       {/* Stage */}
       <div className="relative flex-shrink-0">
         <div className="absolute -inset-8 bg-[#0e70db]/[0.04] rounded-full blur-2xl" />
-        <div className="dw-stage relative w-[340px] sm:w-[420px] aspect-[4/5]">
-          {/* Step 1: the real moment at the counter */}
-          <div className={`dw-photo ${step === 0 ? "" : "is-off"}`} aria-hidden={step !== 0}>
-            <Image
-              src="/landing/hero-cafe.png"
-              alt="Cliente mostrando su pase en el mostrador de una cafetería"
-              fill
-              sizes="420px"
-            />
-          </div>
-          <div className={`dw-cap ${step === 0 ? "is-on" : ""}`} aria-hidden="true">
-            <i /> Pase listo en segundos
-          </div>
-
+        <div className="dw-stage relative w-[300px] sm:w-[320px]">
           {/* The pass in the Wallet */}
-          <div className={`dw-passphone ${step === 0 ? "is-arrive" : "is-solo"}`}>
+          <div className={`dw-passphone ${step === 0 ? "is-arrive" : ""}`}>
             <LivePass
               base="/landing/mockup-gradual-7.png"
               next="/landing/mockup-gradual-8.png"
@@ -120,6 +100,9 @@ export function DemoWalkthrough({ active }: { active: boolean }) {
               crossfade={step >= 1}
               push={step === 2 ? REWARD_PUSH : null}
             />
+          </div>
+          <div className={`dw-cap ${step === 0 ? "is-on" : ""}`} aria-hidden="true">
+            <i /> Pase listo en segundos
           </div>
         </div>
       </div>
