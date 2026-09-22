@@ -131,7 +131,7 @@ export default function SobreCuikPage() {
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#0e70db] mb-4">
                 El problema
               </p>
-              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 tracking-[-0.02em] leading-[1.06] text-balance">
+              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-[-0.02em] leading-[1.08] text-balance text-gray-900 max-w-xl">
                 Los clientes que vuelven son los que sostienen un negocio. Y casi nadie sabe quiénes
                 son.
               </h2>
@@ -182,7 +182,7 @@ export default function SobreCuikPage() {
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-100 mb-6">
               Lo que creemos
             </p>
-            <blockquote className="text-2xl sm:text-3xl lg:text-[2.6rem] font-extrabold tracking-[-0.02em] leading-[1.15] text-balance">
+            <blockquote className="text-3xl sm:text-4xl font-extrabold tracking-[-0.02em] leading-[1.08] text-balance max-w-3xl mx-auto">
               “La solución ya estaba en el bolsillo de cada cliente: su Wallet. Solo faltaba que un
               negocio local pudiera usarla sin un equipo de tecnología. Eso es Cuik.”
             </blockquote>
@@ -223,10 +223,10 @@ export default function SobreCuikPage() {
               <Reveal key={m.title} delay={i * 90}>
                 <TiltCard max={10} className="h-full">
                   <div className="relative h-full rounded-3xl bg-white border border-gray-100 shadow-[0_30px_60px_-30px_rgba(15,23,42,0.35)] overflow-hidden">
-                    <div className={`relative h-72 bg-gradient-to-br ${m.tint} overflow-hidden`}>
+                    <div className={`relative h-80 bg-gradient-to-br ${m.tint} overflow-hidden`}>
                       {/* Same visual phone size on every card: the El Patrón photo is a tighter crop, so its box is narrower */}
                       <div
-                        className={`absolute inset-x-0 mx-auto ${m.wide ? "w-[58%] -bottom-[96px]" : "w-[82%] -bottom-[92px]"}`}
+                        className={`absolute inset-x-0 mx-auto ${m.wide ? "w-[81%] -bottom-[63px]" : "w-[115%] -bottom-[60px]"}`}
                       >
                         <Image
                           src={m.img}
@@ -234,7 +234,7 @@ export default function SobreCuikPage() {
                           width={564}
                           height={1002}
                           className="w-full h-auto drop-shadow-2xl"
-                          sizes="260px"
+                          sizes="360px"
                         />
                       </div>
                     </div>

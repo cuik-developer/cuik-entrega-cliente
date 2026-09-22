@@ -46,6 +46,7 @@ const WIDE_SCALE = 0.55 / 0.78
 
 export function AboutHero() {
   const stage = useRef<HTMLDivElement>(null)
+  const hero = useRef<HTMLDivElement>(null)
   // "static": server HTML as-is (no JS yet, or JS arrived late — no entrance then, no flash).
   // "pending": hidden start pose for one frame; "ready": entrance plays; "done": free to swap.
   const [phase, setPhase] = useState<"static" | "pending" | "ready" | "done">("static")
@@ -70,7 +71,8 @@ export function AboutHero() {
   // Pointer tilt + idle drift, one rAF loop, spring-smoothed.
   useEffect(() => {
     const el = stage.current
-    if (!el || reduce) return
+    const host = hero.current
+    if (!el || !host || reduce) return
     const fine = window.matchMedia("(hover: hover) and (pointer: fine)").matches
     let rx = { v: 0, x: 0 }
     let ry = { v: 0, x: 0 }
@@ -107,13 +109,13 @@ export function AboutHero() {
       hover = false
     }
     if (fine) {
-      el.addEventListener("pointermove", move)
-      el.addEventListener("pointerleave", leave)
+      host.addEventListener("pointermove", move)
+      host.addEventListener("pointerleave", leave)
     }
     return () => {
       cancelAnimationFrame(raf)
-      el.removeEventListener("pointermove", move)
-      el.removeEventListener("pointerleave", leave)
+      host.removeEventListener("pointermove", move)
+      host.removeEventListener("pointerleave", leave)
     }
   }, [reduce])
 
@@ -148,7 +150,7 @@ export function AboutHero() {
           radial-gradient(600px 400px at 90% 10%, rgba(255,72,16,0.16), transparent 60%);
         }
         .ah-grid { position: absolute; inset: 0; opacity: 0.35; background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 64px 64px; mask-image: radial-gradient(ellipse at 50% 60%, #000 30%, transparent 75%); }
-        .ah-stage { container-type: inline-size; perspective: 1600px; --rx: 0deg; --ry: 0deg; }
+        .ah-stage { container-type: inline-size; perspective: 1600px; --rx: 0deg; --ry: 0deg; pointer-events: none; }
         .ah-world { position: relative; height: 100%; transform-style: preserve-3d; transform: rotateX(var(--rx)) rotateY(var(--ry)); will-change: transform; }
         /* Resting pose is the default (what the server renders). */
         .ah-phone { position: absolute; left: 50%; bottom: 0; transform-style: preserve-3d; background: none; border: 0; padding: 0; opacity: 1; transform: translate3d(calc(-50% + var(--x)), 0, var(--z)) rotateY(var(--ry0)) rotateX(0deg); will-change: transform, opacity; pointer-events: none; }
@@ -188,14 +190,14 @@ export function AboutHero() {
         }
       `}</style>
 
-      <div className={`ah relative ${stateClass}`}>
+      <div ref={hero} className={`ah relative ${stateClass}`}>
         <div className="ah-bg" aria-hidden="true" />
         <div className="ah-grid" aria-hidden="true" />
 
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-0 text-center">
           <div className="ah-copy max-w-3xl mx-auto">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-300">Sobre Cuik</p>
-            <h1 className="mt-4 text-4xl sm:text-5xl lg:text-[3.75rem] font-extrabold tracking-[-0.02em] leading-[1.04] text-balance">
+            <h1 className="mt-4 text-3xl sm:text-4xl font-extrabold tracking-[-0.02em] leading-[1.08] text-balance max-w-2xl mx-auto">
               La fidelización que usan las grandes cadenas, ahora en la Wallet de tus clientes
             </h1>
             <p className="mt-6 text-lg sm:text-xl text-blue-100/80 max-w-2xl mx-auto leading-relaxed">
