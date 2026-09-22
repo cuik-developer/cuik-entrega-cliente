@@ -160,7 +160,6 @@ export function FanHero({
           radial-gradient(700px 500px at 15% -10%, rgba(59,142,232,0.22), transparent 60%),
           radial-gradient(600px 400px at 90% 10%, rgba(255,72,16,0.16), transparent 60%);
         }
-        .ah-grid { position: absolute; inset: 0; opacity: 0.35; background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 64px 64px; mask-image: radial-gradient(ellipse at 50% 60%, #000 30%, transparent 75%); }
         /* The stage plane would sit in front of the passes with translateZ < 0 and swallow their clicks: it ignores the pointer. */
         .ah-stage { container-type: inline-size; perspective: 1600px; --rx: 0deg; --ry: 0deg; pointer-events: none; }
         .ah-world { position: relative; height: 100%; transform-style: preserve-3d; transform: rotateX(var(--rx)) rotateY(var(--ry)); will-change: transform; }
@@ -205,7 +204,6 @@ export function FanHero({
 
       <div ref={hero} className={`ah relative ${stateClass}`}>
         <div className="ah-bg" aria-hidden="true" />
-        <div className="ah-grid" aria-hidden="true" />
 
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-8 sm:pt-10 pb-0 text-center">
           <div className="ah-copy max-w-4xl mx-auto flex flex-col items-center">{children}</div>
