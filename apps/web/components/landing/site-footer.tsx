@@ -1,6 +1,7 @@
 import { Instagram, MessageCircle } from "lucide-react"
 import Link from "next/link"
 import { CuikLogo } from "@/components/cuik-logo"
+import { CookieBanner } from "@/components/landing/cookie-banner"
 
 export const WHATSAPP_URL = "https://wa.me/51972213023"
 export const INSTAGRAM_URL = "https://www.instagram.com/cuik.ia/"
@@ -29,8 +30,15 @@ const COLUMNS = [
     links: [
       { label: "Sobre Cuik", href: "/sobre-cuik" },
       { label: "Contáctanos", href: "/contacto" },
-      { label: "Términos", href: "#" },
-      { label: "Privacidad", href: "#" },
+    ],
+  },
+  {
+    title: "Legal",
+    links: [
+      { label: "Términos y Condiciones", href: "/terminos-y-condiciones" },
+      { label: "Política de Privacidad", href: "/politica-de-privacidad" },
+      { label: "Política de Cookies", href: "/politica-de-cookies" },
+      { label: "Libro de Reclamaciones", href: "/libro-de-reclamaciones" },
     ],
   },
 ]
@@ -39,8 +47,9 @@ const COLUMNS = [
 export function SiteFooter() {
   return (
     <footer className="bg-[#0f172a] text-gray-400 py-14">
+      <CookieBanner />
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-10">
           <div className="col-span-2 md:col-span-1 space-y-4">
             <Link href="/" className="flex items-center gap-2.5">
               <CuikLogo size="sm" />

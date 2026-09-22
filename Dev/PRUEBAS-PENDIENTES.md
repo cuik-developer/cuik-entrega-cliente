@@ -69,6 +69,10 @@ Cubre los despliegues `e3b3561` y `442a3ba` (programa de puntos, panel Premios, 
 | 16c | "El antes y el ahora": esperar a que termine la escena | Se queda en el pase digital con 3 visitas; ya no vuelve al carton | |
 | 16d | "4 formas de fidelizar" en celular | Debajo de las pestanas hay un riel gris con pulgar azul y el texto "Desliza para ver las 4 mecanicas"; el pulgar se mueve al deslizar y la fila se desplaza sola cuando la rotacion cambia de mecanica | |
 | 17 | Footer | Instagram y WhatsApp abren; TikTok y LinkedIn no aparecen | |
+| 18 | Footer → columna Legal | Abren Terminos y Condiciones, Politica de Privacidad, Politica de Cookies y Libro de Reclamaciones, con indice lateral y secciones numeradas | |
+| 18b | Aviso de cookies (primera visita a la web publica) | Aparece abajo a la izquierda con Aceptar y Rechazar; al elegir desaparece y no vuelve a salir por un ano; en Politica de Cookies se ve la eleccion y se puede cambiar | |
+| 18c | Libro de Reclamaciones: enviar una hoja de prueba | Devuelve numero LR-AAAA-XXXX; llega copia al correo del consumidor y el original a SA_EMAIL; los campos vacios marcan error debajo | |
+| 18d | Textos legales | Reemplazar en apps/web/lib/legal.ts la razon social, RUC, domicilio y codigo de banco de datos antes de publicar | |
 | 16b | "4 formas de fidelizar" en celular vertical | Las pestanas se deslizan de lado, el telefono queda centrado y la tarjeta "Como funciona" ocupa el ancho de la pantalla (antes el telefono quedaba fuera de la vista y la tarjeta se cortaba) | |
 
 ## Como reportar
