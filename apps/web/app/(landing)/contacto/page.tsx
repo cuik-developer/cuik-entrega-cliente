@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function ContactoPage() {
   return (
-    <div className="min-h-screen bg-white font-sans antialiased">
+    <div className="site-zoom min-h-screen bg-white font-sans antialiased">
       <SiteNav solid />
       <ContactExperience />
 

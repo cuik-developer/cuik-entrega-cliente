@@ -361,7 +361,7 @@ export default function HomePage() {
   const pricing = useInView()
 
   return (
-    <div className="min-h-screen bg-white font-sans antialiased">
+    <div className="site-zoom min-h-screen bg-white font-sans antialiased">
       {/* ─── Styles ──────────────────────────────────── */}
       <style>{`
         @keyframes marquee { from { transform: translateX(0) } to { transform: translateX(-50%) } }

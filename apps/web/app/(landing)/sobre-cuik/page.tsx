@@ -118,7 +118,7 @@ const STEPS = [
 
 export default function SobreCuikPage() {
   return (
-    <div className="min-h-screen bg-white font-sans antialiased">
+    <div className="site-zoom min-h-screen bg-white font-sans antialiased">
       <FxStyles />
       <SiteNav solid />
       <AboutIntro />
