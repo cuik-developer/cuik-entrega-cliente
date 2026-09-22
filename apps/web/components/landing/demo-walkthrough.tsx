@@ -17,7 +17,9 @@ import { LivePass, type PushContent } from "./live-pass"
  *      bezel overlap it naturally: the sign, iOS's yellow frame locking onto
  *      the QR, and the link chip. The sign itself stands top-left, behind.
  *   2. The cashier scans the pass (7 visits) at the register.
- *   3. The 8th stamp lands and the reward push arrives.
+ *   3. The 8th stamp lands and the reward push arrives, with a short burst
+ *      of confetti from behind the phone: 26 pieces in brand colours, one
+ *      second, once per visit to the step. Reduced motion: none.
  *
  * Auto-advances every STEP_MS while in view; clicking a step jumps to it.
  */
@@ -75,6 +77,26 @@ const QR = (() => {
     }
   }
   return cells
+})()
+
+// Confetti: deterministic burst from behind the phone. Angle (deg), distance (% of stage),
+// spin (deg), delay (ms), size (px), colour.
+const CONFETTI = (() => {
+  const colors = ["#0e70db", "#ff4810", "#f2a65a", "#10b981", "#111827", "#3b8ee8"]
+  let seed = 3
+  const rnd = () => {
+    seed = (seed * 9301 + 49297) % 233280
+    return seed / 233280
+  }
+  return Array.from({ length: 26 }, (_, i) => ({
+    a: -90 + (i / 26) * 360 + (rnd() - 0.5) * 18,
+    d: 42 + rnd() * 26,
+    r: (rnd() - 0.5) * 720,
+    dl: Math.round(rnd() * 120),
+    w: 5 + Math.round(rnd() * 4),
+    h: 9 + Math.round(rnd() * 6),
+    c: colors[i % colors.length],
+  }))
 })()
 
 export function DemoWalkthrough({ active }: { active: boolean }) {
@@ -138,6 +160,16 @@ export function DemoWalkthrough({ active }: { active: boolean }) {
         .dw-frame i:nth-child(4) { right: 0; bottom: 0; border-left: 0; border-top: 0; }
         .dw-chip { position: absolute; left: 50%; top: 13%; transform: translateX(-50%) translateY(6px); padding: 3cqw 6cqw; border-radius: 9999px; background: #ffd60a; color: #111; font-weight: 700; font-size: 6cqw; white-space: nowrap; opacity: 0; transition: opacity 240ms var(--dw-out), transform 420ms var(--dw-out); transition-delay: 1100ms; }
         .dw-layer:not(.is-off) .dw-chip { opacity: 1; transform: translateX(-50%); }
+        /* Confetti: bursts from behind the phone when the reward lands */
+        .dw-confetti { position: absolute; left: 50%; top: 46%; width: 0; height: 0; z-index: 0; pointer-events: none; }
+        .dw-confetti i { position: absolute; left: 0; top: 0; width: var(--w); height: var(--h); border-radius: 2px; background: var(--c); opacity: 0; transform: translate(-50%, -50%); }
+        .dw-confetti.is-on i { animation: dw-burst 1100ms cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: var(--dl); }
+        @keyframes dw-burst {
+          0% { opacity: 0; transform: translate(-50%, -50%) rotate(0deg) scale(0.6); }
+          12% { opacity: 1; }
+          70% { opacity: 1; }
+          100% { opacity: 0; transform: translate(calc(-50% + cos(var(--a)) * var(--d)), calc(-50% + sin(var(--a)) * var(--d) + 24px)) rotate(var(--r)) scale(1); }
+        }
         .dw-cap { position: absolute; left: 50%; bottom: 4%; z-index: 3; transform: translateX(-50%) translateY(6px); display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.85rem; border-radius: 9999px; background: rgba(255,255,255,0.94); color: #0f172a; font-size: 0.75rem; font-weight: 700; white-space: nowrap; box-shadow: 0 10px 30px -12px rgba(15,23,42,0.4), 0 0 0 1px rgba(15,23,42,0.06); opacity: 0; transition: opacity 300ms var(--dw-out), transform 400ms var(--dw-out); transition-delay: 500ms; }
         .dw-cap.is-on { opacity: 1; transform: translateX(-50%); }
         .dw-cap i { width: 0.5rem; height: 0.5rem; border-radius: 9999px; background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.2); }
@@ -146,6 +178,7 @@ export function DemoWalkthrough({ active }: { active: boolean }) {
           .dw-icon { transform: none; transition: none; }
           .dw-step.is-on.is-running .dw-bar > i { animation: none; transform: scaleX(1); }
           .dw-layer { transition: opacity 250ms ease; transform: none !important; }
+          .dw-confetti { display: none; }
           .dw-frame, .dw-chip { transition: opacity 250ms ease; transform: translateX(-50%) !important; }
           .dw-cap { transition: opacity 250ms ease; transform: translateX(-50%) !important; }
         }
@@ -219,7 +252,26 @@ export function DemoWalkthrough({ active }: { active: boolean }) {
 
           {/* Steps 2–3: the pass in the Wallet */}
           <div className={`dw-layer ${step === 0 ? "is-off" : ""}`} aria-hidden={step === 0}>
-            <div className="dw-passphone">
+            <div className={`dw-confetti ${step === 2 ? "is-on" : ""}`} aria-hidden="true">
+              {CONFETTI.map((c, i) => (
+                <i
+                  // biome-ignore lint/suspicious/noArrayIndexKey: static burst
+                  key={i}
+                  style={
+                    {
+                      "--a": `${c.a}deg`,
+                      "--d": `${c.d}cqw`,
+                      "--r": `${c.r}deg`,
+                      "--dl": `${c.dl}ms`,
+                      "--w": `${c.w}px`,
+                      "--h": `${c.h}px`,
+                      "--c": c.c,
+                    } as CSSProperties
+                  }
+                />
+              ))}
+            </div>
+            <div className="dw-passphone relative">
               <LivePass
                 base="/landing/mockup-gradual-7.png"
                 next="/landing/mockup-gradual-8.png"
