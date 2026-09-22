@@ -1,6 +1,6 @@
 "use client"
 
-import { CheckCircle2, Gift, QrCode, Zap } from "lucide-react"
+import { CheckCircle2, Gift, QrCode } from "lucide-react"
 import Image from "next/image"
 import type { CSSProperties, ReactNode } from "react"
 import { useEffect, useState } from "react"
@@ -9,16 +9,12 @@ import { LivePass, type PushContent } from "./live-pass"
 /**
  * "Mira cómo funciona tu pase": three steps synchronized with the live pass.
  *
- *   1. Two phones, like a real counter: on the left one the customer has the
- *      camera open and iOS is detecting the QR on the sign (yellow frame,
- *      link chip); on the right one the pass sits in the Wallet.
- *   2. The cashier scans the pass at the register → the visit is stamped
- *      (scan frame over the pass QR, then the crossfade to one more stamp).
+ *   1. A real moment at the counter (photo): the customer holds up their
+ *      phone; the pass phone rises into the scene. Nothing drawn.
+ *   2. The cashier scans the pass at the register → the visit is stamped.
  *   3. The card is complete → the reward push.
  *
- * Both phones are the site's real iPhone photo; the camera UI is drawn
- * inside the measured screen area of the photo (left 24%, top 7.5%,
- * width 52%, height 85.8%, corner radius ≈ 7.3% of the width).
+ * Auto-advances every STEP_MS while in view; clicking a step jumps to it.
  */
 
 const STEP_MS = 3400
@@ -34,7 +30,7 @@ const STEPS: { icon: ReactNode; title: string; desc: string }[] = [
   {
     icon: <QrCode className="w-7 h-7" />,
     title: "Escanea el QR de tu local",
-    desc: "Tu cliente apunta la cámara al QR del mostrador o de la mesa y su pase entra a la Wallet. Sin apps, sin formularios largos.",
+    desc: "Tu cliente escanea el QR del mostrador y en segundos tiene su pase en la Wallet. Sin apps, sin formularios.",
   },
   {
     icon: <CheckCircle2 className="w-7 h-7" />,
@@ -47,30 +43,6 @@ const STEPS: { icon: ReactNode; title: string; desc: string }[] = [
     desc: "Al completar todos los sellos, el premio se desbloquea y le llega una notificación.",
   },
 ]
-
-// Deterministic QR-looking pattern (finder squares + noise)
-const QR = (() => {
-  const n = 21
-  const cells: boolean[] = []
-  let seed = 7
-  const rnd = () => {
-    seed = (seed * 9301 + 49297) % 233280
-    return seed / 233280
-  }
-  for (let y = 0; y < n; y++) {
-    for (let x = 0; x < n; x++) {
-      const finder = (x < 7 && y < 7) || (x >= n - 7 && y < 7) || (x < 7 && y >= n - 7)
-      if (finder) {
-        const fx = x < 7 ? x : x - (n - 7)
-        const fy = y < 7 ? y : y - (n - 7)
-        const ring = fx === 0 || fy === 0 || fx === 6 || fy === 6
-        const core = fx >= 2 && fx <= 4 && fy >= 2 && fy <= 4
-        cells.push(ring || core)
-      } else cells.push(rnd() > 0.55)
-    }
-  }
-  return cells
-})()
 
 export function DemoWalkthrough({ active }: { active: boolean }) {
   const [step, setStep] = useState(0)
@@ -98,96 +70,48 @@ export function DemoWalkthrough({ active }: { active: boolean }) {
         .dw-step.is-on.is-running .dw-bar > i { animation: dw-fill ${STEP_MS}ms linear forwards; }
         @keyframes dw-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
-        /* Stage: the pass phone on the right; the scanning phone slides in behind it on the left */
+        /* Stage: the counter photo behind, the pass phone in front. Steps 2–3 keep the phone alone. */
         .dw-stage { container-type: inline-size; }
-        .dw-passphone { position: relative; margin-left: auto; width: 68%; z-index: 2; transition: transform 800ms var(--dw-drawer); }
-        .dw-passphone.is-solo { transform: translateX(-16%); }
-        .dw-scanphone { position: absolute; left: 0; top: 10%; width: 60%; z-index: 1; opacity: 0; transform: translateX(10%) rotate(-10deg) scale(0.96); transition: opacity 420ms var(--dw-out), transform 800ms var(--dw-drawer); pointer-events: none; }
-        .dw-scanphone.is-on { opacity: 1; transform: rotate(-10deg); }
-        .dw-scanphone img { width: 100%; height: auto; filter: drop-shadow(0 30px 40px rgba(15,23,42,0.35)); }
-        /* camera UI inside the photo's screen */
-        .dw-cam { position: absolute; left: 24%; top: 7.5%; width: 52%; height: 85.8%; border-radius: 7.3cqw; overflow: hidden; background: #0b0b0c; color: #fff; font-size: 2.2cqw; }
-        .dw-view { position: absolute; inset: 0; background:
-          radial-gradient(60% 40% at 50% 30%, rgba(255,232,210,0.35), transparent 70%),
-          linear-gradient(180deg, #3a2b22 0%, #6b4a36 45%, #2a211c 100%); }
-        .dw-view::after { content: ''; position: absolute; inset: 0; background: radial-gradient(120% 90% at 50% 100%, rgba(0,0,0,0.55), transparent 60%); }
-        .dw-status { position: absolute; left: 0; right: 0; top: 0; display: flex; justify-content: space-between; padding: 2cqw 3.4cqw 0; font-weight: 600; font-size: 2.1cqw; }
-        .dw-sign { position: absolute; left: 50%; top: 30%; width: 62%; transform: translateX(-50%); border-radius: 1.6cqw; background: #fff; color: #111827; box-shadow: 0 8px 24px rgba(0,0,0,0.35); overflow: hidden; }
-        .dw-sign-head { padding: 1.4cqw 1.8cqw 1.2cqw; background: linear-gradient(135deg, #e26534, #f2a65a); color: #fff; }
-        .dw-qr { display: grid; grid-template-columns: repeat(21, 1fr); gap: 0.15cqw; padding: 1.6cqw 3cqw 1.2cqw; }
-        .dw-qr i { display: block; aspect-ratio: 1; background: #111827; }
-        .dw-qr i.o { background: transparent; }
-        /* iOS QR detection: yellow corner brackets that settle onto the code, and the link chip */
-        .dw-frame { position: absolute; left: 50%; top: 41%; width: 44%; aspect-ratio: 1; transform: translateX(-50%) scale(1.25); opacity: 0; transition: opacity 240ms var(--dw-out), transform 520ms var(--dw-out); transition-delay: 500ms; }
-        .dw-scanphone.is-on .dw-frame { opacity: 1; transform: translateX(-50%) scale(1); }
-        .dw-frame i { position: absolute; width: 26%; height: 26%; border: 0.55cqw solid #ffd60a; border-radius: 0.6cqw; }
-        .dw-frame i:nth-child(1) { left: 0; top: 0; border-right: 0; border-bottom: 0; }
-        .dw-frame i:nth-child(2) { right: 0; top: 0; border-left: 0; border-bottom: 0; }
-        .dw-frame i:nth-child(3) { left: 0; bottom: 0; border-right: 0; border-top: 0; }
-        .dw-frame i:nth-child(4) { right: 0; bottom: 0; border-left: 0; border-top: 0; }
-        .dw-chip { position: absolute; left: 50%; top: 21%; transform: translateX(-50%) translateY(6px); display: inline-flex; align-items: center; gap: 1cqw; padding: 1cqw 2cqw; border-radius: 9999px; background: #ffd60a; color: #111; font-weight: 700; font-size: 2cqw; white-space: nowrap; opacity: 0; transition: opacity 240ms var(--dw-out), transform 420ms var(--dw-out); transition-delay: 1000ms; }
-        .dw-scanphone.is-on .dw-chip { opacity: 1; transform: translateX(-50%); }
-        .dw-shutter { position: absolute; left: 50%; bottom: 4%; width: 12cqw; height: 12cqw; transform: translateX(-50%); border-radius: 9999px; background: #fff; box-shadow: 0 0 0 1cqw rgba(255,255,255,0.35); }
-        .dw-modes { position: absolute; left: 0; right: 0; bottom: 18%; display: flex; justify-content: center; gap: 3cqw; font-size: 1.9cqw; font-weight: 600; letter-spacing: 0.06em; color: rgba(255,255,255,0.7); }
-        .dw-modes b { color: #ffd60a; }
+        .dw-photo { position: absolute; inset: 0; border-radius: 1.5rem; overflow: hidden; box-shadow: 0 30px 60px -30px rgba(15,23,42,0.35), 0 0 0 1px rgba(15,23,42,0.06); transform: scale(1); opacity: 1; transition: opacity 500ms var(--dw-out), transform 800ms var(--dw-drawer); }
+        .dw-photo img { object-fit: cover; object-position: 46% 42%; }
+        .dw-photo::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15,23,42,0) 55%, rgba(15,23,42,0.35) 100%); }
+        .dw-photo.is-off { opacity: 0; transform: scale(0.96); }
+        .dw-passphone { position: absolute; right: 0; bottom: -6%; width: 54%; z-index: 2; transform-origin: 50% 100%; transition: transform 800ms var(--dw-drawer), width 800ms var(--dw-drawer), right 800ms var(--dw-drawer), bottom 800ms var(--dw-drawer); }
+        .dw-passphone.is-arrive { animation: dw-arrive 900ms var(--dw-drawer) both; animation-delay: 250ms; }
+        @keyframes dw-arrive { from { opacity: 0; transform: translateY(24px) scale(0.96); } to { opacity: 1; transform: none; } }
+        .dw-passphone.is-solo { right: 16%; bottom: 2%; width: 68%; }
+        .dw-cap { position: absolute; left: 1.25rem; bottom: 1.25rem; z-index: 3; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.75rem; border-radius: 9999px; background: rgba(255,255,255,0.92); color: #0f172a; font-size: 0.75rem; font-weight: 700; box-shadow: 0 10px 30px -12px rgba(15,23,42,0.4); opacity: 0; transform: translateY(6px); transition: opacity 300ms var(--dw-out), transform 400ms var(--dw-out); transition-delay: 700ms; }
+        .dw-cap.is-on { opacity: 1; transform: none; }
+        .dw-cap i { width: 0.5rem; height: 0.5rem; border-radius: 9999px; background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.2); }
 
         @media (prefers-reduced-motion: reduce) {
           .dw-icon { transform: none; transition: none; }
           .dw-step.is-on.is-running .dw-bar > i { animation: none; transform: scaleX(1); }
-          .dw-scanphone, .dw-passphone, .dw-frame, .dw-chip { transition: opacity 250ms ease; }
-          .dw-scanphone { transform: rotate(-10deg) !important; }
-          .dw-passphone { transform: none !important; }
-          .dw-frame, .dw-chip { transform: translateX(-50%) !important; }
+          .dw-photo, .dw-passphone, .dw-cap { transition: opacity 250ms ease; }
+          .dw-photo.is-off { transform: none; }
+          .dw-passphone.is-arrive { animation: none; }
         }
       `}</style>
 
       {/* Stage */}
       <div className="relative flex-shrink-0">
         <div className="absolute -inset-8 bg-[#0e70db]/[0.04] rounded-full blur-2xl" />
-        <div className="dw-stage relative w-[340px] sm:w-[440px]">
-          {/* Customer's phone: camera open, iOS reading the sign's QR */}
-          <div className={`dw-scanphone ${step === 0 ? "is-on" : ""}`} aria-hidden="true">
-            <Image src="/landing/mockup-gradual-7.png" alt="" width={564} height={1002} />
-            <div className="dw-cam">
-              <div className="dw-view" />
-              <div className="dw-status">
-                <span>9:41</span>
-                <Zap style={{ width: "2.6cqw", height: "2.6cqw" }} />
-              </div>
-              <div className="dw-chip">cuik.org/gradual-cafe</div>
-              <div className="dw-sign">
-                <div className="dw-sign-head">
-                  <div style={{ fontSize: "1.5cqw", opacity: 0.85, letterSpacing: "0.08em" }}>
-                    GRADUAL CAFÉ
-                  </div>
-                  <div style={{ fontSize: "2cqw", fontWeight: 800, lineHeight: 1.15 }}>
-                    Escanea y llévate tu tarjeta de sellos
-                  </div>
-                </div>
-                <div className="dw-qr">
-                  {QR.map((on, i) => (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: static pattern
-                    <i key={i} className={on ? "" : "o"} />
-                  ))}
-                </div>
-              </div>
-              <div className="dw-frame">
-                <i />
-                <i />
-                <i />
-                <i />
-              </div>
-              <div className="dw-modes">
-                <span>VIDEO</span>
-                <b>FOTO</b>
-                <span>RETRATO</span>
-              </div>
-              <div className="dw-shutter" />
-            </div>
+        <div className="dw-stage relative w-[340px] sm:w-[420px] aspect-[4/5]">
+          {/* Step 1: the real moment at the counter */}
+          <div className={`dw-photo ${step === 0 ? "" : "is-off"}`} aria-hidden={step !== 0}>
+            <Image
+              src="/landing/hero-cafe.png"
+              alt="Cliente mostrando su pase en el mostrador de una cafetería"
+              fill
+              sizes="420px"
+            />
+          </div>
+          <div className={`dw-cap ${step === 0 ? "is-on" : ""}`} aria-hidden="true">
+            <i /> Pase listo en segundos
           </div>
 
           {/* The pass in the Wallet */}
-          <div className={`dw-passphone ${step === 0 ? "" : "is-solo"}`}>
+          <div className={`dw-passphone ${step === 0 ? "is-arrive" : "is-solo"}`}>
             <LivePass
               base="/landing/mockup-gradual-7.png"
               next="/landing/mockup-gradual-8.png"
