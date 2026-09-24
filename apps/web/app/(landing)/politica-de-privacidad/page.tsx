@@ -92,7 +92,7 @@ const SECTIONS: LegalSection[] = [
           Respecto de los datos de los Clientes de un Comercio, el <strong>Comercio</strong> es el
           titular del banco de datos y decide las finalidades de su programa; Cuik actúa como{" "}
           <strong>encargado del tratamiento</strong> por cuenta del Comercio, conforme a lo previsto
-          en la Ley N.° 29733, y solo trata eeres datos según sus instrucciones y esta política.
+          en la Ley N.° 29733, y solo trata esos datos según sus instrucciones y esta política.
         </p>
         <p>Banco de datos de Cuik inscrito ante la ANPD: {LEGAL.bancoDatosCodigo}.</p>
       </>
@@ -154,7 +154,7 @@ const SECTIONS: LegalSection[] = [
     body: (
       <p>
         Aplicamos medidas técnicas y organizativas: cifrado en tránsito, cifrado de credenciales
-        sensibles, control de acceeres por rol, registros de actividad y copias de seguridad. Ante
+        sensibles, control de accesos por rol, registros de actividad y copias de seguridad. Ante
         un incidente que afecte datos personales, lo notificaremos a la ANPD y a los titulares
         afectados dentro de los plazos que fija el Reglamento.
       </p>
