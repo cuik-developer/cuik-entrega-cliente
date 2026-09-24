@@ -1,7 +1,8 @@
 import type { Metadata } from "next"
 import Link from "next/link"
+import { notFound } from "next/navigation"
 import { LegalPage, type LegalSection } from "@/components/landing/legal-page"
-import { LEGAL } from "@/lib/legal"
+import { LEGAL, LEGAL_PAGES_ENABLED } from "@/lib/legal"
 import { CookiePreferences } from "./cookie-preferences"
 
 export const metadata: Metadata = {
@@ -122,6 +123,7 @@ const SECTIONS: LegalSection[] = [
 ]
 
 export default function CookiesPage() {
+  if (!LEGAL_PAGES_ENABLED) notFound()
   return (
     <LegalPage
       eyebrow="Legal"

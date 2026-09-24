@@ -2,6 +2,7 @@ import { Instagram, MessageCircle } from "lucide-react"
 import Link from "next/link"
 import { CuikLogo } from "@/components/cuik-logo"
 import { CookieBanner } from "@/components/landing/cookie-banner"
+import { LEGAL_PAGES_ENABLED } from "@/lib/legal"
 
 export const WHATSAPP_URL = "https://wa.me/51972213023"
 export const INSTAGRAM_URL = "https://www.instagram.com/cuik.ia/"
@@ -17,14 +18,7 @@ const COLUMNS = [
       { label: "Precios", href: "/#precios" },
     ],
   },
-  {
-    title: "Recursos",
-    links: [
-      { label: "Blog", href: "#" },
-      { label: "Guías", href: "#" },
-      { label: "API Docs", href: "#" },
-    ],
-  },
+  // "Recursos" (Blog, Guías, API Docs) hidden until there is real content behind it.
   {
     title: "Empresa",
     links: [
@@ -32,24 +26,28 @@ const COLUMNS = [
       { label: "Contáctanos", href: "/contacto" },
     ],
   },
-  {
-    title: "Legal",
-    links: [
-      { label: "Términos y Condiciones", href: "/terminos-y-condiciones" },
-      { label: "Política de Privacidad", href: "/politica-de-privacidad" },
-      { label: "Política de Cookies", href: "/politica-de-cookies" },
-      { label: "Libro de Reclamaciones", href: "/libro-de-reclamaciones" },
-    ],
-  },
+  ...(LEGAL_PAGES_ENABLED
+    ? [
+        {
+          title: "Legal",
+          links: [
+            { label: "Términos y Condiciones", href: "/terminos-y-condiciones" },
+            { label: "Política de Privacidad", href: "/politica-de-privacidad" },
+            { label: "Política de Cookies", href: "/politica-de-cookies" },
+            { label: "Libro de Reclamaciones", href: "/libro-de-reclamaciones" },
+          ],
+        },
+      ]
+    : []),
 ]
 
 /** Public site footer, shared by the home page and the marketing pages. */
 export function SiteFooter() {
   return (
     <footer className="bg-[#0f172a] text-gray-400 py-14">
-      <CookieBanner />
+      {LEGAL_PAGES_ENABLED && <CookieBanner />}
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-10">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
           <div className="col-span-2 md:col-span-1 space-y-4">
             <Link href="/" className="flex items-center gap-2.5">
               <CuikLogo size="sm" />

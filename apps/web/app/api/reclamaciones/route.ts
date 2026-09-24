@@ -2,7 +2,7 @@ import { MensajePersonalizado, sendEmail } from "@cuik/email"
 import { z } from "zod"
 
 import { errorResponse, successResponse } from "@/lib/api-utils"
-import { LEGAL } from "@/lib/legal"
+import { LEGAL, LEGAL_PAGES_ENABLED } from "@/lib/legal"
 
 export const dynamic = "force-dynamic"
 
@@ -36,6 +36,7 @@ const schema = z.object({
  * and traceable from the email itself.
  */
 export async function POST(request: Request) {
+  if (!LEGAL_PAGES_ENABLED) return errorResponse("No disponible", 404)
   try {
     const body = await request.json().catch(() => null)
     const parsed = schema.safeParse(body)

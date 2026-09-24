@@ -1,7 +1,8 @@
 import type { Metadata } from "next"
 import Link from "next/link"
+import { notFound } from "next/navigation"
 import { LegalPage, type LegalSection } from "@/components/landing/legal-page"
-import { LEGAL } from "@/lib/legal"
+import { LEGAL, LEGAL_PAGES_ENABLED } from "@/lib/legal"
 
 export const metadata: Metadata = {
   title: "Política de Privacidad — Cuik",
@@ -154,8 +155,8 @@ const SECTIONS: LegalSection[] = [
     body: (
       <p>
         Aplicamos medidas técnicas y organizativas: cifrado en tránsito, cifrado de credenciales
-        sensibles, control de accesos por rol, registros de actividad y copias de seguridad. Ante
-        un incidente que afecte datos personales, lo notificaremos a la ANPD y a los titulares
+        sensibles, control de accesos por rol, registros de actividad y copias de seguridad. Ante un
+        incidente que afecte datos personales, lo notificaremos a la ANPD y a los titulares
         afectados dentro de los plazos que fija el Reglamento.
       </p>
     ),
@@ -204,6 +205,7 @@ const SECTIONS: LegalSection[] = [
 ]
 
 export default function PrivacidadPage() {
+  if (!LEGAL_PAGES_ENABLED) notFound()
   return (
     <LegalPage
       eyebrow="Legal"
