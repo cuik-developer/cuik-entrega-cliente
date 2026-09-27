@@ -74,6 +74,10 @@ Cubre los despliegues `e3b3561` y `442a3ba` (programa de puntos, panel Premios, 
 | 18c | Libro de Reclamaciones: enviar una hoja de prueba | Devuelve numero LR-AAAA-XXXX; llega copia al correo del consumidor y el original a SA_EMAIL; los campos vacios marcan error debajo | |
 | 18d | Textos legales | Reemplazar en apps/web/lib/legal.ts la razon social, RUC, domicilio y codigo de banco de datos antes de publicar | |
 | 16b | "4 formas de fidelizar" en celular vertical | Las pestanas se deslizan de lado, el telefono queda centrado y la tarjeta "Como funciona" ocupa el ancho de la pantalla (antes el telefono quedaba fuera de la vista y la tarjeta se cortaba) | |
+| 19 | Vencimiento de puntos (super-admin > promocion > "Vencimiento de puntos") | Al elegir un modo (por compra / dia fijo semanal / dia fijo mensual / cada X dias) y guardar, la regla aparece en Panel > Mi pase; los puntos ya acumulados reciben fecha (por compra: desde hoy; dia fijo: primer corte) sin perderse ese dia | |
+| 19b | Caja: visita con puntos y vencimiento activo | El resultado muestra "Vencen el <dia>"; el historial del cliente en el panel muestra el movimiento | |
+| 19c | Canje con lotes de distinta fecha | Se descuentan primero los puntos que vencen antes (ver historial: el canje anota los lotes) | |
+| 19d | Cron `loyalty-expiration` | Al pasar la fecha de corte el saldo baja, aparece "Vencimiento" en el historial y el pase se actualiza; con el aviso activado llega el push "tus puntos vencen el ..." a la hora configurada y no se repite el mismo dia | |
 
 ## Como reportar
 

@@ -22,6 +22,10 @@ export type TemplateContext = {
   }
   points?: {
     balance: number
+    /** Points of the soonest-expiring lot(s); "" when nothing expires. */
+    expiring?: number | string
+    /** "jue 8 oct" style date of that expiry; "" when nothing expires. */
+    expiresAt?: string
   }
   rewards?: {
     pending: number

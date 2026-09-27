@@ -1090,8 +1090,9 @@ Todos requieren header `x-cron-secret: ${CRON_SECRET}`:
 | `POST /api/cron/analytics-retention` | 1×/dia (22:15 Lima) | `calculateRetentionCohorts()` por cada tenant activo |
 | `POST /api/cron/campaigns-scheduled` | cada 5 min | Ejecuta campaigns con `scheduledAt <= NOW()` y status `scheduled` |
 | `POST /api/cron/campaigns-birthday[?force=1]` | cada hora (`5 * * * *`) | Saludo de cumpleanos: crea y envia la campana del dia para los tenants cuya hora local == `sendHour` |
+| `POST /api/cron/loyalty-expiration[?force=1]` | cada hora (`15 * * * *`) | Vencimiento de puntos: drena los lotes (`points_transactions.remaining`) con `expires_at <= now` por cliente (fila `expire` en el historial, saldo, refresh del pase) y, a la hora local `expirationWarning.hour`, envia el push "tus puntos vencen el ..." (idempotente por dia, `warned_at` por lote). Solo actua en tenants con `points.pointsExpiration.mode != never`. `?force=1` ignora la hora del aviso |
 
-**Produccion (Dokploy, sep-2026):** los schedules se crean a mano en la app `cuik-loyalty-frontend` (la que corre Next.js; `-backend` es Postgres). Corren en el contexto de Dokploy, asi que deben llamar a `https://cuik.org/...` (no `localhost`) y llevar el secret literal en el header (`$CRON_SECRET` no se expande). Creados: `campaigns-scheduled`, `analytics-retention`, `analytics-daily`, `campaigns-birthday`. `office-tasks` sin programar hasta que se use Cuik Office.
+**Produccion (Dokploy, sep-2026):** los schedules se crean a mano en la app `cuik-loyalty-frontend` (la que corre Next.js; `-backend` es Postgres). Corren en el contexto de Dokploy, asi que deben llamar a `https://cuik.org/...` (no `localhost`) y llevar el secret literal en el header (`$CRON_SECRET` no se expande). Creados: `campaigns-scheduled`, `analytics-retention`, `analytics-daily`, `campaigns-birthday`. `office-tasks` sin programar hasta que se use Cuik Office. **Pendiente de crear:** `loyalty-expiration` (cada hora), necesario en cuanto un tenant active vencimiento de puntos.
 
 ### 9.7 Email
 

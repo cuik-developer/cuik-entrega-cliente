@@ -169,10 +169,13 @@ export function describeExpirationPolicy(policy: ExpirationPolicy): string {
 export function formatExpiry(expiresAt: Date, timezone: string): string {
   // The instant is the midnight AFTER the last valid day: show that day.
   const lastValid = new Date(expiresAt.getTime() - 1)
-  return lastValid.toLocaleDateString("es-PE", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    timeZone: timezone,
-  })
+  return lastValid
+    .toLocaleDateString("es-PE", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      timeZone: timezone,
+    })
+    .replace(/\./g, "")
+    .replace(",", "")
 }

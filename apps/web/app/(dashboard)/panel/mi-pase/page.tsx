@@ -1,11 +1,13 @@
 import { PhoneFrame, WalletPreview } from "@cuik/editor"
 import type { PassDesignConfigV2 } from "@cuik/shared/types/editor"
+import { expirationPolicySchema } from "@cuik/shared/validators"
 import { Award, Clock, Coins, CreditCard, Gift, Info, Smartphone, Star, Zap } from "lucide-react"
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { auth } from "@/lib/auth"
 import { formatDateTime } from "@/lib/format-date"
+import { describeExpirationPolicy } from "@/lib/loyalty/expiration"
 import { getTenantForUser } from "@/lib/tenant-context"
 
 import { CompartirPase } from "./components/compartir-pase"
@@ -189,6 +191,14 @@ function buildPointsRules(
       icon: <Award className="h-4 w-4 text-violet-500" />,
       label: "Compra minima",
       value: `S/ ${pts.minimumPurchaseForPoints}`,
+    })
+  }
+  const policy = expirationPolicySchema.safeParse(pts.pointsExpiration ?? { mode: "never" })
+  if (policy.success && policy.data.mode !== "never") {
+    rules.push({
+      icon: <Clock className="h-4 w-4 text-red-500" />,
+      label: "Vencimiento de puntos",
+      value: describeExpirationPolicy(policy.data),
     })
   }
   return rules

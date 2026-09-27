@@ -7,6 +7,7 @@ import {
   passDesigns,
   passInstances,
   promotions,
+  tenants,
 } from "@cuik/db"
 import { buildGoogleClassId, getGoogleAccessToken } from "@cuik/wallet/google"
 import {
@@ -18,6 +19,8 @@ import {
   validateGoogleEnv,
 } from "@cuik/wallet/shared"
 
+import { formatExpiry } from "@/lib/loyalty/expiration"
+import { nextExpiration } from "@/lib/loyalty/points-lots"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 
 /**
@@ -102,6 +105,13 @@ export async function triggerWalletUpdate(ctx: {
         .from(clients)
         .where(eq(clients.id, ctx.clientId))
         .limit(1)
+      const [tenantRow] = await db
+        .select({ timezone: tenants.timezone })
+        .from(tenants)
+        .where(eq(tenants.id, ctx.tenantId))
+        .limit(1)
+      const upcoming =
+        activePromotion?.type === "points" ? await nextExpiration(db, ctx.clientId) : null
       const templateContext: TemplateContext = {
         client: {
           name: ctx.clientName,
@@ -122,6 +132,10 @@ export async function triggerWalletUpdate(ctx: {
         },
         points: {
           balance: ctx.pointsBalance,
+          expiring: upcoming ? upcoming.amount : "",
+          expiresAt: upcoming
+            ? formatExpiry(upcoming.expiresAt, tenantRow?.timezone ?? "America/Lima")
+            : "",
         },
         rewards: {
           pending: ctx.pendingRewards,

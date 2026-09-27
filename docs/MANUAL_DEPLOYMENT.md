@@ -942,14 +942,16 @@ La app tiene endpoints cron protegidos por `CRON_SECRET`:
 | `POST /api/cron/analytics-retention` | Una vez al dia (4 AM) | Calcula cohortes de retencion |
 | `POST /api/cron/campaigns-birthday` | Cada hora | Push de cumpleanos a la hora local configurada por cada comercio |
 | `POST /api/cron/reports` | Cada hora (minuto 10) | Reportes semanal/mensual por correo cuando coincide el dia y la hora local de cada comercio; idempotente por periodo |
+| `POST /api/cron/loyalty-expiration` | Cada hora (minuto 15) | Vence los puntos cuya fecha paso (segun la politica de cada comercio) y, a la hora local configurada, envia el push "tus puntos vencen el ..." |
 
 ```bash
 # Ejemplo con crontab
-*/5 * * * * curl -s -H "Authorization: Bearer TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/campaigns-scheduled
+*/5 * * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/campaigns-scheduled
 0 3 * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/analytics-daily
 0 4 * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/analytics-retention
 5 * * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/campaigns-birthday
 10 * * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/reports
+15 * * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/loyalty-expiration
 ```
 
 > En Vercel, usar Vercel Cron Jobs en `vercel.json`. En Railway, usar su sistema de cron integrado.
