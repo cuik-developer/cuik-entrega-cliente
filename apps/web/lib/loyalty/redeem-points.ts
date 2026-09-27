@@ -10,6 +10,7 @@ import {
   sql,
 } from "@cuik/db"
 
+import { consumeLots } from "./points-lots"
 import type { PointsRedeemResult } from "./types"
 
 /** Two redemptions of the same item by the same client closer than this are treated as one click. */
@@ -96,6 +97,11 @@ export async function redeemPoints(params: {
     const newBalance = client.pointsBalance - catalogItem.pointsCost
     await tx.update(clients).set({ pointsBalance: newBalance }).where(eq(clients.id, client.id))
 
+    // 5b. Take the points from the lots that expire first. The client row is
+    // locked, so lots cannot change under us. Legacy points not tracked in a
+    // lot are simply not listed here (see points-lots.ts).
+    const consumed = await consumeLots(tx, client.id, catalogItem.pointsCost)
+
     // 6. Insert points transaction (redeem = negative amount). Who handed it over goes in metadata.
     await tx.insert(pointsTransactions).values({
       clientId: client.id,
@@ -104,7 +110,11 @@ export async function redeemPoints(params: {
       type: "redeem",
       catalogItemId: catalogItem.id,
       description: catalogItem.name,
-      metadata: { cashierId, balanceAfter: newBalance },
+      metadata: {
+        cashierId,
+        balanceAfter: newBalance,
+        lots: consumed.map((c) => ({ id: c.lotId, taken: c.taken })),
+      },
     })
 
     // 7. Create reward record (immediately redeemed)

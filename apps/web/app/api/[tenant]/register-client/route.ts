@@ -7,13 +7,14 @@ import {
   passAssets,
   passDesigns,
   passInstances,
-  pointsTransactions,
   promotions,
+  tenants,
   visits,
 } from "@cuik/db"
 import type { RegistrationConfig } from "@cuik/shared/validators"
 import {
   buildRegistrationSchema,
+  pointsPromotionConfigSchema,
   registerClientSchema,
   registrationConfigSchema,
 } from "@cuik/shared/validators"
@@ -27,6 +28,7 @@ import {
 } from "@cuik/wallet/google"
 import { resolvePassFields, type TemplateContext, validateGoogleEnv } from "@cuik/wallet/shared"
 import { errorResponse, resolveTenant, successResponse } from "@/lib/api-utils"
+import { insertEarnLot } from "@/lib/loyalty/points-lots"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 
 // ── Registration helpers ─────────────────────────────────────────────
@@ -187,7 +189,12 @@ async function applyMarketingBonus(ctx: {
   // promotion can exist (the default stamps one + a points one): the old
   // `LIMIT 1` without ORDER BY picked one at random and could skip the bonus.
   const active = await db
-    .select({ id: promotions.id, type: promotions.type, maxVisits: promotions.maxVisits })
+    .select({
+      id: promotions.id,
+      type: promotions.type,
+      maxVisits: promotions.maxVisits,
+      config: promotions.config,
+    })
     .from(promotions)
     .where(and(eq(promotions.tenantId, tenantId), eq(promotions.active, true)))
     .orderBy(desc(promotions.createdAt))
@@ -242,13 +249,21 @@ async function applyMarketingBonus(ctx: {
         locationId: null,
       })
       .returning({ id: visits.id })
-    await db.insert(pointsTransactions).values({
+    // Same lot rules as a purchase: the bonus expires under the tenant's policy.
+    const [tenantRow] = await db
+      .select({ timezone: tenants.timezone })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1)
+    const pointsConfig = pointsPromotionConfigSchema.parse(promotion.config ?? {})
+    await insertEarnLot(db, {
       clientId: client.id,
       tenantId,
       amount: config.pointsBonus,
-      type: "earn",
       visitId: visit?.id ?? null,
       description: "Marketing opt-in bonus",
+      policy: pointsConfig.points.pointsExpiration,
+      timezone: tenantRow?.timezone ?? "America/Lima",
     })
 
     // Update client pointsBalance
