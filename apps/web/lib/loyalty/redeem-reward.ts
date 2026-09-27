@@ -1,17 +1,4 @@
-import {
-  and,
-  asc,
-  clients,
-  count,
-  db,
-  desc,
-  eq,
-  or,
-  rewards,
-  sql,
-  tenants,
-  visits,
-} from "@cuik/db"
+import { and, asc, clients, count, db, desc, eq, or, rewards, sql, tenants, visits } from "@cuik/db"
 
 import { updateRewardsRedeemed } from "../analytics/update-visits-daily"
 import type { RedeemResult } from "./types"
@@ -38,6 +25,13 @@ export async function redeemReward(params: {
     if (!client) {
       return {
         code: "CLIENT_NOT_FOUND" as const,
+        remainingPendingRewards: 0,
+      }
+    }
+    if (client.status !== "active" && client.status !== "inactive") {
+      return {
+        code:
+          client.status === "blocked" ? ("CLIENT_BLOCKED" as const) : ("CLIENT_ARCHIVED" as const),
         remainingPendingRewards: 0,
       }
     }

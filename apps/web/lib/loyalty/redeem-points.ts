@@ -37,6 +37,12 @@ export async function redeemPoints(params: {
     if (!client) {
       return { code: "CLIENT_NOT_FOUND" as const }
     }
+    if (client.status !== "active" && client.status !== "inactive") {
+      return {
+        code:
+          client.status === "blocked" ? ("CLIENT_BLOCKED" as const) : ("CLIENT_ARCHIVED" as const),
+      }
+    }
 
     // 2. Check for active points promotion
     const promoRows = await tx

@@ -80,6 +80,7 @@ function buildLoyaltyObjectPayload(params: UpsertLoyaltyObjectParams) {
     rewardRedeemed,
     qrValue,
     promotionType,
+    expired,
   } = params
 
   // Google Wallet IDs only allow alphanumeric, dots, hyphens, and underscores
@@ -115,7 +116,7 @@ function buildLoyaltyObjectPayload(params: UpsertLoyaltyObjectParams) {
     const dynamicPayload: Record<string, unknown> = {
       id: objectId,
       classId,
-      state: "ACTIVE",
+      state: expired ? "EXPIRED" : "ACTIVE",
       accountName: clientName,
       // Google shows accountId as "ID de miembro" on the back: only the DNI, never the internal QR code.
       ...(clientDni ? { accountId: clientDni } : {}),
@@ -151,7 +152,7 @@ function buildLoyaltyObjectPayload(params: UpsertLoyaltyObjectParams) {
   const fallbackPayload: Record<string, unknown> = {
     id: objectId,
     classId,
-    state: "ACTIVE",
+    state: expired ? "EXPIRED" : "ACTIVE",
     accountName: clientName,
     ...(clientDni ? { accountId: clientDni } : {}),
     barcode: {

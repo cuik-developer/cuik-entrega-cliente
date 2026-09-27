@@ -47,6 +47,25 @@ export async function registerVisit(params: {
       }
     }
 
+    // 1a. Blocked / archived / anonymized clients cannot earn (the block dialog promises this).
+    if (client.status !== "active" && client.status !== "inactive") {
+      return {
+        code:
+          client.status === "blocked" ? ("CLIENT_BLOCKED" as const) : ("CLIENT_ARCHIVED" as const),
+        client: {
+          id: client.id,
+          name: client.name,
+          lastName: client.lastName,
+          totalVisits: client.totalVisits,
+          currentCycle: client.currentCycle,
+          tier: client.tier ?? null,
+        },
+        stamps: { current: 0, max: 0 },
+        cycleComplete: false,
+        pendingRewards: 0,
+      }
+    }
+
     // 1b. Read tenant timezone for "today" comparisons (used below)
     const tenantRows = await tx
       .select({ timezone: tenants.timezone })

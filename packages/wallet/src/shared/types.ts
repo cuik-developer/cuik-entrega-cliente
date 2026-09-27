@@ -109,6 +109,9 @@ export type CreateApplePassParams = {
   locations?: Array<{ latitude: number; longitude: number; relevantText?: string }>
   relevantDate?: Date
 
+  /** Anonymized client: the pass is issued void with a past expirationDate (Wallet files it under expired). */
+  expired?: boolean
+
   // Dynamic fields from pass design (optional — when absent, hard-coded fields used)
   designFields?: {
     headerFields: Array<{ key: string; label: string; value: string; changeMessage?: string }>
@@ -190,6 +193,8 @@ export type UpsertLoyaltyObjectParams = {
   serialNumber: string
   clientName: string
   clientDni?: string
+  /** Anonymized client: state EXPIRED instead of ACTIVE. */
+  expired?: boolean
   stampsInCycle: number
   maxVisits: number
   totalVisits: number
@@ -255,6 +260,8 @@ export type WalletUpdateParams = {
   promotionType?: "stamps" | "points" | "discount" | "coupon" | "subscription"
   // Points programs: current balance, forwarded to the Google loyalty object.
   pointsBalance?: number
+  /** Anonymized client: Google object state EXPIRED (moves to the expired passes section). */
+  expired?: boolean
   // Resolved design fields for Google upsert (optional — when absent, hard-coded fallback used)
   designFields?: {
     headerFields: Array<{ key: string; label: string; value: string }>

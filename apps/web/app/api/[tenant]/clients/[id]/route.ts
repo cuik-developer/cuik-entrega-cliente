@@ -11,7 +11,6 @@ import {
 import { getClientStatus } from "@/lib/loyalty"
 import type { SegmentationThresholds } from "@/lib/loyalty/client-segments"
 import { getThresholds } from "@/lib/loyalty/client-segments"
-import { triggerWalletUpdate } from "@/lib/wallet/trigger-wallet-update"
 
 export async function GET(
   request: Request,
@@ -94,15 +93,7 @@ export async function PATCH(
     const { status, reason, birthday } = parsed.data
 
     const [current] = await db
-      .select({
-        id: clients.id,
-        status: clients.status,
-        qrCode: clients.qrCode,
-        name: clients.name,
-        lastName: clients.lastName,
-        totalVisits: clients.totalVisits,
-        pointsBalance: clients.pointsBalance,
-      })
+      .select({ id: clients.id, status: clients.status })
       .from(clients)
       .where(and(eq(clients.id, id), eq(clients.tenantId, tenant.id)))
       .limit(1)
@@ -153,23 +144,9 @@ export async function PATCH(
       })
     })
 
-    // Archiving voids the pass on the phone; restoring brings it back. Fire-and-forget.
-    if ((status === "archived" || wasArchived) && current.qrCode) {
-      triggerWalletUpdate({
-        qrCode: current.qrCode,
-        clientId: id,
-        clientName: `${current.name}${current.lastName ? ` ${current.lastName}` : ""}`,
-        tenantId: tenant.id,
-        tenantName: tenant.name,
-        stampsInCycle: 0,
-        maxVisits: 0,
-        totalVisits: current.totalVisits,
-        pendingRewards: 0,
-        pointsBalance: current.pointsBalance,
-        voided: status === "archived",
-      }).catch((err) => console.error("[PATCH client] wallet update failed:", err))
-    }
-
+    // Archiving leaves the pass as it is on the phone: it simply stops updating
+    // (visits and redemptions are rejected, campaigns exclude the client). The
+    // last update that expires it happens when the purge anonymizes the client.
     return successResponse({ id, status, changed: true })
   } catch (error) {
     console.error("[PATCH /api/[tenant]/clients/[id]]", error)

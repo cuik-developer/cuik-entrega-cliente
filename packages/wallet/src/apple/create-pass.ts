@@ -70,6 +70,12 @@ export async function createApplePass(
         // Web Service Protocol (auto-updates)
         webServiceURL: params.webServiceUrl,
         authenticationToken: params.authToken,
+
+        // Anonymized client: void + already expired, so Wallet files the pass
+        // under "Expired passes" (a server cannot delete a pass from a phone).
+        ...(params.expired
+          ? { voided: true, expirationDate: new Date(Date.now() - 60_000).toISOString() }
+          : {}),
       },
     )
 

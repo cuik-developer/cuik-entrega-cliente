@@ -1,17 +1,16 @@
 import {
   and,
-  appleDevices,
   clientNotes,
   clients,
   clientTagAssignments,
   db,
   eq,
-  inArray,
   lte,
-  passInstances,
   sql,
+  tenants,
 } from "@cuik/db"
 
+import { triggerWalletUpdate } from "@/lib/wallet/trigger-wallet-update"
 import { ARCHIVE_RETENTION_DAYS } from "./archive"
 
 export { ARCHIVE_RETENTION_DAYS, purgeDateFor } from "./archive"
@@ -23,9 +22,14 @@ export type PurgeResult = { anonymized: number; errors: string[] }
  *
  * The row stays (status "deleted") so visits, points and rewards keep adding
  * up in analytics and reports; what goes is everything personal: name,
- * last name, DNI, phone, email, birthday, custom registration fields, notes,
- * tags and the wallet pass registrations. The QR is rotated so an old pass
- * can never be scanned again. One transaction per client.
+ * last name, DNI, phone, email, birthday, custom registration fields, notes
+ * and tags. The QR is rotated so an old pass can never be scanned again.
+ *
+ * The pass registrations (serial + device token, no personal data) are kept
+ * on purpose: they carry the LAST update, which expires the pass so Wallet
+ * files it under "Expired passes" (a server cannot delete a pass from a
+ * phone). Apple / Google drop the registration when the person removes it.
+ * One transaction per client, wallet push after commit.
  */
 export async function purgeArchivedClients(params?: {
   tenantId?: string
@@ -52,25 +56,23 @@ export async function purgeArchivedClients(params?: {
 
   for (const c of due) {
     try {
-      await db.transaction(async (tx) => {
+      const wallet = await db.transaction(async (tx) => {
         // Lock and re-check: an admin may have restored the client meanwhile.
         const [row] = await tx
-          .select({ status: clients.status, archivedAt: clients.archivedAt })
+          .select({
+            status: clients.status,
+            archivedAt: clients.archivedAt,
+            qrCode: clients.qrCode,
+            totalVisits: clients.totalVisits,
+          })
           .from(clients)
           .where(eq(clients.id, c.id))
           .for("update")
           .limit(1)
-        if (!row || row.status !== "archived" || !row.archivedAt || row.archivedAt > cutoff) return
-
-        const serials = await tx
-          .select({ serialNumber: passInstances.serialNumber })
-          .from(passInstances)
-          .where(eq(passInstances.clientId, c.id))
-        const serialList = serials.map((s) => s.serialNumber)
-        if (serialList.length > 0) {
-          await tx.delete(appleDevices).where(inArray(appleDevices.serialNumber, serialList))
+        if (!row || row.status !== "archived" || !row.archivedAt || row.archivedAt > cutoff) {
+          return null
         }
-        await tx.delete(passInstances).where(eq(passInstances.clientId, c.id))
+
         await tx.delete(clientTagAssignments).where(eq(clientTagAssignments.clientId, c.id))
         await tx.delete(clientNotes).where(eq(clientNotes.clientId, c.id))
 
@@ -91,7 +93,30 @@ export async function purgeArchivedClients(params?: {
           })
           .where(eq(clients.id, c.id))
         anonymized++
+        // The old QR is the pass serial: needed for the final update below.
+        return { serial: row.qrCode, totalVisits: row.totalVisits }
       })
+
+      if (wallet?.serial) {
+        const [tenant] = await db
+          .select({ name: tenants.name })
+          .from(tenants)
+          .where(eq(tenants.id, c.tenantId))
+          .limit(1)
+        await triggerWalletUpdate({
+          qrCode: wallet.serial,
+          clientId: c.id,
+          clientName: "Cliente eliminado",
+          tenantId: c.tenantId,
+          tenantName: tenant?.name ?? "Cuik",
+          stampsInCycle: 0,
+          maxVisits: 0,
+          totalVisits: wallet.totalVisits,
+          pendingRewards: 0,
+          pointsBalance: 0,
+          expired: true,
+        }).catch((err) => console.error("[purge] final wallet update failed:", err))
+      }
     } catch (err) {
       errors.push(`${c.id}: ${err instanceof Error ? err.message : String(err)}`)
     }

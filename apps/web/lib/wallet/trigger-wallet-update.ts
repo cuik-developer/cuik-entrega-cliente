@@ -40,10 +40,25 @@ export async function triggerWalletUpdate(ctx: {
   totalVisits: number
   pendingRewards: number
   pointsBalance: number
-  /** Archived client: render the pass as void (Apple `voided`, Google INACTIVE). */
-  voided?: boolean
+  /**
+   * Anonymized client: last update that expires the pass on the phone. Archived
+   * clients are never pushed (their pass simply stops updating).
+   */
+  expired?: boolean
 }): Promise<void> {
   const serialNumber = ctx.qrCode
+
+  if (!ctx.expired) {
+    const [statusRow] = await db
+      .select({ status: clients.status })
+      .from(clients)
+      .where(eq(clients.id, ctx.clientId))
+      .limit(1)
+    if (statusRow && (statusRow.status === "archived" || statusRow.status === "deleted")) {
+      console.info(`[Wallet:Update] serial=${serialNumber} skipped (client ${statusRow.status})`)
+      return
+    }
+  }
 
   // Find pass_instances for this client
   const instanceRows = await db
@@ -230,6 +245,7 @@ export async function triggerWalletUpdate(ctx: {
     promotionType: activePromotion?.type,
     pointsBalance: ctx.pointsBalance,
     designFields: resolvedDesignFields,
+    expired: ctx.expired,
   })
 
   console.info(

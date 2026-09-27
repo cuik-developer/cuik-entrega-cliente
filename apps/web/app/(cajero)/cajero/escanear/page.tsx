@@ -213,6 +213,14 @@ function handleVisitResult(
       setErrorMsg("No hay promocion activa en este comercio")
       setStep("error")
       break
+    case "CLIENT_BLOCKED":
+      setErrorMsg("Cliente bloqueado: no puede registrar visitas ni canjear")
+      setStep("error")
+      break
+    case "CLIENT_ARCHIVED":
+      setErrorMsg("Cliente archivado: su pase ya no es válido")
+      setStep("error")
+      break
     case "AMOUNT_REQUIRED":
       setErrorMsg("El monto de compra es obligatorio para este tipo de promocion")
       setStep("error")

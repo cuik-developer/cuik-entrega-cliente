@@ -79,6 +79,7 @@ async function updateGoogle(
       promotionType: params.promotionType,
       pointsBalance: params.pointsBalance,
       designFields: params.designFields,
+      expired: params.expired,
     })
 
     if (result.ok) {

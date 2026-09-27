@@ -961,6 +961,7 @@ async function regeneratePass(ctx: {
       designFields: resolvedDesignFields,
       locations: locations.length > 0 ? locations : undefined,
       relevantDate,
+      expired: client.status === "deleted",
     })
 
     if (!passResult.ok) {
