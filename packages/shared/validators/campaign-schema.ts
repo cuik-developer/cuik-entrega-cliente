@@ -54,7 +54,13 @@ export const createCampaignSchema = z.object({
     .min(1, "Message is required")
     .max(150, "Apple Wallet trunca mensajes a 150 caracteres"),
   segment: segmentFilterSchema,
-  scheduledAt: z.string().datetime().optional(),
+  scheduledAt: z
+    .string()
+    .datetime()
+    .optional()
+    .refine((v) => !v || new Date(v).getTime() > Date.now() - 60_000, {
+      message: "La fecha de envío debe ser futura",
+    }),
 })
 
 export type CreateCampaignInput = z.infer<typeof createCampaignSchema>

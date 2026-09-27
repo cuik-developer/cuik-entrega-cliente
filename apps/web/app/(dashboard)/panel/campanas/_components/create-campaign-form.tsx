@@ -34,6 +34,9 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import { useTenant } from "@/hooks/use-tenant"
+import { formatDateTime } from "@/lib/format-date"
+import { utcToWallTime, wallTimeToUtc } from "@/lib/zoned-time"
 import { SegmentPicker } from "./segment-picker"
 import { VariableInsertButton } from "./variable-insert-button"
 
@@ -53,6 +56,13 @@ export function CreateCampaignForm({
   const [isScheduled, setIsScheduled] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const messageRef = useRef<HTMLTextAreaElement | null>(null)
+  // The picker keeps the wall time the admin typed ("2026-09-28T04:17"); the
+  // UTC instant is derived from it in the TENANT timezone (not the browser's)
+  // and only that instant travels to the server. Feeding the UTC ISO back into
+  // the input is what used to show 09:17 for a 04:17 choice (and compounded
+  // +5h on every edit).
+  const { timezone } = useTenant()
+  const [scheduledLocal, setScheduledLocal] = useState("")
 
   const form = useForm<CreateCampaignInput>({
     resolver: zodResolver(createCampaignSchema),
@@ -84,6 +94,7 @@ export function CreateCampaignForm({
       toast.success("Campaña creada exitosamente")
       form.reset()
       setIsScheduled(false)
+      setScheduledLocal("")
       onOpenChange(false)
       onSuccess?.()
     } catch {
@@ -100,9 +111,22 @@ export function CreateCampaignForm({
   function handleScheduleToggle(checked: boolean) {
     setIsScheduled(checked)
     if (!checked) {
-      form.setValue("scheduledAt", undefined)
+      setScheduledLocal("")
+      form.setValue("scheduledAt", undefined, { shouldValidate: true })
     }
   }
+
+  function handleScheduledLocalChange(local: string) {
+    setScheduledLocal(local)
+    const instant = wallTimeToUtc(local, timezone)
+    form.setValue("scheduledAt", instant ? instant.toISOString() : undefined, {
+      shouldValidate: true,
+    })
+  }
+
+  const scheduledIso = form.watch("scheduledAt")
+  // Earliest pickable value: now, in the tenant timezone.
+  const minLocal = utcToWallTime(new Date(), timezone)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -255,13 +279,19 @@ export function CreateCampaignForm({
                       <FormControl>
                         <Input
                           type="datetime-local"
-                          value={field.value ? field.value.slice(0, 16) : ""}
-                          onChange={(e) => {
-                            const val = e.target.value
-                            field.onChange(val ? new Date(val).toISOString() : undefined)
-                          }}
+                          min={minLocal}
+                          value={scheduledLocal}
+                          onChange={(e) => handleScheduledLocalChange(e.target.value)}
+                          onBlur={field.onBlur}
+                          name={field.name}
                         />
                       </FormControl>
+                      {scheduledIso && (
+                        <p className="text-xs text-muted-foreground">
+                          Se enviará el {formatDateTime(scheduledIso, timezone)} (hora del comercio,{" "}
+                          {timezone.replace("_", " ")})
+                        </p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}

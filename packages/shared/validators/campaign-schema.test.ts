@@ -145,12 +145,18 @@ describe("createCampaignSchema", () => {
     expect(result.success).toBe(false)
   })
 
-  it("accepts valid scheduledAt datetime", () => {
+  it("accepts a future scheduledAt datetime", () => {
+    const future = new Date(Date.now() + 3_600_000).toISOString()
+    const result = createCampaignSchema.safeParse({ ...validCampaign, scheduledAt: future })
+    expect(result.success).toBe(true)
+  })
+
+  it("rejects a scheduledAt in the past", () => {
     const result = createCampaignSchema.safeParse({
       ...validCampaign,
       scheduledAt: "2025-06-15T10:00:00Z",
     })
-    expect(result.success).toBe(true)
+    expect(result.success).toBe(false)
   })
 
   it("rejects invalid scheduledAt format", () => {
