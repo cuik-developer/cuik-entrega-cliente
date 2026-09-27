@@ -40,6 +40,8 @@ import {
   resolveTemplate,
   validateAppleEnv,
 } from "@cuik/wallet/shared"
+import { formatExpiry } from "@/lib/loyalty/expiration"
+import { nextExpiration } from "@/lib/loyalty/points-lots"
 import { buildStripImages } from "@/lib/wallet/points-strip"
 import { getTenantAppleConfig, resolveClientTenantId } from "@/lib/wallet/tenant-apple-config"
 
@@ -805,10 +807,25 @@ async function regeneratePass(ctx: {
 
     // Fetch tenant name + wallet config (used for organizationName, template context, locations)
     const [tenantRow] = await db
-      .select({ name: tenants.name, walletConfig: tenants.walletConfig })
+      .select({
+        name: tenants.name,
+        walletConfig: tenants.walletConfig,
+        timezone: tenants.timezone,
+      })
       .from(tenants)
       .where(eq(tenants.id, client.tenantId))
       .limit(1)
+
+    // Soonest points expiry, for {{points.expiring}} / {{points.expiresAt}}.
+    // Any failure here must never block the pass: fall back to "no expiry".
+    let upcoming: { amount: number; expiresAt: Date } | null = null
+    if (activePromo?.type === "points") {
+      try {
+        upcoming = await nextExpiration(db, client.id)
+      } catch (err) {
+        console.warn("[Apple:Pass] nextExpiration failed, rendering without expiry:", err)
+      }
+    }
 
     // Parse wallet config for locations and relevantDate
     const walletConfig = tenantRow?.walletConfig as {
@@ -866,6 +883,10 @@ async function regeneratePass(ctx: {
       },
       points: {
         balance: client.pointsBalance,
+        expiring: upcoming ? upcoming.amount : "",
+        expiresAt: upcoming
+          ? formatExpiry(upcoming.expiresAt, tenantRow?.timezone ?? "America/Lima")
+          : "",
       },
       rewards: {
         pending: pendingRewards,

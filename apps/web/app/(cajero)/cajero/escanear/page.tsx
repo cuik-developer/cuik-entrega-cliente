@@ -57,11 +57,25 @@ type PointsVisitApiResult = {
     pointsBalance: number
     tier?: string | null
   }
-  points: { earned: number; balance: number }
+  points: {
+    earned: number
+    balance: number
+    expiresAt?: string | null
+    nextExpiration?: { amount: number; expiresAt: string } | null
+  }
   bonusApplied?: string | null
 }
 
 type VisitApiResult = StampsVisitApiResult | PointsVisitApiResult
+
+/** "jue 8 oct": the expiry instant is the midnight AFTER the last valid day, so show that day. */
+function formatExpiryLabel(expiresAt: string): string {
+  const lastValid = new Date(new Date(expiresAt).getTime() - 1)
+  return lastValid
+    .toLocaleDateString("es-PE", { weekday: "short", day: "numeric", month: "short" })
+    .replace(/\./g, "")
+    .replace(",", "")
+}
 
 function isPointsResult(result: VisitApiResult): result is PointsVisitApiResult {
   return "points" in result
@@ -851,6 +865,16 @@ function SuccessStepView({
               <div className="text-white/50 text-xs">puntos</div>
             </div>
           </div>
+          {result.points.nextExpiration && (
+            <div className="mt-3 pt-3 border-t border-white/15 text-xs text-white/80">
+              {result.points.nextExpiration.amount === result.points.balance
+                ? "Vencen el "
+                : `${result.points.nextExpiration.amount} puntos vencen el `}
+              <span className="font-semibold">
+                {formatExpiryLabel(result.points.nextExpiration.expiresAt)}
+              </span>
+            </div>
+          )}
         </div>
       ) : (
         <>
