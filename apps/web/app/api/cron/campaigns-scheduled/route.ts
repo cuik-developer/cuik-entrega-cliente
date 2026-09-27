@@ -15,7 +15,11 @@ export async function POST(request: Request) {
     const dueCampaigns = await db
       .select({ id: campaigns.id })
       .from(campaigns)
-      .where(sql`${campaigns.status} = 'scheduled' AND ${campaigns.scheduledAt} <= NOW()`)
+      // scheduled_at is timestamp WITHOUT tz holding UTC wall time: compare against
+      // UTC explicitly so the result never depends on the session TimeZone.
+      .where(
+        sql`${campaigns.status} = 'scheduled' AND ${campaigns.scheduledAt} <= (NOW() AT TIME ZONE 'UTC')`,
+      )
 
     const errors: string[] = []
     let processed = 0
