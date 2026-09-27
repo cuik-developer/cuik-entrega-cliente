@@ -265,7 +265,7 @@ export async function computePlatformMetrics(f: MetricsFilters): Promise<Platfor
           ((SELECT count(*)::int FROM loyalty.rewards r WHERE r.tenant_id = t.id AND r.status = 'redeemed' AND r.redeemed_at IS NOT NULL AND ${inCur("r.redeemed_at")})
            + (SELECT count(*)::int FROM loyalty.points_transactions pt WHERE pt.tenant_id = t.id AND pt.type = 'redeem' AND ${inCur("pt.created_at")})) AS redemptions,
           (SELECT max(v.created_at) FROM loyalty.visits v WHERE v.tenant_id = t.id AND v.source <> 'bonus') AS last_visit_at,
-          (SELECT count(*)::int FROM loyalty.clients c WHERE c.tenant_id = t.id AND c.status <> 'blocked'
+          (SELECT count(*)::int FROM loyalty.clients c WHERE c.tenant_id = t.id AND c.status IN ('active', 'inactive')
              AND c.points_balance >= (SELECT min(rc.points_cost) FROM loyalty.reward_catalog rc WHERE rc.tenant_id = t.id AND rc.active = true)) AS can_redeem
         FROM tenants t
         LEFT JOIN plans p ON p.id = t.plan_id

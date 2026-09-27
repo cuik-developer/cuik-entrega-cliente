@@ -41,7 +41,7 @@ export async function calculateRetentionCohorts(tenantId: string, opts?: { month
         to_char(NOW() AT TIME ZONE ${tzLit}, 'YYYY-MM-01') AS "currentMonth"
       FROM loyalty.clients c
       WHERE c."tenant_id" = ${tenantId}
-        AND c."status" != 'blocked'
+        AND c."status" IN ('active', 'inactive')
         ${cohortFilter}
       GROUP BY ${clientMonth}
       ORDER BY "cohortMonth"
@@ -67,7 +67,7 @@ export async function calculateRetentionCohorts(tenantId: string, opts?: { month
       WHERE c."tenant_id" = ${tenantId}
         AND v."tenant_id" = ${tenantId}
         AND v."source" <> 'bonus'
-        AND c."status" != 'blocked'
+        AND c."status" IN ('active', 'inactive')
         ${cohortFilter}
       GROUP BY ${clientMonth}, ${visitMonth}
     `,

@@ -374,7 +374,7 @@ export async function computeReport(params: {
   if (programType === "points") {
     const res = await db.execute<{ n: number }>(sql`
       SELECT COUNT(*)::int AS n FROM loyalty.clients c
-      WHERE c.tenant_id = ${tenantId} AND c.status <> 'blocked'
+      WHERE c.tenant_id = ${tenantId} AND c.status IN ('active', 'inactive')
         AND c.points_balance >= COALESCE((SELECT MIN(points_cost) FROM loyalty.reward_catalog rc WHERE rc.tenant_id = ${tenantId} AND rc.active = true), 2147483647)`)
     actionable = { label: "Clientes con saldo para canjear", count: Number(res.rows[0]?.n ?? 0) }
   } else {
@@ -540,7 +540,7 @@ export async function computeCumulative(params: {
       (SELECT MAX(v.created_at) FROM loyalty.visits v WHERE v.client_id = c.id AND v.source <> 'bonus' AND ${upTo("v.created_at")}) AS last_visit_at,
       (SELECT COUNT(*)::int FROM loyalty.visits v3 WHERE v3.client_id = c.id AND v3.cycle_number = c.current_cycle) AS cycle_visits
     FROM loyalty.clients c
-    WHERE c.tenant_id = ${tenantId} AND c.status <> 'blocked'
+    WHERE c.tenant_id = ${tenantId} AND c.status IN ('active', 'inactive')
     ORDER BY total_visits DESC, c.name ASC LIMIT 20`)
   const topClients = topRes.rows
     .filter((r) => Number(r.total_visits) > 0)
@@ -571,7 +571,7 @@ export async function computeCumulative(params: {
           ELSE NULL END AS avg_days
       FROM loyalty.visits v WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' GROUP BY v.client_id
     ) s ON s.client_id = c.id
-    WHERE c.tenant_id = ${tenantId} AND c.status <> 'blocked'`)
+    WHERE c.tenant_id = ${tenantId} AND c.status IN ('active', 'inactive')`)
   const tally = tallySegments(
     segRes.rows.map((r) => ({
       createdAt: new Date(r.created_at),

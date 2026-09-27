@@ -39,6 +39,14 @@ const STATUS: Record<string, { label: string; className: string }> = {
     label: "Bloqueado",
     className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
   },
+  archived: {
+    label: "Archivado",
+    className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  },
+  deleted: {
+    label: "Eliminado",
+    className: "bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
+  },
 }
 
 /** Administrative status of a client (active / inactive / blocked). */

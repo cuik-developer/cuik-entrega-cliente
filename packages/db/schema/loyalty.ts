@@ -21,7 +21,15 @@ const loyaltySchema = pgSchema("loyalty")
 
 // --- Enums ---
 
-export const clientStatusEnum = pgEnum("client_status", ["active", "inactive", "blocked"])
+export const clientStatusEnum = pgEnum("client_status", [
+  "active",
+  "inactive",
+  "blocked",
+  /** Hidden everywhere; the QR no longer works; purged 30 days after archived_at. */
+  "archived",
+  /** Personal data wiped; the row stays so visits and points history keep adding up. */
+  "deleted",
+])
 
 export const rewardStatusEnum = pgEnum("reward_status", ["pending", "redeemed", "expired"])
 
@@ -64,6 +72,10 @@ export const clients = loyaltySchema.table(
     pointsBalance: integer("points_balance").default(0).notNull(),
     marketingOptIn: boolean("marketing_opt_in").default(false).notNull(),
     birthday: date("birthday"),
+    /** Set when an admin archives the client; the purge cron anonymizes 30 days later. */
+    archivedAt: timestamp("archived_at"),
+    /** Set by the purge cron once the personal data was wiped (status = deleted). */
+    anonymizedAt: timestamp("anonymized_at"),
     customData: jsonb("custom_data"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
@@ -73,6 +85,9 @@ export const clients = loyaltySchema.table(
     index("clients_tenant_status_idx").on(table.tenantId, table.status),
     index("clients_tenant_tier_idx").on(table.tenantId, table.tier),
     index("clients_points_balance_idx").on(table.tenantId, table.pointsBalance),
+    index("clients_archived_idx")
+      .on(table.tenantId, table.archivedAt)
+      .where(sql`status = 'archived'`),
     index("clients_tenant_birthday_idx").on(table.tenantId, table.birthday),
   ],
 )

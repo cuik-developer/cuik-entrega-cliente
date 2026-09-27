@@ -52,8 +52,16 @@ export type VisitResultCode =
   | "BELOW_MINIMUM_PURCHASE"
   | "AMOUNT_REQUIRED"
   | "LOCATION_NOT_ALLOWED"
+  | "CLIENT_BLOCKED"
+  | "CLIENT_ARCHIVED"
 
-export type RedeemResultCode = "OK" | "NO_PENDING_REWARD" | "CLIENT_NOT_FOUND" | "REWARD_EXPIRED"
+export type RedeemResultCode =
+  | "OK"
+  | "NO_PENDING_REWARD"
+  | "CLIENT_NOT_FOUND"
+  | "REWARD_EXPIRED"
+  | "CLIENT_BLOCKED"
+  | "CLIENT_ARCHIVED"
 
 // --- Result Types ---
 
@@ -110,6 +118,8 @@ export type ClientStatus = {
     /** "YYYY-MM-DD" or null. */
     birthday: string | null
     createdAt: Date
+    /** Set while archived: the purge anonymizes 30 days after this. */
+    archivedAt: Date | null
   }
   segment: string
   stamps: {
@@ -172,6 +182,8 @@ export type PointsRedeemResultCode =
   | "CATALOG_ITEM_INACTIVE"
   | "CLIENT_NOT_FOUND"
   | "NO_ACTIVE_PROMOTION"
+  | "CLIENT_BLOCKED"
+  | "CLIENT_ARCHIVED"
   /** Same client + item redeemed seconds ago: a double click, not a second redemption. */
   | "DUPLICATE_REDEEM"
 

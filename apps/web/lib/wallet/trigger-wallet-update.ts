@@ -40,6 +40,8 @@ export async function triggerWalletUpdate(ctx: {
   totalVisits: number
   pendingRewards: number
   pointsBalance: number
+  /** Archived client: render the pass as void (Apple `voided`, Google INACTIVE). */
+  voided?: boolean
 }): Promise<void> {
   const serialNumber = ctx.qrCode
 

@@ -39,7 +39,7 @@ export async function computeLoyaltyFunnel(
           ${hasRedeemed} AS "has_redeemed"
         FROM loyalty.clients c
         WHERE c."tenant_id" = ${tenantId}
-          AND c."status" <> 'blocked'
+          AND c."status" IN ('active', 'inactive')
       )
       SELECT
         COUNT(*)::int AS "registered",

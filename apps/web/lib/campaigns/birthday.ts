@@ -51,7 +51,7 @@ export async function findBirthdayClients(
     .where(
       and(
         eq(clients.tenantId, tenantId),
-        sql`${clients.status} <> 'blocked'`,
+        sql`${clients.status} IN ('active', 'inactive')`,
         sql`${clients.birthday} IS NOT NULL`,
         sql`to_char(${clients.birthday}, 'MM-DD') = ANY(${`{${mmdd.join(",")}}`}::text[])`,
       ),
@@ -82,7 +82,7 @@ export async function upcomingBirthdays(
     .where(
       and(
         eq(clients.tenantId, tenantId),
-        sql`${clients.status} <> 'blocked'`,
+        sql`${clients.status} IN ('active', 'inactive')`,
         sql`${clients.birthday} IS NOT NULL`,
       ),
     )
@@ -121,7 +121,7 @@ export async function birthdayCoverage(
       withBirthday: sql<number>`COUNT(*) FILTER (WHERE ${clients.birthday} IS NOT NULL)::int`,
     })
     .from(clients)
-    .where(and(eq(clients.tenantId, tenantId), sql`${clients.status} <> 'blocked'`))
+    .where(and(eq(clients.tenantId, tenantId), sql`${clients.status} IN ('active', 'inactive')`))
   return { withBirthday: Number(row?.withBirthday ?? 0), total: Number(row?.total ?? 0) }
 }
 

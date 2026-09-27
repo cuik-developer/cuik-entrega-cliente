@@ -91,7 +91,7 @@ export async function computePointsAnalytics(
     db.execute<{ outstanding: Num; active_clients: Num }>(sql`
         SELECT COALESCE(SUM(points_balance), 0)::int AS outstanding, COUNT(*)::int AS active_clients
         FROM loyalty.clients
-        WHERE tenant_id = ${tenantId} AND status <> 'blocked'
+        WHERE tenant_id = ${tenantId} AND status IN ('active', 'inactive')
       `),
     // Average ticket over visits with a purchase amount
     db.execute<{ avg_ticket: Num; ticket_count: Num }>(sql`
@@ -149,7 +149,7 @@ export async function computePointsAnalytics(
           COUNT(c.id) FILTER (WHERE cat.cheapest IS NULL OR c.points_balance < cat.cheapest)::int AS below_cheapest,
           COUNT(c.id) FILTER (WHERE cat.cheapest IS NOT NULL AND c.points_balance >= cat.cheapest)::int AS can_cheapest,
           COUNT(c.id) FILTER (WHERE cat.most_expensive IS NOT NULL AND c.points_balance >= cat.most_expensive)::int AS can_most_expensive
-        FROM cat LEFT JOIN loyalty.clients c ON c.tenant_id = ${tenantId} AND c.status <> 'blocked'
+        FROM cat LEFT JOIN loyalty.clients c ON c.tenant_id = ${tenantId} AND c.status IN ('active', 'inactive')
         GROUP BY cat.cheapest, cat.most_expensive
       `),
     // Incentives: opt-in bonus (bonus visits) and birthday extra. Rows written
@@ -187,7 +187,7 @@ export async function computePointsAnalytics(
         SELECT COUNT(DISTINCT pt.client_id)::int AS redeemers
         FROM loyalty.points_transactions pt
         JOIN loyalty.clients c ON c.id = pt.client_id
-        WHERE pt.tenant_id = ${tenantId} AND pt.type = 'redeem' AND c.status <> 'blocked'
+        WHERE pt.tenant_id = ${tenantId} AND pt.type = 'redeem' AND c.status IN ('active', 'inactive')
       `),
   ])
 

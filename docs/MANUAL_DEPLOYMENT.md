@@ -943,6 +943,7 @@ La app tiene endpoints cron protegidos por `CRON_SECRET`:
 | `POST /api/cron/campaigns-birthday` | Cada hora | Push de cumpleanos a la hora local configurada por cada comercio |
 | `POST /api/cron/reports` | Cada hora (minuto 10) | Reportes semanal/mensual por correo cuando coincide el dia y la hora local de cada comercio; idempotente por periodo |
 | `POST /api/cron/loyalty-expiration` | Cada hora (minuto 15) | Vence los puntos cuya fecha paso (segun la politica de cada comercio) y, a la hora local configurada, envia el push "tus puntos vencen el ..." |
+| `POST /api/cron/clients-purge` | Una vez al dia (5 AM) | Anonimiza los clientes archivados hace mas de 30 dias (datos personales, notas, etiquetas y pases; las visitas quedan como historial anonimo) |
 
 ```bash
 # Ejemplo con crontab
@@ -952,6 +953,7 @@ La app tiene endpoints cron protegidos por `CRON_SECRET`:
 5 * * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/campaigns-birthday
 10 * * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/reports
 15 * * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/loyalty-expiration
+0 5 * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/clients-purge
 ```
 
 > En Vercel, usar Vercel Cron Jobs en `vercel.json`. En Railway, usar su sistema de cron integrado.

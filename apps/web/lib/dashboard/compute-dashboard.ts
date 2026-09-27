@@ -125,6 +125,7 @@ export async function getTodayItems(params: {
         and(
           eq(clients.tenantId, tenantId),
           eq(clients.totalVisits, 0),
+          sql`${clients.status} IN ('active', 'inactive')`,
           sql`${clients.createdAt} >= NOW() - interval '7 days'`,
         ),
       ),

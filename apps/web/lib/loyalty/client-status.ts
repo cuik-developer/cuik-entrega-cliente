@@ -171,6 +171,7 @@ export async function getClientStatus(params: {
       tier: client.tier,
       birthday: client.birthday,
       createdAt: client.createdAt,
+      archivedAt: client.archivedAt,
     },
     segment,
     stamps: {

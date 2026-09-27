@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  Archive,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -56,6 +57,8 @@ export default function ClientesPage() {
   >("all")
   // "Con premio pendiente" toggle — combinable with the segment chips.
   const [pendingOnly, setPendingOnly] = useState(false)
+  // "Archivados": a separate view (archived clients are hidden from every other list).
+  const [archivedOnly, setArchivedOnly] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null)
 
   // Deep links: /panel/clientes?segment=en_riesgo (Analítica) and
@@ -68,14 +71,18 @@ export default function ClientesPage() {
   }, [])
 
   const fetchClients = useCallback(
-    async (p: number, search: string, segment: string, pending: boolean) => {
+    async (p: number, search: string, segment: string, pending: boolean, archived: boolean) => {
       if (!tenantSlug) return
       setLoading(true)
       try {
         const params = new URLSearchParams({ page: String(p), limit: "20" })
         if (search) params.set("search", search)
-        if (segment !== "all") params.set("segment", segment)
-        if (pending) params.set("pendingReward", "1")
+        if (archived) {
+          params.set("status", "archived")
+        } else {
+          if (segment !== "all") params.set("segment", segment)
+          if (pending) params.set("pendingReward", "1")
+        }
 
         const res = await fetch(`/api/${tenantSlug}/clients?${params}`)
         const json = await res.json()
@@ -95,13 +102,13 @@ export default function ClientesPage() {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(
-      () => fetchClients(page, searchQuery, filter, pendingOnly),
+      () => fetchClients(page, searchQuery, filter, pendingOnly, archivedOnly),
       300,
     )
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [page, searchQuery, filter, pendingOnly, fetchClients])
+  }, [page, searchQuery, filter, pendingOnly, archivedOnly, fetchClients])
 
   const handleExportXlsx = async () => {
     if (!tenantSlug || exporting) return
@@ -144,7 +151,12 @@ export default function ClientesPage() {
         <div>
           <h1 className="text-2xl font-extrabold text-foreground">Clientes</h1>
           <p className="text-sm text-muted-foreground">
-            {total} {pendingOnly ? "con premio pendiente" : "clientes registrados"}
+            {total}{" "}
+            {archivedOnly
+              ? "archivados (se eliminan a los 30 días)"
+              : pendingOnly
+                ? "con premio pendiente"
+                : "clientes registrados"}
           </p>
         </div>
         <div className="flex gap-2">
@@ -221,6 +233,19 @@ export default function ClientesPage() {
           >
             <Gift className="w-3.5 h-3.5" />
             Con premio pendiente
+          </Button>
+          <Button
+            size="sm"
+            variant={archivedOnly ? "default" : "outline"}
+            className={`gap-1.5 ${archivedOnly ? "bg-slate-700 hover:bg-slate-800 text-white border-slate-700" : "text-slate-500"}`}
+            onClick={() => {
+              setArchivedOnly((v) => !v)
+              setPage(1)
+            }}
+            title="Clientes archivados: se eliminan definitivamente a los 30 días"
+          >
+            <Archive className="w-3.5 h-3.5" />
+            Archivados
           </Button>
         </div>
       </div>

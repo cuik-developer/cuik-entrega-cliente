@@ -58,7 +58,7 @@ export async function getAtRiskClients(
       FROM loyalty.clients c
       LEFT JOIN loyalty.visits v ON v.client_id = c.id AND v.tenant_id = c.tenant_id
       WHERE c.tenant_id = ${tenantId}
-        AND c.status != 'blocked'
+        AND c.status IN ('active', 'inactive')
         AND c.total_visits >= 3
       GROUP BY c.id, c.name, c.last_name, c.total_visits, c.created_at
     )
@@ -106,7 +106,7 @@ export async function getAtRiskClientCount(
       FROM loyalty.clients c
       LEFT JOIN loyalty.visits v ON v.client_id = c.id AND v.tenant_id = c.tenant_id
       WHERE c.tenant_id = ${tenantId}
-        AND c.status != 'blocked'
+        AND c.status IN ('active', 'inactive')
         AND c.total_visits >= 3
       GROUP BY c.id, c.total_visits
     )

@@ -8,10 +8,10 @@ import {
   resolveTenant,
   successResponse,
 } from "@/lib/api-utils"
-
 import { getClientStatus } from "@/lib/loyalty"
 import type { SegmentationThresholds } from "@/lib/loyalty/client-segments"
 import { getThresholds } from "@/lib/loyalty/client-segments"
+import { triggerWalletUpdate } from "@/lib/wallet/trigger-wallet-update"
 
 export async function GET(
   request: Request,
@@ -50,7 +50,7 @@ export async function GET(
 
 const patchClientSchema = z
   .object({
-    status: z.enum(["active", "blocked"]).optional(),
+    status: z.enum(["active", "blocked", "archived"]).optional(),
     reason: z.string().trim().max(500).optional(),
     /** "YYYY-MM-DD" to set, null to clear. */
     birthday: z.string().date().nullable().optional(),
@@ -61,7 +61,7 @@ const patchClientSchema = z
 
 /**
  * PATCH /api/[tenant]/clients/[id]
- *   { status: "active" | "blocked", reason? }  — block / unblock (audit note)
+ *   { status: "active" | "blocked" | "archived", reason? }  — block / unblock / archive / restore (audit note)
  *   { birthday: "YYYY-MM-DD" | null }           — set / clear the birthday
  * Admin only. A status change is written to the client's notes with who did
  * it and why, so it shows up in the timeline — no separate audit table.
@@ -94,11 +94,22 @@ export async function PATCH(
     const { status, reason, birthday } = parsed.data
 
     const [current] = await db
-      .select({ id: clients.id, status: clients.status })
+      .select({
+        id: clients.id,
+        status: clients.status,
+        qrCode: clients.qrCode,
+        name: clients.name,
+        lastName: clients.lastName,
+        totalVisits: clients.totalVisits,
+        pointsBalance: clients.pointsBalance,
+      })
       .from(clients)
       .where(and(eq(clients.id, id), eq(clients.tenantId, tenant.id)))
       .limit(1)
     if (!current) return errorResponse("Client not found", 404)
+    if (current.status === "deleted") {
+      return errorResponse("Este cliente fue eliminado y ya no se puede modificar", 409)
+    }
 
     if (birthday !== undefined) {
       await db.update(clients).set({ birthday }).where(eq(clients.id, id))
@@ -111,9 +122,29 @@ export async function PATCH(
       return successResponse({ id, status, changed: false })
     }
 
+    const wasArchived = current.status === "archived"
+    const action =
+      status === "archived"
+        ? "Cliente archivado (se eliminará definitivamente en 30 días)"
+        : wasArchived
+          ? "Cliente restaurado"
+          : status === "blocked"
+            ? "Cliente bloqueado"
+            : "Cliente desbloqueado"
+
     await db.transaction(async (tx) => {
-      await tx.update(clients).set({ status }).where(eq(clients.id, id))
-      const action = status === "blocked" ? "Cliente bloqueado" : "Cliente desbloqueado"
+      await tx
+        .update(clients)
+        .set({
+          status,
+          // Archiving starts the 30-day clock; leaving the archived state stops it.
+          ...(status === "archived"
+            ? { archivedAt: new Date() }
+            : wasArchived
+              ? { archivedAt: null }
+              : {}),
+        })
+        .where(eq(clients.id, id))
       await tx.insert(clientNotes).values({
         clientId: id,
         tenantId: tenant.id,
@@ -121,6 +152,23 @@ export async function PATCH(
         content: reason ? `${action}. Motivo: ${reason}` : action,
       })
     })
+
+    // Archiving voids the pass on the phone; restoring brings it back. Fire-and-forget.
+    if ((status === "archived" || wasArchived) && current.qrCode) {
+      triggerWalletUpdate({
+        qrCode: current.qrCode,
+        clientId: id,
+        clientName: `${current.name}${current.lastName ? ` ${current.lastName}` : ""}`,
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        stampsInCycle: 0,
+        maxVisits: 0,
+        totalVisits: current.totalVisits,
+        pendingRewards: 0,
+        pointsBalance: current.pointsBalance,
+        voided: status === "archived",
+      }).catch((err) => console.error("[PATCH client] wallet update failed:", err))
+    }
 
     return successResponse({ id, status, changed: true })
   } catch (error) {

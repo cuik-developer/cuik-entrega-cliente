@@ -18,7 +18,7 @@ export type RedeemRewardInput = z.infer<typeof redeemRewardSchema>
 export const clientSearchSchema = z.object({
   search: z.string().trim().optional(),
   qr: z.string().trim().optional(),
-  status: z.enum(["active", "inactive", "blocked"]).optional(),
+  status: z.enum(["active", "inactive", "blocked", "archived", "deleted"]).optional(),
   segment: z
     .enum(["nuevo", "frecuente", "esporadico", "regular", "one_time", "en_riesgo", "inactivo"])
     .optional(),

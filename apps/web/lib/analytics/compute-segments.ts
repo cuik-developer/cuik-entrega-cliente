@@ -1,4 +1,4 @@
-import { and, clients, db, eq, ne } from "@cuik/db"
+import { and, clients, db, eq, inArray } from "@cuik/db"
 import type { SegmentsData } from "@cuik/shared/types/analytics"
 import type { ClientSegment, SegmentationThresholds } from "@/lib/loyalty/client-segments"
 import { computeClientSegment } from "@/lib/loyalty/client-segments"
@@ -64,7 +64,7 @@ export async function computeSegmentDistribution(
     })
     .from(clients)
     .leftJoin(vs, eq(vs.clientId, clients.id))
-    .where(and(eq(clients.tenantId, tenantId), ne(clients.status, "blocked")))
+    .where(and(eq(clients.tenantId, tenantId), inArray(clients.status, ["active", "inactive"])))
 
   return tallySegments(rows, thresholds)
 }

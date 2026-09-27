@@ -83,6 +83,10 @@ Cubre los despliegues `e3b3561` y `442a3ba` (programa de puntos, panel Premios, 
 | 21 | Campanas > Programar envio | La hora elegida se mantiene tal cual (04:17 muestra 04:17), debajo dice "Se enviara el ... (hora del comercio)", no deja elegir fechas pasadas, y la campana sale a esa hora local | |
 | 21b | Campanas > lapiz en un borrador o programada | Abre el formulario con los datos cargados (nombre, tipo, mensaje, segmento, fecha); al guardar se actualiza; quitar la fecha la vuelve borrador; una enviada no tiene lapiz | |
 | 21c | Campanas > tacho en un borrador o programada | Pide confirmacion y la elimina; una enviada no tiene tacho | |
+| 22 | Ficha de cliente > Archivar | Pide confirmacion, el cliente desaparece de la lista/campanas/metricas, aparece en el filtro "Archivados" con la fecha de eliminacion; el cajero al escanear su QR ve "Cliente archivado"; el pase queda anulado (Apple gris/tachado, Google inactivo) | |
+| 22b | Ficha de cliente archivado > Restaurar | Vuelve a activo, reaparece en la lista y el pase vuelve a funcionar | |
+| 22c | Bloquear cliente | Ahora si impide registrar visitas y canjear (antes solo lo sacaba de campanas) | |
+| 22d | Cron `clients-purge` | Un cliente archivado hace mas de 30 dias queda como "Cliente eliminado" sin datos personales; sus visitas siguen contando en analitica | |
 
 ## Como reportar
 

@@ -12,7 +12,7 @@ export interface TenantClientRow {
   lastName: string | null
   dni: string | null
   phone: string | null
-  status: "active" | "inactive" | "blocked"
+  status: "active" | "inactive" | "blocked" | "archived" | "deleted"
 }
 
 export interface ImportRow {
@@ -132,7 +132,7 @@ export function matchRecipients(rows: ImportRow[], clients: TenantClientRow[]): 
       rejected.push({ row: r.row, dni: r.dni, phone: r.phone, reason: "not_found" })
       continue
     }
-    if (client.status === "blocked") {
+    if (client.status !== "active" && client.status !== "inactive") {
       rejected.push({ row: r.row, dni: r.dni, phone: r.phone, reason: "blocked" })
       continue
     }

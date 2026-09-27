@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowLeft, Ban, CircleCheck, Coins, Loader2, Star } from "lucide-react"
+import { Archive, ArrowLeft, Ban, CircleCheck, Coins, Loader2, Star } from "lucide-react"
 import { useParams, useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useTenant } from "@/hooks/use-tenant"
 import { formatDateTime } from "@/lib/format-date"
 import { expiryPhrase } from "@/lib/loyalty/expiry-label"
+import { purgeDateFor } from "@/lib/loyalty/archive"
 
 import { ClientNotes } from "../_components/client-notes"
 import { ClientPointsHistory } from "../_components/client-points-history"
@@ -33,6 +34,7 @@ type ClientRow = {
   createdAt: string
   qrCode: string | null
   birthday: string | null
+  archivedAt: string | null
 }
 
 type ClientDetail = {
@@ -65,7 +67,7 @@ export default function ClientDetailPage() {
 
   const [data, setData] = useState<ClientDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [statusDialog, setStatusDialog] = useState<"blocked" | "active" | null>(null)
+  const [statusDialog, setStatusDialog] = useState<"blocked" | "active" | "archived" | null>(null)
   const [statusReason, setStatusReason] = useState("")
   const [statusSaving, setStatusSaving] = useState(false)
   // Bumps after a status change so the Actividad tab reloads and shows the audit note.
@@ -101,7 +103,15 @@ export default function ClientDetailPage() {
       })
       const json = await res.json()
       if (!json.success) throw new Error(json.error ?? "error")
-      toast.success(statusDialog === "blocked" ? "Cliente bloqueado" : "Cliente desbloqueado")
+      toast.success(
+        statusDialog === "blocked"
+          ? "Cliente bloqueado"
+          : statusDialog === "archived"
+            ? "Cliente archivado"
+            : data?.client.status === "archived"
+              ? "Cliente restaurado"
+              : "Cliente desbloqueado",
+      )
       setStatusDialog(null)
       setStatusReason("")
       setTimelineKey((k) => k + 1)
@@ -137,6 +147,8 @@ export default function ClientDetailPage() {
 
   const { client, stamps, pendingRewards, segment } = data
   const isBlocked = client.status === "blocked"
+  const isArchived = client.status === "archived"
+  const isDeleted = client.status === "deleted"
   const isPoints = data.promotion?.type === "points"
   const stampsMax = stamps.max ?? 0
   const stampsCurrent = stamps.current ?? 0
@@ -178,21 +190,65 @@ export default function ClientDetailPage() {
           </p>
           <ClientBadges segment={segment} status={client.status} />
         </div>
-        <div className="ml-auto shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            className={`gap-1.5 ${isBlocked ? "" : "text-red-600 border-red-200 hover:bg-red-50"}`}
-            onClick={() => setStatusDialog(isBlocked ? "active" : "blocked")}
-          >
-            {isBlocked ? <CircleCheck className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
-            {isBlocked ? "Desbloquear" : "Bloquear"}
-          </Button>
+        <div className="ml-auto shrink-0 flex flex-wrap gap-2 justify-end">
+          {isArchived ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setStatusDialog("active")}
+            >
+              <CircleCheck className="w-4 h-4" />
+              Restaurar
+            </Button>
+          ) : isDeleted ? null : (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className={`gap-1.5 ${isBlocked ? "" : "text-red-600 border-red-200 hover:bg-red-50"}`}
+                onClick={() => setStatusDialog(isBlocked ? "active" : "blocked")}
+              >
+                {isBlocked ? <CircleCheck className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
+                {isBlocked ? "Desbloquear" : "Bloquear"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-slate-600"
+                onClick={() => setStatusDialog("archived")}
+                title="Se elimina definitivamente a los 30 días"
+              >
+                <Archive className="w-4 h-4" />
+                Archivar
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
+      {isArchived && client.archivedAt && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-800 flex items-center gap-2 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-300">
+          <Archive className="w-4 h-4 shrink-0" />
+          <span>
+            Archivado el {formatDateTime(client.archivedAt, timezone)}. Sus datos personales se
+            eliminan definitivamente el{" "}
+            <strong>{formatDateTime(purgeDateFor(client.archivedAt), timezone)}</strong>. Hasta
+            entonces puedes restaurarlo.
+          </span>
+        </div>
+      )}
+
+      {isDeleted && (
+        <div className="bg-slate-100 border border-slate-200 rounded-xl p-3 text-sm text-slate-600 dark:bg-slate-800/40 dark:border-slate-700 dark:text-slate-300">
+          Cliente eliminado: sus datos personales fueron borrados. Las visitas y puntos quedan como
+          historial anónimo.
+        </div>
+      )}
+
       <ClientStatusDialog
         target={statusDialog}
+        currentStatus={client.status}
         reason={statusReason}
         saving={statusSaving}
         onReasonChange={setStatusReason}

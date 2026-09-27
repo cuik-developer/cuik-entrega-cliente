@@ -182,7 +182,7 @@ export async function runPointsExpirationWarning(params: {
         sql`${pointsTransactions.expiresAt} IS NOT NULL`,
         gt(pointsTransactions.expiresAt, now),
         lte(pointsTransactions.expiresAt, windowEnd),
-        sql`${clients.status} <> 'blocked'`,
+        sql`${clients.status} IN ('active', 'inactive')`,
       ),
     )
   if (lots.length === 0) return { status: "skipped", reason: "nobody" }

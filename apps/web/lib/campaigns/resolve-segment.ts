@@ -1,4 +1,4 @@
-import { and, clients, db, eq, ne, sql } from "@cuik/db"
+import { and, clients, db, eq, inArray, sql } from "@cuik/db"
 import type { SegmentFilter } from "@cuik/shared/types/campaign"
 import type { SegmentationThresholds } from "@/lib/loyalty/client-segments"
 import { DEFAULT_THRESHOLDS } from "@/lib/loyalty/client-segments"
@@ -55,7 +55,7 @@ function buildWhereConditions(
 ) {
   const conditions: ReturnType<typeof eq>[] = [
     eq(clients.tenantId, tenantId),
-    ne(clients.status, "blocked"),
+    inArray(clients.status, ["active", "inactive"]),
   ]
 
   // Expand preset into conditions
@@ -114,7 +114,7 @@ function buildWhereConditions(
               FROM loyalty.clients c
               JOIN loyalty.visits v ON v.client_id = c.id AND v.tenant_id = c.tenant_id
               WHERE c.tenant_id = ${tenantId}
-                AND c.status != 'blocked'
+                AND c.status IN ('active', 'inactive')
                 AND c.total_visits >= 3
               GROUP BY c.id
               HAVING COUNT(v.id) >= 2
@@ -137,7 +137,7 @@ function buildWhereConditions(
               FROM loyalty.clients c
               JOIN loyalty.visits v ON v.client_id = c.id AND v.tenant_id = c.tenant_id
               WHERE c.tenant_id = ${tenantId}
-                AND c.status != 'blocked'
+                AND c.status IN ('active', 'inactive')
                 AND c.total_visits >= 3
               GROUP BY c.id
               HAVING COUNT(v.id) >= 2
@@ -172,7 +172,7 @@ function buildWhereConditions(
               FROM loyalty.clients c
               JOIN loyalty.visits v ON v.client_id = c.id AND v.tenant_id = c.tenant_id
               WHERE c.tenant_id = ${tenantId}
-                AND c.status != 'blocked'
+                AND c.status IN ('active', 'inactive')
                 AND c.total_visits >= 3
               GROUP BY c.id
               HAVING COUNT(v.id) >= 2

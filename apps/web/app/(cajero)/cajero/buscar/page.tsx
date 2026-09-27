@@ -145,6 +145,10 @@ function resolveVisitMessage(
       return "No hay promocion activa en este comercio"
     case "CLIENT_NOT_FOUND":
       return "Cliente no encontrado"
+    case "CLIENT_BLOCKED":
+      return "Cliente bloqueado: no puede registrar visitas"
+    case "CLIENT_ARCHIVED":
+      return "Cliente archivado: su pase ya no es válido"
     case "AMOUNT_REQUIRED":
       return "El monto de compra es obligatorio"
     case "BELOW_MINIMUM_PURCHASE":

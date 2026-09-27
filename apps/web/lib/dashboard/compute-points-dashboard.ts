@@ -111,7 +111,7 @@ export async function getPointsDashboardState(
         COALESCE(SUM(c.points_balance), 0)::int AS in_circulation,
         COUNT(c.id) FILTER (WHERE cat.cheapest IS NOT NULL AND c.points_balance >= cat.cheapest)::int AS can_redeem,
         cat.cheapest
-      FROM cat LEFT JOIN loyalty.clients c ON c.tenant_id = ${tenantId} AND c.status <> 'blocked'
+      FROM cat LEFT JOIN loyalty.clients c ON c.tenant_id = ${tenantId} AND c.status IN ('active', 'inactive')
       GROUP BY cat.cheapest`),
     db.execute<{ points: number | string | null; clients: number | string | null }>(sql`
       SELECT COALESCE(SUM(pt.remaining), 0)::int AS points, COUNT(DISTINCT pt.client_id)::int AS clients

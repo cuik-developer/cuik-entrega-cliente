@@ -82,6 +82,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
 
     if (status) {
       conditions.push(eq(clients.status, status))
+    } else {
+      // Archived clients live behind their own filter; anonymized ones never show.
+      conditions.push(sql`${clients.status} IN ('active', 'inactive', 'blocked')`)
     }
 
     // Visit aggregates come from a LEFT JOINed subquery, never from a correlated
@@ -102,6 +105,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       email: clients.email,
       qrCode: clients.qrCode,
       status: clients.status,
+      archivedAt: clients.archivedAt,
       totalVisits: clients.totalVisits,
       currentCycle: clients.currentCycle,
       tier: clients.tier,
@@ -119,7 +123,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       phone: string | null
       email: string | null
       qrCode: string | null
-      status: "active" | "inactive" | "blocked"
+      status: "active" | "inactive" | "blocked" | "archived" | "deleted"
+      archivedAt: Date | null
       totalVisits: number
       currentCycle: number
       tier: string | null

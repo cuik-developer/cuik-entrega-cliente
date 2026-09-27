@@ -119,6 +119,12 @@ async function fetchBatch(
   lastId: string | null,
 ): Promise<ClientRow[]> {
   const conditions: ReturnType<typeof eq>[] = [eq(clients.tenantId, tenantId)]
+  if (!filters?.status) {
+    // Never export archived / anonymized clients by default.
+    conditions.push(
+      sql`${clients.status} IN ('active', 'inactive', 'blocked')` as ReturnType<typeof eq>,
+    )
+  }
 
   if (filters?.status) {
     conditions.push(eq(clients.status, filters.status))
