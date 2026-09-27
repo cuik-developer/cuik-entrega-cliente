@@ -78,13 +78,14 @@ export async function expireDuePoints(params: {
         }
         // Never below zero: legacy balances may not be fully tracked in lots.
         const newBalance = Math.max(0, client.pointsBalance - total)
+        const removed = client.pointsBalance - newBalance
         await tx.insert(pointsTransactions).values({
           clientId: client.id,
           tenantId: params.tenantId,
-          amount: -(client.pointsBalance - newBalance),
+          amount: -removed,
           type: "expire",
-          description: `Vencieron ${total} puntos`,
-          metadata: { lotIds: lots.map((l) => l.id), balanceAfter: newBalance },
+          description: `Vencieron ${removed} puntos`,
+          metadata: { lotIds: lots.map((l) => l.id), lotsTotal: total, balanceAfter: newBalance },
         })
         await tx.update(clients).set({ pointsBalance: newBalance }).where(eq(clients.id, client.id))
 
@@ -94,7 +95,7 @@ export async function expireDuePoints(params: {
           clientName: `${client.name}${client.lastName ? ` ${client.lastName}` : ""}`,
           totalVisits: client.totalVisits,
           pointsBalance: newBalance,
-          expired: total,
+          expired: removed,
         }
       })
 

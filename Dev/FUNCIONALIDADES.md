@@ -451,11 +451,13 @@ Configuracion:
 - `points.dayMultipliers`: `{ dayOfWeek, hourStart, hourEnd, multiplier }` — primer match gana
 - `points.birthdayMultiplier`: stack multiplicativo sobre day multiplier
 
+- `points.pointsExpiration`: politica de vencimiento (`never` | `rolling` X dias por compra | `weekly` dia fijo | `monthly` ordinal + dia | `interval` cada X dias desde una fecha). El corte es siempre el final del dia local; lo ganado el dia de corte pasa al periodo siguiente.
+
 **Flujo**:
-- Cada visita genera un `points_transactions` de tipo `earn`.
-- `clients.pointsBalance` acumula.
-- Canjes: cliente elige item del `rewardCatalog` → `points_transactions` de tipo `redeem` que decrementa balance.
-- Expiracion de puntos (futuro): tipo `expire`.
+- Cada visita genera un `points_transactions` de tipo `earn` que es un **lote**: `remaining` (lo que queda) y `expires_at` (segun la politica; null = no vence).
+- `clients.pointsBalance` acumula y es igual a la suma de los lotes abiertos.
+- Canjes: cliente elige item del `rewardCatalog` → `points_transactions` de tipo `redeem`; consume primero los lotes que vencen antes (`metadata.lots`).
+- Vencimiento: el cron `loyalty-expiration` drena los lotes con `expires_at <= now` (fila `expire`, saldo, refresh del pase). Al cambiar la politica se re-fechan los lotes abiertos desde hoy (nunca retroactivo). Aviso previo por push configurable por el comercio en Panel > Campanas (`tenants.automations.pointsExpiry`).
 
 ### 7.3 Segmentacion de clientes
 
@@ -676,6 +678,7 @@ Todos requieren header `x-cron-secret: ${CRON_SECRET}`. Configuracion en proveed
 | `POST /api/cron/campaigns-scheduled` | cada 5 min | Ejecuta campaigns programadas con `scheduledAt <= NOW()` y status `scheduled` |
 | `POST /api/cron/campaigns-birthday` | cada hora | Push de cumpleanos a la hora local configurada por tenant |
 | `POST /api/cron/reports` | cada hora | Reportes semanal/mensual por correo cuando coincide el dia y la hora local del tenant; idempotente por periodo (`?force=1` ignora dia/hora) |
+| `POST /api/cron/loyalty-expiration` | cada hora | Vence puntos segun la politica de cada tenant y envia el push "puntos por vencer" a la hora local configurada (`?force=1` ignora la hora) |
 
 ---
 

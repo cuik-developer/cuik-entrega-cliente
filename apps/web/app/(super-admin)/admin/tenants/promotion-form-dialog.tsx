@@ -254,7 +254,7 @@ const DEFAULT_EXPIRATION_FORM: ExpirationFormValues = {
   expAnchor: null,
 }
 
-/** Read `points.pointsExpiration` / `stamps.stampsExpiration` (+ warning) into form values. */
+/** Read `points.pointsExpiration` / `stamps.stampsExpiration` into form values. */
 function extractExpirationValues(config: unknown, type: "stamps" | "points"): ExpirationFormValues {
   const out = { ...DEFAULT_EXPIRATION_FORM }
   if (!config || typeof config !== "object") return out

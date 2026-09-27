@@ -13,6 +13,7 @@ import {
 import { pointsPromotionConfigSchema, stampsPromotionConfigSchema } from "@cuik/shared/validators"
 import type { SegmentationThresholds } from "./client-segments"
 import { computeClientSegment } from "./client-segments"
+import { nextExpiration } from "./points-lots"
 import { computeTier, getNextTier } from "./rules-engine"
 import type { ClientStatus } from "./types"
 
@@ -33,11 +34,14 @@ export async function getClientStatus(params: {
   const client = clientRows[0]
   if (!client) return null
 
-  // 2. Get active promotion (any type)
+  // 2. Get active promotion. A tenant can have a stamps and a points promotion
+  // active at once (the default stamps one + a points one): prefer points, the
+  // same choice register-client makes, so the card and the till agree.
   const promoRows = await db
     .select()
     .from(promotions)
     .where(and(eq(promotions.tenantId, tenantId), eq(promotions.active, true)))
+    .orderBy(sql`CASE WHEN ${promotions.type} = 'points' THEN 0 ELSE 1 END`, promotions.createdAt)
     .limit(1)
 
   const promotion = promoRows[0]
@@ -99,22 +103,26 @@ export async function getClientStatus(params: {
   const stampsMax = !isPoints ? (promotion?.maxVisits ?? null) : null
 
   // 9. For points promotions, count available catalog items
-  let pointsData: { balance: number; availableCatalogItems?: number } | undefined
+  let pointsData: ClientStatus["points"]
   if (isPoints) {
-    const availableItems = await db
-      .select({ cnt: count() })
-      .from(rewardCatalog)
-      .where(
-        and(
-          eq(rewardCatalog.tenantId, tenantId),
-          eq(rewardCatalog.active, true),
-          sql`${rewardCatalog.pointsCost} <= ${client.pointsBalance}`,
+    const [availableItems, upcoming] = await Promise.all([
+      db
+        .select({ cnt: count() })
+        .from(rewardCatalog)
+        .where(
+          and(
+            eq(rewardCatalog.tenantId, tenantId),
+            eq(rewardCatalog.active, true),
+            sql`${rewardCatalog.pointsCost} <= ${client.pointsBalance}`,
+          ),
         ),
-      )
+      nextExpiration(db, client.id),
+    ])
 
     pointsData = {
       balance: client.pointsBalance,
       availableCatalogItems: availableItems[0]?.cnt ?? 0,
+      nextExpiration: upcoming,
     }
   }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { createPromotionSchema } from "./promotion-schema"
+import { createPromotionSchema, expirationPolicySchema } from "./promotion-schema"
 
 describe("createPromotionSchema", () => {
   it("keeps a points config as points (regression: union used to collapse it into stamps)", () => {
@@ -51,5 +51,40 @@ describe("createPromotionSchema", () => {
     })
     expect(res.success).toBe(false)
     if (!res.success) expect(res.error.issues[0].path[0]).toBe("config")
+  })
+})
+
+describe("expirationPolicySchema", () => {
+  it("reads the legacy {type, value} shape as never", () => {
+    expect(expirationPolicySchema.parse({ type: "months", value: 12 })).toEqual({ mode: "never" })
+  })
+  it("accepts every mode with its parameters", () => {
+    expect(expirationPolicySchema.parse({ mode: "rolling", days: 7 })).toEqual({
+      mode: "rolling",
+      days: 7,
+    })
+    expect(expirationPolicySchema.parse({ mode: "weekly", weekday: 4 })).toEqual({
+      mode: "weekly",
+      weekday: 4,
+    })
+    expect(expirationPolicySchema.parse({ mode: "monthly", weekday: 4, ordinal: "last" })).toEqual({
+      mode: "monthly",
+      weekday: 4,
+      ordinal: "last",
+    })
+    expect(
+      expirationPolicySchema.parse({ mode: "interval", days: 10, anchor: "2026-09-21" }),
+    ).toEqual({ mode: "interval", days: 10, anchor: "2026-09-21" })
+  })
+  it("rejects a rolling policy without days and a bad anchor", () => {
+    expect(expirationPolicySchema.safeParse({ mode: "rolling" }).success).toBe(false)
+    expect(
+      expirationPolicySchema.safeParse({ mode: "interval", days: 7, anchor: "21/09/2026" }).success,
+    ).toBe(false)
+  })
+  it("defaults the points config to never", () => {
+    const parsed = createPromotionSchema.parse({ type: "points", rewardValue: "x" })
+    const cfg = parsed.config as { points: { pointsExpiration: { mode: string } } }
+    expect(cfg.points.pointsExpiration).toEqual({ mode: "never" })
   })
 })

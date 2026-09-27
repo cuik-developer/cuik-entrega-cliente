@@ -42,7 +42,7 @@ Tenants → Promoción → tipo **Puntos**. Campos: puntos por sol, redondeo (fl
 | `points.roundingMethod` | floor | cómo redondear el resultado |
 | `points.minimumPurchaseForPoints` | null | debajo de este monto no suma |
 | `points.maxVisitsPerDay` | 1 | tope de registros por día |
-| `points.pointsExpiration` | never | **no hace nada** (nadie lo lee) |
+| `points.pointsExpiration` | never | politica de vencimiento (implementada sep-2026: lotes + cron `loyalty-expiration`) |
 | `accumulation.pointsMultipliers[]` | [] | multiplicador por día/hora (sin UI para cargarlo) |
 | `accumulation.birthdayMultiplier` | 1 | multiplicador en el cumpleaños (**nunca se aplica**, ver §2) |
 | `accumulation.bonusPointsOnRegistration` | 0 | **no hace nada**; el bono real sale de la configuración de registro (bono de marketing) |
@@ -120,7 +120,7 @@ Además, el **seed no tiene ningún tenant de puntos**: los dos son de sellos. P
 
 1. **Los canjes de puntos escriben en `rewards`** como si fueran premios de sellos → inflan "Premios canjeados" y "Tasa de canje" en Analítica y aparecen dos veces en el timeline ("Ganó un premio" y "Canjeó su premio" en el mismo instante).
 2. **Cada guardado de la promoción borra** multiplicadores, cumpleaños y expiración (el formulario los resetea a vacío). Como no hay UI para cargarlos, hoy no se nota, pero es una trampa.
-3. **`pointsTransactions` es de solo escritura**: nadie la lee. No hay historial de puntos en la ficha, no hay ajuste manual ("+50 por compensación"), no hay vencimiento. La expiración configurable es decorativa.
+3. ~~**`pointsTransactions` es de solo escritura**~~ (resuelto sep-2026: historial en la ficha, vencimiento por lotes y cron). Sigue pendiente el ajuste manual ("+50 por compensación").
 4. **Escanear no permite canjear**; solo Buscar. Y el escáner rechaza QRs que no empiecen con `cuik:` o `MV_` (prefijo hardcodeado de Mascota Veloz): los QR `CC_…` del seed son "QR no válido".
 5. **Vocabulario de sellos en pantallas de puntos**: historial del cajero "Sello 8 (ciclo 1)", timeline "Visita · sello 8 (ciclo 1)", bienvenida "Acumula sellos", variables de campaña de sellos ofrecidas a tenants de puntos.
 6. **Analítica sin métricas de puntos**: no hay puntos emitidos, canjeados, saldo total en circulación (pasivo del comercio), ni ticket promedio aunque el monto es obligatorio. El export oculta "Monto" si no hay mínimo configurado.

@@ -79,7 +79,7 @@ Una lista corta de cosas que piden una accion, cada una con un link a la pantall
 
 ### Si tu programa es de puntos
 
-Las tarjetas cambian: **Puntos otorgados** y **Puntos canjeados** en el periodo (con el porcentaje de cambio contra el periodo anterior), **Puntos vigentes** (la suma de los saldos de tus clientes: lo que hoy "debes" en premios) y **Ticket promedio** (monto promedio por compra registrada). Debajo del grafico de visitas aparecen:
+El Dashboard tambien cambia: KPIs de hoy (puntos otorgados, canjeados, clientes que sumaron, canjes), el estado del programa (puntos en circulacion, quienes ya pueden canjear, puntos por vencer en 7 dias, vencidos este mes) y "Para hoy" avisa si hay puntos por vencer o si el aviso automatico esta apagado. En Analitica las tarjetas cambian: **Puntos otorgados** y **Puntos canjeados** en el periodo (con el porcentaje de cambio contra el periodo anterior), **Puntos vigentes** (la suma de los saldos de tus clientes: lo que hoy "debes" en premios) y **Ticket promedio** (monto promedio por compra registrada). Debajo del grafico de visitas aparecen:
 
 - **Puntos por dia / semana / mes**: otorgados contra canjeados. Si las barras de canje no acompanan, tus clientes acumulan y no cobran: es momento de una campana.
 - **Premios mas canjeados**: cuales se llevan, cuantos puntos gastaron y cuando fue el ultimo canje. Lo que nadie canjea conviene revisarlo o quitarlo.

@@ -135,6 +135,8 @@ export type ClientStatus = {
   points?: {
     balance: number
     availableCatalogItems?: number
+    /** Soonest-expiring open lot(s): how many points and when. Null = nothing expires. */
+    nextExpiration?: { amount: number; expiresAt: Date } | null
   }
 }
 

@@ -15,6 +15,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useTenant } from "@/hooks/use-tenant"
+import { expiryPhrase } from "@/lib/loyalty/expiry-label"
 
 type LocationOption = {
   id: string
@@ -40,7 +41,11 @@ type ClientDetail = {
   stamps: { current: number | null; max: number | null }
   pendingRewards: number
   promotion: { id: string; type: string; rewardValue: string | null } | null
-  points?: { balance: number; availableCatalogItems?: number }
+  points?: {
+    balance: number
+    availableCatalogItems?: number
+    nextExpiration?: { amount: number; expiresAt: string } | null
+  }
 }
 
 type CatalogItem = {
@@ -129,17 +134,8 @@ function resolveVisitMessage(
           nextExpiration?: { amount: number; expiresAt: string } | null
         }
         const base = `Visita registrada! +${pts.earned} puntos (Balance: ${pts.balance})`
-        if (!pts.nextExpiration) return base
-        // The instant is the midnight after the last valid day: show that day.
-        const day = new Date(new Date(pts.nextExpiration.expiresAt).getTime() - 1)
-          .toLocaleDateString("es-PE", { weekday: "short", day: "numeric", month: "short" })
-          .replace(/\./g, "")
-          .replace(",", "")
-        const who =
-          pts.nextExpiration.amount === pts.balance
-            ? "Vencen"
-            : `${pts.nextExpiration.amount} puntos vencen`
-        return `${base} · ${who} el ${day}`
+        const phrase = expiryPhrase(pts.nextExpiration, pts.balance)
+        return phrase ? `${base} · ${phrase}` : base
       }
       return "Visita registrada!"
     }
@@ -648,6 +644,11 @@ function ClientDetailView({
                 <Coins className="w-3 h-3" /> Puntos
               </div>
               <div className="font-bold text-xl">{selected.points.balance}</div>
+              {expiryPhrase(selected.points.nextExpiration, selected.points.balance) && (
+                <div className="text-white/70 text-[11px] mt-0.5">
+                  {expiryPhrase(selected.points.nextExpiration, selected.points.balance)}
+                </div>
+              )}
             </div>
             <div className="text-right">
               <div className="text-white/60 text-xs">Premios disp.</div>

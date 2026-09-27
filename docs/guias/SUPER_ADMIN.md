@@ -259,6 +259,7 @@ Gestion de las promociones del comercio. Cuik soporta dos tipos de promocion: **
      - Puntos por sol gastado (ej: 1 punto = S/1).
      - Metodo de redondeo: Piso, Normal, Techo.
      - Compra minima para acumular puntos (opcional).
+     - Vencimiento de puntos: no vencen / cada compra vence a los X dias / dia fijo de la semana / dia fijo del mes / cada X dias. Al guardar, los puntos ya acumulados reciben fecha desde hoy (nadie pierde puntos el dia de la activacion). El aviso por push lo configura el comercio en Panel > Campanas.
    - **Estado activo**: Toggle on/off.
 3. Guardar.
 

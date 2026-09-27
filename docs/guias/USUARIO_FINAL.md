@@ -138,6 +138,8 @@ Si el comercio usa puntos, podes ver el **catalogo de premios** disponibles en l
 
 Para canjear: le decis al cajero que item queres y el lo procesa desde su pantalla, descontando los puntos de tu balance.
 
+Algunos comercios ponen fecha de vencimiento a los puntos (por ejemplo, "vencen cada jueves" o "duran 30 dias"). Si es el caso, tu pase muestra cuando vencen y podes recibir un aviso unos dias antes. Al canjear se usan primero los puntos que vencen antes.
+
 ![Catalogo de premios mostrando items con su costo en puntos](../screenshots/user-02-premios.png)
 
 ---

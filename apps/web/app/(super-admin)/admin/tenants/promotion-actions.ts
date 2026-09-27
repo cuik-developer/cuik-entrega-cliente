@@ -87,6 +87,25 @@ export async function createPromotion(
       })
       .returning({ id: promotions.id })
 
+    // A new points promotion born with an expiration policy: date the tenant's
+    // existing open lots too, otherwise points earned before it would never expire.
+    if (parsed.data.type === "points") {
+      const policy = pointsPromotionConfigSchema.parse(parsed.data.config ?? {}).points
+        .pointsExpiration
+      if (policy.mode !== "never") {
+        const [tz] = await db
+          .select({ timezone: tenants.timezone })
+          .from(tenants)
+          .where(eq(tenants.id, tenantId))
+          .limit(1)
+        await restampOpenLots(db, {
+          tenantId,
+          policy,
+          timezone: tz?.timezone ?? "America/Lima",
+        })
+      }
+    }
+
     // Auto-create a draft pass design linked to this promotion
     try {
       const [tenant] = await db
@@ -309,30 +328,36 @@ export async function updatePromotion(
     if (parsed.data.active !== undefined) updateData.active = parsed.data.active
     if (parsed.data.config) updateData.config = mergedConfig
 
-    await db.update(promotions).set(updateData).where(eq(promotions.id, promotionId))
-
     // Points expiration policy changed: re-stamp the tenant's open lots so the
-    // new rule applies from today (never retroactively).
-    if (isPoints && parsed.data.config) {
-      const before = pointsPromotionConfigSchema.parse(existing.config ?? {}).points
-        .pointsExpiration
-      const after = pointsPromotionConfigSchema.parse(mergedConfig ?? {}).points.pointsExpiration
-      if (JSON.stringify(before) !== JSON.stringify(after)) {
-        const [tenant] = await db
+    // new rule applies from today (never retroactively). Same transaction as
+    // the promotion update: either both land or neither.
+    const before = isPoints
+      ? pointsPromotionConfigSchema.parse(existing.config ?? {}).points.pointsExpiration
+      : null
+    const after =
+      isPoints && parsed.data.config
+        ? pointsPromotionConfigSchema.parse(mergedConfig ?? {}).points.pointsExpiration
+        : null
+    const policyChanged = after !== null && JSON.stringify(before) !== JSON.stringify(after)
+
+    await db.transaction(async (tx) => {
+      await tx.update(promotions).set(updateData).where(eq(promotions.id, promotionId))
+      if (policyChanged && after) {
+        const [tenant] = await tx
           .select({ timezone: tenants.timezone })
           .from(tenants)
           .where(eq(tenants.id, existing.tenantId))
           .limit(1)
-        const { updated } = await restampOpenLots(db, {
+        const { updated } = await restampOpenLots(tx, {
           tenantId: existing.tenantId,
           policy: after,
           timezone: tenant?.timezone ?? "America/Lima",
         })
         console.info(
-          `[updatePromotion] points expiration ${before.mode} -> ${after.mode}, re-stamped ${updated} open lots (tenant ${existing.tenantId})`,
+          `[updatePromotion] points expiration ${before?.mode} -> ${after.mode}, re-stamped ${updated} open lots (tenant ${existing.tenantId})`,
         )
       }
-    }
+    })
 
     // Data refresh handled by parent component
 

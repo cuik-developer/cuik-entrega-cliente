@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useTenant } from "@/hooks/use-tenant"
 import { formatDateTime } from "@/lib/format-date"
+import { expiryPhrase } from "@/lib/loyalty/expiry-label"
 
 import { ClientNotes } from "../_components/client-notes"
 import { ClientPointsHistory } from "../_components/client-points-history"
@@ -40,7 +41,11 @@ type ClientDetail = {
   stamps: { current: number | null; max: number | null }
   pendingRewards: number
   promotion: { type: string; rewardValue: string | null } | null
-  points?: { balance: number; availableCatalogItems?: number }
+  points?: {
+    balance: number
+    availableCatalogItems?: number
+    nextExpiration?: { amount: number; expiresAt: string } | null
+  }
 }
 
 function ClientBadges({ segment, status }: { segment: string; status: string }) {
@@ -217,6 +222,11 @@ export default function ClientDetailPage() {
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-700 flex items-center gap-2 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400">
           <Coins className="w-4 h-4" />
           Balance: {data.points.balance} puntos
+          {expiryPhrase(data.points.nextExpiration, data.points.balance) && (
+            <span className="text-blue-500">
+              · {expiryPhrase(data.points.nextExpiration, data.points.balance)}
+            </span>
+          )}
         </div>
       )}
 

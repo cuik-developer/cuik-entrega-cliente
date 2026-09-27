@@ -166,7 +166,7 @@ Cada comercio puede tener multiples promociones creadas, pero **solo una puede e
 | Multiplicadores | Dias/horarios con puntos multiplicados | Sabados 12:00-15:00: 2x |
 | Multiplicador de cumpleanos | Puntos extra el dia del cumpleanos | Cumpleanos: 3x |
 | Bonus de registro | Puntos al registrarse | +50 puntos |
-| Expiracion | Los puntos pueden expirar | 12 meses |
+| Vencimiento | Los puntos pueden vencer: por compra (X dias), un dia fijo de la semana o del mes, o cada X dias. El corte es al final del dia. Por defecto no vencen | Todos los jueves |
 
 **Catalogo de recompensas**: Items canjeables con nombre, descripcion, imagen, costo en puntos y categoria. Los clientes pueden verlo en la pagina publica `/:slug/premios`.
 

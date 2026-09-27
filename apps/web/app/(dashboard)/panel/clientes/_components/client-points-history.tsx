@@ -103,11 +103,16 @@ export function ClientPointsHistory({ clientId, tenantSlug }: Props) {
     { label: "Saldo actual", value: data.balance, tone: "text-primary" },
     { label: "Ganados en total", value: data.totalEarned, tone: "text-emerald-600" },
     { label: "Canjeados en total", value: data.totalRedeemed, tone: "text-purple-600" },
+    ...(data.totalExpired > 0
+      ? [{ label: "Vencidos en total", value: data.totalExpired, tone: "text-red-500" }]
+      : []),
   ]
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-3 gap-3">
+      <div
+        className={`grid gap-3 ${summary.length === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}
+      >
         {summary.map((s) => (
           <Card key={s.label} className="border border-border">
             <CardContent className="p-3 text-center">

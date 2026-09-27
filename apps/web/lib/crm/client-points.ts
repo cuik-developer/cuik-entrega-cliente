@@ -45,6 +45,7 @@ export type ClientPointsHistory = {
   balance: number
   totalEarned: number
   totalRedeemed: number
+  totalExpired: number
   movements: PointsMovement[]
 }
 
@@ -129,6 +130,7 @@ export async function getClientPointsHistory(params: {
       .select({
         earned: sql<number>`COALESCE(SUM(${pointsTransactions.amount}) FILTER (WHERE ${pointsTransactions.amount} > 0), 0)::int`,
         redeemed: sql<number>`COALESCE(SUM(-${pointsTransactions.amount}) FILTER (WHERE ${pointsTransactions.type} = 'redeem'), 0)::int`,
+        expired: sql<number>`COALESCE(SUM(-${pointsTransactions.amount}) FILTER (WHERE ${pointsTransactions.type} = 'expire'), 0)::int`,
       })
       .from(pointsTransactions)
       .where(
@@ -179,6 +181,7 @@ export async function getClientPointsHistory(params: {
     balance,
     totalEarned: Number(totals[0]?.earned ?? 0),
     totalRedeemed: Number(totals[0]?.redeemed ?? 0),
+    totalExpired: Number(totals[0]?.expired ?? 0),
     movements,
   }
 }

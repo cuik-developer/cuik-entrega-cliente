@@ -224,7 +224,7 @@ Una tarjeta azul con:
 
 - Nombre y telefono
 - Visitas totales
-- **Balance de puntos**
+- **Balance de puntos** y, si el programa tiene vencimiento, cuando vencen ("Vencen el jue 1 oct")
 - **Catalogo de items canjeables** con costo en puntos
 
 <!-- TODO: capture screenshot for detalle de cliente en busqueda con tarjeta azul -->
