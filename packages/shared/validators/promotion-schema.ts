@@ -54,17 +54,6 @@ export const expirationPolicySchema = z.preprocess(
 
 export type ExpirationPolicy = z.infer<typeof expirationPolicySchema>
 
-/** Push sent to clients whose balance is about to expire. */
-export const expirationWarningSchema = z.object({
-  enabled: z.boolean().default(false),
-  /** Days before the cutoff. 2 = "vencen pasado manana". */
-  daysBefore: z.number().int().min(1).max(30).default(2),
-  /** Local hour (0-23) at which the push goes out. */
-  hour: z.number().int().min(0).max(23).default(10),
-})
-
-export type ExpirationWarning = z.infer<typeof expirationWarningSchema>
-
 const tierLevelSchema = z.object({
   name: z.string().min(1).max(50),
   minVisits: z.number().int().min(0),
@@ -96,7 +85,6 @@ const stampsBlockSchema = z.object({
   maxVisitsPerDay: z.number().int().min(1).max(10).default(1),
   rewardExpirationDays: z.number().int().min(1).nullable().default(null),
   stampsExpiration: expirationPolicySchema.default({ mode: "never" }),
-  expirationWarning: expirationWarningSchema.default({}),
 })
 
 // --- Main config schema ---
@@ -128,7 +116,6 @@ const pointsBlockSchema = z.object({
   minimumPurchaseForPoints: z.number().positive().nullable().default(null),
   maxVisitsPerDay: z.number().int().min(1).max(10).default(1),
   pointsExpiration: expirationPolicySchema.default({ mode: "never" }),
-  expirationWarning: expirationWarningSchema.default({}),
 })
 
 const pointsAccumulationSchema = z.object({

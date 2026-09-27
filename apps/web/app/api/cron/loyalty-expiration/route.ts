@@ -3,7 +3,11 @@ import { pointsPromotionConfigSchema } from "@cuik/shared/validators"
 
 import { errorResponse, successResponse } from "@/lib/api-utils"
 import { hourLocal } from "@/lib/campaigns/birthday"
-import { expireDuePoints, runPointsExpirationWarning } from "@/lib/loyalty/expire-points"
+import {
+  expireDuePoints,
+  getPointsExpiryConfig,
+  runPointsExpirationWarning,
+} from "@/lib/loyalty/expire-points"
 
 /**
  * POST /api/cron/loyalty-expiration[?force=1]
@@ -28,6 +32,7 @@ export async function POST(request: Request) {
         slug: tenants.slug,
         name: tenants.name,
         timezone: tenants.timezone,
+        automations: tenants.automations,
         config: promotions.config,
       })
       .from(promotions)
@@ -51,7 +56,8 @@ export async function POST(request: Request) {
         errors.push(`${row.slug}: invalid config`)
         continue
       }
-      const { pointsExpiration, expirationWarning } = parsed.data.points
+      const { pointsExpiration } = parsed.data.points
+      const warning = getPointsExpiryConfig(row.automations)
       if (pointsExpiration.mode === "never") {
         skipped.push({ tenant: row.slug, reason: "no_expiration" })
         continue
@@ -62,12 +68,12 @@ export async function POST(request: Request) {
         if (r.clients > 0) expired.push({ tenant: row.slug, clients: r.clients, points: r.points })
         errors.push(...r.errors.map((e) => `${row.slug}: ${e}`))
 
-        if (expirationWarning.enabled && (force || hourLocal(tz) === expirationWarning.hour)) {
+        if (warning.enabled && (force || hourLocal(tz) === warning.sendHour)) {
           const w = await runPointsExpirationWarning({
             tenantId: row.tenantId,
             tenantName: row.name,
             timezone: tz,
-            config: expirationWarning,
+            config: warning,
           })
           if (w.status === "sent") {
             warned.push({ tenant: row.slug, campaigns: w.campaigns, sentCount: w.sentCount })

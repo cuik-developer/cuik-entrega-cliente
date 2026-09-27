@@ -1,7 +1,7 @@
 "use client"
 
 import type { CreatePromotionInput, ExpirationPolicy } from "@cuik/shared/validators"
-import { expirationPolicySchema, expirationWarningSchema } from "@cuik/shared/validators"
+import { expirationPolicySchema } from "@cuik/shared/validators"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useTransition } from "react"
 import { Controller, useForm } from "react-hook-form"
@@ -85,14 +85,6 @@ const formSchema = z
     expWeekday: z.number().int().min(0).max(6),
     expOrdinal: z.enum(["1", "2", "3", "4", "last"]).default("1"),
     expAnchor: z.string().nullable(),
-    warnEnabled: z.boolean(),
-    warnDaysBefore: z
-      .number({ invalid_type_error: "Ingresa un numero valido" })
-      .int()
-      .min(1, "Minimo 1 dia")
-      .max(30, "Maximo 30 dias")
-      .nullable(),
-    warnHour: z.number().int().min(0).max(23),
   })
   .superRefine((data, ctx) => {
     if ((data.expMode === "rolling" || data.expMode === "interval") && !data.expDays) {
@@ -109,13 +101,7 @@ const formSchema = z
         path: ["expAnchor"],
       })
     }
-    if (data.expMode !== "never" && data.warnEnabled && !data.warnDaysBefore) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Indica cuantos dias antes",
-        path: ["warnDaysBefore"],
-      })
-    }
+
     if (data.type === "stamps") {
       if (data.maxVisits === null || data.maxVisits === undefined) {
         ctx.addIssue({
@@ -258,9 +244,6 @@ type ExpirationFormValues = {
   expWeekday: number
   expOrdinal: "1" | "2" | "3" | "4" | "last"
   expAnchor: string | null
-  warnEnabled: boolean
-  warnDaysBefore: number | null
-  warnHour: number
 }
 
 const DEFAULT_EXPIRATION_FORM: ExpirationFormValues = {
@@ -269,9 +252,6 @@ const DEFAULT_EXPIRATION_FORM: ExpirationFormValues = {
   expWeekday: 4,
   expOrdinal: "1",
   expAnchor: null,
-  warnEnabled: false,
-  warnDaysBefore: 2,
-  warnHour: 10,
 }
 
 /** Read `points.pointsExpiration` / `stamps.stampsExpiration` (+ warning) into form values. */
@@ -293,12 +273,6 @@ function extractExpirationValues(config: unknown, type: "stamps" | "points"): Ex
       out.expOrdinal = String(p.ordinal) as ExpirationFormValues["expOrdinal"]
     if (p.mode === "interval") out.expAnchor = p.anchor
   }
-  const warning = expirationWarningSchema.safeParse(block.expirationWarning ?? {})
-  if (warning.success) {
-    out.warnEnabled = warning.data.enabled
-    out.warnDaysBefore = warning.data.daysBefore
-    out.warnHour = warning.data.hour
-  }
   return out
 }
 
@@ -318,14 +292,6 @@ function buildExpirationPolicy(v: ExpirationFormValues): ExpirationPolicy {
       return { mode: "interval", days: v.expDays ?? 7, anchor: v.expAnchor ?? "" }
     default:
       return { mode: "never" }
-  }
-}
-
-function buildExpirationWarning(v: ExpirationFormValues) {
-  return {
-    enabled: v.expMode !== "never" && v.warnEnabled,
-    daysBefore: v.warnDaysBefore ?? 2,
-    hour: v.warnHour,
   }
 }
 
@@ -432,7 +398,6 @@ export function PromotionFormDialog({
   const hasMinimumPurchase = watch("hasMinimumPurchase")
   const hasMinimumPurchaseForPoints = watch("hasMinimumPurchaseForPoints")
   const expMode = watch("expMode")
-  const warnEnabled = watch("warnEnabled")
 
   function onSubmit(values: FormValues) {
     // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: handles stamps vs points config building + create vs update branching
@@ -443,7 +408,6 @@ export function PromotionFormDialog({
             maxVisitsPerDay: values.maxVisitsPerDay,
             rewardExpirationDays: values.hasExpiration ? values.rewardExpirationDays : null,
             stampsExpiration: buildExpirationPolicy(values),
-            expirationWarning: buildExpirationWarning(values),
           },
           accumulation: {
             bonusOnRegistration: 0,
@@ -499,7 +463,6 @@ export function PromotionFormDialog({
               : null,
             maxVisitsPerDay: values.maxVisitsPerDay,
             pointsExpiration: buildExpirationPolicy(values),
-            expirationWarning: buildExpirationWarning(values),
           },
           accumulation: {
             pointsMultipliers: [],
@@ -915,53 +878,10 @@ export function PromotionFormDialog({
             )}
 
             {expMode !== "never" && (
-              <div className="space-y-2 border-t border-slate-100 pt-3">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="warnEnabled">Avisar por push antes de vencer</Label>
-                  <Controller
-                    control={control}
-                    name="warnEnabled"
-                    render={({ field }) => (
-                      <Switch
-                        id="warnEnabled"
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    )}
-                  />
-                </div>
-                {warnEnabled && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label htmlFor="warnDaysBefore" className="text-xs">
-                        Dias antes
-                      </Label>
-                      <Input
-                        id="warnDaysBefore"
-                        type="number"
-                        min={1}
-                        max={30}
-                        {...register("warnDaysBefore", { valueAsNumber: true })}
-                      />
-                      {errors.warnDaysBefore && (
-                        <p className="text-sm text-red-600">{errors.warnDaysBefore.message}</p>
-                      )}
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="warnHour" className="text-xs">
-                        Hora local (0-23)
-                      </Label>
-                      <Input
-                        id="warnHour"
-                        type="number"
-                        min={0}
-                        max={23}
-                        {...register("warnHour", { valueAsNumber: true })}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
+              <p className="text-xs text-slate-400 border-t border-slate-100 pt-3">
+                El aviso por push antes del vencimiento lo configura el comercio en Panel &gt;
+                Campanas.
+              </p>
             )}
           </div>
 

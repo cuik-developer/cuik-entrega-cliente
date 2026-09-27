@@ -1,7 +1,7 @@
 import { and, asc, type db as dbType, eq, gt, isNull, lte, pointsTransactions, sql } from "@cuik/db"
 import type { ExpirationPolicy } from "@cuik/shared/validators"
 
-import { computeExpiresAt } from "./expiration"
+import { addDays, computeExpiresAt, localDateString, localMidnight } from "./expiration"
 
 /**
  * Points are kept as "lots": every earn row carries `remaining` (what is left
@@ -136,6 +136,31 @@ export async function pointsExpiringBy(db: Db, clientId: string, until: Date): P
       ),
     )
   return Number(row?.amount ?? 0)
+}
+
+/** How many clients hold open lots that expire within the next `days` days. */
+export async function clientsWithPointsExpiringSoon(
+  db: Db,
+  tenantId: string,
+  timezone: string,
+  days: number,
+  now = new Date(),
+): Promise<number> {
+  const windowEnd = localMidnight(addDays(localDateString(now, timezone), days + 1), timezone)
+  const [row] = await db
+    .select({ n: sql<number>`COUNT(DISTINCT ${pointsTransactions.clientId})::int` })
+    .from(pointsTransactions)
+    .where(
+      and(
+        eq(pointsTransactions.tenantId, tenantId),
+        eq(pointsTransactions.type, "earn"),
+        gt(pointsTransactions.remaining, 0),
+        sql`${pointsTransactions.expiresAt} IS NOT NULL`,
+        gt(pointsTransactions.expiresAt, now),
+        lte(pointsTransactions.expiresAt, windowEnd),
+      ),
+    )
+  return Number(row?.n ?? 0)
 }
 
 /**

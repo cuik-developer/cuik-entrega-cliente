@@ -21,6 +21,39 @@ export const birthdayAutomationSchema = z.object({
 
 export type BirthdayAutomation = z.infer<typeof birthdayAutomationSchema>
 
+// ── Points about to expire ──────────────────────────────────────────
+
+export const DEFAULT_POINTS_EXPIRY_MESSAGE =
+  "Tus puntos en {{tenant.name}} vencen el {{points.expiresAt}}. Pásate antes y úsalos."
+
+/**
+ * Push sent to clients whose points expire within `daysBefore` days. Only
+ * meaningful when the tenant's points promotion has an expiration policy
+ * (set by the Cuik team); the merchant owns the text, the timing and the
+ * on/off switch.
+ */
+export const pointsExpiryAutomationSchema = z.object({
+  enabled: z.boolean(),
+  message: z
+    .string()
+    .trim()
+    .min(1, "El mensaje es requerido")
+    .max(150, "Apple Wallet trunca mensajes a 150 caracteres"),
+  /** Days before the cutoff. 2 = the push goes out two days before the points expire. */
+  daysBefore: z.number().int().min(1).max(30),
+  /** Local hour (tenant timezone) at which the push goes out, 0-23. */
+  sendHour: z.number().int().min(0).max(23),
+})
+
+export type PointsExpiryAutomation = z.infer<typeof pointsExpiryAutomationSchema>
+
+export const DEFAULT_POINTS_EXPIRY_AUTOMATION: PointsExpiryAutomation = {
+  enabled: false,
+  message: DEFAULT_POINTS_EXPIRY_MESSAGE,
+  daysBefore: 2,
+  sendHour: 10,
+}
+
 // ── Reports by email ────────────────────────────────────────────────
 
 /** Weekly report: sent once a week, on `dayOfWeek` (1 = Monday … 7 = Sunday) at `sendHour`. */
@@ -68,6 +101,7 @@ export const DEFAULT_MONTHLY_REPORT: MonthlyReportConfig = {
 
 export const automationsConfigSchema = z.object({
   birthday: birthdayAutomationSchema.optional(),
+  pointsExpiry: pointsExpiryAutomationSchema.optional(),
   reports: reportsAutomationSchema.optional(),
 })
 
@@ -83,6 +117,7 @@ export const DEFAULT_BIRTHDAY_AUTOMATION: BirthdayAutomation = {
 export const updateAutomationsSchema = z
   .object({
     birthday: birthdayAutomationSchema.optional(),
+    pointsExpiry: pointsExpiryAutomationSchema.optional(),
     reports: z
       .object({
         weekly: weeklyReportSchema.omit({ lastSentPeriod: true }).optional(),
@@ -91,8 +126,11 @@ export const updateAutomationsSchema = z
       })
       .optional(),
   })
-  .refine((v) => v.birthday !== undefined || v.reports !== undefined, {
-    message: "Nada que actualizar",
-  })
+  .refine(
+    (v) => v.birthday !== undefined || v.pointsExpiry !== undefined || v.reports !== undefined,
+    {
+      message: "Nada que actualizar",
+    },
+  )
 
 export type UpdateAutomationsInput = z.infer<typeof updateAutomationsSchema>

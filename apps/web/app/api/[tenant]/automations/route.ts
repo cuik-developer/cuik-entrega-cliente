@@ -1,6 +1,7 @@
-import { db, eq, tenants } from "@cuik/db"
+import { and, db, eq, promotions, tenants } from "@cuik/db"
 import {
   automationsConfigSchema,
+  pointsPromotionConfigSchema,
   registrationConfigSchema,
   updateAutomationsSchema,
 } from "@cuik/shared/validators"
@@ -20,7 +21,33 @@ import {
   todayLocal,
   upcomingBirthdays,
 } from "@/lib/campaigns/birthday"
+import { describeExpirationPolicy } from "@/lib/loyalty/expiration"
+import { getPointsExpiryConfig } from "@/lib/loyalty/expire-points"
+import { clientsWithPointsExpiringSoon } from "@/lib/loyalty/points-lots"
 import { defaultRecipients, getReportsConfig } from "@/lib/reports/send-report"
+
+/**
+ * Points expiration policy of the tenant's active points promotion, as set by
+ * the Cuik team. Null when the tenant is not on points or points never expire:
+ * the "puntos por vencer" card is hidden in that case.
+ */
+async function pointsExpiryPolicy(tenantId: string): Promise<string | null> {
+  const [promo] = await db
+    .select({ config: promotions.config })
+    .from(promotions)
+    .where(
+      and(
+        eq(promotions.tenantId, tenantId),
+        eq(promotions.type, "points"),
+        eq(promotions.active, true),
+      ),
+    )
+    .limit(1)
+  if (!promo) return null
+  const parsed = pointsPromotionConfigSchema.safeParse(promo.config ?? {})
+  if (!parsed.success || parsed.data.points.pointsExpiration.mode === "never") return null
+  return describeExpirationPolicy(parsed.data.points.pointsExpiration)
+}
 
 /**
  * GET /api/[tenant]/automations
@@ -52,11 +79,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         return fallback
       }
     }
-    const [coverage, today, upcoming, recipients] = await Promise.all([
+    const pointsExpiryConfig = getPointsExpiryConfig(tenant.automations)
+    const [coverage, today, upcoming, recipients, expiryPolicy, expiringSoon] = await Promise.all([
       safe("birthdayCoverage", () => birthdayCoverage(tenant.id), { withBirthday: 0, total: 0 }),
       safe("findBirthdayClients", () => findBirthdayClients(tenant.id, date), []),
       safe("upcomingBirthdays", () => upcomingBirthdays(tenant.id, date, 7), []),
       safe("defaultRecipients", () => defaultRecipients(tenant.id), [] as string[]),
+      safe("pointsExpiryPolicy", () => pointsExpiryPolicy(tenant.id), null as string | null),
+      safe(
+        "clientsWithPointsExpiringSoon",
+        () => clientsWithPointsExpiringSoon(db, tenant.id, tz, pointsExpiryConfig.daysBefore),
+        0,
+      ),
     ])
     const regParsed = registrationConfigSchema.safeParse(tenant.registrationConfig ?? {})
     const birthdayAsked = regParsed.success ? regParsed.data.birthday.enabled : false
@@ -69,6 +103,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         upcoming,
         /** Whether the public registration asks for the birthday (SA → Registro). */
         asked: birthdayAsked,
+      },
+      pointsExpiry: {
+        config: pointsExpiryConfig,
+        /** Human label of the policy set by Cuik; null = card hidden (no expiration). */
+        policy: expiryPolicy,
+        /** Clients holding points that expire within `daysBefore` days. */
+        expiringSoon,
       },
       reports: {
         config: getReportsConfig(tenant.automations),
@@ -132,7 +173,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ tena
 
     await db.update(tenants).set({ automations: next }).where(eq(tenants.id, tenant.id))
 
-    return successResponse({ birthday: getBirthdayConfig(next), reports: getReportsConfig(next) })
+    return successResponse({
+      birthday: getBirthdayConfig(next),
+      pointsExpiry: getPointsExpiryConfig(next),
+      reports: getReportsConfig(next),
+    })
   } catch (error) {
     console.error("[PUT /api/[tenant]/automations]", error)
     return errorResponse("Internal server error", 500)

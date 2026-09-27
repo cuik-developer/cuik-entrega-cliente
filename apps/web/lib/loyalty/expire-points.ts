@@ -11,12 +11,20 @@ import {
   pointsTransactions,
   sql,
 } from "@cuik/db"
-import type { ExpirationWarning } from "@cuik/shared/validators"
+import type { AutomationsConfig, PointsExpiryAutomation } from "@cuik/shared/validators"
+import { automationsConfigSchema, DEFAULT_POINTS_EXPIRY_AUTOMATION } from "@cuik/shared/validators"
 
 import { executeCampaign } from "@/lib/campaigns/execute-campaign"
 import { triggerWalletUpdate } from "@/lib/wallet/trigger-wallet-update"
 import { addDays, formatExpiry, localDateString, localMidnight } from "./expiration"
 import { dueLotsByClient } from "./points-lots"
+
+/** Parse tenants.automations (jsonb, may be null/partial) into a full points-expiry config. */
+export function getPointsExpiryConfig(raw: unknown): PointsExpiryAutomation {
+  const parsed = automationsConfigSchema.safeParse(raw ?? {})
+  const cfg: AutomationsConfig = parsed.success ? parsed.data : {}
+  return { ...DEFAULT_POINTS_EXPIRY_AUTOMATION, ...(cfg.pointsExpiry ?? {}) }
+}
 
 /**
  * Drains every open lot of the tenant whose expiry has passed. One transaction
@@ -132,7 +140,7 @@ export async function runPointsExpirationWarning(params: {
   tenantId: string
   tenantName: string
   timezone: string
-  config: ExpirationWarning
+  config: PointsExpiryAutomation
   now?: Date
 }): Promise<WarningRunResult> {
   const { tenantId, tenantName, timezone, config } = params
@@ -194,13 +202,19 @@ export async function runPointsExpirationWarning(params: {
   let created = 0
   for (const group of byDay.values()) {
     const label = formatExpiry(group.expiresAt, timezone)
+    // The date and the business name are the same for the whole group, so
+    // they are filled in here (works on Apple and Google alike). Per-client
+    // variables ({{client.name}}, {{points.balance}}) stay for the pass renderer.
+    const message = config.message
+      .replaceAll("{{points.expiresAt}}", label)
+      .replaceAll("{{tenant.name}}", tenantName)
     const [campaign] = await db
       .insert(campaigns)
       .values({
         tenantId,
         name: `Puntos por vencer · ${label}`,
         type: "push",
-        message: `Tus puntos en ${tenantName} vencen el ${label}. Pásate antes y úsalos.`,
+        message,
         status: "draft",
         content: { automation: "points_expiring", date: dateLocal, expiresAt: group.expiresAt },
       })

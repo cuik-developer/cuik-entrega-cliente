@@ -23,7 +23,11 @@ const STAMPS: Variable[] = [
   { variable: "{{stamps.remaining}}", label: "Sellos restantes" },
   { variable: "{{rewards.pending}}", label: "Premios pendientes" },
 ]
-const POINTS: Variable[] = [{ variable: "{{points.balance}}", label: "Balance de puntos" }]
+const POINTS: Variable[] = [
+  { variable: "{{points.balance}}", label: "Balance de puntos" },
+  { variable: "{{points.expiring}}", label: "Puntos por vencer" },
+  { variable: "{{points.expiresAt}}", label: "Fecha de vencimiento" },
+]
 const TAIL: Variable[] = [{ variable: "{{tenant.name}}", label: "Nombre del comercio" }]
 
 /**
