@@ -155,8 +155,15 @@ function rewardEvents(r: RewardRow): TimelineEvent[] {
   return out
 }
 
-// Block/unblock writes an audit note (see PATCH /clients/[id]); show it as its own event.
-const STATUS_NOTE = /^Cliente (bloqueado|desbloqueado)\.?(?: Motivo: (.*))?$/s
+// Block/unblock/archive/restore write an audit note (see PATCH /clients/[id]); show it as its own event.
+const STATUS_NOTE =
+  /^Cliente (bloqueado|desbloqueado|archivado|restaurado)(?: \(se eliminará definitivamente en 30 días\))?\.?(?: Motivo: (.*))?$/s
+const STATUS_TITLES: Record<string, string> = {
+  bloqueado: "Cliente bloqueado",
+  desbloqueado: "Cliente desbloqueado",
+  archivado: "Cliente archivado (se elimina en 30 días)",
+  restaurado: "Cliente restaurado",
+}
 
 function noteEvent(n: NoteRow): TimelineEvent {
   const m = STATUS_NOTE.exec(n.content)
@@ -165,7 +172,7 @@ function noteEvent(n: NoteRow): TimelineEvent {
       id: `note-${n.id}`,
       type: "status_change",
       at: n.at.toISOString(),
-      title: m[1] === "bloqueado" ? "Cliente bloqueado" : "Cliente desbloqueado",
+      title: STATUS_TITLES[m[1]] ?? `Cliente ${m[1]}`,
       detail: m[2] ? `Motivo: ${m[2]}` : undefined,
       by: n.author ?? undefined,
     }
