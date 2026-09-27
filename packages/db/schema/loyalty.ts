@@ -239,11 +239,23 @@ export const pointsTransactions = loyaltySchema.table(
     catalogItemId: uuid("catalog_item_id").references(() => rewardCatalog.id),
     description: text("description"),
     metadata: jsonb("metadata"),
+    /** Earn lots only: points of this lot not yet redeemed or expired. */
+    remaining: integer("remaining"),
+    /** Earn lots only: local midnight after the last valid day. Null = never. */
+    expiresAt: timestamp("expires_at"),
+    /** Earn lots only: when the "about to expire" push went out for this lot. */
+    warnedAt: timestamp("warned_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
     index("points_tx_client_created_idx").on(table.clientId, table.createdAt),
     index("points_tx_tenant_created_idx").on(table.tenantId, table.createdAt),
     index("points_tx_client_type_idx").on(table.clientId, table.type),
+    index("points_tx_open_lots_client_idx")
+      .on(table.clientId, table.expiresAt, table.createdAt)
+      .where(sql`type = 'earn' AND remaining > 0`),
+    index("points_tx_open_lots_tenant_idx")
+      .on(table.tenantId, table.expiresAt)
+      .where(sql`type = 'earn' AND remaining > 0`),
   ],
 )

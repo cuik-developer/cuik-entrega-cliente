@@ -15,6 +15,7 @@ import {
 import { headers } from "next/headers"
 
 import { auth } from "@/lib/auth"
+import { restampOpenLots } from "@/lib/loyalty/points-lots"
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -309,6 +310,29 @@ export async function updatePromotion(
     if (parsed.data.config) updateData.config = mergedConfig
 
     await db.update(promotions).set(updateData).where(eq(promotions.id, promotionId))
+
+    // Points expiration policy changed: re-stamp the tenant's open lots so the
+    // new rule applies from today (never retroactively).
+    if (isPoints && parsed.data.config) {
+      const before = pointsPromotionConfigSchema.parse(existing.config ?? {}).points
+        .pointsExpiration
+      const after = pointsPromotionConfigSchema.parse(mergedConfig ?? {}).points.pointsExpiration
+      if (JSON.stringify(before) !== JSON.stringify(after)) {
+        const [tenant] = await db
+          .select({ timezone: tenants.timezone })
+          .from(tenants)
+          .where(eq(tenants.id, existing.tenantId))
+          .limit(1)
+        const { updated } = await restampOpenLots(db, {
+          tenantId: existing.tenantId,
+          policy: after,
+          timezone: tenant?.timezone ?? "America/Lima",
+        })
+        console.info(
+          `[updatePromotion] points expiration ${before.mode} -> ${after.mode}, re-stamped ${updated} open lots (tenant ${existing.tenantId})`,
+        )
+      }
+    }
 
     // Data refresh handled by parent component
 

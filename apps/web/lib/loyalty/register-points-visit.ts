@@ -1,6 +1,7 @@
-import { clients, type db as dbType, eq, pointsTransactions, visits } from "@cuik/db"
+import { clients, type db as dbType, eq, visits } from "@cuik/db"
 import type { PointsPromotionConfig } from "@cuik/shared/validators"
 
+import { insertEarnLot, nextExpiration } from "./points-lots"
 import { computeTier, evaluatePointsRules } from "./rules-engine"
 import type { PointsRulesContext, PointsVisitResult, VisitResultCode } from "./types"
 
@@ -108,12 +109,12 @@ export async function registerPointsVisit(params: PointsVisitParams): Promise<Po
     })
     .returning()
 
-  // 5. Insert points_transaction (earn)
-  await tx.insert(pointsTransactions).values({
+  // 5. Insert the earn lot (points_transaction with remaining + expiry)
+  const timezone = params.timezone ?? "America/Lima"
+  const expiresAt = await insertEarnLot(tx, {
     clientId: client.id,
     tenantId,
     amount: pointsToEarn,
-    type: "earn",
     visitId: visit.id,
     description: `Earned ${pointsToEarn} points from visit`,
     // Analytics reads this to cost the birthday/day multipliers.
@@ -122,7 +123,11 @@ export async function registerPointsVisit(params: PointsVisitParams): Promise<Po
       bonusReasons: rulesResult.bonusReasons,
       ...(cashierId ? { cashierId } : {}),
     },
+    policy: config.points.pointsExpiration,
+    timezone,
+    earnedAt: now,
   })
+  const upcoming = expiresAt ? await nextExpiration(tx, client.id) : null
 
   // 6. Update client: pointsBalance, totalVisits, tier
   const newPointsBalance = client.pointsBalance + pointsToEarn
@@ -157,6 +162,8 @@ export async function registerPointsVisit(params: PointsVisitParams): Promise<Po
     points: {
       earned: pointsToEarn,
       balance: newPointsBalance,
+      expiresAt,
+      nextExpiration: upcoming,
     },
     bonusApplied: rulesResult.bonusReasons.length > 0 ? rulesResult.bonusReasons.join(", ") : null,
   }

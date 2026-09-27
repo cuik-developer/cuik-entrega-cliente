@@ -8,10 +8,62 @@ const doubleStampsDaySchema = z.object({
   endHour: z.number().int().min(0).max(23),
 })
 
-const stampsExpirationSchema = z.object({
-  type: z.enum(["never", "months", "inactivity"]).default("never"),
-  value: z.number().int().min(0).default(0),
+// --- Expiration policy (shared by points and stamps) ---
+
+/** 0 = domingo ... 6 = sabado, like Date#getDay(). */
+const weekdaySchema = z.number().int().min(0).max(6)
+
+/**
+ * When do points / stamps expire. Every cutoff is the END of the given local
+ * day in the tenant timezone (the points are still valid all Thursday and are
+ * gone Friday 00:00).
+ *
+ * - never:    no expiration.
+ * - rolling:  each earn lot lasts `days` days from the day it was earned.
+ * - weekly:   everything resets at the end of `weekday`, every week.
+ * - monthly:  everything resets at the end of the `ordinal`-th `weekday` of
+ *             the month ("primer jueves", "ultimo viernes").
+ * - interval: everything resets every `days` days counted from `anchor`
+ *             (a local "YYYY-MM-DD"), regardless of weekday.
+ */
+export const expirationPolicySchema = z.preprocess(
+  (raw) => {
+    // Legacy shape {type: "never"|"months"|"inactivity", value} was never
+    // acted on: read it as "never" so old rows keep parsing.
+    if (raw && typeof raw === "object" && "type" in raw && !("mode" in raw)) {
+      return { mode: "never" }
+    }
+    return raw
+  },
+  z.discriminatedUnion("mode", [
+    z.object({ mode: z.literal("never") }),
+    z.object({ mode: z.literal("rolling"), days: z.number().int().min(1).max(730) }),
+    z.object({ mode: z.literal("weekly"), weekday: weekdaySchema }),
+    z.object({
+      mode: z.literal("monthly"),
+      weekday: weekdaySchema,
+      ordinal: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal("last")]),
+    }),
+    z.object({
+      mode: z.literal("interval"),
+      days: z.number().int().min(1).max(730),
+      anchor: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    }),
+  ]),
+)
+
+export type ExpirationPolicy = z.infer<typeof expirationPolicySchema>
+
+/** Push sent to clients whose balance is about to expire. */
+export const expirationWarningSchema = z.object({
+  enabled: z.boolean().default(false),
+  /** Days before the cutoff. 2 = "vencen pasado manana". */
+  daysBefore: z.number().int().min(1).max(30).default(2),
+  /** Local hour (0-23) at which the push goes out. */
+  hour: z.number().int().min(0).max(23).default(10),
 })
+
+export type ExpirationWarning = z.infer<typeof expirationWarningSchema>
 
 const tierLevelSchema = z.object({
   name: z.string().min(1).max(50),
@@ -43,7 +95,8 @@ const accumulationSchema = z.object({
 const stampsBlockSchema = z.object({
   maxVisitsPerDay: z.number().int().min(1).max(10).default(1),
   rewardExpirationDays: z.number().int().min(1).nullable().default(null),
-  stampsExpiration: stampsExpirationSchema.default({}),
+  stampsExpiration: expirationPolicySchema.default({ mode: "never" }),
+  expirationWarning: expirationWarningSchema.default({}),
 })
 
 // --- Main config schema ---
@@ -69,17 +122,13 @@ const pointsMultiplierSchema = z.object({
   multiplier: z.number().positive().min(1).max(10).default(2),
 })
 
-const pointsExpirationSchema = z.object({
-  type: z.enum(["never", "months", "inactivity"]).default("never"),
-  value: z.number().int().min(0).default(0),
-})
-
 const pointsBlockSchema = z.object({
   pointsPerCurrency: z.number().positive().default(1),
   roundingMethod: z.enum(["floor", "round", "ceil"]).default("floor"),
   minimumPurchaseForPoints: z.number().positive().nullable().default(null),
   maxVisitsPerDay: z.number().int().min(1).max(10).default(1),
-  pointsExpiration: pointsExpirationSchema.default({}),
+  pointsExpiration: expirationPolicySchema.default({ mode: "never" }),
+  expirationWarning: expirationWarningSchema.default({}),
 })
 
 const pointsAccumulationSchema = z.object({

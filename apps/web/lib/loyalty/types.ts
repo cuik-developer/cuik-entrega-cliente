@@ -193,6 +193,10 @@ export type PointsVisitResult = {
   points: {
     earned: number
     balance: number
+    /** When the points earned in this visit expire (null = never). */
+    expiresAt?: Date | null
+    /** Soonest expiration among the client's open lots after this visit. */
+    nextExpiration?: { amount: number; expiresAt: Date } | null
   }
   bonusApplied?: string | null
 }

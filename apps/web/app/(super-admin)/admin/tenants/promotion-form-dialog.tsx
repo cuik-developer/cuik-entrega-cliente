@@ -1,6 +1,7 @@
 "use client"
 
-import type { CreatePromotionInput } from "@cuik/shared/validators"
+import type { CreatePromotionInput, ExpirationPolicy } from "@cuik/shared/validators"
+import { expirationPolicySchema, expirationWarningSchema } from "@cuik/shared/validators"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useTransition } from "react"
 import { Controller, useForm } from "react-hook-form"
@@ -73,8 +74,48 @@ const formSchema = z
       .number({ invalid_type_error: "Ingresa un numero valido" })
       .min(1, "Minimo 1 (sin bono)")
       .max(10, "Maximo 10"),
+    // Expiration of points / stamps (shared by both types)
+    expMode: z.enum(["never", "rolling", "weekly", "monthly", "interval"]).default("never"),
+    expDays: z
+      .number({ invalid_type_error: "Ingresa un numero valido" })
+      .int()
+      .min(1, "Minimo 1 dia")
+      .max(730, "Maximo 730 dias")
+      .nullable(),
+    expWeekday: z.number().int().min(0).max(6),
+    expOrdinal: z.enum(["1", "2", "3", "4", "last"]).default("1"),
+    expAnchor: z.string().nullable(),
+    warnEnabled: z.boolean(),
+    warnDaysBefore: z
+      .number({ invalid_type_error: "Ingresa un numero valido" })
+      .int()
+      .min(1, "Minimo 1 dia")
+      .max(30, "Maximo 30 dias")
+      .nullable(),
+    warnHour: z.number().int().min(0).max(23),
   })
   .superRefine((data, ctx) => {
+    if ((data.expMode === "rolling" || data.expMode === "interval") && !data.expDays) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Indica cada cuantos dias",
+        path: ["expDays"],
+      })
+    }
+    if (data.expMode === "interval" && !/^\d{4}-\d{2}-\d{2}$/.test(data.expAnchor ?? "")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Indica la fecha de inicio del ciclo",
+        path: ["expAnchor"],
+      })
+    }
+    if (data.expMode !== "never" && data.warnEnabled && !data.warnDaysBefore) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Indica cuantos dias antes",
+        path: ["warnDaysBefore"],
+      })
+    }
     if (data.type === "stamps") {
       if (data.maxVisits === null || data.maxVisits === undefined) {
         ctx.addIssue({
@@ -211,6 +252,92 @@ function extractPointsConfigValues(config: unknown): {
   return defaults
 }
 
+type ExpirationFormValues = {
+  expMode: "never" | "rolling" | "weekly" | "monthly" | "interval"
+  expDays: number | null
+  expWeekday: number
+  expOrdinal: "1" | "2" | "3" | "4" | "last"
+  expAnchor: string | null
+  warnEnabled: boolean
+  warnDaysBefore: number | null
+  warnHour: number
+}
+
+const DEFAULT_EXPIRATION_FORM: ExpirationFormValues = {
+  expMode: "never",
+  expDays: null,
+  expWeekday: 4,
+  expOrdinal: "1",
+  expAnchor: null,
+  warnEnabled: false,
+  warnDaysBefore: 2,
+  warnHour: 10,
+}
+
+/** Read `points.pointsExpiration` / `stamps.stampsExpiration` (+ warning) into form values. */
+function extractExpirationValues(config: unknown, type: "stamps" | "points"): ExpirationFormValues {
+  const out = { ...DEFAULT_EXPIRATION_FORM }
+  if (!config || typeof config !== "object") return out
+  const c = config as Record<string, unknown>
+  const block = c[type] as Record<string, unknown> | undefined
+  if (!block) return out
+  const policy = expirationPolicySchema.safeParse(
+    block[type === "points" ? "pointsExpiration" : "stampsExpiration"] ?? { mode: "never" },
+  )
+  if (policy.success) {
+    const p = policy.data
+    out.expMode = p.mode
+    if (p.mode === "rolling" || p.mode === "interval") out.expDays = p.days
+    if (p.mode === "weekly" || p.mode === "monthly") out.expWeekday = p.weekday
+    if (p.mode === "monthly")
+      out.expOrdinal = String(p.ordinal) as ExpirationFormValues["expOrdinal"]
+    if (p.mode === "interval") out.expAnchor = p.anchor
+  }
+  const warning = expirationWarningSchema.safeParse(block.expirationWarning ?? {})
+  if (warning.success) {
+    out.warnEnabled = warning.data.enabled
+    out.warnDaysBefore = warning.data.daysBefore
+    out.warnHour = warning.data.hour
+  }
+  return out
+}
+
+function buildExpirationPolicy(v: ExpirationFormValues): ExpirationPolicy {
+  switch (v.expMode) {
+    case "rolling":
+      return { mode: "rolling", days: v.expDays ?? 7 }
+    case "weekly":
+      return { mode: "weekly", weekday: v.expWeekday }
+    case "monthly":
+      return {
+        mode: "monthly",
+        weekday: v.expWeekday,
+        ordinal: v.expOrdinal === "last" ? "last" : (Number(v.expOrdinal) as 1 | 2 | 3 | 4),
+      }
+    case "interval":
+      return { mode: "interval", days: v.expDays ?? 7, anchor: v.expAnchor ?? "" }
+    default:
+      return { mode: "never" }
+  }
+}
+
+function buildExpirationWarning(v: ExpirationFormValues) {
+  return {
+    enabled: v.expMode !== "never" && v.warnEnabled,
+    daysBefore: v.warnDaysBefore ?? 2,
+    hour: v.warnHour,
+  }
+}
+
+const WEEKDAY_LABELS = ["Domingo", "Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado"]
+const ORDINAL_LABELS: Record<string, string> = {
+  "1": "Primer",
+  "2": "Segundo",
+  "3": "Tercer",
+  "4": "Cuarto",
+  last: "Ultimo",
+}
+
 const ROUNDING_LABELS: Record<string, string> = {
   floor: "Piso (redondeo abajo)",
   round: "Redondeo normal",
@@ -232,6 +359,9 @@ export function PromotionFormDialog({
 
   const stampsConfig = isEdit ? extractStampsConfigValues(promotion.config) : null
   const pointsConfig = isEdit ? extractPointsConfigValues(promotion.config) : null
+  const expirationValues = isEdit
+    ? extractExpirationValues(promotion.config, promotionType)
+    : DEFAULT_EXPIRATION_FORM
 
   const {
     register,
@@ -259,6 +389,7 @@ export function PromotionFormDialog({
             minimumPurchaseForPoints: pointsConfig?.minimumPurchaseForPoints ?? null,
             hasMinimumPurchaseForPoints: pointsConfig?.minimumPurchaseForPoints !== null,
             birthdayMultiplier: pointsConfig?.birthdayMultiplier ?? 1,
+            ...expirationValues,
           }
         : {
             type: "stamps",
@@ -275,6 +406,7 @@ export function PromotionFormDialog({
             minimumPurchaseForPoints: null,
             hasMinimumPurchaseForPoints: false,
             birthdayMultiplier: 1,
+            ...expirationValues,
           }
       : {
           type: "stamps",
@@ -291,6 +423,7 @@ export function PromotionFormDialog({
           minimumPurchaseForPoints: null,
           hasMinimumPurchaseForPoints: false,
           birthdayMultiplier: 1,
+          ...DEFAULT_EXPIRATION_FORM,
         },
   })
 
@@ -298,6 +431,8 @@ export function PromotionFormDialog({
   const hasExpiration = watch("hasExpiration")
   const hasMinimumPurchase = watch("hasMinimumPurchase")
   const hasMinimumPurchaseForPoints = watch("hasMinimumPurchaseForPoints")
+  const expMode = watch("expMode")
+  const warnEnabled = watch("warnEnabled")
 
   function onSubmit(values: FormValues) {
     // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: handles stamps vs points config building + create vs update branching
@@ -307,7 +442,8 @@ export function PromotionFormDialog({
           stamps: {
             maxVisitsPerDay: values.maxVisitsPerDay,
             rewardExpirationDays: values.hasExpiration ? values.rewardExpirationDays : null,
-            stampsExpiration: { type: "never" as const, value: 0 },
+            stampsExpiration: buildExpirationPolicy(values),
+            expirationWarning: buildExpirationWarning(values),
           },
           accumulation: {
             bonusOnRegistration: 0,
@@ -362,7 +498,8 @@ export function PromotionFormDialog({
               ? values.minimumPurchaseForPoints
               : null,
             maxVisitsPerDay: values.maxVisitsPerDay,
-            pointsExpiration: { type: "never" as const, value: 0 },
+            pointsExpiration: buildExpirationPolicy(values),
+            expirationWarning: buildExpirationWarning(values),
           },
           accumulation: {
             pointsMultipliers: [],
@@ -668,6 +805,165 @@ export function PromotionFormDialog({
               )}
             </div>
           )}
+
+          {/* Expiration of points / stamps */}
+          <div className="space-y-3 rounded-lg border border-slate-200 p-3">
+            <div className="space-y-2">
+              <Label>
+                {selectedType === "points" ? "Vencimiento de puntos" : "Vencimiento de sellos"}
+              </Label>
+              <Controller
+                control={control}
+                name="expMode"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="never">No vencen</SelectItem>
+                      <SelectItem value="rolling">Cada compra vence a los X dias</SelectItem>
+                      <SelectItem value="weekly">Se reinician un dia fijo de la semana</SelectItem>
+                      <SelectItem value="monthly">Se reinician un dia fijo del mes</SelectItem>
+                      <SelectItem value="interval">Se reinician cada X dias</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              <p className="text-xs text-slate-400">
+                El corte es al final del dia elegido, en la hora local del comercio.
+              </p>
+            </div>
+
+            {(expMode === "rolling" || expMode === "interval") && (
+              <div className="space-y-2">
+                <Label htmlFor="expDays">
+                  {expMode === "rolling" ? "Dias de vigencia" : "Cada cuantos dias"}
+                </Label>
+                <Input
+                  id="expDays"
+                  type="number"
+                  min={1}
+                  max={730}
+                  placeholder="7"
+                  {...register("expDays", { valueAsNumber: true })}
+                />
+                {errors.expDays && <p className="text-sm text-red-600">{errors.expDays.message}</p>}
+              </div>
+            )}
+
+            {expMode === "interval" && (
+              <div className="space-y-2">
+                <Label htmlFor="expAnchor">Fecha de inicio del ciclo</Label>
+                <Input id="expAnchor" type="date" {...register("expAnchor")} />
+                {errors.expAnchor && (
+                  <p className="text-sm text-red-600">{errors.expAnchor.message}</p>
+                )}
+              </div>
+            )}
+
+            {(expMode === "weekly" || expMode === "monthly") && (
+              <div className="grid grid-cols-2 gap-2">
+                {expMode === "monthly" && (
+                  <div className="space-y-2">
+                    <Label>Semana</Label>
+                    <Controller
+                      control={control}
+                      name="expOrdinal"
+                      render={({ field }) => (
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(ORDINAL_LABELS).map(([k, label]) => (
+                              <SelectItem key={k} value={k}>
+                                {label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </div>
+                )}
+                <div className={expMode === "monthly" ? "space-y-2" : "space-y-2 col-span-2"}>
+                  <Label>Dia</Label>
+                  <Controller
+                    control={control}
+                    name="expWeekday"
+                    render={({ field }) => (
+                      <Select
+                        value={String(field.value)}
+                        onValueChange={(v) => field.onChange(Number(v))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {WEEKDAY_LABELS.map((label, i) => (
+                            <SelectItem key={label} value={String(i)}>
+                              {label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </div>
+              </div>
+            )}
+
+            {expMode !== "never" && (
+              <div className="space-y-2 border-t border-slate-100 pt-3">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="warnEnabled">Avisar por push antes de vencer</Label>
+                  <Controller
+                    control={control}
+                    name="warnEnabled"
+                    render={({ field }) => (
+                      <Switch
+                        id="warnEnabled"
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    )}
+                  />
+                </div>
+                {warnEnabled && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="warnDaysBefore" className="text-xs">
+                        Dias antes
+                      </Label>
+                      <Input
+                        id="warnDaysBefore"
+                        type="number"
+                        min={1}
+                        max={30}
+                        {...register("warnDaysBefore", { valueAsNumber: true })}
+                      />
+                      {errors.warnDaysBefore && (
+                        <p className="text-sm text-red-600">{errors.warnDaysBefore.message}</p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="warnHour" className="text-xs">
+                        Hora local (0-23)
+                      </Label>
+                      <Input
+                        id="warnHour"
+                        type="number"
+                        min={0}
+                        max={23}
+                        {...register("warnHour", { valueAsNumber: true })}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Minimum purchase amount — stamps only */}
           {selectedType === "stamps" && (
