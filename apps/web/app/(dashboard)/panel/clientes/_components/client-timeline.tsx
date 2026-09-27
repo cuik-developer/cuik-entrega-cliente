@@ -10,6 +10,7 @@ import {
   Megaphone,
   Stamp,
   StickyNote,
+  TimerOff,
   UserPlus,
 } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
@@ -26,6 +27,7 @@ type TimelineEvent = {
     | "reward_earned"
     | "reward_redeemed"
     | "reward_expired"
+    | "points_expired"
     | "note"
     | "status_change"
     | "campaign"
@@ -49,7 +51,7 @@ const FILTERS: Array<{ v: Filter; label: string }> = [
 const FILTER_TYPES: Record<Filter, TimelineEvent["type"][] | null> = {
   all: null,
   visits: ["visit", "registered"],
-  rewards: ["reward_earned", "reward_redeemed", "reward_expired"],
+  rewards: ["reward_earned", "reward_redeemed", "reward_expired", "points_expired"],
   notes: ["note", "status_change"],
   campaigns: ["campaign"],
 }
@@ -59,6 +61,7 @@ const STYLE: Record<TimelineEvent["type"], { icon: typeof Stamp; tone: string }>
   reward_earned: { icon: Gift, tone: "bg-amber-50 text-amber-600" },
   reward_redeemed: { icon: Award, tone: "bg-emerald-50 text-emerald-600" },
   reward_expired: { icon: GiftIcon, tone: "bg-red-50 text-red-500" },
+  points_expired: { icon: TimerOff, tone: "bg-red-50 text-red-500" },
   note: { icon: StickyNote, tone: "bg-slate-100 text-slate-500" },
   status_change: { icon: Ban, tone: "bg-red-50 text-red-500" },
   campaign: { icon: Megaphone, tone: "bg-violet-50 text-violet-600" },

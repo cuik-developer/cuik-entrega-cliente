@@ -123,8 +123,23 @@ function resolveVisitMessage(
   switch (code) {
     case "OK": {
       if (isPoints && data?.points) {
-        const pts = data.points as { earned: number; balance: number }
-        return `Visita registrada! +${pts.earned} puntos (Balance: ${pts.balance})`
+        const pts = data.points as {
+          earned: number
+          balance: number
+          nextExpiration?: { amount: number; expiresAt: string } | null
+        }
+        const base = `Visita registrada! +${pts.earned} puntos (Balance: ${pts.balance})`
+        if (!pts.nextExpiration) return base
+        // The instant is the midnight after the last valid day: show that day.
+        const day = new Date(new Date(pts.nextExpiration.expiresAt).getTime() - 1)
+          .toLocaleDateString("es-PE", { weekday: "short", day: "numeric", month: "short" })
+          .replace(/\./g, "")
+          .replace(",", "")
+        const who =
+          pts.nextExpiration.amount === pts.balance
+            ? "Vencen"
+            : `${pts.nextExpiration.amount} puntos vencen`
+        return `${base} · ${who} el ${day}`
       }
       return "Visita registrada!"
     }

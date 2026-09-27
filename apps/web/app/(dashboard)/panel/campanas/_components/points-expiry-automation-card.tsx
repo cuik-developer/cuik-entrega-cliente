@@ -209,9 +209,15 @@ export function PointsExpiryAutomationCard({ tenantSlug }: { tenantSlug: string 
         </div>
 
         <p className="text-xs text-muted-foreground">
-          {data.expiringSoon === 0
-            ? `Ningún cliente tiene puntos que venzan en los próximos ${daysBefore} días.`
-            : `${data.expiringSoon} ${data.expiringSoon === 1 ? "cliente tiene" : "clientes tienen"} puntos que vencen en los próximos ${daysBefore} días.`}
+          {(() => {
+            const when = daysBefore === 1 ? "mañana" : `en los próximos ${daysBefore} días`
+            if (data.expiringSoon === 0) return `Ningún cliente tiene puntos que venzan ${when}.`
+            const who =
+              data.expiringSoon === 1
+                ? "1 cliente tiene puntos que vencen"
+                : `${data.expiringSoon} clientes tienen puntos que vencen`
+            return `${who} ${when}.`
+          })()}
         </p>
       </CardContent>
     </Card>

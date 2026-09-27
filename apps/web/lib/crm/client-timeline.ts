@@ -22,6 +22,7 @@ export type TimelineEventType =
   | "reward_earned"
   | "reward_redeemed"
   | "reward_expired"
+  | "points_expired"
   | "note"
   | "status_change"
   | "campaign"
@@ -105,8 +106,16 @@ type PointsRedeemRow = {
   cashierName: string | null
 }
 
-/** Points redemptions live in points_transactions, not in loyalty.rewards. */
-function pointsRedeemEvent(r: PointsRedeemRow): TimelineEvent {
+/** Points redemptions and expirations live in points_transactions, not in loyalty.rewards. */
+function pointsRedeemEvent(r: PointsRedeemRow & { type?: string }): TimelineEvent {
+  if (r.type === "expire") {
+    return {
+      id: `points-expire-${r.id}`,
+      type: "points_expired",
+      at: r.at.toISOString(),
+      title: `Vencieron ${Math.abs(r.amount)} pts`,
+    }
+  }
   return {
     id: `points-redeem-${r.id}`,
     type: "reward_redeemed",
@@ -282,6 +291,7 @@ export async function getClientTimeline(params: {
           id: pointsTransactions.id,
           at: pointsTransactions.createdAt,
           amount: pointsTransactions.amount,
+          type: pointsTransactions.type,
           rewardName: rewardCatalog.name,
           description: pointsTransactions.description,
           cashierId: sql<string | null>`${pointsTransactions.metadata}->>'cashierId'`,
@@ -289,7 +299,7 @@ export async function getClientTimeline(params: {
         .from(pointsTransactions)
         .leftJoin(rewardCatalog, eq(rewardCatalog.id, pointsTransactions.catalogItemId))
         .where(
-          sql`${pointsTransactions.clientId} = ${clientId} AND ${pointsTransactions.tenantId} = ${tenantId} AND ${pointsTransactions.type} = 'redeem'`,
+          sql`${pointsTransactions.clientId} = ${clientId} AND ${pointsTransactions.tenantId} = ${tenantId} AND ${pointsTransactions.type} IN ('redeem', 'expire')`,
         )
         .orderBy(desc(pointsTransactions.createdAt))
         .limit(PER_SOURCE_LIMIT),
