@@ -10,14 +10,20 @@ type Transaction = {
   createdAt: string
   clientName: string
   clientLastName: string | null
+  /** Points granted by the visit (points programs). */
+  points?: number | null
+  /** Purchase amount, when the till recorded one. */
+  amount?: string | null
 }
 
 export function TransactionsTable({
   data,
   timezone = "America/Lima",
+  mode = "stamps",
 }: {
   data: Transaction[]
   timezone?: string
+  mode?: "stamps" | "points"
 }) {
   return (
     <Card className="border border-slate-200">
@@ -44,7 +50,17 @@ export function TransactionsTable({
                   </span>
                   <span className="text-slate-500 text-sm">
                     {" "}
-                    · Sello {tx.visitNum} (ciclo {tx.cycleNumber})
+                    {mode === "points" ? (
+                      <>
+                        ·{" "}
+                        <span className="font-medium text-emerald-700">+{tx.points ?? 0} pts</span>
+                        {tx.amount ? ` · S/ ${Number(tx.amount).toFixed(2)}` : ""}
+                      </>
+                    ) : (
+                      <>
+                        · Sello {tx.visitNum} (ciclo {tx.cycleNumber})
+                      </>
+                    )}
                   </span>
                 </div>
               </div>

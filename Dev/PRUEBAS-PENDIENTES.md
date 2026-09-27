@@ -79,6 +79,7 @@ Cubre los despliegues `e3b3561` y `442a3ba` (programa de puntos, panel Premios, 
 | 19c | Canje con lotes de distinta fecha | Se descuentan primero los puntos que vencen antes (ver historial: el canje anota los lotes) | |
 | 19d | Cron `loyalty-expiration` | Al pasar la fecha de corte el saldo baja, aparece "Vencimiento" en el historial y el pase se actualiza; con el aviso activado llega el push a la hora configurada y no se repite el mismo dia | |
 | 19e | Panel > Campanas > "Puntos por vencer" | La tarjeta solo aparece si el programa de puntos tiene vencimiento; el comercio edita el texto (con `{{points.expiresAt}}`), los dias de anticipacion y la hora; al guardar, el cron usa ese texto | |
+| 20 | Dashboard de un comercio con puntos (Panel > Dashboard) | KPIs de puntos (otorgados, canjeados, clientes que sumaron, canjes) con comparacion vs. semana pasada; fila de estado (en circulacion, ya pueden canjear, por vencer en 7 dias, vencidos este mes); "Para hoy" con puntos por vencer y aviso apagado; grafico "Puntos otorgados esta semana"; transacciones con "+N pts". Un comercio de sellos sigue viendo su dashboard de siempre | |
 
 ## Como reportar
 

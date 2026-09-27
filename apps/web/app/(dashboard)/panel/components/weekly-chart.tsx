@@ -6,31 +6,42 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 type WeeklyData = {
   day: string
-  visits: number
+  value: number
 }
 
 function CustomTooltip({
   active,
   payload,
   label,
+  unit,
 }: {
   active?: boolean
   payload?: Array<{ value: number }>
   label?: string
+  unit: string
 }) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-slate-900 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg">
-      <span className="font-medium">{label}</span>: {payload[0].value} visitas
+      <span className="font-medium">{label}</span>: {payload[0].value} {unit}
     </div>
   )
 }
 
-export function WeeklyChart({ data }: { data: WeeklyData[] }) {
+/** Last 7 local days of one metric: visits for stamps programs, points granted for points. */
+export function WeeklyChart({
+  data,
+  title = "Visitas esta semana",
+  unit = "visitas",
+}: {
+  data: WeeklyData[]
+  title?: string
+  unit?: string
+}) {
   return (
     <Card className="border border-slate-200">
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-bold text-slate-700">Visitas esta semana</CardTitle>
+        <CardTitle className="text-sm font-bold text-slate-700">{title}</CardTitle>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={180}>
@@ -49,10 +60,10 @@ export function WeeklyChart({ data }: { data: WeeklyData[] }) {
               allowDecimals={false}
             />
             <Tooltip
-              content={<CustomTooltip />}
+              content={<CustomTooltip unit={unit} />}
               cursor={{ fill: "var(--color-muted)", opacity: 0.5 }}
             />
-            <Bar dataKey="visits" fill="var(--color-primary)" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="value" fill="var(--color-primary)" radius={[6, 6, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>

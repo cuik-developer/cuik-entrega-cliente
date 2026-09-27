@@ -1,40 +1,16 @@
-import { Award, TrendingUp, UserPlus, Users } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 
 import { Card, CardContent } from "@/components/ui/card"
-import type { DashboardKpis } from "@/lib/dashboard/compute-dashboard"
 import type { DayKpi } from "@/lib/dashboard/kpi-utils"
 import { pctDelta } from "@/lib/dashboard/kpi-utils"
 
-type Props = {
-  kpis: DashboardKpis
-}
-
-const CARDS: Array<{
-  key: keyof DashboardKpis
+export type KpiCard = {
+  key: string
   label: string
-  icon: typeof TrendingUp
+  icon: LucideIcon
   bg: string
-}> = [
-  { key: "visits", label: "Visitas hoy", icon: TrendingUp, bg: "bg-blue-50 text-primary" },
-  {
-    key: "uniqueClients",
-    label: "Clientes que vinieron hoy",
-    icon: Users,
-    bg: "bg-emerald-50 text-emerald-600",
-  },
-  {
-    key: "newClients",
-    label: "Clientes nuevos hoy",
-    icon: UserPlus,
-    bg: "bg-amber-50 text-amber-600",
-  },
-  {
-    key: "rewardsRedeemed",
-    label: "Premios canjeados hoy",
-    icon: Award,
-    bg: "bg-orange-50 text-accent",
-  },
-]
+  kpi: DayKpi
+}
 
 function DeltaPill({ kpi }: { kpi: DayKpi }) {
   const delta = pctDelta(kpi.today, kpi.previous)
@@ -59,36 +35,34 @@ function DeltaPill({ kpi }: { kpi: DayKpi }) {
 /**
  * Today so far vs. the same weekday last week up to the same time of day.
  * One number per card on purpose — an accumulated week next to "today" read
- * as two different things and confused the operator.
+ * as two different things and confused the operator. The list of cards is
+ * chosen by the page: stamps and points programs measure different things.
  */
-export function KpiCompareCards({ kpis }: Props) {
+export function KpiCompareCards({ cards }: { cards: KpiCard[] }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      {CARDS.map((card) => {
-        const kpi = kpis[card.key]
-        return (
-          <Card key={card.key} className="border border-slate-200">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-slate-500 font-medium">{card.label}</span>
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${card.bg}`}>
-                  <card.icon className="w-4 h-4" />
-                </div>
+      {cards.map((card) => (
+        <Card key={card.key} className="border border-slate-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-slate-500 font-medium">{card.label}</span>
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${card.bg}`}>
+                <card.icon className="w-4 h-4" />
               </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-extrabold text-slate-900 tabular-nums">
-                  {kpi.today}
-                </span>
-                <DeltaPill kpi={kpi} />
-              </div>
-              <div className="mt-1 text-xs text-slate-500 tabular-nums">
-                Sem. pasada a esta hora:{" "}
-                <span className="font-medium text-slate-700">{kpi.previous}</span>
-              </div>
-            </CardContent>
-          </Card>
-        )
-      })}
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-extrabold text-slate-900 tabular-nums">
+                {card.kpi.today}
+              </span>
+              <DeltaPill kpi={card.kpi} />
+            </div>
+            <div className="mt-1 text-xs text-slate-500 tabular-nums">
+              Sem. pasada a esta hora:{" "}
+              <span className="font-medium text-slate-700">{card.kpi.previous}</span>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   )
 }

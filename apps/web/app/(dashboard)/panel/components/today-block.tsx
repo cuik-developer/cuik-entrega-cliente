@@ -1,13 +1,25 @@
-import { AlertTriangle, CalendarClock, CheckCircle2, Gift, Sparkles, UserX } from "lucide-react"
+import {
+  AlertTriangle,
+  BellOff,
+  CalendarClock,
+  CheckCircle2,
+  Gift,
+  Hourglass,
+  Sparkles,
+  UserX,
+} from "lucide-react"
 import Link from "next/link"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { TodayItems } from "@/lib/dashboard/compute-dashboard"
+import type { PointsDashboardState } from "@/lib/dashboard/compute-points-dashboard"
 import { formatDateTime } from "@/lib/format-date"
 
 type Props = {
   items: TodayItems
   timezone: string
+  /** Present for points programs: adds the points-specific rows. */
+  points?: PointsDashboardState
 }
 
 type Row = {
@@ -28,8 +40,59 @@ function plural(n: number, one: string, many: string) {
  * where that action is taken. Rows only appear when there is something to do;
  * an empty list is good news and says so.
  */
-export function TodayBlock({ items, timezone }: Props) {
+export function TodayBlock({ items, timezone, points }: Props) {
   const rows: Row[] = []
+
+  if (points && points.policy && points.expiringSoon.clients > 0) {
+    rows.push({
+      key: "points-expiring",
+      icon: Hourglass,
+      tone: "bg-amber-50 text-amber-600",
+      text: (
+        <>
+          <strong>{points.expiringSoon.points}</strong> puntos de{" "}
+          <strong>{points.expiringSoon.clients}</strong>{" "}
+          {plural(points.expiringSoon.clients, "cliente vencen", "clientes vencen")} en los próximos
+          7 días
+        </>
+      ),
+      href: "/panel/campanas",
+      cta: points.warningEnabled ? "Ver aviso" : "Activar aviso",
+    })
+  }
+
+  if (points && points.policy && !points.warningEnabled) {
+    rows.push({
+      key: "points-warning-off",
+      icon: BellOff,
+      tone: "bg-slate-100 text-slate-500",
+      text: (
+        <>
+          Tus puntos vencen ({points.policy.toLowerCase()}) pero el aviso automático está{" "}
+          <strong>apagado</strong>
+        </>
+      ),
+      href: "/panel/campanas",
+      cta: "Activar",
+    })
+  }
+
+  if (points && points.canRedeem > 0 && points.cheapestCost !== null) {
+    rows.push({
+      key: "points-can-redeem",
+      icon: Gift,
+      tone: "bg-emerald-50 text-emerald-600",
+      text: (
+        <>
+          <strong>{points.canRedeem}</strong>{" "}
+          {plural(points.canRedeem, "cliente ya puede", "clientes ya pueden")} canjear un premio (
+          {points.cheapestCost} pts o más)
+        </>
+      ),
+      href: "/panel/clientes",
+      cta: "Ver clientes",
+    })
+  }
 
   if (items.atRiskClients > 0) {
     rows.push({
