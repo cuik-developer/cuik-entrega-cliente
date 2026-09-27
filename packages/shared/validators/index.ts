@@ -50,6 +50,8 @@ export {
   type SegmentFilterInput,
   segmentConditionSchema,
   segmentFilterSchema,
+  type UpdateCampaignInput,
+  updateCampaignSchema,
 } from "./campaign-schema"
 export {
   type CreateCatalogItemInput,

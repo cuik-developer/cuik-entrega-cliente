@@ -5,7 +5,7 @@ import type { CreateCampaignInput } from "@cuik/shared/validators"
 import { createCampaignSchema } from "@cuik/shared/validators"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Bell, Clock, Loader2, Send } from "lucide-react"
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -45,6 +45,16 @@ interface CreateCampaignFormProps {
   onOpenChange: (open: boolean) => void
   tenantSlug: string
   onSuccess?: () => void
+  /** Id of a draft / scheduled campaign to edit. Undefined = create. */
+  editId?: string | null
+}
+
+const EMPTY_VALUES: CreateCampaignInput = {
+  name: "",
+  message: "",
+  type: "push",
+  segment: { preset: "todos" },
+  scheduledAt: undefined,
 }
 
 export function CreateCampaignForm({
@@ -52,7 +62,10 @@ export function CreateCampaignForm({
   onOpenChange,
   tenantSlug,
   onSuccess,
+  editId,
 }: CreateCampaignFormProps) {
+  const isEdit = Boolean(editId)
+  const [loadingEdit, setLoadingEdit] = useState(false)
   const [isScheduled, setIsScheduled] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const messageRef = useRef<HTMLTextAreaElement | null>(null)
@@ -66,33 +79,81 @@ export function CreateCampaignForm({
 
   const form = useForm<CreateCampaignInput>({
     resolver: zodResolver(createCampaignSchema),
-    defaultValues: {
-      name: "",
-      message: "",
-      type: "push",
-      segment: { preset: "todos" },
-      scheduledAt: undefined,
-    },
+    defaultValues: EMPTY_VALUES,
   })
+
+  // Edit mode: load the campaign when the dialog opens with an id. Create
+  // mode: start clean every time it opens.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: form is stable (react-hook-form ref)
+  useEffect(() => {
+    if (!open) return
+    if (!editId) {
+      form.reset(EMPTY_VALUES)
+      setIsScheduled(false)
+      setScheduledLocal("")
+      return
+    }
+    let cancelled = false
+    setLoadingEdit(true)
+    fetch(`/api/${tenantSlug}/campaigns/${editId}`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (cancelled || !json.success) throw new Error()
+        const c = json.data as {
+          name: string
+          type: "push" | "wallet_update"
+          message: string | null
+          scheduledAt: string | null
+          segment: { filter: SegmentFilter } | null
+        }
+        form.reset({
+          name: c.name,
+          type: c.type,
+          message: c.message ?? "",
+          segment: c.segment?.filter ?? { preset: "todos" },
+          scheduledAt: c.scheduledAt ?? undefined,
+        })
+        setIsScheduled(Boolean(c.scheduledAt))
+        setScheduledLocal(c.scheduledAt ? utcToWallTime(c.scheduledAt, timezone) : "")
+      })
+      .catch(() => {
+        if (!cancelled) {
+          toast.error("No se pudo cargar la campaña")
+          onOpenChange(false)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingEdit(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, editId, tenantSlug, timezone])
 
   async function onSubmit(data: CreateCampaignInput) {
     setIsSubmitting(true)
     try {
-      const res = await fetch(`/api/${tenantSlug}/campaigns`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      })
+      const res = await fetch(
+        isEdit ? `/api/${tenantSlug}/campaigns/${editId}` : `/api/${tenantSlug}/campaigns`,
+        {
+          method: isEdit ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          // On edit, an unscheduled campaign sends null so a previous schedule is removed.
+          body: JSON.stringify(isEdit ? { ...data, scheduledAt: data.scheduledAt ?? null } : data),
+        },
+      )
 
       const json = await res.json()
 
       if (!res.ok) {
-        toast.error(json.error ?? "Error al crear la campaña")
+        toast.error(
+          json.error ?? (isEdit ? "Error al guardar la campaña" : "Error al crear la campaña"),
+        )
         return
       }
 
-      toast.success("Campaña creada exitosamente")
-      form.reset()
+      toast.success(isEdit ? "Campaña actualizada" : "Campaña creada exitosamente")
+      form.reset(EMPTY_VALUES)
       setIsScheduled(false)
       setScheduledLocal("")
       onOpenChange(false)
@@ -134,10 +195,12 @@ export function CreateCampaignForm({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Bell className="w-5 h-5 text-primary" />
-            Nueva campaña
+            {isEdit ? "Editar campaña" : "Nueva campaña"}
           </DialogTitle>
           <DialogDescription>
-            Envia mensajes segmentados a tus clientes via Wallet.
+            {isEdit
+              ? "Puedes cambiar todo mientras la campaña no se haya enviado."
+              : "Envia mensajes segmentados a tus clientes via Wallet."}
           </DialogDescription>
         </DialogHeader>
 
@@ -249,6 +312,7 @@ export function CreateCampaignForm({
                 <FormItem>
                   <FormControl>
                     <SegmentPicker
+                      key={editId ?? "new"}
                       value={field.value}
                       onChange={handleSegmentChange}
                       tenantSlug={tenantSlug}
@@ -303,15 +367,15 @@ export function CreateCampaignForm({
             <div className="flex gap-2 pt-2">
               <Button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || loadingEdit}
                 className="bg-primary text-white gap-2 flex-1"
               >
-                {isSubmitting ? (
+                {isSubmitting || loadingEdit ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <Send className="w-4 h-4" />
                 )}
-                {isScheduled ? "Programar" : "Crear campaña"}
+                {isEdit ? "Guardar cambios" : isScheduled ? "Programar" : "Crear campaña"}
               </Button>
               <Button
                 type="button"

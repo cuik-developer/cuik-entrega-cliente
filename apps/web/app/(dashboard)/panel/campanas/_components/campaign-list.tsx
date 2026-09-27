@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronLeft, ChevronRight, Eye, Loader2, Send } from "lucide-react"
+import { ChevronLeft, ChevronRight, Eye, Loader2, Pencil, Send, Trash2 } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
@@ -62,6 +62,8 @@ interface PaginationData {
 interface CampaignListProps {
   tenantSlug: string
   refreshKey?: number
+  /** Opens the campaign form in edit mode (drafts and scheduled only). */
+  onEdit?: (campaignId: string) => void
 }
 
 const STATUS_CONFIG: Record<CampaignStatus, { label: string; className: string }> = {
@@ -133,11 +135,15 @@ function MobileCampaignCard({
   campaign,
   sendingId,
   onSend,
+  onEdit,
+  onDelete,
   formatDate,
 }: {
   campaign: CampaignRow
   sendingId: string | null
   onSend: (id: string) => void
+  onEdit?: (id: string) => void
+  onDelete: (id: string) => void
   formatDate: (d: string | null) => string
 }) {
   const statusConf = STATUS_CONFIG[campaign.status]
@@ -183,12 +189,34 @@ function MobileCampaignCard({
             )}
           </Button>
         )}
+        {canSend && onEdit && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0"
+            onClick={() => onEdit(campaign.id)}
+            aria-label="Editar campaña"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </Button>
+        )}
+        {canSend && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0 text-red-600 hover:text-red-700"
+            onClick={() => onDelete(campaign.id)}
+            aria-label="Eliminar campaña"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+        )}
       </div>
     </div>
   )
 }
 
-export function CampaignList({ tenantSlug, refreshKey }: CampaignListProps) {
+export function CampaignList({ tenantSlug, refreshKey, onEdit }: CampaignListProps) {
   const { timezone } = useTenant()
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([])
   const [pagination, setPagination] = useState<PaginationData | null>(null)
@@ -246,6 +274,29 @@ export function CampaignList({ tenantSlug, refreshKey }: CampaignListProps) {
       toast.error("Error de conexion")
     } finally {
       setSendingId(null)
+    }
+  }
+
+  async function handleDelete(campaignId: string) {
+    const target = campaigns.find((c) => c.id === campaignId)
+    if (
+      !window.confirm(
+        `¿Eliminar la campaña "${target?.name ?? ""}"? Esta acción no se puede deshacer.`,
+      )
+    ) {
+      return
+    }
+    try {
+      const res = await fetch(`/api/${tenantSlug}/campaigns/${campaignId}`, { method: "DELETE" })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error ?? "Error al eliminar la campaña")
+        return
+      }
+      toast.success("Campaña eliminada")
+      fetchCampaigns()
+    } catch {
+      toast.error("Error de conexion")
     }
   }
 
@@ -362,6 +413,32 @@ export function CampaignList({ tenantSlug, refreshKey }: CampaignListProps) {
                                 )}
                               </Button>
                             )}
+                            {canSend && onEdit && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2"
+                                onClick={() => onEdit(c.id)}
+                                type="button"
+                                aria-label="Editar campaña"
+                                title="Editar"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                            {canSend && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-red-600 hover:text-red-700"
+                                onClick={() => handleDelete(c.id)}
+                                type="button"
+                                aria-label="Eliminar campaña"
+                                title="Eliminar"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -379,6 +456,8 @@ export function CampaignList({ tenantSlug, refreshKey }: CampaignListProps) {
                   campaign={c}
                   sendingId={sendingId}
                   onSend={handleSend}
+                  onEdit={onEdit}
+                  onDelete={handleDelete}
                   formatDate={formatDate}
                 />
               ))}

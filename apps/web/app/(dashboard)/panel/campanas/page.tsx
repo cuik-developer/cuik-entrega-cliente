@@ -15,6 +15,7 @@ import { PointsExpiryAutomationCard } from "./_components/points-expiry-automati
 export default function CampanasPage() {
   const { tenantSlug, isLoading, error } = useTenant()
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
 
   const handleCampaignCreated = useCallback(() => {
@@ -72,13 +73,17 @@ export default function CampanasPage() {
       <PointsExpiryAutomationCard tenantSlug={tenantSlug} />
 
       {/* Campaign list */}
-      <CampaignList tenantSlug={tenantSlug} refreshKey={refreshKey} />
+      <CampaignList tenantSlug={tenantSlug} refreshKey={refreshKey} onEdit={setEditId} />
 
-      {/* Create dialog */}
+      {/* Create / edit dialog */}
       <CreateCampaignForm
-        open={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
+        open={showCreateDialog || editId !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditId(null)
+          setShowCreateDialog(open && editId === null)
+        }}
         tenantSlug={tenantSlug}
+        editId={editId}
         onSuccess={handleCampaignCreated}
       />
     </div>

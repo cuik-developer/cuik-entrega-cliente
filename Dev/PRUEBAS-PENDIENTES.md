@@ -80,6 +80,9 @@ Cubre los despliegues `e3b3561` y `442a3ba` (programa de puntos, panel Premios, 
 | 19d | Cron `loyalty-expiration` | Al pasar la fecha de corte el saldo baja, aparece "Vencimiento" en el historial y el pase se actualiza; con el aviso activado llega el push a la hora configurada y no se repite el mismo dia | |
 | 19e | Panel > Campanas > "Puntos por vencer" | La tarjeta solo aparece si el programa de puntos tiene vencimiento; el comercio edita el texto (con `{{points.expiresAt}}`), los dias de anticipacion y la hora; al guardar, el cron usa ese texto | |
 | 20 | Dashboard de un comercio con puntos (Panel > Dashboard) | KPIs de puntos (otorgados, canjeados, clientes que sumaron, canjes) con comparacion vs. semana pasada; fila de estado (en circulacion, ya pueden canjear, por vencer en 7 dias, vencidos este mes); "Para hoy" con puntos por vencer y aviso apagado; grafico "Puntos otorgados esta semana"; transacciones con "+N pts". Un comercio de sellos sigue viendo su dashboard de siempre | |
+| 21 | Campanas > Programar envio | La hora elegida se mantiene tal cual (04:17 muestra 04:17), debajo dice "Se enviara el ... (hora del comercio)", no deja elegir fechas pasadas, y la campana sale a esa hora local | |
+| 21b | Campanas > lapiz en un borrador o programada | Abre el formulario con los datos cargados (nombre, tipo, mensaje, segmento, fecha); al guardar se actualiza; quitar la fecha la vuelve borrador; una enviada no tiene lapiz | |
+| 21c | Campanas > tacho en un borrador o programada | Pide confirmacion y la elimina; una enviada no tiene tacho | |
 
 ## Como reportar
 

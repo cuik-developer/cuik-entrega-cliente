@@ -65,6 +65,34 @@ export const createCampaignSchema = z.object({
 
 export type CreateCampaignInput = z.infer<typeof createCampaignSchema>
 
+/**
+ * PATCH body for a draft / scheduled campaign. Every field optional;
+ * `scheduledAt: null` removes the schedule (back to draft).
+ */
+export const updateCampaignSchema = z
+  .object({
+    name: z.string().trim().min(1, "Campaign name is required").max(200).optional(),
+    type: z.enum(["push", "wallet_update"]).optional(),
+    message: z
+      .string()
+      .trim()
+      .min(1, "Message is required")
+      .max(150, "Apple Wallet trunca mensajes a 150 caracteres")
+      .optional(),
+    segment: segmentFilterSchema.optional(),
+    scheduledAt: z
+      .string()
+      .datetime()
+      .nullable()
+      .optional()
+      .refine((v) => !v || new Date(v).getTime() > Date.now() - 60_000, {
+        message: "La fecha de envío debe ser futura",
+      }),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: "Nada que actualizar" })
+
+export type UpdateCampaignInput = z.infer<typeof updateCampaignSchema>
+
 export const campaignListSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
