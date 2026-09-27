@@ -256,19 +256,31 @@ async function applyMarketingBonus(ctx: {
       .where(eq(tenants.id, tenantId))
       .limit(1)
     const pointsConfig = pointsPromotionConfigSchema.parse(promotion.config ?? {})
-    await insertEarnLot(db, {
-      clientId: client.id,
-      tenantId,
-      amount: config.pointsBonus,
-      visitId: visit?.id ?? null,
-      description: "Marketing opt-in bonus",
-      policy: pointsConfig.points.pointsExpiration,
-      timezone: tenantRow?.timezone ?? "America/Lima",
+    // Lot and balance land together, with the client row locked, so the sum of
+    // open lots always equals points_balance (same guarantee as a visit).
+    await db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select({ pointsBalance: clients.pointsBalance })
+        .from(clients)
+        .where(eq(clients.id, client.id))
+        .for("update")
+        .limit(1)
+      await insertEarnLot(tx, {
+        clientId: client.id,
+        tenantId,
+        amount: config.pointsBonus,
+        visitId: visit?.id ?? null,
+        description: "Marketing opt-in bonus",
+        policy: pointsConfig.points.pointsExpiration,
+        timezone: tenantRow?.timezone ?? "America/Lima",
+      })
+      await tx
+        .update(clients)
+        .set({
+          pointsBalance: (locked?.pointsBalance ?? client.pointsBalance) + config.pointsBonus,
+        })
+        .where(eq(clients.id, client.id))
     })
-
-    // Update client pointsBalance
-    const newBalance = client.pointsBalance + config.pointsBonus
-    await db.update(clients).set({ pointsBalance: newBalance }).where(eq(clients.id, client.id))
   } else {
     console.warn(
       `[register-client] marketing bonus skipped: promotion=${promotion.type} stampsBonus=${config.stampsBonus} pointsBonus=${config.pointsBonus}`,

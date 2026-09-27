@@ -10,7 +10,7 @@ import {
   sql,
 } from "@cuik/db"
 
-import { consumeLots } from "./points-lots"
+import { consumeLots, nextExpiration } from "./points-lots"
 import type { PointsRedeemResult } from "./types"
 
 /** Two redemptions of the same item by the same client closer than this are treated as one click. */
@@ -128,7 +128,8 @@ export async function redeemPoints(params: {
       redeemedAt: now,
     })
 
-    // 8. Return success
+    // 8. Return success (with what expires next, so the till can show it right away)
+    const upcoming = await nextExpiration(tx, client.id)
     return {
       code: "OK" as const,
       catalogItem: {
@@ -139,6 +140,7 @@ export async function redeemPoints(params: {
       points: {
         deducted: catalogItem.pointsCost,
         newBalance,
+        nextExpiration: upcoming,
       },
     }
   })

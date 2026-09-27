@@ -1,7 +1,13 @@
 import { and, asc, type db as dbType, eq, gt, isNull, lte, pointsTransactions, sql } from "@cuik/db"
 import type { ExpirationPolicy } from "@cuik/shared/validators"
 
-import { addDays, computeExpiresAt, localDateString, localMidnight } from "./expiration"
+import {
+  addDays,
+  computeExpiresAt,
+  formatExpiry,
+  localDateString,
+  localMidnight,
+} from "./expiration"
 
 /**
  * Points are kept as "lots": every earn row carries `remaining` (what is left
@@ -119,6 +125,27 @@ export async function nextExpiration(db: Db, clientId: string): Promise<NextExpi
     .limit(1)
   if (!row?.expiresAt) return null
   return { amount: Number(row.amount), expiresAt: row.expiresAt }
+}
+
+/**
+ * `{{points.expiring}}` / `{{points.expiresAt}}` for a pass template context.
+ * Never throws: a failure here must not block a pass, so it falls back to
+ * empty strings ("nothing expires").
+ */
+export async function pointsExpiryTemplateVars(
+  db: Db,
+  clientId: string,
+  timezone: string,
+): Promise<{ expiring: number | string; expiresAt: string }> {
+  try {
+    const upcoming = await nextExpiration(db, clientId)
+    return upcoming
+      ? { expiring: upcoming.amount, expiresAt: formatExpiry(upcoming.expiresAt, timezone) }
+      : { expiring: "", expiresAt: "" }
+  } catch (err) {
+    console.warn("[points] nextExpiration failed, rendering pass without expiry:", err)
+    return { expiring: "", expiresAt: "" }
+  }
 }
 
 /** Points expiring on or before `until` (open lots only). */

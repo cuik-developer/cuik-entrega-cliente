@@ -24,6 +24,7 @@ import {
   type TemplateContext,
 } from "@cuik/wallet/shared"
 import { errorResponse, requireAuth, requireTenantMembership, resolveTenant } from "@/lib/api-utils"
+import { pointsExpiryTemplateVars } from "@/lib/loyalty/points-lots"
 import { buildStripImages } from "@/lib/wallet/points-strip"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 
@@ -294,6 +295,7 @@ export async function GET(
         },
         points: {
           balance: client.pointsBalance,
+          ...(await pointsExpiryTemplateVars(db, client.id, tenant.timezone ?? "America/Lima")),
         },
         rewards: {
           pending: Number(pendingRewards),

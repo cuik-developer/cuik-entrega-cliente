@@ -213,5 +213,7 @@ export type PointsRedeemResult = {
   points?: {
     deducted: number
     newBalance: number
+    /** Soonest expiration among the remaining lots. Null = nothing expires. */
+    nextExpiration?: { amount: number; expiresAt: Date } | null
   }
 }

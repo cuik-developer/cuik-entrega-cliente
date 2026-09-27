@@ -25,6 +25,7 @@ import {
   resolveTenant,
   successResponse,
 } from "@/lib/api-utils"
+import { pointsExpiryTemplateVars } from "@/lib/loyalty/points-lots"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -138,6 +139,7 @@ export async function POST(
         },
         points: {
           balance: client.pointsBalance,
+          ...(await pointsExpiryTemplateVars(db, client.id, tenant.timezone ?? "America/Lima")),
         },
         rewards: {
           pending: Number(pendingRewards),
