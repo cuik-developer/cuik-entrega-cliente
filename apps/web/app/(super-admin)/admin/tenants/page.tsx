@@ -1,6 +1,10 @@
 "use client"
 
-import { describePointsRate, type PointsRate } from "@cuik/shared/validators"
+import {
+  describePointsRate,
+  expirationPolicySchema,
+  type PointsRate,
+} from "@cuik/shared/validators"
 
 import {
   ArrowRightLeft,
@@ -16,6 +20,7 @@ import {
   Eye,
   Filter,
   Gift,
+  Link2,
   Loader2,
   Mail,
   Paintbrush,
@@ -42,6 +47,7 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { SegmentationThresholds } from "@/lib/loyalty/client-segments"
 import { getThresholds } from "@/lib/loyalty/client-segments"
+import { describeExpirationPolicy } from "@/lib/loyalty/expiration"
 import { AppleCertWizard } from "./apple-cert-wizard"
 import { CatalogSection } from "./catalog-section"
 import {
@@ -186,6 +192,21 @@ const BUSINESS_TYPE_OPTIONS = [
   "Spa",
   "Otro",
 ] as const
+
+/** One-line summary of the active promotion: "Puntos · 1 punto por cada S/ 4.50 · Se reinician cada miercoles". */
+function describePromotion(promo: TenantPromotion): string {
+  const cfg = (promo.config ?? {}) as Record<string, unknown>
+  if (promo.type === "points") {
+    const pts = (cfg.points ?? {}) as Record<string, unknown>
+    const policy = expirationPolicySchema.safeParse(pts.pointsExpiration)
+    const expiry = policy.success ? describeExpirationPolicy(policy.data) : "Sin vencimiento"
+    return ["Puntos", describePointsRate(pts as PointsRate), expiry].join(" · ")
+  }
+  const parts = ["Sellos"]
+  if (promo.maxVisits) parts.push(`${promo.maxVisits} visitas`)
+  if (promo.rewardValue) parts.push(promo.rewardValue)
+  return parts.join(" · ")
+}
 
 /* ────────────────────────────────────────────────────────────
    Tenant Detail Modal — tabbed layout with KPIs, info & actions
@@ -627,7 +648,31 @@ function TenantDetailModal({
               <h3 className="text-lg font-bold text-slate-900 truncate">{tenant.name}</h3>
               <p className="text-sm text-slate-500 truncate">{tenant.slug}</p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 px-2 gap-1 text-xs hidden sm:inline-flex"
+                title="Copiar link de registro para clientes"
+                onClick={() => copyToClipboard(registroUrl, "registro-header")}
+              >
+                {copiedField === "registro-header" ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                ) : (
+                  <Link2 className="w-3.5 h-3.5" />
+                )}
+                {copiedField === "registro-header" ? "Copiado" : "Link registro"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 px-2 gap-1 text-xs"
+                title="Ver panel del comercio (solo lectura)"
+                onClick={() => openTenantPanel(tenant.id)}
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Ver panel</span>
+              </Button>
               <Badge className={`text-xs border ${cfg.color}`}>{cfg.label}</Badge>
               <button
                 type="button"
@@ -732,6 +777,46 @@ function TenantDetailModal({
                   </div>
                 ))}
               </div>
+
+              {/* Active program, in one line */}
+              {(() => {
+                const active = promotions.filter((pr) => pr.active)
+                if (promotionLoading) return null
+                if (active.length === 0) {
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("promocion")}
+                      className="w-full flex items-center gap-2 rounded-xl border border-dashed border-amber-300 bg-amber-50 px-3 py-2 text-left text-xs text-amber-800 hover:bg-amber-100"
+                    >
+                      <Stamp className="w-3.5 h-3.5 shrink-0" />
+                      Sin promocion activa. Configurar en Promocion
+                      <ChevronRight className="w-3.5 h-3.5 ml-auto shrink-0" />
+                    </button>
+                  )
+                }
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("promocion")}
+                    className="w-full flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50"
+                    title="Abrir Promocion"
+                  >
+                    {active[0].type === "points" ? (
+                      <TrendingUp className="w-3.5 h-3.5 text-[#0e70db] shrink-0" />
+                    ) : (
+                      <Stamp className="w-3.5 h-3.5 text-[#0e70db] shrink-0" />
+                    )}
+                    <span className="truncate">{describePromotion(active[0])}</span>
+                    {active.length > 1 && (
+                      <span className="text-amber-600 shrink-0">
+                        +{active.length - 1} activa(s)
+                      </span>
+                    )}
+                    <ChevronRight className="w-3.5 h-3.5 ml-auto text-slate-400 shrink-0" />
+                  </button>
+                )
+              })()}
 
               {/* Info section */}
               <div className="bg-slate-50 rounded-xl p-4 space-y-2 text-sm">
