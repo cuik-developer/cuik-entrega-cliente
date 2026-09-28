@@ -595,46 +595,46 @@ function TenantDetailModal({
           onValueChange={setActiveTab}
           className="flex-1 min-h-0 flex flex-col"
         >
-          <div className="px-4 sm:px-6 overflow-x-auto [scrollbar-width:none] border-b border-slate-200">
+          <div className="shrink-0 px-4 sm:px-6 overflow-x-auto overflow-y-hidden [scrollbar-width:none] border-b border-slate-200">
             <TabsList className="w-max min-w-full justify-start bg-transparent rounded-none p-0 h-auto flex-nowrap">
               <TabsTrigger
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 sm:px-4 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
                 value="general"
               >
                 General
               </TabsTrigger>
               <TabsTrigger
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 sm:px-4 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
                 value="promocion"
               >
                 Promocion
               </TabsTrigger>
               <TabsTrigger
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 sm:px-4 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
                 value="registro"
               >
                 Registro
               </TabsTrigger>
               <TabsTrigger
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 sm:px-4 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
                 value="segmentacion"
               >
                 Segmentacion
               </TabsTrigger>
               <TabsTrigger
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 sm:px-4 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
                 value="apple"
               >
                 Apple
               </TabsTrigger>
               <TabsTrigger
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 sm:px-4 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
                 value="notas"
               >
                 Notas{notesCount ? ` (${notesCount})` : ""}
               </TabsTrigger>
               <TabsTrigger
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 sm:px-4 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
                 value="editar"
               >
                 Editar
