@@ -558,26 +558,28 @@ function TenantDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-black/50 flex items-stretch sm:items-center justify-center p-0 sm:p-4"
       onPointerDown={onClose}
     >
+      {/* Phone: full-screen sheet. Desktop: centered card. */}
       <div
-        className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] flex flex-col"
+        className="bg-white w-full h-dvh sm:h-auto sm:max-h-[90dvh] sm:max-w-2xl sm:rounded-2xl shadow-2xl flex flex-col"
         onPointerDown={(e) => e.stopPropagation()}
       >
         {/* Header — always visible above tabs */}
-        <div className="p-6 pb-0">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">{tenant.name}</h3>
-              <p className="text-sm text-slate-500">{tenant.slug}</p>
+        <div className="p-4 sm:p-6 pb-0 sm:pb-0">
+          <div className="flex items-start justify-between gap-3 mb-3 sm:mb-4">
+            <div className="min-w-0">
+              <h3 className="text-lg font-bold text-slate-900 truncate">{tenant.name}</h3>
+              <p className="text-sm text-slate-500 truncate">{tenant.slug}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <Badge className={`text-xs border ${cfg.color}`}>{cfg.label}</Badge>
               <button
                 type="button"
                 onClick={onClose}
-                className="text-slate-400 hover:text-slate-600 ml-2"
+                className="w-9 h-9 -mr-2 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                aria-label="Cerrar"
               >
                 &#10005;
               </button>
@@ -591,46 +593,46 @@ function TenantDetailModal({
           onValueChange={setActiveTab}
           className="flex-1 min-h-0 flex flex-col"
         >
-          <div className="px-6">
-            <TabsList className="w-full justify-start bg-transparent border-b border-slate-200 rounded-none p-0 h-auto">
+          <div className="px-4 sm:px-6 overflow-x-auto [scrollbar-width:none] border-b border-slate-200">
+            <TabsList className="w-max min-w-full justify-start bg-transparent rounded-none p-0 h-auto flex-nowrap">
               <TabsTrigger
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-4 py-2.5 text-sm"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 sm:px-4 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
                 value="general"
               >
                 General
               </TabsTrigger>
               <TabsTrigger
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-4 py-2.5 text-sm"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 sm:px-4 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
                 value="promocion"
               >
                 Promocion
               </TabsTrigger>
               <TabsTrigger
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-4 py-2.5 text-sm"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 sm:px-4 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
                 value="registro"
               >
                 Registro
               </TabsTrigger>
               <TabsTrigger
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-4 py-2.5 text-sm"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 sm:px-4 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
                 value="segmentacion"
               >
                 Segmentacion
               </TabsTrigger>
               <TabsTrigger
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-4 py-2.5 text-sm"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 sm:px-4 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
                 value="apple"
               >
                 Apple
               </TabsTrigger>
               <TabsTrigger
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-4 py-2.5 text-sm"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 sm:px-4 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
                 value="notas"
               >
                 Notas{notesCount ? ` (${notesCount})` : ""}
               </TabsTrigger>
               <TabsTrigger
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-4 py-2.5 text-sm"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 sm:px-4 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
                 value="editar"
               >
                 Editar
@@ -644,7 +646,7 @@ function TenantDetailModal({
             forceMount
             className="flex-1 overflow-y-auto data-[state=inactive]:hidden"
           >
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               {/* KPIs */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
@@ -1093,7 +1095,7 @@ function TenantDetailModal({
             forceMount
             className="flex-1 overflow-y-auto data-[state=inactive]:hidden"
           >
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               {/* Header with create button */}
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -1296,7 +1298,7 @@ function TenantDetailModal({
             forceMount
             className="flex-1 overflow-y-auto data-[state=inactive]:hidden"
           >
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               {/* Business type info */}
               <div className="bg-slate-50 rounded-xl p-4 space-y-1">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -1315,7 +1317,7 @@ function TenantDetailModal({
                 <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide">
                   Valores por defecto (referencia)
                 </p>
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                   <div className="flex justify-between">
                     <span className="text-slate-500">Frecuente max dias</span>
                     <span className="font-medium text-slate-700">
@@ -1349,7 +1351,7 @@ function TenantDetailModal({
                   Sobreescribir umbrales (dejar vacio para usar defaults)
                 </p>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label htmlFor="seg-frequentMaxDays" className="text-xs text-slate-600">
                       Frecuente max dias
@@ -1462,7 +1464,7 @@ function TenantDetailModal({
             forceMount
             className="flex-1 overflow-y-auto data-[state=inactive]:hidden"
           >
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <AppleCertWizard tenantId={tenant.id} tenantSlug={tenant.slug} />
             </div>
           </TabsContent>
@@ -1473,7 +1475,7 @@ function TenantDetailModal({
             forceMount
             className="flex-1 overflow-y-auto data-[state=inactive]:hidden"
           >
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="edit-name" className="text-xs font-medium text-slate-700">
@@ -1962,7 +1964,7 @@ export default function TenantsPage() {
         <CardHeader className="pb-2">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <CardTitle className="text-base font-bold text-slate-900">Todos los Tenants</CardTitle>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <Input
@@ -1972,7 +1974,7 @@ export default function TenantsPage() {
                     setSearchQuery(e.target.value)
                     setCurrentPage(1)
                   }}
-                  className="pl-9 h-8 text-xs w-48"
+                  className="pl-9 h-9 sm:h-8 text-sm sm:text-xs w-full sm:w-48"
                 />
               </div>
               <div className="relative">
@@ -1983,7 +1985,7 @@ export default function TenantsPage() {
                     setStatusFilter(e.target.value)
                     setCurrentPage(1)
                   }}
-                  className="h-8 pl-8 pr-3 rounded-md border border-slate-200 bg-white text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0e70db] focus:border-transparent appearance-none cursor-pointer"
+                  className="h-9 sm:h-8 w-full sm:w-auto pl-8 pr-3 rounded-md border border-slate-200 bg-white text-sm sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0e70db] focus:border-transparent appearance-none cursor-pointer"
                 >
                   <option value="all">Todos los estados</option>
                   <option value="active">Activo</option>
@@ -2013,7 +2015,113 @@ export default function TenantsPage() {
             </div>
           ) : (
             <>
-              <table className="w-full text-sm">
+              {/* Phone: one card per tenant with big tap targets. */}
+              <div className="md:hidden space-y-3">
+                {tenants.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-slate-400">
+                    No se encontraron tenants con esos filtros.
+                  </p>
+                ) : (
+                  tenants.map((t) => {
+                    const cfg = statusConfig[t.status]
+                    const trialDaysLeft =
+                      t.status === "trial" && t.trialEndsAt
+                        ? Math.max(
+                            0,
+                            Math.ceil(
+                              (new Date(t.trialEndsAt).getTime() - Date.now()) /
+                                (1000 * 60 * 60 * 24),
+                            ),
+                          )
+                        : null
+                    const open = (tab: string) => {
+                      setDefaultTab(tab)
+                      setSelectedTenant(t)
+                    }
+                    return (
+                      <div key={t.id} className="rounded-xl border border-slate-200 p-3 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="font-semibold text-slate-900 truncate">{t.name}</div>
+                            <div className="text-xs text-slate-400 truncate">{t.slug}</div>
+                          </div>
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            <Badge className={`text-xs border ${cfg?.color ?? ""}`}>
+                              {cfg?.label ?? t.status}
+                              {trialDaysLeft !== null && ` \u2014 ${trialDaysLeft}d`}
+                            </Badge>
+                            {t.appleConfig?.mode === "production" ? (
+                              <Badge className="text-xs border bg-emerald-100 text-emerald-700 border-emerald-200">
+                                <Shield className="w-3 h-3 mr-0.5" />
+                                Apple
+                              </Badge>
+                            ) : t.appleConfig?.mode === "configuring" ? (
+                              <Badge className="text-xs border bg-amber-100 text-amber-700 border-amber-200">
+                                <Shield className="w-3 h-3 mr-0.5" />
+                                Configurando
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <div className="min-w-0">
+                            {t.health ? (
+                              <TenantHealthCell
+                                health={t.health}
+                                clientCount={Number(t.clientCount)}
+                              />
+                            ) : (
+                              <span className="text-xs text-slate-300">—</span>
+                            )}
+                          </div>
+                          <div className="flex gap-4 shrink-0 text-right">
+                            <div>
+                              <div className="text-[11px] text-slate-400">Clientes</div>
+                              <div className="font-semibold tabular-nums">
+                                {Number(t.clientCount).toLocaleString()}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-[11px] text-slate-400">Visitas</div>
+                              <div className="font-semibold tabular-nums text-slate-600">
+                                {Number(t.visitCount).toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-10 gap-1.5 text-xs"
+                            onClick={() => open("general")}
+                          >
+                            <Eye className="w-3.5 h-3.5" /> Ver
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-10 gap-1.5 text-xs"
+                            onClick={() => open("apple")}
+                          >
+                            <Shield className="w-3.5 h-3.5" /> Apple
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-10 gap-1.5 text-xs"
+                            onClick={() => open("editar")}
+                          >
+                            <Edit className="w-3.5 h-3.5" /> Editar
+                          </Button>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+
+              <table className="w-full text-sm hidden md:table">
                 <thead>
                   <tr className="text-xs text-slate-500 border-b border-slate-100">
                     <th className="pb-2 text-left font-semibold">Tenant</th>
