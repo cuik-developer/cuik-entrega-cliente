@@ -1,6 +1,10 @@
 import { PhoneFrame, WalletPreview } from "@cuik/editor"
 import type { PassDesignConfigV2 } from "@cuik/shared/types/editor"
-import { expirationPolicySchema } from "@cuik/shared/validators"
+import {
+  describePointsRate,
+  expirationPolicySchema,
+  type PointsRate,
+} from "@cuik/shared/validators"
 import { Award, Clock, Coins, CreditCard, Gift, Info, Smartphone, Star, Zap } from "lucide-react"
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
@@ -178,8 +182,8 @@ function buildPointsRules(
   const rules: Array<{ icon: React.ReactNode; label: string; value: string }> = []
   rules.push({
     icon: <Coins className="h-4 w-4 text-blue-500" />,
-    label: "Puntos por sol",
-    value: `${pts.pointsPerCurrency ?? 1} punto(s) por cada S/ 1.00`,
+    label: "Puntos por compra",
+    value: describePointsRate(pts as PointsRate),
   })
   rules.push({
     icon: <Zap className="h-4 w-4 text-amber-500" />,

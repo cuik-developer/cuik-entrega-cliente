@@ -38,7 +38,9 @@ Tenants → Promoción → tipo **Puntos**. Campos: puntos por sol, redondeo (fl
 
 | Campo | Default | Efecto |
 |---|---|---|
-| `points.pointsPerCurrency` | 1 | puntos por cada sol |
+| `points.calcMode` | per_currency | `per_currency` multiplica (`amount x pointsPerCurrency`); `currency_per_point` divide (`amount / solesPerPoint`). Configs antiguas sin el campo siguen multiplicando |
+| `points.pointsPerCurrency` | 1 | puntos por cada sol (modo per_currency) |
+| `points.solesPerPoint` | null | soles que hacen 1 punto (modo currency_per_point, ej. 4.50). Obligatorio en ese modo |
 | `points.roundingMethod` | floor | cómo redondear el resultado |
 | `points.minimumPurchaseForPoints` | null | debajo de este monto no suma |
 | `points.maxVisitsPerDay` | 1 | tope de registros por día |

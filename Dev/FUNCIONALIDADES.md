@@ -444,7 +444,8 @@ Configuracion en `promotions.config`:
 ### 7.2 Programa de puntos (points)
 
 Configuracion:
-- `points.pointsPerCurrency` (ej: 1 punto por cada 1 PEN)
+- `points.calcMode`: `per_currency` (cada sol da X puntos) o `currency_per_point` (cada X soles dan 1 punto)
+- `points.pointsPerCurrency` (ej: 1 punto por cada 1 PEN) o `points.solesPerPoint` (ej: 4.50 soles = 1 punto)
 - `points.rounding` (floor / round / ceil)
 - `points.minimumPurchaseForPoints` (opcional)
 - `points.maxVisitsPerDay` (default mayor que stamps)

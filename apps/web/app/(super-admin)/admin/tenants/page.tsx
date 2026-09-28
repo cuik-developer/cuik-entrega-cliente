@@ -1,5 +1,7 @@
 "use client"
 
+import { describePointsRate, type PointsRate } from "@cuik/shared/validators"
+
 import {
   ArrowRightLeft,
   Ban,
@@ -1208,12 +1210,12 @@ function TenantDetailModal({
                     {promo.type === "points" ? (
                       <>
                         <div>
-                          <span className="text-slate-500">Pts/Sol:</span>{" "}
+                          <span className="text-slate-500">Regla:</span>{" "}
                           <span className="font-medium text-slate-900">
                             {(() => {
                               const c = promo.config as Record<string, unknown> | null
                               const pts = c?.points as Record<string, unknown> | undefined
-                              return String(pts?.pointsPerCurrency ?? "1")
+                              return describePointsRate((pts ?? {}) as PointsRate)
                             })()}
                           </span>
                         </div>

@@ -110,13 +110,84 @@ const pointsMultiplierSchema = z.object({
   multiplier: z.number().positive().min(1).max(10).default(2),
 })
 
-const pointsBlockSchema = z.object({
-  pointsPerCurrency: z.number().positive().default(1),
-  roundingMethod: z.enum(["floor", "round", "ceil"]).default("floor"),
-  minimumPurchaseForPoints: z.number().positive().nullable().default(null),
-  maxVisitsPerDay: z.number().int().min(1).max(10).default(1),
-  pointsExpiration: expirationPolicySchema.default({ mode: "never" }),
-})
+export const POINTS_CALC_MODES = ["per_currency", "currency_per_point"] as const
+export type PointsCalcMode = (typeof POINTS_CALC_MODES)[number]
+
+const pointsBlockSchema = z
+  .object({
+    // How base points are computed from the purchase amount:
+    //   per_currency:       points = amount x pointsPerCurrency  ("2 puntos por sol")
+    //   currency_per_point: points = amount / solesPerPoint      ("1 punto por cada S/ 4.50")
+    // Existing configs have no `calcMode` and keep multiplying, unchanged.
+    calcMode: z.enum(POINTS_CALC_MODES).default("per_currency"),
+    pointsPerCurrency: z.number().positive().default(1),
+    solesPerPoint: z.number().positive().nullable().default(null),
+    roundingMethod: z.enum(["floor", "round", "ceil"]).default("floor"),
+    minimumPurchaseForPoints: z.number().positive().nullable().default(null),
+    maxVisitsPerDay: z.number().int().min(1).max(10).default(1),
+    pointsExpiration: expirationPolicySchema.default({ mode: "never" }),
+  })
+  .superRefine((points, ctx) => {
+    if (points.calcMode === "currency_per_point" && points.solesPerPoint === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["solesPerPoint"],
+        message: "Indica cuantos soles hacen 1 punto",
+      })
+    }
+  })
+
+/** The subset of the points block that drives the base-points calculation. */
+export type PointsRate = {
+  calcMode?: PointsCalcMode | null
+  pointsPerCurrency?: number | null
+  solesPerPoint?: number | null
+  roundingMethod?: "floor" | "round" | "ceil" | null
+}
+
+/**
+ * Base points for a purchase amount. Single source of truth for the rules
+ * engine, the super-admin preview and analytics estimates.
+ *
+ * The raw quotient/product is snapped to 6 decimals before rounding: binary
+ * floating point turns 100 x 0.29 into 28.999999999999996 (floor -> 28 instead
+ * of 29) and 0.3 / 0.1 into 2.9999999999999996. No real rate uses more than
+ * 4 decimals, so 6 removes the noise without changing any legitimate result.
+ */
+export function pointsForAmount(amount: number, rate: PointsRate): number {
+  if (!Number.isFinite(amount) || amount <= 0) return 0
+  let raw: number
+  if (rate.calcMode === "currency_per_point") {
+    const soles = rate.solesPerPoint ?? 0
+    if (soles <= 0) return 0
+    raw = amount / soles
+  } else {
+    raw = amount * (rate.pointsPerCurrency ?? 1)
+  }
+  raw = Number(raw.toFixed(6))
+  switch (rate.roundingMethod ?? "floor") {
+    case "ceil":
+      return Math.ceil(raw)
+    case "round":
+      return Math.round(raw)
+    default:
+      return Math.floor(raw)
+  }
+}
+
+function fmtSoles(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(2)
+}
+
+/** Human label for the rate: "1 punto por cada S/ 4.50" / "2 puntos por sol". */
+export function describePointsRate(rate: PointsRate): string {
+  if (rate.calcMode === "currency_per_point" && rate.solesPerPoint) {
+    return `1 punto por cada S/ ${fmtSoles(rate.solesPerPoint)}`
+  }
+  const ppc = rate.pointsPerCurrency ?? 1
+  if (ppc === 1) return "1 punto por sol"
+  return `${ppc} puntos por sol`
+}
 
 const pointsAccumulationSchema = z.object({
   pointsMultipliers: z.array(pointsMultiplierSchema).default([]),

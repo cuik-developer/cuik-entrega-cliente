@@ -1,7 +1,15 @@
 "use client"
 
-import type { CreatePromotionInput, ExpirationPolicy } from "@cuik/shared/validators"
-import { expirationPolicySchema } from "@cuik/shared/validators"
+import type {
+  CreatePromotionInput,
+  ExpirationPolicy,
+  PointsCalcMode,
+} from "@cuik/shared/validators"
+import {
+  describePointsRate,
+  expirationPolicySchema,
+  pointsForAmount,
+} from "@cuik/shared/validators"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useTransition } from "react"
 import { Controller, useForm } from "react-hook-form"
@@ -60,7 +68,12 @@ const formSchema = z
       .positive("Debe ser mayor a 0")
       .nullable(),
     // Points fields
+    calcMode: z.enum(["per_currency", "currency_per_point"]).default("per_currency"),
     pointsPerCurrency: z
+      .number({ invalid_type_error: "Ingresa un numero valido" })
+      .positive("Debe ser mayor a 0")
+      .nullable(),
+    solesPerPoint: z
       .number({ invalid_type_error: "Ingresa un numero valido" })
       .positive("Debe ser mayor a 0")
       .nullable(),
@@ -119,7 +132,15 @@ const formSchema = z
       }
     }
     if (data.type === "points") {
-      if (data.pointsPerCurrency === null || data.pointsPerCurrency === undefined) {
+      if (data.calcMode === "currency_per_point") {
+        if (data.solesPerPoint === null || data.solesPerPoint === undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Indica cuantos soles hacen 1 punto",
+            path: ["solesPerPoint"],
+          })
+        }
+      } else if (data.pointsPerCurrency === null || data.pointsPerCurrency === undefined) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: "Los puntos por sol son obligatorios",
@@ -187,20 +208,26 @@ function extractStampsConfigValues(config: unknown): {
 }
 
 function extractPointsConfigValues(config: unknown): {
+  calcMode: PointsCalcMode
   pointsPerCurrency: number
+  solesPerPoint: number | null
   roundingMethod: "floor" | "round" | "ceil"
   minimumPurchaseForPoints: number | null
   maxVisitsPerDay: number
   birthdayMultiplier: number
 } {
   const defaults: {
+    calcMode: PointsCalcMode
     pointsPerCurrency: number
+    solesPerPoint: number | null
     roundingMethod: "floor" | "round" | "ceil"
     minimumPurchaseForPoints: number | null
     maxVisitsPerDay: number
     birthdayMultiplier: number
   } = {
+    calcMode: "per_currency",
     pointsPerCurrency: 1,
+    solesPerPoint: null,
     roundingMethod: "floor",
     minimumPurchaseForPoints: null,
     maxVisitsPerDay: 1,
@@ -217,8 +244,14 @@ function extractPointsConfigValues(config: unknown): {
   }
 
   if (points) {
+    if (points.calcMode === "currency_per_point" || points.calcMode === "per_currency") {
+      defaults.calcMode = points.calcMode
+    }
     if (typeof points.pointsPerCurrency === "number") {
       defaults.pointsPerCurrency = points.pointsPerCurrency
+    }
+    if (typeof points.solesPerPoint === "number") {
+      defaults.solesPerPoint = points.solesPerPoint
     }
     if (
       points.roundingMethod === "floor" ||
@@ -350,7 +383,9 @@ export function PromotionFormDialog({
             rewardExpirationDays: null,
             hasMinimumPurchase: false,
             minimumPurchaseAmount: null,
+            calcMode: pointsConfig?.calcMode ?? "per_currency",
             pointsPerCurrency: pointsConfig?.pointsPerCurrency ?? 1,
+            solesPerPoint: pointsConfig?.solesPerPoint ?? null,
             roundingMethod: pointsConfig?.roundingMethod ?? "floor",
             minimumPurchaseForPoints: pointsConfig?.minimumPurchaseForPoints ?? null,
             hasMinimumPurchaseForPoints: pointsConfig?.minimumPurchaseForPoints !== null,
@@ -367,7 +402,9 @@ export function PromotionFormDialog({
             rewardExpirationDays: stampsConfig?.rewardExpirationDays ?? null,
             hasMinimumPurchase: stampsConfig?.minimumPurchaseAmount !== null,
             minimumPurchaseAmount: stampsConfig?.minimumPurchaseAmount ?? null,
+            calcMode: "per_currency",
             pointsPerCurrency: 1,
+            solesPerPoint: null,
             roundingMethod: "floor",
             minimumPurchaseForPoints: null,
             hasMinimumPurchaseForPoints: false,
@@ -384,7 +421,9 @@ export function PromotionFormDialog({
           rewardExpirationDays: null,
           hasMinimumPurchase: false,
           minimumPurchaseAmount: null,
+          calcMode: "per_currency",
           pointsPerCurrency: 1,
+          solesPerPoint: null,
           roundingMethod: "floor",
           minimumPurchaseForPoints: null,
           hasMinimumPurchaseForPoints: false,
@@ -398,6 +437,18 @@ export function PromotionFormDialog({
   const hasMinimumPurchase = watch("hasMinimumPurchase")
   const hasMinimumPurchaseForPoints = watch("hasMinimumPurchaseForPoints")
   const expMode = watch("expMode")
+  const calcMode = watch("calcMode")
+  const pointsPerCurrency = watch("pointsPerCurrency")
+  const solesPerPoint = watch("solesPerPoint")
+  const roundingMethod = watch("roundingMethod")
+
+  const rate = { calcMode, pointsPerCurrency, solesPerPoint, roundingMethod }
+  const rateReady =
+    calcMode === "currency_per_point"
+      ? typeof solesPerPoint === "number" && solesPerPoint > 0
+      : typeof pointsPerCurrency === "number" && pointsPerCurrency > 0
+  const previewPoints = (amount: number) =>
+    rateReady ? String(pointsForAmount(amount, rate)) : "-"
 
   function onSubmit(values: FormValues) {
     // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: handles stamps vs points config building + create vs update branching
@@ -456,7 +507,9 @@ export function PromotionFormDialog({
         // Points type
         const pointsConfigPartial = {
           points: {
+            calcMode: values.calcMode,
             pointsPerCurrency: values.pointsPerCurrency ?? 1,
+            solesPerPoint: values.calcMode === "currency_per_point" ? values.solesPerPoint : null,
             roundingMethod: values.roundingMethod,
             minimumPurchaseForPoints: values.hasMinimumPurchaseForPoints
               ? values.minimumPurchaseForPoints
@@ -592,26 +645,71 @@ export function PromotionFormDialog({
           {/* ── Points-specific fields ── */}
           {selectedType === "points" && (
             <>
-              {/* Points per currency */}
+              {/* Calc mode + rate */}
               <div className="space-y-2">
-                <Label htmlFor="pointsPerCurrency">Puntos por sol (S/)</Label>
-                <Input
-                  id="pointsPerCurrency"
-                  type="number"
-                  min={0.01}
-                  step={0.01}
-                  placeholder="1"
-                  {...register("pointsPerCurrency", {
-                    valueAsNumber: true,
-                  })}
+                <Label>Como se calculan los puntos</Label>
+                <Controller
+                  control={control}
+                  name="calcMode"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="currency_per_point">Cada X soles dan 1 punto</SelectItem>
+                        <SelectItem value="per_currency">Cada sol da X puntos</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 />
-                <p className="text-xs text-slate-400">
-                  Cuantos puntos gana el cliente por cada S/ 1.00 de compra.
-                </p>
-                {errors.pointsPerCurrency && (
-                  <p className="text-sm text-red-600">{errors.pointsPerCurrency.message}</p>
-                )}
               </div>
+
+              {calcMode === "currency_per_point" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="solesPerPoint">Soles por punto (S/)</Label>
+                  <Input
+                    id="solesPerPoint"
+                    type="number"
+                    min={0.01}
+                    step="any"
+                    placeholder="4.50"
+                    {...register("solesPerPoint", { valueAsNumber: true })}
+                  />
+                  <p className="text-xs text-slate-400">
+                    Cuantos soles de compra hacen 1 punto. Ej: 4.50 = 1 punto por cada S/ 4.50.
+                  </p>
+                  {errors.solesPerPoint && (
+                    <p className="text-sm text-red-600">{errors.solesPerPoint.message}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="pointsPerCurrency">Puntos por sol (S/)</Label>
+                  <Input
+                    id="pointsPerCurrency"
+                    type="number"
+                    min={0.0001}
+                    step="any"
+                    placeholder="1"
+                    {...register("pointsPerCurrency", { valueAsNumber: true })}
+                  />
+                  <p className="text-xs text-slate-400">
+                    Cuantos puntos gana el cliente por cada S/ 1.00 de compra.
+                  </p>
+                  {errors.pointsPerCurrency && (
+                    <p className="text-sm text-red-600">{errors.pointsPerCurrency.message}</p>
+                  )}
+                </div>
+              )}
+
+              {rateReady ? (
+                <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                  <span className="font-medium text-slate-700">{describePointsRate(rate)}</span>
+                  {" · "}S/ 4.50 = {previewPoints(4.5)} pt · S/ 10 = {previewPoints(10)} pt · S/
+                  13.50 = {previewPoints(13.5)} pt · S/ 50 = {previewPoints(50)} pt
+                </p>
+              ) : null}
 
               {/* Rounding method */}
               <div className="space-y-2">

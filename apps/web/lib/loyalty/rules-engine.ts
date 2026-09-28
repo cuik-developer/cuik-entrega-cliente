@@ -1,4 +1,5 @@
 import type { PointsPromotionConfig, StampsPromotionConfig } from "@cuik/shared/validators"
+import { pointsForAmount } from "@cuik/shared/validators"
 
 import type {
   PointsRulesContext,
@@ -145,21 +146,9 @@ export function evaluatePointsRules(
     }
   }
 
-  // 5. Calculate base points from amount
-  const rawPoints = context.visitAmount * config.points.pointsPerCurrency
-  let pointsToEarn: number
-
-  switch (config.points.roundingMethod) {
-    case "ceil":
-      pointsToEarn = Math.ceil(rawPoints)
-      break
-    case "round":
-      pointsToEarn = Math.round(rawPoints)
-      break
-    default:
-      pointsToEarn = Math.floor(rawPoints)
-      break
-  }
+  // 5. Calculate base points from amount (multiply or divide per calcMode,
+  //    snapped to 6 decimals before rounding; see pointsForAmount).
+  let pointsToEarn = pointsForAmount(context.visitAmount, config.points)
 
   const bonusReasons: string[] = []
   const basePoints = pointsToEarn

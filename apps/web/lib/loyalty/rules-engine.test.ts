@@ -491,4 +491,66 @@ describe("isBirthdayVisit", () => {
     expect(result.pointsToEarn).toBe(40)
     expect(result.bonusReasons).toContain("birthday_multiplier")
   })
+
+  describe("points: calc modes", () => {
+    const ctx = (visitAmount: number) => ({
+      visitDate: new Date("2026-09-18T15:00:00Z"),
+      visitDateLocal: "2026-09-18",
+      clientTotalVisits: 3,
+      clientBirthday: null,
+      visitAmount,
+      locationId: null,
+      todayVisitCount: 0,
+    })
+
+    it("currency_per_point: 1 punto por cada S/ 4.50", () => {
+      const config = {
+        ...DEFAULT_POINTS_CONFIG,
+        points: {
+          ...DEFAULT_POINTS_CONFIG.points,
+          calcMode: "currency_per_point" as const,
+          solesPerPoint: 4.5,
+          roundingMethod: "floor" as const,
+        },
+      }
+      expect(evaluatePointsRules(config, ctx(4.49)).pointsToEarn).toBe(0)
+      expect(evaluatePointsRules(config, ctx(4.5)).pointsToEarn).toBe(1)
+      expect(evaluatePointsRules(config, ctx(13.5)).pointsToEarn).toBe(3)
+      expect(evaluatePointsRules(config, ctx(50)).pointsToEarn).toBe(11)
+    })
+
+    it("per_currency (legacy) still multiplies", () => {
+      const config = {
+        ...DEFAULT_POINTS_CONFIG,
+        points: {
+          ...DEFAULT_POINTS_CONFIG.points,
+          pointsPerCurrency: 0.22,
+          roundingMethod: "ceil" as const,
+        },
+      }
+      expect(evaluatePointsRules(config, ctx(4.5)).pointsToEarn).toBe(1)
+      expect(evaluatePointsRules(config, ctx(5)).pointsToEarn).toBe(2)
+    })
+
+    it("floating point: 100 x 0.29 earns 29 with floor, 100 x 0.07 earns 7 with ceil", () => {
+      const floorCfg = {
+        ...DEFAULT_POINTS_CONFIG,
+        points: {
+          ...DEFAULT_POINTS_CONFIG.points,
+          pointsPerCurrency: 0.29,
+          roundingMethod: "floor" as const,
+        },
+      }
+      const ceilCfg = {
+        ...DEFAULT_POINTS_CONFIG,
+        points: {
+          ...DEFAULT_POINTS_CONFIG.points,
+          pointsPerCurrency: 0.07,
+          roundingMethod: "ceil" as const,
+        },
+      }
+      expect(evaluatePointsRules(floorCfg, ctx(100)).pointsToEarn).toBe(29)
+      expect(evaluatePointsRules(ceilCfg, ctx(100)).pointsToEarn).toBe(7)
+    })
+  })
 })

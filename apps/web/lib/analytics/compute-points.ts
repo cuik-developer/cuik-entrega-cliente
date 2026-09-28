@@ -157,7 +157,12 @@ export async function computePointsAnalytics(
     // "visit on the client's birthday" and the promotion's points-per-currency.
     db.execute<{ bonus_points: Num; birthday_extra: Num }>(sql`
         WITH promo AS (
-          SELECT COALESCE((config->'points'->>'pointsPerCurrency')::numeric, 1) AS ppc
+          SELECT CASE
+                   WHEN config->'points'->>'calcMode' = 'currency_per_point'
+                        AND COALESCE((config->'points'->>'solesPerPoint')::numeric, 0) > 0
+                     THEN 1 / (config->'points'->>'solesPerPoint')::numeric
+                   ELSE COALESCE((config->'points'->>'pointsPerCurrency')::numeric, 1)
+                 END AS ppc
           FROM loyalty.promotions
           WHERE tenant_id = ${tenantId} AND active = true AND type = 'points'
           ORDER BY created_at DESC LIMIT 1

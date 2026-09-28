@@ -1,4 +1,5 @@
 import { and, db, eq, promotions } from "@cuik/db"
+import { describePointsRate, type PointsRate } from "@cuik/shared/validators"
 import { z } from "zod"
 import { generateImage } from "@/lib/ai/generate-image"
 import { ASSET_DIMENSIONS, buildPrompt } from "@/lib/ai/prompt-templates"
@@ -134,7 +135,7 @@ function computeGridLayout(maxVisits: number) {
 }
 
 function buildPointsFields(ctx: {
-  pointsPerCurrency: unknown
+  rateLabel: string
   promoReward: string | null
   businessName: string
 }) {
@@ -149,7 +150,7 @@ function buildPointsFields(ctx: {
       {
         key: "rate",
         label: "Puntos por compra",
-        value: `${ctx.pointsPerCurrency} punto(s) por cada S/ 1.00`,
+        value: ctx.rateLabel,
       },
       { key: "visits", label: "Visitas totales", value: "{{stamps.total}}" },
       ...(ctx.promoReward ? [{ key: "program", label: "Programa", value: ctx.promoReward }] : []),
@@ -197,7 +198,7 @@ function buildV2Config(ctx: {
   promoType: string
   promoMaxVisits: number
   promoReward: string | null
-  pointsPerCurrency: unknown
+  rateLabel: string
   businessName: string
 }) {
   const isPoints = ctx.promoType === "points"
@@ -256,8 +257,9 @@ export async function POST(request: Request) {
     const promoReward = activePromo?.rewardValue ?? null
     const promoMaxVisits = activePromo?.maxVisits ?? 8
     const promoConfig = activePromo?.config as Record<string, unknown> | null
-    const pointsPerCurrency =
-      (promoConfig?.points as Record<string, unknown>)?.pointsPerCurrency ?? 1
+    const rateLabel = describePointsRate(
+      ((promoConfig?.points as Record<string, unknown>) ?? {}) as PointsRate,
+    )
 
     // Generate color palette based on business type
     const palette = generatePalette(businessType)
@@ -319,7 +321,7 @@ export async function POST(request: Request) {
       promoType,
       promoMaxVisits,
       promoReward,
-      pointsPerCurrency,
+      rateLabel,
       businessName,
     })
 

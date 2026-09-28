@@ -730,7 +730,7 @@ if (cycleComplete) updateRewardsRedeemed(...).catch(logError)
 1. Max visits/day, location checks (igual)
 2. Amount > 0 → obligatorio
 3. `minimumPurchaseForPoints`
-4. `rawPoints = amount × pointsPerCurrency`, redondeo (floor/round/ceil)
+4. `pointsForAmount(amount, points)` (shared): multiplica o divide según `calcMode`, recorta a 6 decimales (evita 100×0.29 = 28.999…) y redondea (floor/round/ceil)
 5. Day/hour multipliers (first match wins, no stacking)
 6. Birthday multiplier (stack multiplicativo)
 7. Retorna `{ eligible, pointsToEarn, bonusReasons }`
