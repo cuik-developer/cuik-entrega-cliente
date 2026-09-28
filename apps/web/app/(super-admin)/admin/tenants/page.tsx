@@ -201,7 +201,41 @@ function TenantDetailModal({
   const [promotionLoading, setPromotionLoading] = useState(true)
   const [promoDialogOpen, setPromoDialogOpen] = useState(false)
   const [editingPromo, setEditingPromo] = useState<TenantPromotion | null>(null)
-  const [activeTab, setActiveTab] = useState(defaultTab)
+  // Remember the last tab per tenant for this browser session, so reopening the
+  // same tenant lands where you left it. An explicit non-general defaultTab
+  // (e.g. the Apple shortcut in the table) always wins.
+  const tabStorageKey = `cuik.sa.tenantTab.${tenant.id}`
+  const [activeTab, setActiveTabState] = useState(() => {
+    if (defaultTab !== "general") return defaultTab
+    try {
+      return window.sessionStorage.getItem(tabStorageKey) ?? "general"
+    } catch {
+      return "general"
+    }
+  })
+  const setActiveTab = useCallback(
+    (tab: string) => {
+      setActiveTabState(tab)
+      try {
+        window.sessionStorage.setItem(tabStorageKey, tab)
+      } catch {
+        /* private mode / storage blocked: ignore */
+      }
+    },
+    [tabStorageKey],
+  )
+  // Checklist shortcuts can point to a section inside a tab (e.g. Sucursales).
+  const openTabSection = useCallback(
+    (tab: string, anchor?: string) => {
+      setActiveTab(tab)
+      if (anchor) {
+        window.setTimeout(() => {
+          document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" })
+        }, 60)
+      }
+    },
+    [setActiveTab],
+  )
   const [checklist, setChecklist] = useState<ChecklistData | null>(null)
   const [notesCount, setNotesCount] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
@@ -605,6 +639,12 @@ function TenantDetailModal({
               </TabsTrigger>
               <TabsTrigger
                 className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
+                value="editar"
+              >
+                Editar
+              </TabsTrigger>
+              <TabsTrigger
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
                 value="promocion"
               >
                 Promocion
@@ -632,12 +672,6 @@ function TenantDetailModal({
                 value="notas"
               >
                 Notas{notesCount ? ` (${notesCount})` : ""}
-              </TabsTrigger>
-              <TabsTrigger
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0e70db] data-[state=active]:text-[#0e70db] data-[state=active]:shadow-none px-3 py-3 sm:py-2.5 text-sm whitespace-nowrap shrink-0"
-                value="editar"
-              >
-                Editar
               </TabsTrigger>
             </TabsList>
           </div>
@@ -712,7 +746,7 @@ function TenantDetailModal({
                 <OnboardingChecklist
                   checklist={checklist}
                   tenantId={tenant.id}
-                  onOpenTab={setActiveTab}
+                  onOpenTab={openTabSection}
                 />
               )}
 
@@ -1007,7 +1041,7 @@ function TenantDetailModal({
               </div>
 
               {/* ── Sucursales ─────────────────────────────────── */}
-              <div className="space-y-3">
+              <div id="sucursales" className="space-y-3 scroll-mt-4">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
                   <Building2 className="w-3.5 h-3.5" /> Sucursales
                 </p>
