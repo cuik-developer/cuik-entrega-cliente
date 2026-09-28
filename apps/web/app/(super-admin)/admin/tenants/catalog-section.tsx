@@ -162,6 +162,8 @@ export function CatalogSection({ tenantId, promotionType }: CatalogSectionProps)
                   size="sm"
                   variant="ghost"
                   className="h-7 w-7 p-0"
+                  title="Editar premio"
+                  aria-label="Editar premio"
                   onClick={() => handleEdit(item)}
                 >
                   <Edit className="w-3 h-3" />
@@ -170,6 +172,8 @@ export function CatalogSection({ tenantId, promotionType }: CatalogSectionProps)
                   size="sm"
                   variant="ghost"
                   className="h-7 w-7 p-0"
+                  title={item.active ? "Desactivar premio" : "Activar premio"}
+                  aria-label={item.active ? "Desactivar premio" : "Activar premio"}
                   onClick={() => handleToggleActive(item)}
                   disabled={isPending}
                 >

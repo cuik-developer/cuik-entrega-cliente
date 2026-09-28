@@ -1079,6 +1079,8 @@ function TenantDetailModal({
                           type="button"
                           onClick={() => handleDeleteSaLocation(loc.id)}
                           disabled={saLocSaving}
+                          title="Eliminar sucursal"
+                          aria-label="Eliminar sucursal"
                           className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
                         >
                           <XCircle className="w-3.5 h-3.5" />
@@ -1205,6 +1207,7 @@ function TenantDetailModal({
                           variant="ghost"
                           className="h-7 px-2 text-xs"
                           title="Editar pase"
+                          aria-label="Editar pase"
                           onClick={() =>
                             window.open(`/admin/pases/${promo.passDesignId}/editor`, "_self")
                           }
@@ -1217,6 +1220,8 @@ function TenantDetailModal({
                         size="sm"
                         variant="ghost"
                         className="h-7 px-2 text-xs"
+                        title={promo.active ? "Pausar promocion" : "Activar promocion"}
+                        aria-label={promo.active ? "Pausar promocion" : "Activar promocion"}
                         onClick={() => handleTogglePromo(promo.id, !promo.active)}
                       >
                         {promo.active ? (
@@ -1230,6 +1235,8 @@ function TenantDetailModal({
                         size="sm"
                         variant="ghost"
                         className="h-7 px-2 text-xs"
+                        title="Editar promocion"
+                        aria-label="Editar promocion"
                         onClick={() => {
                           setEditingPromo(promo)
                           setPromoDialogOpen(true)
@@ -2238,6 +2245,8 @@ export default function TenantsPage() {
                                 size="sm"
                                 variant="ghost"
                                 className="h-7 px-2 text-xs"
+                                title="Ver tenant"
+                                aria-label="Ver tenant"
                                 onClick={() => {
                                   setDefaultTab("general")
                                   setSelectedTenant(t)
@@ -2250,6 +2259,7 @@ export default function TenantsPage() {
                                 variant="ghost"
                                 className="h-7 px-2 text-xs"
                                 title="Certificado Apple"
+                                aria-label="Certificado Apple"
                                 onClick={() => {
                                   setDefaultTab("apple")
                                   setSelectedTenant(t)
@@ -2261,6 +2271,8 @@ export default function TenantsPage() {
                                 size="sm"
                                 variant="ghost"
                                 className="h-7 px-2 text-xs"
+                                title="Editar tenant"
+                                aria-label="Editar tenant"
                                 onClick={() => {
                                   setDefaultTab("editar")
                                   setSelectedTenant(t)
@@ -2289,6 +2301,8 @@ export default function TenantsPage() {
                       variant="outline"
                       className="h-7 px-2 text-xs"
                       disabled={pagination.page <= 1}
+                      title="Pagina anterior"
+                      aria-label="Pagina anterior"
                       onClick={() => setCurrentPage((p) => p - 1)}
                     >
                       <ChevronLeft className="w-3 h-3" />
@@ -2298,6 +2312,8 @@ export default function TenantsPage() {
                       variant="outline"
                       className="h-7 px-2 text-xs"
                       disabled={pagination.page >= pagination.totalPages}
+                      title="Pagina siguiente"
+                      aria-label="Pagina siguiente"
                       onClick={() => setCurrentPage((p) => p + 1)}
                     >
                       <ChevronRight className="w-3 h-3" />
