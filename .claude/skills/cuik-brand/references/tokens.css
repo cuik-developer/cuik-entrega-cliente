@@ -1,0 +1,16 @@
+/* Cuik brand tokens — see SKILL.md */
+:root {
+  --cuik-blue: #0e70db;
+  --cuik-orange: #ff4810;
+  --cuik-ink: #231f20;
+  --cuik-black: #000000;
+  --cuik-white: #ffffff;
+  --cuik-surface: #f8f8f8;
+  --cuik-navy: #0f172a; /* product UI only */
+  --cuik-muted: #6b7280;
+  --cuik-line: #e5e7eb;
+  --cuik-font-display: "Cocogoose Pro", "Poppins Black", "Poppins", Arial Black, sans-serif;
+  --cuik-font-heading: "Poppins", Arial, sans-serif; /* weight 900 */
+  --cuik-font-body: "Poppins", Arial, sans-serif;    /* weight 400 / 700 */
+  --cuik-radius: 16px;
+}
