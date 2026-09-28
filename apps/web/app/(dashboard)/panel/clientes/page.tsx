@@ -182,20 +182,55 @@ export default function ClientesPage() {
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nombre, DNI o celular..."
-            className="pl-9"
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value)
-              setPage(1)
-            }}
-          />
+      {/* Row 1: search + the two "view" toggles. Row 2: segment chips in a
+          scrollable strip, so eight segments never squeeze the search box. */}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="relative flex-1 sm:max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nombre, DNI o celular..."
+              className="pl-9"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                setPage(1)
+              }}
+            />
+          </div>
+          <div className="flex gap-2 sm:ml-auto">
+            <Button
+              size="sm"
+              variant={pendingOnly ? "default" : "outline"}
+              className={`gap-1.5 ${pendingOnly ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-500" : ""}`}
+              onClick={() => {
+                setPendingOnly((v) => !v)
+                setPage(1)
+              }}
+              disabled={archivedOnly}
+              title="Solo clientes con un premio pendiente de canje"
+            >
+              <Gift className="w-3.5 h-3.5" />
+              Con premio pendiente
+            </Button>
+            <Button
+              size="sm"
+              variant={archivedOnly ? "default" : "outline"}
+              className={`gap-1.5 ${archivedOnly ? "bg-slate-700 hover:bg-slate-800 text-white border-slate-700" : "text-slate-500"}`}
+              onClick={() => {
+                setArchivedOnly((v) => !v)
+                setPage(1)
+              }}
+              title="Clientes archivados: se eliminan definitivamente a los 30 días"
+            >
+              <Archive className="w-3.5 h-3.5" />
+              Archivados
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:thin]">
+          <span className="text-xs font-medium text-muted-foreground shrink-0 mr-1">Segmento</span>
           {(
             [
               { v: "all", label: "Todos" },
@@ -212,7 +247,8 @@ export default function ClientesPage() {
               key={f.v}
               size="sm"
               variant={filter === f.v ? "default" : "outline"}
-              className={filter === f.v ? "bg-primary text-white" : ""}
+              className={`shrink-0 ${filter === f.v ? "bg-primary text-white" : ""}`}
+              disabled={archivedOnly}
               onClick={() => {
                 setFilter(f.v)
                 setPage(1)
@@ -221,32 +257,6 @@ export default function ClientesPage() {
               {f.label}
             </Button>
           ))}
-          <Button
-            size="sm"
-            variant={pendingOnly ? "default" : "outline"}
-            className={`gap-1.5 ${pendingOnly ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-500" : ""}`}
-            onClick={() => {
-              setPendingOnly((v) => !v)
-              setPage(1)
-            }}
-            title="Solo clientes con un premio pendiente de canje"
-          >
-            <Gift className="w-3.5 h-3.5" />
-            Con premio pendiente
-          </Button>
-          <Button
-            size="sm"
-            variant={archivedOnly ? "default" : "outline"}
-            className={`gap-1.5 ${archivedOnly ? "bg-slate-700 hover:bg-slate-800 text-white border-slate-700" : "text-slate-500"}`}
-            onClick={() => {
-              setArchivedOnly((v) => !v)
-              setPage(1)
-            }}
-            title="Clientes archivados: se eliminan definitivamente a los 30 días"
-          >
-            <Archive className="w-3.5 h-3.5" />
-            Archivados
-          </Button>
         </div>
       </div>
 
