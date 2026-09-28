@@ -136,6 +136,20 @@ const statusConfig: Record<TenantStatus, { label: string; color: string }> = {
 
 // ── Shared PATCH helper ──────────────────────────────────────────────
 
+/** Opens the merchant panel in read-only mode (1 h) in a new tab. */
+async function openTenantPanel(tenantId: string) {
+  const res = await fetch("/api/admin/sa-view", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tenantId }),
+  })
+  if (!res.ok) {
+    toast.error("No se pudo abrir la vista del comercio")
+    return
+  }
+  window.open("/panel", "_blank")
+}
+
 async function patchTenant(
   tenantId: string,
   payload: Record<string, unknown>,
@@ -180,12 +194,16 @@ const BUSINESS_TYPE_OPTIONS = [
 function TenantDetailModal({
   tenant,
   defaultTab = "general",
+  forceTab = false,
   onClose,
   onActionComplete,
   onOpenPlanModal,
 }: {
   tenant: ApiTenant
+  /** Tab to open the first time (no tab remembered yet for this tenant). */
   defaultTab?: string
+  /** Always open `defaultTab`, ignoring the remembered one (e.g. the Apple shortcut). */
+  forceTab?: boolean
   onClose: () => void
   onActionComplete: () => void
   onOpenPlanModal: (tenantId: string, action: PlanModalAction) => void
@@ -202,15 +220,15 @@ function TenantDetailModal({
   const [promoDialogOpen, setPromoDialogOpen] = useState(false)
   const [editingPromo, setEditingPromo] = useState<TenantPromotion | null>(null)
   // Remember the last tab per tenant for this browser session, so reopening the
-  // same tenant lands where you left it. An explicit non-general defaultTab
-  // (e.g. the Apple shortcut in the table) always wins.
+  // same tenant lands where you left it. `defaultTab` is only the first-time
+  // landing; `forceTab` (Apple shortcut) ignores the memory.
   const tabStorageKey = `cuik.sa.tenantTab.${tenant.id}`
   const [activeTab, setActiveTabState] = useState(() => {
-    if (defaultTab !== "general") return defaultTab
+    if (forceTab) return defaultTab
     try {
-      return window.sessionStorage.getItem(tabStorageKey) ?? "general"
+      return window.sessionStorage.getItem(tabStorageKey) ?? defaultTab
     } catch {
-      return "general"
+      return defaultTab
     }
   })
   const setActiveTab = useCallback(
@@ -878,18 +896,7 @@ function TenantDetailModal({
                     size="sm"
                     variant="outline"
                     className="gap-1.5 shrink-0"
-                    onClick={async () => {
-                      const res = await fetch("/api/admin/sa-view", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ tenantId: tenant.id }),
-                      })
-                      if (!res.ok) {
-                        toast.error("No se pudo abrir la vista del comercio")
-                        return
-                      }
-                      window.open("/panel", "_blank")
-                    }}
+                    onClick={() => openTenantPanel(tenant.id)}
                   >
                     <Eye className="w-3 h-3" /> Abrir panel
                   </Button>
@@ -1821,6 +1828,7 @@ export default function TenantsPage() {
 
   const [selectedTenant, setSelectedTenant] = useState<ApiTenant | null>(null)
   const [defaultTab, setDefaultTab] = useState<string>("general")
+  const [forceTab, setForceTab] = useState(false)
   const [planModalContext, setPlanModalContext] = useState<{
     tenantId: string
     tenantName: string
@@ -1960,6 +1968,7 @@ export default function TenantsPage() {
         <TenantDetailModal
           tenant={selectedTenant}
           defaultTab={defaultTab}
+          forceTab={forceTab}
           onClose={() => setSelectedTenant(null)}
           onActionComplete={handleActionComplete}
           onOpenPlanModal={handleOpenPlanModal}
@@ -2077,8 +2086,9 @@ export default function TenantsPage() {
                             ),
                           )
                         : null
-                    const open = (tab: string) => {
+                    const open = (tab: string, force = false) => {
                       setDefaultTab(tab)
+                      setForceTab(force)
                       setSelectedTenant(t)
                     }
                     return (
@@ -2137,15 +2147,15 @@ export default function TenantsPage() {
                             size="sm"
                             variant="outline"
                             className="h-10 gap-1.5 text-xs"
-                            onClick={() => open("general")}
+                            onClick={() => openTenantPanel(t.id)}
                           >
-                            <Eye className="w-3.5 h-3.5" /> Ver
+                            <Eye className="w-3.5 h-3.5" /> Panel
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
                             className="h-10 gap-1.5 text-xs"
-                            onClick={() => open("apple")}
+                            onClick={() => open("apple", true)}
                           >
                             <Shield className="w-3.5 h-3.5" /> Apple
                           </Button>
@@ -2245,12 +2255,9 @@ export default function TenantsPage() {
                                 size="sm"
                                 variant="ghost"
                                 className="h-7 px-2 text-xs"
-                                title="Ver tenant"
-                                aria-label="Ver tenant"
-                                onClick={() => {
-                                  setDefaultTab("general")
-                                  setSelectedTenant(t)
-                                }}
+                                title="Ver panel del comercio"
+                                aria-label="Ver panel del comercio"
+                                onClick={() => openTenantPanel(t.id)}
                               >
                                 <Eye className="w-3 h-3" />
                               </Button>
@@ -2262,6 +2269,7 @@ export default function TenantsPage() {
                                 aria-label="Certificado Apple"
                                 onClick={() => {
                                   setDefaultTab("apple")
+                                  setForceTab(true)
                                   setSelectedTenant(t)
                                 }}
                               >
@@ -2275,6 +2283,7 @@ export default function TenantsPage() {
                                 aria-label="Editar tenant"
                                 onClick={() => {
                                   setDefaultTab("editar")
+                                  setForceTab(false)
                                   setSelectedTenant(t)
                                 }}
                               >
