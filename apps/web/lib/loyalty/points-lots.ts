@@ -1,4 +1,15 @@
-import { and, asc, type db as dbType, eq, gt, isNull, lte, pointsTransactions, sql } from "@cuik/db"
+import {
+  and,
+  asc,
+  clients,
+  type db as dbType,
+  eq,
+  gt,
+  isNull,
+  lte,
+  pointsTransactions,
+  sql,
+} from "@cuik/db"
 import type { ExpirationPolicy } from "@cuik/shared/validators"
 
 import {
@@ -177,6 +188,7 @@ export async function clientsWithPointsExpiringSoon(
   const [row] = await db
     .select({ n: sql<number>`COUNT(DISTINCT ${pointsTransactions.clientId})::int` })
     .from(pointsTransactions)
+    .innerJoin(clients, eq(clients.id, pointsTransactions.clientId))
     .where(
       and(
         eq(pointsTransactions.tenantId, tenantId),
@@ -185,6 +197,7 @@ export async function clientsWithPointsExpiringSoon(
         sql`${pointsTransactions.expiresAt} IS NOT NULL`,
         gt(pointsTransactions.expiresAt, now),
         lte(pointsTransactions.expiresAt, windowEnd),
+        sql`${clients.status} IN ('active', 'inactive')`,
       ),
     )
   return Number(row?.n ?? 0)
@@ -243,6 +256,7 @@ export async function dueLotsByClient(
       remaining: pointsTransactions.remaining,
     })
     .from(pointsTransactions)
+    .innerJoin(clients, eq(clients.id, pointsTransactions.clientId))
     .where(
       and(
         eq(pointsTransactions.tenantId, tenantId),
@@ -250,6 +264,8 @@ export async function dueLotsByClient(
         gt(pointsTransactions.remaining, 0),
         sql`${pointsTransactions.expiresAt} IS NOT NULL`,
         lte(pointsTransactions.expiresAt, now),
+        // Archived clients are frozen (they may be restored); deleted ones have no lots left.
+        sql`${clients.status} IN ('active', 'inactive', 'blocked')`,
       ),
     )
   const byClient = new Map<string, { clientId: string; amount: number; lotIds: string[] }>()

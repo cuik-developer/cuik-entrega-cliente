@@ -116,6 +116,7 @@ export async function getPointsDashboardState(
     db.execute<{ points: number | string | null; clients: number | string | null }>(sql`
       SELECT COALESCE(SUM(pt.remaining), 0)::int AS points, COUNT(DISTINCT pt.client_id)::int AS clients
       FROM loyalty.points_transactions pt
+      JOIN loyalty.clients c ON c.id = pt.client_id AND c.status IN ('active', 'inactive')
       WHERE pt.tenant_id = ${tenantId} AND pt.type = 'earn' AND pt.remaining > 0
         AND pt.expires_at IS NOT NULL AND pt.expires_at > NOW()
         AND pt.expires_at <= NOW() + interval '7 days'`),

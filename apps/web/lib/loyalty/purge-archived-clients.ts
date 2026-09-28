@@ -5,7 +5,9 @@ import {
   clientTagAssignments,
   db,
   eq,
+  gt,
   lte,
+  pointsTransactions,
   sql,
   tenants,
 } from "@cuik/db"
@@ -75,6 +77,11 @@ export async function purgeArchivedClients(params?: {
 
         await tx.delete(clientTagAssignments).where(eq(clientTagAssignments.clientId, c.id))
         await tx.delete(clientNotes).where(eq(clientNotes.clientId, c.id))
+        // Close the open point lots: nothing of a deleted client may expire, warn or count.
+        await tx
+          .update(pointsTransactions)
+          .set({ remaining: 0 })
+          .where(and(eq(pointsTransactions.clientId, c.id), gt(pointsTransactions.remaining, 0)))
 
         await tx
           .update(clients)
