@@ -30,6 +30,7 @@ ASSETS = os.path.join(os.path.dirname(HERE), "assets")
 LOGO_MARK = os.path.join(ASSETS, "logo", "logo-mark.jpeg")
 WORDMARK = os.path.join(ASSETS, "logo", "wordmark-blue-on-white.png")
 ASTERISK_ORANGE = os.path.join(ASSETS, "logo", "asterisk-orange.png")
+MARK_WHITE = os.path.join(ASSETS, "logo", "mark-white-transparent.png")
 
 BLUE = RGBColor(0x0E, 0x70, 0xDB)
 ORANGE = RGBColor(0xFF, 0x48, 0x10)
@@ -41,6 +42,7 @@ LINE_HEX = "E5E7EB"
 
 FONT = "Poppins"
 FONT_DISPLAY = "Poppins Black"
+FONT_HERO = "Poppins ExtraBold"
 
 
 def _shade(cell, hex_color: str):
@@ -114,6 +116,45 @@ class CuikDoc:
             _run(p, subtitle, 13, MUTED)
         p = self.doc.add_paragraph()
         p.add_run().add_picture(ASTERISK_ORANGE, height=Cm(0.9))
+        self.doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
+
+
+    def cover_blue(self, title: str, meta: Sequence[str] = (), footnote: str = ""):
+        """House-style cover: full-width blue block, giant uppercase title, meta lines, footnote.
+        `title` may contain newlines. Ends with a page break."""
+        t = self.doc.add_table(rows=1, cols=1)
+        t.alignment = WD_TABLE_ALIGNMENT.CENTER
+        cell = t.cell(0, 0)
+        _shade(cell, BLUE_HEX)
+        # meta (right aligned)
+        first = True
+        for i, line in enumerate(meta):
+            para = cell.paragraphs[0] if first else cell.add_paragraph()
+            first = False
+            para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            para.paragraph_format.space_after = Pt(0)
+            r = _run(para, line, 9, RGBColor(0xFF, 0xFF, 0xFF), bold=(i == 1))
+        spacer = cell.add_paragraph() if not first else cell.paragraphs[0]
+        spacer.paragraph_format.space_before = Pt(60)
+        for i, line in enumerate(title.upper().split("\n")):
+            para = spacer if i == 0 else cell.add_paragraph()
+            para.paragraph_format.space_after = Pt(0)
+            para.paragraph_format.line_spacing = 0.9
+            r = para.add_run(line)
+            r.font.name = FONT_HERO
+            r._element.rPr.rFonts.set(qn("w:eastAsia"), FONT_HERO)
+            r.font.size = Pt(40)
+            r.font.bold = True
+            r.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+        gap = cell.add_paragraph()
+        gap.paragraph_format.space_before = Pt(120)
+        if footnote:
+            fp = cell.add_paragraph()
+            _run(fp, footnote, 10, RGBColor(0xFF, 0xFF, 0xFF))
+        mk = cell.add_paragraph()
+        mk.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        mk.add_run().add_picture(MARK_WHITE, height=Cm(1.4))
+        mk.paragraph_format.space_after = Pt(12)
         self.doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
     def h1(self, text: str):

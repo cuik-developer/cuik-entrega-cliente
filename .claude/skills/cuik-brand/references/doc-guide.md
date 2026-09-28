@@ -4,7 +4,7 @@ Use `scripts/cuik_docx.py`. A4, 2 cm margins, Poppins 11 pt, titles Poppins Blac
 
 Typical client document (guía de tenant, propuesta, manual corto):
 
-1. `cover(title, subtitle, tag)` — page 1.
+1. `cover_blue(title, meta, footnote)` (house style, blue block + giant uppercase title) or `cover(title, subtitle, tag)` (soft) — page 1.
 2. `h1` + `p` — qué es y para quién.
 3. `stat_row` — 3-4 números del negocio.
 4. `h1` reglas → `kv([...])` — regla por fila (label gris, valor).
