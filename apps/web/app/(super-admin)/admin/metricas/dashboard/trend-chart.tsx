@@ -89,7 +89,7 @@ export function TrendChart({ data }: { data: PlatformMetrics }) {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <Select value={metric} onValueChange={(v) => setMetric(v as MetricKey)}>
-            <SelectTrigger size="sm" className="w-52 h-8 text-xs">
+            <SelectTrigger size="sm" className="w-full sm:w-52 h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

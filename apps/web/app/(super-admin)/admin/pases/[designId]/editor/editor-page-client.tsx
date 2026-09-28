@@ -5,6 +5,7 @@ import { adaptV1ToV2, getDefaultConfigV2, isV2Config, PassEditor } from "@cuik/e
 import type { PassDesignConfigV2 } from "@cuik/shared/types/editor"
 import { getConfigVersion } from "@cuik/shared/validators/pass-design-schema"
 import { AlertTriangle, Loader2 } from "lucide-react"
+import Link from "next/link"
 import { useState } from "react"
 import { toast } from "sonner"
 
@@ -218,15 +219,32 @@ export function EditorPageClient({
     : null
 
   return (
-    <div className="h-screen flex flex-col">
-      {promotionLabel && (
-        <div className="bg-violet-50 border-b border-violet-200 px-4 py-2 text-sm text-violet-700 flex items-center gap-2 shrink-0">
-          <span className="font-medium">Promocion vinculada:</span>
-          <span>{promotionLabel}</span>
+    <div className="h-dvh flex flex-col">
+      {/* The editor has fixed 320px / 480px panels: below md it is unusable, say so. */}
+      <div className="md:hidden flex-1 flex items-center justify-center p-6 text-center">
+        <div className="max-w-xs space-y-2">
+          <p className="text-base font-semibold text-slate-900">Editor solo para computadora</p>
+          <p className="text-sm text-slate-500">
+            El editor de pases necesita una pantalla ancha. Ábrelo desde una laptop o PC.
+          </p>
+          <Link
+            href="/admin/pases"
+            className="inline-block mt-2 text-sm font-medium text-[#0e70db] hover:underline"
+          >
+            Volver a Diseños de Pases
+          </Link>
         </div>
-      )}
-      <div className="flex-1 min-h-0">
-        <PassEditor config={config} callbacks={callbacks} />
+      </div>
+      <div className="hidden md:flex flex-1 min-h-0 flex-col">
+        {promotionLabel && (
+          <div className="bg-violet-50 border-b border-violet-200 px-4 py-2 text-sm text-violet-700 flex items-center gap-2 shrink-0">
+            <span className="font-medium">Promocion vinculada:</span>
+            <span>{promotionLabel}</span>
+          </div>
+        )}
+        <div className="flex-1 min-h-0">
+          <PassEditor config={config} callbacks={callbacks} />
+        </div>
       </div>
 
       {/* Publish confirmation dialog */}

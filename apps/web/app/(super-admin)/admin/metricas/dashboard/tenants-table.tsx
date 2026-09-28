@@ -91,11 +91,15 @@ export function TenantsTable({
     })
   }, [rows, sort, q, highlight])
 
-  function th(key: SortKey, label: string, align: "left" | "right" = "right") {
+  // `secondary` columns only show from md up; on a phone the table keeps
+  // Salud, Comercio, Clientes, Visitas and Retorno, with the name column sticky.
+  function th(key: SortKey, label: string, align: "left" | "right" = "right", secondary = false) {
     const active = sort.key === key
     const Icon = active ? (sort.dir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown
     return (
-      <th className={`pb-2 font-semibold text-${align} whitespace-nowrap`}>
+      <th
+        className={`pb-2 font-semibold text-${align} whitespace-nowrap ${secondary ? "hidden md:table-cell" : ""} ${key === "name" ? "sticky left-6 bg-white z-10 pr-3" : ""}`}
+      >
         <button
           type="button"
           className={`inline-flex items-center gap-1 hover:text-slate-900 ${active ? "text-slate-900" : ""}`}
@@ -134,7 +138,7 @@ export function TenantsTable({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Buscar comercio"
-              className="h-8 w-48 pl-7 text-xs"
+              className="h-8 w-full sm:w-48 pl-7 text-xs"
             />
           </div>
         </div>
@@ -143,17 +147,19 @@ export function TenantsTable({
         <table className="w-full text-sm">
           <thead>
             <tr className="text-xs text-slate-500 border-b border-slate-100">
-              <th className="pb-2 text-left font-semibold">Salud</th>
+              <th className="pb-2 text-left font-semibold sticky left-0 bg-white z-10 w-6">
+                Salud
+              </th>
               {th("name", "Comercio", "left")}
               {th("clients", "Clientes")}
-              {th("newClients", "Nuevos")}
+              {th("newClients", "Nuevos", "right", true)}
               {th("visits", "Visitas")}
-              {th("delta", "vs ant.")}
+              {th("delta", "vs ant.", "right", true)}
               {th("returnRate", "Retorno")}
-              {th("installRate", "Instalan")}
-              {th("redemptions", "Canjes")}
-              {th("lastVisitAt", "Última visita")}
-              {th("trialDaysLeft", "Demo")}
+              {th("installRate", "Instalan", "right", true)}
+              {th("redemptions", "Canjes", "right", true)}
+              {th("lastVisitAt", "Última visita", "right", true)}
+              {th("trialDaysLeft", "Demo", "right", true)}
             </tr>
           </thead>
           <tbody>
@@ -168,13 +174,13 @@ export function TenantsTable({
                 const d = t.visits - t.visitsPrev
                 return (
                   <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50">
-                    <td className="py-2 pr-2">
+                    <td className="py-2 pr-2 sticky left-0 bg-white z-10 w-6">
                       <span
                         className={`inline-block w-2.5 h-2.5 rounded-full ${HEALTH_DOT[t.health]}`}
                         title={HEALTH_LABEL[t.health]}
                       />
                     </td>
-                    <td className="py-2 pr-3">
+                    <td className="py-2 pr-3 sticky left-6 bg-white z-10 max-w-[160px] md:max-w-none">
                       <Link
                         href={`/admin/tenants?q=${encodeURIComponent(t.name)}`}
                         className="font-medium text-slate-900 hover:text-[#0e70db]"
@@ -193,10 +199,12 @@ export function TenantsTable({
                       </div>
                     </td>
                     <td className="py-2 text-right tabular-nums">{t.clients}</td>
-                    <td className="py-2 text-right tabular-nums">{t.newClients}</td>
+                    <td className="py-2 text-right tabular-nums hidden md:table-cell">
+                      {t.newClients}
+                    </td>
                     <td className="py-2 text-right tabular-nums font-semibold">{t.visits}</td>
                     <td
-                      className={`py-2 text-right tabular-nums text-xs ${d > 0 ? "text-emerald-600" : d < 0 ? "text-red-500" : "text-slate-400"}`}
+                      className={`py-2 text-right tabular-nums text-xs hidden md:table-cell ${d > 0 ? "text-emerald-600" : d < 0 ? "text-red-500" : "text-slate-400"}`}
                     >
                       {d > 0 ? "+" : ""}
                       {d}
@@ -204,19 +212,19 @@ export function TenantsTable({
                     <td className="py-2 text-right tabular-nums">
                       {t.returnRate === null ? "—" : `${t.returnRate}%`}
                     </td>
-                    <td className="py-2 text-right tabular-nums">
+                    <td className="py-2 text-right tabular-nums hidden md:table-cell">
                       {t.installRate === null ? "—" : `${t.installRate}%`}
                     </td>
-                    <td className="py-2 text-right tabular-nums">
+                    <td className="py-2 text-right tabular-nums hidden md:table-cell">
                       {t.redemptions}
                       {t.program === "points" && t.canRedeem > 0 && (
                         <span className="text-[10px] text-slate-400"> · {t.canRedeem} pueden</span>
                       )}
                     </td>
-                    <td className="py-2 text-right text-xs text-slate-500 whitespace-nowrap">
+                    <td className="py-2 text-right text-xs text-slate-500 whitespace-nowrap hidden md:table-cell">
                       {daysAgo(t.lastVisitAt)}
                     </td>
-                    <td className="py-2 text-right text-xs whitespace-nowrap">
+                    <td className="py-2 text-right text-xs whitespace-nowrap hidden md:table-cell">
                       {t.trialDaysLeft === null ? (
                         <span className="text-slate-300">—</span>
                       ) : (

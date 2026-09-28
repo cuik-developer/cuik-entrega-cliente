@@ -219,7 +219,7 @@ export function AppleCertWizard({ tenantId, tenantSlug, initialConfig }: AppleCe
           </Badge>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <div>
             <span className="text-slate-500">Pass Type ID</span>
             <p className="font-medium text-slate-900">{config?.passTypeId}</p>
@@ -291,7 +291,7 @@ export function AppleCertWizard({ tenantId, tenantSlug, initialConfig }: AppleCe
 
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm space-y-2">
           <p className="font-medium text-blue-900">Resumen de configuracion:</p>
-          <div className="grid grid-cols-2 gap-2 text-blue-800">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-blue-800">
             <div>
               <span className="text-blue-600">Pass Type ID:</span>{" "}
               <span className="font-medium">{config.passTypeId}</span>

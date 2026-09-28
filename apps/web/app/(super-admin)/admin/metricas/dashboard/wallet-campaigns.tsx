@@ -92,7 +92,7 @@ export function WalletCampaigns({
         )}
       </div>
 
-      <div className="grid grid-cols-3 gap-3 border-t border-slate-100 pt-4">
+      <div className="grid grid-cols-3 sm:grid-cols-3 gap-3 border-t border-slate-100 pt-4">
         <div>
           <p className="text-xl font-extrabold text-slate-900 tabular-nums">{campaigns.sent}</p>
           <p className="text-[11px] text-slate-500">campañas enviadas</p>

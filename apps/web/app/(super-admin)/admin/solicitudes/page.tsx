@@ -210,7 +210,7 @@ export default function SolicitudesAdminPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Solicitudes</h1>
           <p className="text-sm text-gray-500 mt-1">
@@ -224,7 +224,7 @@ export default function SolicitudesAdminPage() {
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit max-w-full overflow-x-auto [scrollbar-width:none]">
         {FILTER_TABS.map((tab) => (
           <button
             key={tab.value}
@@ -263,7 +263,7 @@ export default function SolicitudesAdminPage() {
           {solicitudes.map((s) => (
             <Card key={s.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold text-gray-900">{s.businessName}</h3>
@@ -306,7 +306,7 @@ export default function SolicitudesAdminPage() {
                   </div>
 
                   {s.status === "rejected" && (
-                    <div className="flex gap-2 flex-shrink-0">
+                    <div className="flex gap-2 flex-shrink-0 [&>button]:flex-1 sm:[&>button]:flex-none">
                       <Button
                         size="sm"
                         variant="outline"
@@ -325,7 +325,7 @@ export default function SolicitudesAdminPage() {
                   )}
 
                   {s.status === "pending" && (
-                    <div className="flex gap-2 flex-shrink-0">
+                    <div className="flex gap-2 flex-shrink-0 [&>button]:flex-1 sm:[&>button]:flex-none">
                       <Button
                         size="sm"
                         onClick={() => handleApprove(s)}

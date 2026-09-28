@@ -1204,7 +1204,7 @@ function TenantDetailModal({
                     </div>
                   </div>
                   {/* Details row */}
-                  <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                     {promo.type === "points" ? (
                       <>
                         <div>

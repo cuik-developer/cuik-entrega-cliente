@@ -146,7 +146,7 @@ export function FiltersBar({
           value={filters.status}
           onValueChange={(v) => onChange({ ...filters, status: v as Filters["status"] })}
         >
-          <SelectTrigger size="sm" className="w-40 h-8 text-xs">
+          <SelectTrigger size="sm" className="w-full sm:w-40 h-8 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -160,7 +160,7 @@ export function FiltersBar({
           value={filters.program}
           onValueChange={(v) => onChange({ ...filters, program: v as Filters["program"] })}
         >
-          <SelectTrigger size="sm" className="w-40 h-8 text-xs">
+          <SelectTrigger size="sm" className="w-full sm:w-40 h-8 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -174,7 +174,7 @@ export function FiltersBar({
           value={filters.planId ?? "all"}
           onValueChange={(v) => onChange({ ...filters, planId: v === "all" ? null : v })}
         >
-          <SelectTrigger size="sm" className="w-40 h-8 text-xs">
+          <SelectTrigger size="sm" className="w-full sm:w-40 h-8 text-xs">
             <SelectValue placeholder="Plan" />
           </SelectTrigger>
           <SelectContent>
