@@ -32,6 +32,7 @@ ASSETS = os.path.join(os.path.dirname(HERE), "assets")
 LOGO_MARK = os.path.join(ASSETS, "logo", "logo-mark.jpeg")
 LOGO_MARK_ON_BLUE = os.path.join(ASSETS, "logo", "logo-mark-on-blue.png")
 WORDMARK = os.path.join(ASSETS, "logo", "wordmark-blue-on-white.png")
+MARK_WHITE = os.path.join(ASSETS, "logo", "mark-white-transparent.png")
 ASTERISK = {
     "orange": os.path.join(ASSETS, "logo", "asterisk-orange.png"),
     "blue": os.path.join(ASSETS, "logo", "asterisk-blue.png"),
@@ -49,6 +50,7 @@ MUTED = RGBColor(0x6B, 0x72, 0x80)
 LINE = RGBColor(0xE5, 0xE7, 0xEB)
 
 FONT_DISPLAY = "Poppins Black"  # Cocogoose only for the wordmark image
+FONT_HERO = "Poppins ExtraBold"  # house deck style: giant uppercase titles on blue
 FONT_BOLD = "Poppins"  # bold=True
 FONT_BODY = "Poppins"
 
@@ -308,6 +310,120 @@ class CuikDeck:
         self._text(s, MARGIN, Inches(4.5), Inches(10), Inches(0.6), contact, 18, WHITE)
         self._text(s, MARGIN, SLIDE_H - Inches(0.7), Inches(8), Inches(0.4), "Hecho con amor en Lima, Perú", 12, WHITE)
         self._asterisk(s, SLIDE_W - MARGIN - Inches(1.4), SLIDE_H - MARGIN - Inches(1.4), Inches(1.4), "orange")
+        return s
+
+
+    # ── house deck style (from "Presentacion Loyalty D'frios") ───────
+    # Full-bleed blue, giant uppercase Poppins ExtraBold titles, meta block
+    # top-right, annotated mockups, "GRACIAS" with the mark in place of the C.
+
+    def _meta(self, s, lines: Sequence[str]):
+        """Top-right block: e.g. ("Setiembre 2026", "Guia del programa", "Presentado por: Cuik")."""
+        y = Inches(0.55)
+        for i, line in enumerate(lines):
+            self._text(s, SLIDE_W - MARGIN - Inches(4), y + Inches(0.26) * i, Inches(4), Inches(0.3),
+                       line, 11, WHITE, bold=(i == 1), align=PP_ALIGN.RIGHT)
+
+    def _hero_text(self, s, x, y, w, h, text: str, size: int, color=WHITE, align=PP_ALIGN.LEFT):
+        tb = s.shapes.add_textbox(x, y, w, h)
+        tf = tb.text_frame
+        tf.word_wrap = True
+        tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = Emu(0)
+        for i, line in enumerate(text.upper().split("\n")):
+            p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+            p.alignment = align
+            p.line_spacing = 0.86
+            r = p.add_run()
+            r.text = line
+            r.font.name = FONT_HERO
+            r.font.size = Pt(size)
+            r.font.bold = True
+            r.font.color.rgb = color
+        return tb
+
+    def hero(self, title: str, meta: Sequence[str] = (), footnote: str = "", size: int = 66):
+        """Cover in the house style. `title` may contain newlines for line breaks."""
+        s = self._slide(BLUE)
+        self._hero_text(s, MARGIN, Inches(0.7), Inches(10.5), Inches(4.5), title, size)
+        if meta:
+            self._meta(s, meta)
+        if footnote:
+            self._text(s, MARGIN + Inches(0.1), SLIDE_H - Inches(1.1), Inches(9), Inches(0.7), footnote, 12, WHITE, line_spacing=1.15)
+        return s
+
+    def hero_section(self, title: str, kicker: str = "", meta: Sequence[str] = ()):
+        """Section divider in the house style: kicker small, title giant, mark bottom-right."""
+        s = self._slide(BLUE)
+        if kicker:
+            self._text(s, MARGIN, Inches(0.7), Inches(6), Inches(0.35), kicker, 12, WHITE, bold=True)
+        if meta:
+            self._meta(s, meta)
+        self._hero_text(s, MARGIN, Inches(1.3), Inches(11.5), Inches(4.5), title, 56)
+        s.shapes.add_picture(MARK_WHITE, SLIDE_W - MARGIN - Inches(0.9), SLIDE_H - MARGIN - Inches(0.9), height=Inches(0.9))
+        return s
+
+    def annotated(self, image_path: str, left: Sequence[tuple[str, str]], right: Sequence[tuple[str, str]],
+                  title_left: str = "ELEMENTOS", title_right: str = "", kicker: str = "", meta: Sequence[str] = (),
+                  image_h: float = 6.2):
+        """Mockup in the middle, callouts left/right: [(label, description), ...] (description may be '')."""
+        s = self._slide(BLUE)
+        if kicker:
+            self._text(s, MARGIN, Inches(0.55), Inches(5), Inches(0.35), kicker, 12, WHITE, bold=True)
+        if meta:
+            self._meta(s, meta)
+        self._hero_text(s, MARGIN, Inches(0.95), Inches(4.2), Inches(1), title_left, 40)
+        if title_right:
+            self._hero_text(s, SLIDE_W - MARGIN - Inches(4.2), Inches(0.95), Inches(4.2), Inches(1), title_right, 40, align=PP_ALIGN.RIGHT)
+        pic = s.shapes.add_picture(image_path, 0, Inches(0.75), height=Inches(image_h))
+        pic.left = int((SLIDE_W - pic.width) / 2)
+        pic_l, pic_r = pic.left, pic.left + pic.width
+
+        def notes(items, side):
+            n = max(1, len(items))
+            top, bottom = Inches(2.0), Inches(6.6)
+            step = (bottom - top) / n
+            for i, (label, desc) in enumerate(items):
+                y = int(top + step * i)
+                if side == "left":
+                    self._text(s, MARGIN, y - Inches(0.05), Inches(3.3), Inches(0.35), label, 13, WHITE, bold=True, align=PP_ALIGN.RIGHT)
+                    if desc:
+                        self._text(s, MARGIN, y + Inches(0.3), Inches(3.3), Inches(0.8), desc, 11, WHITE, align=PP_ALIGN.RIGHT)
+                    x1, x2 = MARGIN + Inches(3.45), pic_l - Inches(0.05)
+                else:
+                    x0 = SLIDE_W - MARGIN - Inches(3.3)
+                    self._text(s, x0, y - Inches(0.05), Inches(3.3), Inches(0.35), label, 13, WHITE, bold=True)
+                    if desc:
+                        self._text(s, x0, y + Inches(0.3), Inches(3.3), Inches(0.8), desc, 11, WHITE)
+                    x1, x2 = pic_r + Inches(0.05), x0 - Inches(0.15)
+                ln = s.shapes.add_connector(1, x1, y + Inches(0.12), x2, y + Inches(0.12))
+                ln.line.color.rgb = WHITE
+                ln.line.width = Pt(1.5)
+
+        notes(left, "left")
+        notes(right, "right")
+        return s
+
+    def thanks(self, word: str = "GRACIAS", line: str = "Valoramos tu confianza y compromiso con nosotros, y sobre todo por elegirnos."):
+        """Closing: the word with the Cuik mark in place of its C."""
+        s = self._slide(BLUE)
+        idx = word.upper().find("C")
+        size = 170
+        if idx < 0:
+            self._hero_text(s, MARGIN, Inches(1.6), SLIDE_W - 2 * MARGIN, Inches(3.5), word, size)
+        else:
+            before, after = word.upper()[:idx], word.upper()[idx + 1:]
+            em = Pt(size)
+            w_before = int(em * 0.72 * len(before))  # approx cap width, Poppins ExtraBold
+            mark_h = int(em * 1.05)
+            x = MARGIN - Inches(0.1)
+            y = Inches(1.7)
+            if before:
+                self._hero_text(s, x, y, w_before + Inches(0.3), Inches(3.2), before, size)
+            mx = x + w_before + Inches(0.05)
+            s.shapes.add_picture(MARK_WHITE, mx, y + Inches(0.42), height=mark_h)
+            if after:
+                self._hero_text(s, mx + mark_h + Inches(0.1), y, Inches(8), Inches(3.2), after, size)
+        self._text(s, MARGIN, Inches(5.6), Inches(9), Inches(0.6), line, 13, WHITE)
         return s
 
     def save(self, path: str):

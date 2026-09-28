@@ -36,7 +36,7 @@ Regla: azul manda, naranja acentúa, el resto es blanco/gris. Nunca degradados a
 - **Cocogoose es versión trial**: úsala solo para el wordmark o un título de portada; el resto en Poppins. Si la pieza va a un cliente final, prefiere Poppins Black para display y evita depender de Cocogoose.
 - Para que PowerPoint/Word rendericen las fuentes en la máquina del destinatario, las fuentes deben estar instaladas ahí o incrustadas. Regla práctica: **instala las .ttf localmente antes de exportar a PDF** (doble clic en cada .ttf → Instalar) y entrega PDF cuando la fidelidad importe. El .pptx/.docx nombran "Poppins"; si falta, cae a Arial y se ve aceptable.
 - Escala tipográfica para slides 16:9 (13.33 × 7.5 in): título 40–44 pt Black, subtítulo 20–24 pt Bold, cuerpo 16–18 pt Regular, notas 12 pt. Para documentos A4: título 28 pt, H2 18 pt, cuerpo 11 pt, interlineado 1.25.
-- Títulos en `sentence case` (solo la primera mayúscula). Nada en MAYÚSCULAS salvo etiquetas pequeñas con tracking.
+- Documentos y slides blancas: títulos en `sentence case`. Slides azules del estilo de presentación (6b): titulares en MAYÚSCULAS, Poppins ExtraBold.
 
 ## 3. Logo (archivos en `assets/logo/`)
 
@@ -67,6 +67,20 @@ Estrella de 8 puntas, el elemento gráfico de la marca. Se usa **una vez** por s
 - Titulares cortos con una idea; el acento naranja subraya la palabra que importa.
 - Cifras siempre con contexto: "El 80% de clientes vuelve cuando se siente recompensado".
 - Firma de piezas: "Cuik · cuik.org" y, si aplica, "Hecho con amor en Lima, Perú".
+
+## 6b. Estilo de presentación (referencia: `assets/referencia-presentacion-dfrios.pdf`)
+
+Es el estilo con el que Cuik ya presenta a clientes. Tiene prioridad sobre la sección 5 cuando la pieza es un deck:
+
+- **Azul a sangre** en portada, secciones, slides de mockup y cierre. Slides de contenido denso (tablas, listas largas) van en blanco.
+- **Titulares gigantes en MAYÚSCULAS**, Poppins ExtraBold, blanco, interlineado apretado (0.86), pegados al margen izquierdo. Portada 60–70 pt en varias líneas ("PRESENTACIÓN / LOYALTY / CARDS"); secciones 56 pt; títulos de slide azul 40 pt.
+- **Bloque meta arriba a la derecha**, 11–12 pt blanco, alineado a la derecha: fecha · tipo de documento en Bold · "Presentado por: Cuik".
+- **Nota al pie en portada**: 12 pt blanco, una o dos líneas que dicen qué contiene el documento.
+- **Mockup anotado**: teléfono centrado, "ELEMENTOS" a la izquierda y otro título a la derecha, llamadas en Poppins Bold 13 pt con línea blanca de 1.5 pt hasta el borde del teléfono; descripción opcional en 11 pt debajo.
+- **Cierre "GRACIAS"** con el isotipo blanco en lugar de la C y una línea de agradecimiento en 13 pt.
+- En este estilo el asterisco se usa poco: solo en slides blancas. El isotipo blanco firma las slides azules.
+
+Helpers: `CuikDeck.hero`, `hero_section`, `annotated`, `thanks` (ver `references/deck-guide.md`).
 
 ## 7. Cómo producir
 

@@ -1,34 +1,36 @@
 # Deck guide (pptx)
 
-Structure that works for a client-facing deck (10-14 slides):
+House style = the D'frios deck (assets/referencia-presentacion-dfrios.pdf): blue full-bleed,
+giant uppercase titles, meta top-right, annotated mockups, GRACIAS closing.
 
-1. `cover` — título en Poppins Black blanco sobre azul, subtítulo "Guía para <negocio>", tag con fecha.
-2. `section` — "Tu programa en una frase".
-3. `bullets` / `text` — cómo funciona para el cliente (escanea, se registra, pase en Wallet, cada visita suma).
-4. `two_columns` — Antes / Ahora (tarjeta azul a la derecha).
-5. `stats` — números reales del tenant (clientes, visitas, puntos en circulación).
-6. `table` — reglas activas (puntos por sol, mínimo, vencimiento, aviso) o catálogo de premios.
-7. `callout` — la regla más importante en una frase ("Los puntos vencen cada lunes.").
-8. `image` — mockup del pase o captura del panel, con caption.
-9. `bullets` — variables del pase / campañas y qué muestra cada una.
-10. `bullets` — día a día en caja y panel.
-11. `closing` — contacto.
+Structure for a client deck (10-14 slides):
 
-Rules: one idea per slide; max 5 bullets; numbers in the tables right-aligned; never more than one orange element per slide (the helper already places the asterisk).
+1. `hero("PRESENTACIÓN\nTU PROGRAMA\nDE PUNTOS", meta=("Setiembre 2026", "Guía del programa", "Presentado por: Cuik"), footnote="...")`
+2. `hero_section("CÓMO SUMAN\nPUNTOS", kicker="Lo básico")`
+3. `bullets(...)` (white slide), 3-5 items.
+4. `annotated(mockup.png, left=[("Logotipo",""), ...], right=[("Puntos acumulados","{{points.balance}}"), ...], title_left="ELEMENTOS", title_right="TU PASE")`
+5. `stats(...)`: real numbers from the tenant.
+6. `table(...)`: reglas activas / catálogo.
+7. `callout(...)`: the one rule to remember.
+8. `bullets(...)`: variables del pase y campañas.
+9. `bullets(...)`: día a día.
+10. `thanks()`
 
-Minimal example:
+`cover`/`closing` (softer, asterisk) remain available, but prefer `hero`/`thanks` for client decks.
+Use \n in hero titles to control line breaks; 2-3 words per line.
 
 ```python
 import sys; sys.path.insert(0, r".claude/skills/cuik-brand/scripts")
 from cuik_pptx import CuikDeck
 d = CuikDeck()
-d.cover("Tu programa de puntos", "Guía para Café Central", tag="Setiembre 2026")
-d.section("Cómo suman puntos tus clientes", kicker="Lo básico")
-d.bullets("Así funciona", ["Escanea el QR del mostrador y recibe su pase en el Wallet", "Cada compra suma 1 punto por sol", "El pase se actualiza solo, con notificación"])
+meta = ("Setiembre 2026", "Guía del programa", "Presentado por: Cuik")
+d.hero("PRESENTACIÓN\nPROGRAMA\nDE PUNTOS", meta=meta, footnote="Documento con las reglas de tu programa, tu pase y cómo usar el panel.")
+d.hero_section("CÓMO SUMAN\nPUNTOS", kicker="Lo básico", meta=meta)
+d.bullets("Así funciona", ["Escanea el QR y recibe su pase en el Wallet", "Cada compra suma 1 punto por sol", "El pase se actualiza solo"])
 d.stats("Tu programa hoy", [("6", "clientes"), ("30", "visitas"), ("120", "puntos en circulación")])
-d.table("Reglas activas", ["Regla", "Valor"], [["Puntos por sol", "1"], ["Vencimiento", "Cada lunes"], ["Aviso", "2 días antes, 10:00"]], col_widths=[2, 3])
-d.closing()
+d.table("Reglas activas", ["Regla", "Valor"], [["Puntos por sol", "1"], ["Vencimiento", "Cada lunes"]], col_widths=[2, 3])
+d.thanks()
 d.save("out.pptx")
 ```
 
-Export to PDF: open in PowerPoint (fonts installed) → Guardar como PDF. There is no LibreOffice on this machine.
+Export to PDF: PowerPoint → Guardar como PDF (fonts installed). No LibreOffice on this machine.
