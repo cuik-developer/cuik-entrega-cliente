@@ -61,8 +61,11 @@ export function composeReportEmail(
 
   const act = actItems(data, isWeekly)
 
+  const team = teamItems(data, isWeekly)
+
   const sections: ReportSectionProps[] = [
     { title: "Lo que pasó", items: happened },
+    ...(team.length > 0 ? [{ title: "Tus sucursales y cajeros", items: team }] : []),
     {
       title: isWeekly ? "Tus clientes más fieles de la semana" : "Tus clientes más fieles del mes",
       items: loyal,
@@ -140,6 +143,62 @@ function happenedItems(data: ReportData, here: string): string[] {
   }
 
   return happened
+}
+
+/** Branch and cashier highlights; empty when the tenant has a single branch and cashier. */
+export function teamItems(data: ReportData, isWeekly: boolean): string[] {
+  const items: string[] = []
+  const here = isWeekly ? "esta semana" : "este mes"
+  const { branches, cashiers, showBranches, showCashiers } = data.team
+
+  if (showBranches) {
+    const real = branches.filter((b) => b.id !== null)
+    const withVisits = real.filter((b) => b.visits > 0)
+    if (withVisits.length > 0) {
+      const best = withVisits[0]
+      const worst = real[real.length - 1]
+      let line = `Sede más fuerte: ${best.name} con ${plural(best.visits, "visita", "visitas")} (${best.share} % del total, ${deltaShort(best.visits, best.previousVisits)} vs. ${data.compareLabel}).`
+      if (worst.id !== best.id) {
+        line +=
+          worst.visits === 0
+            ? ` ${worst.name} no registró ninguna visita ${here}.`
+            : ` La más floja: ${worst.name} con ${plural(worst.visits, "visita", "visitas")} (${deltaShort(worst.visits, worst.previousVisits)}).`
+      }
+      items.push(line)
+    } else {
+      items.push(`Ninguna sucursal registró visitas ${here}.`)
+    }
+    const none = branches.find((b) => b.id === null)
+    if (none && none.visits > 0) {
+      items.push(
+        `${plural(none.visits, "visita se registró", "visitas se registraron")} sin elegir sucursal. Recuérdale al equipo seleccionar la sede en Escanear para que este análisis sea confiable.`,
+      )
+    }
+  }
+
+  if (showCashiers) {
+    const idle = cashiers.filter((c) => c.role === "Cajero" && c.visits === 0)
+    const active = cashiers.filter((c) => c.visits > 0)
+    if (active.length > 0) {
+      const top = active[0]
+      items.push(
+        `Cajero más activo: ${top.name} con ${plural(top.visits, "visita", "visitas")} en ${plural(top.activeDays, "día", "días")} (${top.perActiveDay} por día).`,
+      )
+    }
+    if (idle.length > 0) {
+      const names = idle
+        .slice(0, 4)
+        .map((c) => c.name)
+        .join(", ")
+      items.push(
+        `${plural(idle.length, "cajero no registró", "cajeros no registraron")} ninguna visita ${here}: ${names}${idle.length > 4 ? " y más" : ""}. Suele ser señal de que no están ofreciendo el programa en caja; el detalle está en la hoja "Cajeros" del Excel.`,
+      )
+    } else if (active.length > 0) {
+      items.push(`Todos los cajeros registraron visitas ${here}.`)
+    }
+  }
+
+  return items
 }
 
 function loyalItems(data: ReportData): string[] {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { composeReportEmail, reportPreview, reportSubject } from "./compose-email"
+import { composeReportEmail, reportPreview, reportSubject, teamItems } from "./compose-email"
 import type { ReportData } from "./compute-report"
 import { delta } from "./period"
 
@@ -94,6 +94,7 @@ const base: ReportData = {
     { name: "Carla Mendoza", date: "2026-09-19", weekday: "sábado", autoPush: "Programado 10:00" },
   ],
   birthdayAutomationEnabled: true,
+  team: { branches: [], cashiers: [], showBranches: false, showCashiers: false },
   monthly: null,
 }
 
@@ -236,5 +237,79 @@ describe("composeReportEmail", () => {
     )
     expect(last.items[2]).toBe("Tu mejor mes fue agosto 2026 con 180 visitas.")
     expect(e.attachmentName).toBe("mascota-veloz-mes-2026-09-07.xlsx")
+  })
+})
+
+describe("teamItems", () => {
+  const branch = (
+    id: string | null,
+    name: string,
+    visits: number,
+    previousVisits: number,
+    share: number,
+  ) => ({
+    id,
+    name,
+    active: true,
+    visits,
+    previousVisits,
+    delta: delta(visits, previousVisits),
+    uniqueClients: visits,
+    newClients: 0,
+    share,
+  })
+  const cashier = (
+    id: string,
+    name: string,
+    visits: number,
+    activeDays: number,
+    role: "Cajero" | "Admin" = "Cajero",
+  ) => ({
+    id,
+    name,
+    role,
+    visits,
+    previousVisits: 5,
+    delta: delta(visits, 5),
+    activeDays,
+    perActiveDay: activeDays ? Math.round((visits / activeDays) * 10) / 10 : 0,
+    newClients: 0,
+    lastVisitAt: null,
+  })
+
+  it("stays silent for a single-branch, single-cashier business", () => {
+    expect(teamItems(base, true)).toEqual([])
+    expect(composeReportEmail(base, urls).sections.map((s) => s.title)).not.toContain(
+      "Tus sucursales y cajeros",
+    )
+  })
+
+  it("names the strongest and weakest branch, the unassigned visits and the idle cashiers", () => {
+    const data: ReportData = {
+      ...base,
+      team: {
+        showBranches: true,
+        showCashiers: true,
+        branches: [
+          branch("a", "Miraflores", 30, 25, 71),
+          branch("b", "San Isidro", 0, 4, 0),
+          branch(null, "Sin sucursal", 12, 0, 29),
+        ],
+        cashiers: [
+          cashier("u1", "Rosa", 20, 5),
+          cashier("u2", "Luis", 0, 0),
+          cashier("u3", "Pedro", 0, 0),
+          cashier("u4", "Ana (admin)", 3, 1, "Admin"),
+        ],
+      },
+    }
+    const items = teamItems(data, true)
+    expect(items[0]).toContain("Sede más fuerte: Miraflores con 30 visitas (71 % del total, +20 %")
+    expect(items[0]).toContain("San Isidro no registró ninguna visita esta semana")
+    expect(items[1]).toContain("12 visitas se registraron sin elegir sucursal")
+    expect(items[2]).toContain("Cajero más activo: Rosa con 20 visitas en 5 días (4 por día)")
+    expect(items[3]).toContain("2 cajeros no registraron ninguna visita esta semana: Luis, Pedro")
+    const e = composeReportEmail(data, urls)
+    expect(e.sections[1].title).toBe("Tus sucursales y cajeros")
   })
 })

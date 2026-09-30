@@ -6,6 +6,7 @@ import { getAtRiskClients } from "@/lib/loyalty/churn-detection"
 import type { ClientSegment, SegmentationThresholds } from "@/lib/loyalty/client-segments"
 import { computeClientSegment, getThresholds, SEGMENT_LABELS } from "@/lib/loyalty/client-segments"
 import { parseAvgDays, parseVisitDate } from "@/lib/loyalty/visit-stats"
+import { computeTeam, type TeamData } from "./compute-team"
 import {
   addDays,
   type Delta,
@@ -144,6 +145,8 @@ export type ReportData = {
   actionable: { label: string; count: number }
   birthdays: BirthdayRow[]
   birthdayAutomationEnabled: boolean
+  /** Branch and cashier breakdown (who is registering visits and where). */
+  team: TeamData
   /** Only on monthly reports. */
   monthly: {
     weeks: WeekRow[]
@@ -257,7 +260,11 @@ export async function computeReport(params: {
     }
   }
 
-  const [cur, prev] = await Promise.all([totalsFor(period), totalsFor(previous)])
+  const [cur, prev, team] = await Promise.all([
+    totalsFor(period),
+    totalsFor(previous),
+    computeTeam({ tenantId, slug: tenant.slug, period, previous, tzLit, local, within }),
+  ])
 
   const daily = await dailyRows({ tenantId, period, programType, local, within })
   const withVisits = daily.filter((d) => d.visits > 0)
@@ -302,7 +309,7 @@ export async function computeReport(params: {
     FROM loyalty.clients c
     JOIN pv ON pv.client_id = c.id
     LEFT JOIN stats ON stats.client_id = c.id
-    WHERE c.tenant_id = ${tenantId}
+    WHERE c.tenant_id = ${tenantId} AND c.status NOT IN ('archived', 'deleted')
     ORDER BY pv.period_visits DESC, c.total_visits DESC, c.name ASC`)
 
   const clientRows: ClientRow[] = clientsRes.rows.map((r) => ({
@@ -458,6 +465,7 @@ export async function computeReport(params: {
     actionable,
     birthdays,
     birthdayAutomationEnabled: birthdayEnabled,
+    team,
     monthly,
   }
 }

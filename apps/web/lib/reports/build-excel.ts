@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs"
 import { formatDateForExport } from "@/lib/format-date"
 import type { Cumulative, ReportData } from "./compute-report"
+import { NO_BRANCH_LABEL } from "./compute-team"
 import { dayLabel, deltaShort, weekdayName } from "./period"
 
 /**
@@ -8,6 +9,14 @@ import { dayLabel, deltaShort, weekdayName } from "./period"
  * contact data (phones/emails) on purpose — the panel is where you contact
  * people. Column names match the panel's own exports where they overlap.
  */
+
+const BRANCHES_NOTE =
+  'Visitas registradas por sucursal. La fila "Sin sucursal" son visitas en las que el cajero no eligió sede en Escanear: ' +
+  'si es alta, conviene recordarles que la seleccionen. "Clientes nuevos" = clientes cuya primera visita fue en esa sede.'
+
+const CASHIERS_NOTE =
+  'Visitas registradas por cada persona del equipo. "Días activos" = días de la semana en que registró al menos una visita. ' +
+  "Un cajero con 0 visitas en una sede con movimiento suele significar que no está ofreciendo el programa: vale una conversación."
 
 const AT_RISK_NOTE =
   "Estos clientes están en riesgo por su naturaleza: solían venir seguido y dejaron de hacerlo. " +
@@ -146,6 +155,77 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
     ],
     data.daily.map((d) => ({ ...d, weekday: capitalize(d.weekday), peakHour: d.peakHour ?? "" })),
   )
+
+  // ── Sucursales y cajeros (only when there is more than one) ───────
+  if (data.team.showBranches) {
+    const sheet = wb.addWorksheet("Sucursales")
+    sheet.getCell("A1").value = BRANCHES_NOTE
+    sheet.getCell("A1").alignment = { wrapText: true, vertical: "top" }
+    sheet.mergeCells("A1:G1")
+    sheet.getRow(1).height = 48
+    addTable(
+      sheet,
+      [
+        { header: "Sucursal", key: "name", width: 28 },
+        { header: `Visitas ${periodWord}`, key: "visits", width: 14 },
+        { header: `${isWeekly ? "Semana" : "Mes"} anterior`, key: "previousVisits", width: 16 },
+        { header: "Cambio", key: "change", width: 12 },
+        { header: "% del total", key: "share", width: 12 },
+        { header: "Clientes distintos", key: "uniqueClients", width: 18 },
+        { header: "Clientes nuevos", key: "newClients", width: 16 },
+      ],
+      data.team.branches.map((b) => ({
+        name: b.id === null ? NO_BRANCH_LABEL : b.active ? b.name : `${b.name} (inactiva)`,
+        visits: b.visits,
+        previousVisits: b.previousVisits,
+        change: deltaShort(b.visits, b.previousVisits),
+        share: `${b.share} %`,
+        uniqueClients: b.uniqueClients,
+        newClients: b.newClients,
+      })),
+      3,
+    )
+  }
+  if (data.team.showCashiers) {
+    const sheet = wb.addWorksheet("Cajeros")
+    sheet.getCell("A1").value = CASHIERS_NOTE
+    sheet.getCell("A1").alignment = { wrapText: true, vertical: "top" }
+    sheet.mergeCells("A1:H1")
+    sheet.getRow(1).height = 48
+    addTable(
+      sheet,
+      [
+        { header: "Nombre", key: "name", width: 26 },
+        { header: "Rol", key: "role", width: 10 },
+        { header: `Visitas ${periodWord}`, key: "visits", width: 14 },
+        { header: `${isWeekly ? "Semana" : "Mes"} anterior`, key: "previousVisits", width: 16 },
+        { header: "Cambio", key: "change", width: 12 },
+        { header: "Días activos", key: "activeDays", width: 12 },
+        { header: "Visitas por día activo", key: "perActiveDay", width: 20 },
+        { header: "Clientes nuevos", key: "newClients", width: 16 },
+        { header: "Última visita registrada", key: "lastVisitAt", width: 22 },
+        { header: "Observación", key: "note", width: 40 },
+      ],
+      data.team.cashiers.map((c) => ({
+        name: c.name,
+        role: c.role,
+        visits: c.visits,
+        previousVisits: c.previousVisits,
+        change: deltaShort(c.visits, c.previousVisits),
+        activeDays: c.activeDays,
+        perActiveDay: c.perActiveDay,
+        newClients: c.newClients,
+        lastVisitAt: formatDateForExport(c.lastVisitAt, tz),
+        note:
+          c.visits === 0
+            ? `No registró visitas ${isWeekly ? "esta semana" : "este mes"}`
+            : c.previousVisits > 0 && c.visits < c.previousVisits / 2
+              ? "Cayó a menos de la mitad"
+              : "",
+      })),
+      3,
+    )
+  }
 
   // ── Semanas del mes (monthly) ─────────────────────────────────────
   if (data.monthly) {
