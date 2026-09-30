@@ -18,6 +18,7 @@ import {
   CreditCard,
   Edit,
   Eye,
+  FileSpreadsheet,
   Filter,
   Gift,
   Link2,
@@ -236,6 +237,8 @@ function TenantDetailModal({
   const [resettingPassword, setResettingPassword] = useState(false)
   const [newPassword, setNewPassword] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [reportKind, setReportKind] = useState<"weekly" | "monthly">("weekly")
+  const [reportBusy, setReportBusy] = useState<"download" | "send" | null>(null)
   const [promotions, setPromotions] = useState<TenantPromotion[]>([])
   const [promotionLoading, setPromotionLoading] = useState(true)
   const [promoDialogOpen, setPromoDialogOpen] = useState(false)
@@ -985,6 +988,106 @@ function TenantDetailModal({
                   >
                     <Eye className="w-3 h-3" /> Abrir panel
                   </Button>
+                </div>
+
+                {/* Reporte periódico: descargar el Excel o enviármelo, sin tocar al comercio */}
+                <div className="bg-slate-50 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">Reporte por correo</p>
+                      <p className="text-xs text-slate-500">
+                        El último período cerrado, tal como lo recibe el comercio. No le llega a
+                        nadie más ni cuenta como enviado.
+                      </p>
+                    </div>
+                    <div className="flex rounded-lg border border-slate-200 bg-white p-0.5 shrink-0">
+                      {(["weekly", "monthly"] as const).map((k) => (
+                        <button
+                          key={k}
+                          type="button"
+                          onClick={() => setReportKind(k)}
+                          className={`px-2.5 py-1 text-xs rounded-md ${
+                            reportKind === k
+                              ? "bg-[#0e70db] text-white"
+                              : "text-slate-600 hover:bg-slate-100"
+                          }`}
+                        >
+                          {k === "weekly" ? "Semanal" : "Mensual"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5"
+                      disabled={reportBusy !== null}
+                      onClick={async () => {
+                        setReportBusy("download")
+                        try {
+                          const res = await fetch(
+                            `/api/admin/tenants/${tenant.id}/report?kind=${reportKind}`,
+                          )
+                          if (!res.ok) {
+                            toast.error("No se pudo generar el Excel")
+                            return
+                          }
+                          const blob = await res.blob()
+                          const cd = res.headers.get("Content-Disposition") ?? ""
+                          const name =
+                            /filename="([^"]+)"/.exec(cd)?.[1] ??
+                            `${tenant.slug}-${reportKind === "weekly" ? "semana" : "mes"}.xlsx`
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement("a")
+                          a.href = url
+                          a.download = name
+                          a.click()
+                          URL.revokeObjectURL(url)
+                        } finally {
+                          setReportBusy(null)
+                        }
+                      }}
+                    >
+                      {reportBusy === "download" ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <FileSpreadsheet className="w-3 h-3" />
+                      )}
+                      Descargar Excel
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5"
+                      disabled={reportBusy !== null}
+                      onClick={async () => {
+                        setReportBusy("send")
+                        try {
+                          const res = await fetch(`/api/admin/tenants/${tenant.id}/report`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ kind: reportKind }),
+                          })
+                          const json = await res.json().catch(() => null)
+                          if (!res.ok) {
+                            toast.error(json?.error ?? "No se pudo enviar el reporte")
+                            return
+                          }
+                          toast.success(`Reporte enviado a ${json?.data?.to?.[0] ?? "tu correo"}`)
+                        } finally {
+                          setReportBusy(null)
+                        }
+                      }}
+                    >
+                      {reportBusy === "send" ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Mail className="w-3 h-3" />
+                      )}
+                      Enviarme el reporte
+                    </Button>
+                  </div>
                 </div>
 
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
