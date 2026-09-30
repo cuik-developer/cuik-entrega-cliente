@@ -10,8 +10,8 @@ import { dayLabel, deltaShort, weekdayName } from "./period"
  */
 
 const BRANCHES_NOTE =
-  'Visitas registradas por sucursal. La fila "Sin sucursal" son visitas en las que el cajero no eligió sede en Escanear: ' +
-  'si es alta, conviene recordarles que la seleccionen. "Clientes nuevos" = clientes cuya primera visita fue en esa sede.'
+  'Visitas registradas por sucursal. La fila "Sin sucursal" agrupa visitas anteriores a la creación de las sucursales ' +
+  'o registradas fuera de la caja (panel o API); en caja siempre se elige una sede. "Clientes nuevos" = clientes cuya primera visita fue en esa sede.'
 
 const CASHIERS_NOTE =
   'Visitas registradas por cada persona del equipo. "Días activos" = días de la semana en que registró al menos una visita. ' +

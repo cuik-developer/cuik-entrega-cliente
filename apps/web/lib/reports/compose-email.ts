@@ -171,7 +171,7 @@ export function teamItems(data: ReportData, isWeekly: boolean): string[] {
     const none = branches.find((b) => b.id === null)
     if (none && none.visits > 0) {
       items.push(
-        `${plural(none.visits, "visita se registró", "visitas se registraron")} sin elegir sucursal. Recuérdale al equipo seleccionar la sede en Escanear para que este análisis sea confiable.`,
+        `${plural(none.visits, "visita quedó", "visitas quedaron")} sin sucursal asignada: son anteriores a la creación de tus sedes o se registraron fuera de la caja. No cuentan en el reparto por sucursal.`,
       )
     }
   }

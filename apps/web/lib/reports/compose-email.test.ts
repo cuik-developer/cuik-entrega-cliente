@@ -306,7 +306,7 @@ describe("teamItems", () => {
     const items = teamItems(data, true)
     expect(items[0]).toContain("Sede más fuerte: Miraflores con 30 visitas (71 % del total, +20 %")
     expect(items[0]).toContain("San Isidro no registró ninguna visita esta semana")
-    expect(items[1]).toContain("12 visitas se registraron sin elegir sucursal")
+    expect(items[1]).toContain("12 visitas quedaron sin sucursal asignada")
     expect(items[2]).toContain("Cajero más activo: Rosa con 20 visitas en 5 días (4 por día)")
     expect(items[3]).toContain("2 cajeros no registraron ninguna visita esta semana: Luis, Pedro")
     const e = composeReportEmail(data, urls)
