@@ -75,7 +75,7 @@ export type AtRiskRow = {
 
 export type BirthdayRow = { name: string; date: string; weekday: string; autoPush: string }
 
-export type CampaignRow = { name: string; sentAt: Date | null; sentCount: number }
+export type CampaignRow = { id: string; name: string; sentAt: Date | null; sentCount: number }
 
 export type WeekRow = {
   label: string
@@ -347,14 +347,16 @@ export async function computeReport(params: {
 
   // ── Campaigns sent in the period ──────────────────────────────────
   const campaignsRes = await db.execute<{
+    id: string
     name: string
     sent_at: string | null
     sent_count: number
   }>(sql`
-    SELECT name, sent_at, sent_count FROM campaigns.campaigns
+    SELECT id, name, sent_at, sent_count FROM campaigns.campaigns
     WHERE tenant_id = ${tenantId} AND status = 'sent' AND sent_at IS NOT NULL AND ${within("sent_at", period)}
     ORDER BY sent_at ASC`)
   const campaignRows: CampaignRow[] = campaignsRes.rows.map((r) => ({
+    id: r.id,
     name: r.name,
     sentAt: r.sent_at ? new Date(r.sent_at) : null,
     sentCount: Number(r.sent_count),

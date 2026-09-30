@@ -114,8 +114,22 @@ describe("buildInsights", () => {
         returningClients: 20,
         newVisitors: 10,
         campaignLift: [
-          { name: "Puntos dobles", sentCount: 80, visitsAfter: 18, expected: 11.4, liftPct: 58 },
-          { name: "Hola", sentCount: 80, visitsAfter: 10, expected: 11.4, liftPct: -12 },
+          {
+            name: "Puntos dobles",
+            sentCount: 80,
+            visitsAfter: 18,
+            expected: 11.4,
+            liftPct: 58,
+            responders: [],
+          },
+          {
+            name: "Hola",
+            sentCount: 80,
+            visitsAfter: 10,
+            expected: 11.4,
+            liftPct: -12,
+            responders: [],
+          },
         ],
       }),
     )
@@ -243,7 +257,14 @@ describe("buildInsights", () => {
         peakHour: { current: "18:00", previous: "12:00" },
         bestWeekday: { current: "viernes", previous: "lunes" },
         campaignLift: [
-          { name: "Test", sentCount: 0, visitsAfter: 0, expected: 2.1, liftPct: -100 },
+          {
+            name: "Test",
+            sentCount: 0,
+            visitsAfter: 0,
+            expected: 2.1,
+            liftPct: -100,
+            responders: [],
+          },
         ],
       },
       { kpis: { ...base.kpis, visits: kpi(11, 5), uniqueClients: kpi(8, 4) } },

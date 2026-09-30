@@ -30,6 +30,8 @@ export type CampaignLift = {
   expected: number
   /** Percent lift vs. expected, null when there is no baseline. */
   liftPct: number | null
+  /** Recipients of the push who visited within 48 h of receiving it. */
+  responders: Array<{ name: string; visitedAt: Date; segment: string }>
 }
 
 export type HeatRow = {

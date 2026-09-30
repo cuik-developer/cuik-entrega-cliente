@@ -157,12 +157,56 @@ export async function computeSignals(params: {
         AND v.created_at >= ${c.sentAt.toISOString()}::timestamp
         AND v.created_at < ${c.sentAt.toISOString()}::timestamp + interval '48 hours'`)
     const visitsAfter = Number(res.rows[0]?.n ?? 0)
+    // Who answered: recipients (notification sent/delivered) with a visit in the 48 h after it.
+    const resp = await db.execute<{
+      name: string
+      last_name: string | null
+      visited_at: string
+      created_at: string
+      total_visits: number
+      last_visit_at: string | null
+      avg_days: string | null
+    }>(sql`
+      SELECT c.name, c.last_name, MIN(v.created_at) AS visited_at, c.created_at, c.total_visits,
+        s.last_visit_at, s.avg_days
+      FROM campaigns.notifications n
+      JOIN loyalty.clients c ON c.id = n.client_id AND c.status IN ('active', 'inactive')
+      JOIN loyalty.visits v ON v.client_id = n.client_id AND v.source <> 'bonus'
+        AND v.created_at >= COALESCE(n.sent_at, ${c.sentAt.toISOString()}::timestamp)
+        AND v.created_at < COALESCE(n.sent_at, ${c.sentAt.toISOString()}::timestamp) + interval '48 hours'
+      LEFT JOIN (
+        SELECT v2.client_id, MAX(v2.created_at) AS last_visit_at,
+          CASE WHEN COUNT(*) >= 2
+            THEN EXTRACT(EPOCH FROM (MAX(v2.created_at) - MIN(v2.created_at))) / 86400.0 / NULLIF(COUNT(*) - 1, 0)
+            ELSE NULL END AS avg_days
+        FROM loyalty.visits v2 WHERE v2.tenant_id = ${tenantId} AND v2.source <> 'bonus' GROUP BY v2.client_id
+      ) s ON s.client_id = c.id
+      WHERE n.campaign_id = ${c.id} AND n.status IN ('sent', 'delivered')
+      GROUP BY c.id, c.name, c.last_name, c.created_at, c.total_visits, s.last_visit_at, s.avg_days
+      ORDER BY visited_at ASC`)
+    const responders = resp.rows.map((row) => ({
+      name: [row.name, row.last_name].filter(Boolean).join(" "),
+      visitedAt: new Date(row.visited_at),
+      segment:
+        SEGMENT_LABELS[
+          computeClientSegment(
+            {
+              createdAt: new Date(row.created_at),
+              totalVisits: Number(row.total_visits),
+              lastVisitAt: parseVisitDate(row.last_visit_at),
+              avgDaysBetweenVisits: parseAvgDays(row.avg_days),
+            },
+            params.thresholds,
+          )
+        ],
+    }))
     campaignLift.push({
       name: c.name,
       sentCount: c.sentCount,
       visitsAfter,
       expected,
       liftPct: expected > 0 ? Math.round(((visitsAfter - expected) / expected) * 100) : null,
+      responders,
     })
   }
 

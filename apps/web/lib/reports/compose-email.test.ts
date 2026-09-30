@@ -49,7 +49,12 @@ const base: ReportData = {
   },
   repeatClients: 6,
   campaigns: [
-    { name: "Promo de vacunas", sentAt: new Date("2026-09-10T15:00:00Z"), sentCount: 58 },
+    {
+      id: "camp1",
+      name: "Promo de vacunas",
+      sentAt: new Date("2026-09-10T15:00:00Z"),
+      sentCount: 58,
+    },
   ],
   clients: [],
   topClients: [

@@ -35,6 +35,17 @@ const C = {
   red: "FFDC2626",
 } as const
 const FONT = "Poppins"
+
+/** Soft background + strong text per client segment (conditional colour of the "Segmento" column). */
+const SEGMENT_CHIP: Record<string, { fill: Argb; text: Argb }> = {
+  Nuevo: { fill: "FFE8F1FC", text: "FF0E70DB" },
+  Frecuente: { fill: "FFDCFCE7", text: "FF15803D" },
+  Regular: { fill: "FFF1F5F9", text: "FF334155" },
+  Esporádico: { fill: "FFFEF3C7", text: "FFB45309" },
+  "Una visita": { fill: "FFF1F5F9", text: "FF64748B" },
+  "En riesgo": { fill: "FFFFEDD5", text: "FFC2410C" },
+  Inactivo: { fill: "FFFEE2E2", text: "FFB91C1C" },
+}
 /** Approximate characters per Excel width unit at Poppins 10. */
 const CHARS_PER_UNIT = 0.95
 
@@ -132,28 +143,6 @@ function shareBars(
   })
 }
 
-/** White → blue colour scale over a block (the "heat map"). */
-function heatScale(
-  sheet: Sheet,
-  fromCol: number,
-  toCol: number,
-  firstRow: number,
-  lastRow: number,
-) {
-  if (lastRow < firstRow) return
-  sheet.addConditionalFormatting({
-    ref: `${colLetter(fromCol)}${firstRow}:${colLetter(toCol)}${lastRow}`,
-    rules: [
-      {
-        type: "colorScale",
-        cfvo: [{ type: "num", value: 0 }, { type: "max" }],
-        color: [{ argb: C.white }, { argb: C.blue }],
-        priority: 1,
-      } as unknown as ExcelJS.ConditionalFormattingRule,
-    ],
-  })
-}
-
 // ── Table helper ───────────────────────────────────────────────────
 type Col = {
   header: string
@@ -168,6 +157,8 @@ type Col = {
   barTotal?: number
   wrap?: boolean
   align?: "left" | "right" | "center"
+  /** Colour the cell as a segment chip (see SEGMENT_CHIP). */
+  chip?: boolean
 }
 
 type TableOpts = {
@@ -248,7 +239,12 @@ function addTable(
       const cell = excelRow.getCell(i + 1)
       const v = row[c.key]
       cell.value = (v ?? "") as ExcelJS.CellValue
-      cell.font = font(10, { color: c.delta ? deltaColor(v) : C.ink, bold: Boolean(c.delta && v) })
+      const chip = c.chip ? SEGMENT_CHIP[String(v)] : undefined
+      cell.font = font(10, {
+        color: chip ? chip.text : c.delta ? deltaColor(v) : C.ink,
+        bold: Boolean(chip) || Boolean(c.delta && v),
+      })
+      if (chip) cell.fill = fill(chip.fill)
       cell.border = boxBorder
       cell.alignment = {
         vertical: "top",
@@ -257,7 +253,7 @@ function addTable(
         indent: 1,
       }
       if (c.numFmt && typeof v === "number") cell.numFmt = c.numFmt
-      if ((opts.zebra ?? true) && ri % 2 === 1) cell.fill = fill(C.surface)
+      if ((opts.zebra ?? true) && ri % 2 === 1 && !chip) cell.fill = fill(C.surface)
       if (c.wrap && typeof v === "string") {
         tallest = Math.max(tallest, wrappedHeight(v, c.width ?? 18))
       }
@@ -462,7 +458,12 @@ function miniTable(
       const cell = excelRow.getCell(c.col)
       const v = row[c.key]
       cell.value = (v ?? "") as ExcelJS.CellValue
-      cell.font = font(10, { color: c.delta ? deltaColor(v) : C.ink, bold: Boolean(c.delta && v) })
+      const chip = c.chip ? SEGMENT_CHIP[String(v)] : undefined
+      cell.font = font(10, {
+        color: chip ? chip.text : c.delta ? deltaColor(v) : C.ink,
+        bold: Boolean(chip) || Boolean(c.delta && v),
+      })
+      if (chip) cell.fill = fill(chip.fill)
       cell.alignment = {
         vertical: "middle",
         horizontal: c.align ?? (typeof v === "number" ? "right" : "left"),
@@ -470,7 +471,7 @@ function miniTable(
       }
       if (c.numFmt && typeof v === "number") cell.numFmt = c.numFmt
       cell.border = { bottom: thin }
-      if (ri % 2 === 1) cell.fill = fill(C.surface)
+      if (ri % 2 === 1 && !chip) cell.fill = fill(C.surface)
     }
     excelRow.height = 18
     r += 1
@@ -681,7 +682,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
     sectionLabel(
       dash,
       r,
-      isWeekly ? "Los que más vinieron esta semana" : "Los que más vinieron este mes",
+      isWeekly ? "Tus clientes más fieles de la semana" : "Tus clientes más fieles del mes",
     )
     r += 1
     r = miniTable(
@@ -689,17 +690,10 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
       r,
       [
         { header: "Cliente", key: "name", col: 1, span: 2 },
-        {
-          header: `Visitas ${periodWord}`,
-          key: "periodVisits",
-          col: 3,
-          span: 2,
-          bar: true,
-          numFmt: "#,##0",
-        },
+        { header: `Visitas ${periodWord}`, key: "periodVisits", col: 3, span: 2, numFmt: "#,##0" },
         { header: "Visitas totales", key: "totalVisits", col: 5, numFmt: "#,##0" },
         { header: progressHeader(data), key: "progress", col: 6, align: "right" },
-        { header: "Segmento", key: "segment", col: 7, span: 2 },
+        { header: "Segmento", key: "segment", col: 7, span: 2, chip: true },
       ],
       data.clients.slice(0, 5).map((c) => ({
         name: c.name,
@@ -757,7 +751,20 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
         share: frac(h.morning + h.afternoon + h.evening, heatTotal),
       })),
     )
-    heatScale(dash, 2, 7, top + 1, top + heat.length)
+    // No chart here: just embolden the busiest band of each day.
+    heat.forEach((h, i) => {
+      const row = top + 1 + i
+      const best = Math.max(h.morning, h.afternoon, h.evening)
+      if (best <= 0) return
+      const cols = [
+        [2, h.morning],
+        [4, h.afternoon],
+        [6, h.evening],
+      ] as const
+      for (const [col, v] of cols) {
+        if (v === best) dash.getCell(row, col).font = font(10, { bold: true, color: C.blue })
+      }
+    })
   }
   const f = d.funnel
   r = miniTable(
@@ -1012,7 +1019,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
       { header: "Visitas totales", key: "totalVisits", width: 15, numFmt: "#,##0" },
       { header: "Última visita", key: "lastVisitAt", width: 20 },
       { header: progressHeader(data), key: "progress", width: 12, align: "right" },
-      { header: "Segmento", key: "segment", width: 14 },
+      { header: "Segmento", key: "segment", width: 14, chip: true },
       ...(isPoints
         ? [
             {
@@ -1054,15 +1061,26 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
         { header: "Campaña", key: "name", width: 32 },
         { header: "Enviada", key: "sentAt", width: 20 },
         { header: "Push enviados", key: "sentCount", width: 15, numFmt: "#,##0" },
-        { header: "Visitas 48 h después", key: "after", width: 20, numFmt: "#,##0" },
+        { header: "Respondieron", key: "responders", width: 14, numFmt: "#,##0" },
+        {
+          header: "% de los que recibieron",
+          key: "responseRate",
+          width: 20,
+          numFmt: "0%",
+          align: "right",
+        },
+        { header: "Visitas 48 h después (todas)", key: "after", width: 24, numFmt: "#,##0" },
         { header: "Esperado", key: "expected", width: 12, numFmt: "0.0" },
         { header: "Efecto", key: "lift", width: 12, delta: true, align: "right" },
       ],
       data.campaigns.map((c) => {
         const lift = data.signals.campaignLift.find((l) => l.name === c.name)
+        const responders = lift?.responders.length ?? 0
         return {
           ...c,
           sentAt: formatDateForExport(c.sentAt, tz),
+          responders,
+          responseRate: frac(responders, c.sentCount),
           after: lift?.visitsAfter ?? "",
           expected: lift?.expected ?? "",
           lift: lift?.liftPct != null ? `${lift.liftPct > 0 ? "+" : ""}${lift.liftPct} %` : "",
@@ -1071,10 +1089,34 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
       {
         title: isWeekly ? "Campañas push de la semana" : "Campañas push del mes",
         subtitle:
-          "Efecto = visitas en las 48 horas siguientes al envío frente a lo esperado en cualquier ventana de 48 horas.",
+          "Respondieron = recibieron el push y visitaron dentro de las 48 horas siguientes. Efecto = todas las visitas de esas 48 horas frente a lo esperado en cualquier ventana de 48 horas.",
         freeze: true,
       },
     )
+    const responderRows = data.signals.campaignLift.flatMap((l) =>
+      l.responders.map((p) => ({
+        campaign: l.name,
+        name: p.name,
+        visitedAt: formatDateForExport(p.visitedAt, tz),
+        segment: p.segment,
+      })),
+    )
+    if (responderRows.length > 0) {
+      const sheet = wb.getWorksheet("Campañas")
+      if (sheet) {
+        addTable(
+          sheet,
+          [
+            { header: "Campaña", key: "campaign", width: 32 },
+            { header: "Cliente que respondió", key: "name", width: 26 },
+            { header: "Visitó el", key: "visitedAt", width: 20 },
+            { header: "Segmento", key: "segment", width: 14, chip: true },
+          ],
+          responderRows,
+          { startRow: data.campaigns.length + 7, title: "Quiénes vinieron después del push" },
+        )
+      }
+    }
   }
 
   // ═══════════════ En riesgo ═══════════════
