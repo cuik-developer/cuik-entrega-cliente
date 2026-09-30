@@ -170,10 +170,11 @@ export function depthItems(data: ReportData, isWeekly: boolean): string[] {
         : ""),
   )
 
-  const total = d.buckets.reduce((acc, x) => acc + x.n, 0)
-  if (total > 1) {
+  const unique = data.kpis.uniqueClients.current
+  const returning = data.signals.returningClients
+  if (unique > 0) {
     items.push(
-      `De los ${total} que vinieron: ${d.buckets.map((x) => `${x.n} con ${x.label}`).join(", ")}.`,
+      `Tasa de retorno: ${Math.round((returning / unique) * 100)} % de los que vinieron ya te conocían (${returning} de ${unique}); ${plural(data.signals.newVisitors, "era primerizo", "eran primerizos")}.`,
     )
   }
 

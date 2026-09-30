@@ -32,6 +32,16 @@ export type CampaignLift = {
   liftPct: number | null
 }
 
+export type HeatRow = {
+  weekday: string
+  /** Before 12:00. */
+  morning: number
+  /** 12:00 to 17:59. */
+  afternoon: number
+  /** From 18:00 (and the small hours). */
+  evening: number
+}
+
 export type CohortRow = {
   /** "YYYY-MM" of registration. */
   ym: string
@@ -52,6 +62,8 @@ export type ReportSignals = {
   peakHour: { current: string | null; previous: string | null }
   bestWeekday: { current: string | null; previous: string | null }
   campaignLift: CampaignLift[]
+  /** Visits by weekday and time band (Monday first): when do clients come. */
+  heat: HeatRow[]
   /** Clients in status active/inactive at the period end. */
   activeClients: number
   points: {
@@ -125,6 +137,7 @@ export const EMPTY_SIGNALS: ReportSignals = {
   peakHour: { current: null, previous: null },
   bestWeekday: { current: null, previous: null },
   campaignLift: [],
+  heat: [],
   activeClients: 0,
   points: null,
   stamps: null,

@@ -1,7 +1,7 @@
 import { db, sql } from "@cuik/db"
 import { automationsConfigSchema } from "@cuik/shared/validators"
 import type { CampaignRow, DailyRow, ProgramType } from "./compute-report"
-import type { CampaignLift, CohortRow, DepthKpis, ReportSignals } from "./insights"
+import type { CampaignLift, CohortRow, DepthKpis, HeatRow, ReportSignals } from "./insights"
 import {
   monthName,
   type Period,
@@ -68,7 +68,7 @@ export async function computeSignals(params: {
       : null
 
   // ── New vs. returning visitors, active clients, peak hours ────────
-  const [mixRes, peakCur, peakPrev, dowPrev, activeRes] = await Promise.all([
+  const [mixRes, peakCur, peakPrev, dowPrev, activeRes, heatRes] = await Promise.all([
     db.execute<{ returning: number; first_timers: number }>(sql`
       WITH pv AS (
         SELECT DISTINCT v.client_id FROM loyalty.visits v
@@ -103,7 +103,31 @@ export async function computeSignals(params: {
       SELECT COUNT(*)::int AS n FROM loyalty.clients c
       WHERE c.tenant_id = ${tenantId} AND c.status IN ('active', 'inactive')
         AND ${local("c.created_at")} < (${period.end}::date + 1)`),
+    db.execute<{ dow: number; band: string; n: number }>(sql`
+      SELECT EXTRACT(ISODOW FROM ${local("v.created_at")})::int AS dow,
+        CASE WHEN EXTRACT(HOUR FROM ${local("v.created_at")}) < 12 THEN 'm'
+             WHEN EXTRACT(HOUR FROM ${local("v.created_at")}) < 18 THEN 't'
+             ELSE 'n' END AS band,
+        COUNT(*)::int AS n
+      FROM loyalty.visits v
+      WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' AND ${within("v.created_at", period)}
+      GROUP BY 1, 2`),
   ])
+  const HEAT_DAYS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+  const heat: HeatRow[] = HEAT_DAYS.map((weekday) => ({
+    weekday,
+    morning: 0,
+    afternoon: 0,
+    evening: 0,
+  }))
+  for (const row of heatRes.rows) {
+    const h = heat[Number(row.dow) - 1]
+    if (!h) continue
+    const n = Number(row.n)
+    if (row.band === "m") h.morning += n
+    else if (row.band === "t") h.afternoon += n
+    else h.evening += n
+  }
   const fmtHour = (h: number | undefined) =>
     h === undefined || h === null ? null : `${String(h).padStart(2, "0")}:00`
   const bestCur = daily.filter((d) => d.visits > 0).sort((a, b) => b.visits - a.visits)[0]
@@ -235,6 +259,7 @@ export async function computeSignals(params: {
       previous: prevDay ? weekdayName(prevDay) : null,
     },
     campaignLift,
+    heat,
     activeClients: Number(activeRes.rows[0]?.n ?? 0),
     points,
     stamps,
