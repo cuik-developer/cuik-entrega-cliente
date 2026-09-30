@@ -210,6 +210,7 @@ export async function computeSignals(params: {
 
   const depth = await computeDepth({
     tenantId,
+    isWeekly,
     period,
     previous,
     programType,
@@ -247,6 +248,7 @@ function ratio(a: number, b: number): number {
 
 async function computeDepth(params: {
   tenantId: string
+  isWeekly: boolean
   period: Period
   previous: Period
   programType: ProgramType
@@ -292,14 +294,20 @@ async function computeDepth(params: {
       registered: number
       with_pass: number
       with_visit: number
+      repeaters: number
+      redeemers: number
       new_registered: number
       new_with_pass: number
       new_with_visit: number
+      new_repeaters: number
+      new_redeemers: number
     }>(sql`
       WITH c AS (
         SELECT c.id, c.created_at,
           EXISTS (SELECT 1 FROM passes.pass_instances p WHERE p.client_id = c.id) AS has_pass,
-          EXISTS (SELECT 1 FROM loyalty.visits v WHERE v.client_id = c.id AND v.source <> 'bonus' AND ${upTo}) AS has_visit
+          (SELECT COUNT(*) FROM loyalty.visits v WHERE v.client_id = c.id AND v.source <> 'bonus' AND ${upTo}) AS n_visits,
+          EXISTS (SELECT 1 FROM (${firstRedeem}) fr WHERE fr.client_id = c.id AND ${local("fr.first_at")} < (${period.end}::date + 1)) AS has_redeem,
+          ${within("c.created_at", period)} AS is_new
         FROM loyalty.clients c
         WHERE c.tenant_id = ${tenantId} AND c.status IN ('active', 'inactive')
           AND ${local("c.created_at")} < (${period.end}::date + 1)
@@ -307,10 +315,14 @@ async function computeDepth(params: {
       SELECT
         COUNT(*)::int AS registered,
         COUNT(*) FILTER (WHERE has_pass)::int AS with_pass,
-        COUNT(*) FILTER (WHERE has_visit)::int AS with_visit,
-        COUNT(*) FILTER (WHERE ${within("c.created_at", period)})::int AS new_registered,
-        COUNT(*) FILTER (WHERE has_pass AND ${within("c.created_at", period)})::int AS new_with_pass,
-        COUNT(*) FILTER (WHERE has_visit AND ${within("c.created_at", period)})::int AS new_with_visit
+        COUNT(*) FILTER (WHERE n_visits >= 1)::int AS with_visit,
+        COUNT(*) FILTER (WHERE n_visits >= 2)::int AS repeaters,
+        COUNT(*) FILTER (WHERE has_redeem)::int AS redeemers,
+        COUNT(*) FILTER (WHERE is_new)::int AS new_registered,
+        COUNT(*) FILTER (WHERE has_pass AND is_new)::int AS new_with_pass,
+        COUNT(*) FILTER (WHERE n_visits >= 1 AND is_new)::int AS new_with_visit,
+        COUNT(*) FILTER (WHERE n_visits >= 2 AND is_new)::int AS new_repeaters,
+        COUNT(*) FILTER (WHERE has_redeem AND is_new)::int AS new_redeemers
       FROM c`),
     db.execute<{ med: string | null; n: number }>(sql`
       WITH fr AS (${firstRedeem})
@@ -326,13 +338,25 @@ async function computeDepth(params: {
       WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' AND v.amount IS NOT NULL AND ${within("v.created_at", previous)}`),
   ])
 
-  const buckets = { one: 0, twoThree: 0, fourSeven: 0, eightPlus: 0 }
-  for (const n of params.visitsPerClient) {
-    if (n >= 8) buckets.eightPlus++
-    else if (n >= 4) buckets.fourSeven++
-    else if (n >= 2) buckets.twoThree++
-    else if (n >= 1) buckets.one++
-  }
+  // Realistic buckets: a pet shop or barbershop client rarely comes more than
+  // a few times a week/month, so the top bucket stays low.
+  const defs = params.isWeekly
+    ? [
+        { label: "1 visita", min: 1, max: 1 },
+        { label: "2 visitas", min: 2, max: 2 },
+        { label: "3 visitas", min: 3, max: 3 },
+        { label: "4 o más", min: 4, max: Number.POSITIVE_INFINITY },
+      ]
+    : [
+        { label: "1 visita", min: 1, max: 1 },
+        { label: "2 visitas", min: 2, max: 2 },
+        { label: "3 a 4 visitas", min: 3, max: 4 },
+        { label: "5 o más", min: 5, max: Number.POSITIVE_INFINITY },
+      ]
+  const buckets = defs.map((b) => ({
+    label: b.label,
+    n: params.visitsPerClient.filter((n) => n >= b.min && n <= b.max).length,
+  }))
   const f = funnelRes.rows[0]
   const sv = secondRes.rows[0]
   const cohort = Number(sv?.cohort ?? 0)
@@ -354,9 +378,13 @@ async function computeDepth(params: {
       registered: Number(f?.registered ?? 0),
       withPass: Number(f?.with_pass ?? 0),
       withVisit: Number(f?.with_visit ?? 0),
+      repeaters: Number(f?.repeaters ?? 0),
+      redeemers: Number(f?.redeemers ?? 0),
       newRegistered: Number(f?.new_registered ?? 0),
       newWithPass: Number(f?.new_with_pass ?? 0),
       newWithVisit: Number(f?.new_with_visit ?? 0),
+      newRepeaters: Number(f?.new_repeaters ?? 0),
+      newRedeemers: Number(f?.new_redeemers ?? 0),
     },
     timeToFirstReward: {
       medianDays: rmed != null ? Math.round(Number(rmed)) : null,

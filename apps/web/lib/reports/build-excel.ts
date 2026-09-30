@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs"
 import { formatDateForExport } from "@/lib/format-date"
+import { actItems, happenedItems } from "./compose-email"
 import type { Cumulative, ReportData } from "./compute-report"
 import { buildInsights, type Insight } from "./insights"
 import { dayLabel, deltaShort, weekdayName } from "./period"
@@ -7,15 +8,17 @@ import { dayLabel, deltaShort, weekdayName } from "./period"
 /**
  * The xlsx attached to the report, in the Cuik brand kit.
  *
- * Sheet 1 "Resumen" is the dashboard: KPI tiles, the ranked insights, and
- * compact tables with data bars (visits per day / week, how clients behave,
- * branches). The following sheets are the detail to act on: Insights,
- * Visitas por día, Sucursales, Cajeros, Clientes, En riesgo, Cumpleaños and,
- * monthly, the cumulative picture. No contact data (phones/emails) on
- * purpose — the panel is where you contact people.
+ * Sheet 1 "Resumen" is the dashboard: KPI tiles, the ranked insights, what
+ * happened, visits per day / week, loyal clients, how clients behave, points
+ * usage, branches and what to act on. The following sheets are the detail:
+ * Insights, Sucursales, Cajeros, Clientes, Campañas, En riesgo, Cumpleaños
+ * and, monthly, Visitas por día, Semanas del mes and the cumulative picture.
+ * No contact data (phones/emails) on purpose — the panel is where you
+ * contact people.
  *
- * ExcelJS cannot embed native charts; data bars are used instead, which also
- * survive Google Sheets and Numbers.
+ * ExcelJS cannot embed native charts, so every "chart" is a data bar whose
+ * 100 % is the sum of the column (share of the total), coloured green /
+ * yellow / red by size relative to the largest value.
  */
 
 // ── Brand kit ──────────────────────────────────────────────────────
@@ -27,10 +30,13 @@ const C = {
   muted: "FF6B7280",
   line: "FFE5E7EB",
   white: "FFFFFFFF",
-  green: "FF059669",
+  green: "FF16A34A",
+  yellow: "FFF59E0B",
   red: "FFDC2626",
 } as const
 const FONT = "Poppins"
+/** Approximate characters per Excel width unit at Poppins 10. */
+const CHARS_PER_UNIT = 0.95
 
 type Argb = string
 type Sheet = ExcelJS.Worksheet
@@ -77,22 +83,46 @@ function capitalize(s: string): string {
   return s ? s[0].toUpperCase() + s.slice(1) : s
 }
 
-/** Blue data bar over a column range. */
-function dataBar(sheet: Sheet, col: number, firstRow: number, lastRow: number) {
-  if (lastRow < firstRow) return
+/** Row height (points) for `text` wrapped inside `widthUnits` columns. */
+function wrappedHeight(text: string, widthUnits: number, lineHeight = 15, min = 18): number {
+  const perLine = Math.max(10, Math.floor(widthUnits * CHARS_PER_UNIT))
+  const lines = text
+    .split("\n")
+    .reduce((n, part) => n + Math.max(1, Math.ceil(part.length / perLine)), 0)
+  return Math.max(min, lines * lineHeight + 6)
+}
+
+/**
+ * "Chart" bars: one rule per cell so each bar can have its own colour.
+ * Length = value / sum of the column (100 % = the total); colour by size
+ * relative to the largest value (green ≥ 2/3, yellow ≥ 1/3, red below).
+ */
+function shareBars(sheet: Sheet, col: number, firstRow: number, values: number[]) {
+  const total = values.reduce((a, b) => a + b, 0)
+  const max = Math.max(0, ...values)
+  if (total <= 0 || max <= 0) return
   const L = colLetter(col)
-  sheet.addConditionalFormatting({
-    ref: `${L}${firstRow}:${L}${lastRow}`,
-    rules: [
-      {
-        type: "dataBar",
-        cfvo: [{ type: "min" }, { type: "max" }],
-        color: { argb: C.blue },
-        gradient: false,
-        showValue: true,
-        priority: 1,
-      } as unknown as ExcelJS.ConditionalFormattingRule,
-    ],
+  values.forEach((v, i) => {
+    if (v <= 0) return
+    const ratio = v / max
+    const color = ratio >= 2 / 3 ? C.green : ratio >= 1 / 3 ? C.yellow : C.red
+    const row = firstRow + i
+    sheet.addConditionalFormatting({
+      ref: `${L}${row}:${L}${row}`,
+      rules: [
+        {
+          type: "dataBar",
+          cfvo: [
+            { type: "num", value: 0 },
+            { type: "num", value: total },
+          ],
+          color: { argb: color },
+          gradient: false,
+          showValue: true,
+          priority: 1,
+        } as unknown as ExcelJS.ConditionalFormattingRule,
+      ],
+    })
   })
 }
 
@@ -105,7 +135,7 @@ type Col = {
   numFmt?: string
   /** Colour text by sign (+ green, - red). */
   delta?: boolean
-  /** Draw a blue data bar behind the numbers. */
+  /** Draw share bars behind the numbers (100 % = column total). */
   bar?: boolean
   wrap?: boolean
   align?: "left" | "right" | "center"
@@ -119,6 +149,18 @@ type TableOpts = {
   zebra?: boolean
   freeze?: boolean
   filter?: boolean
+}
+
+function headerHeight(
+  columns: Array<{ header: string; width?: number }>,
+  widthOf: (i: number) => number,
+) {
+  let lines = 1
+  for (const [i, c] of columns.entries()) {
+    const perLine = Math.max(6, Math.floor(widthOf(i) * CHARS_PER_UNIT))
+    lines = Math.max(lines, Math.ceil(c.header.length / perLine))
+  }
+  return Math.max(22, lines * 14 + 10)
 }
 
 /** Renders a branded table and returns the row number after it. */
@@ -138,11 +180,16 @@ function addTable(
     const cell = sheet.getCell(r, 1)
     cell.value = opts.title
     cell.font = font(13, { bold: true })
+    sheet.getRow(r).height = 24
     r += 1
     if (opts.subtitle) {
+      sheet.mergeCells(r, 1, r, Math.max(columns.length, 4))
       const sub = sheet.getCell(r, 1)
       sub.value = opts.subtitle
       sub.font = font(9, { color: C.muted })
+      sub.alignment = { wrapText: true, vertical: "top" }
+      const width = columns.reduce((acc, c) => acc + (c.width ?? 18), 0)
+      sheet.getRow(r).height = wrappedHeight(opts.subtitle, width, 13, 16)
       r += 1
     }
     r += 1
@@ -154,14 +201,20 @@ function addTable(
     cell.value = c.header
     cell.font = font(10, { bold: true, color: C.white })
     cell.fill = fill(C.blue)
-    cell.alignment = { vertical: "middle", horizontal: c.align ?? "left", wrapText: true }
+    cell.alignment = {
+      vertical: "middle",
+      horizontal: c.align ?? "left",
+      wrapText: true,
+      indent: 1,
+    }
     cell.border = boxBorder
   }
-  header.height = 22
+  header.height = headerHeight(columns, (i) => columns[i].width ?? 18)
   r += 1
   const firstData = r
   for (const [ri, row] of rows.entries()) {
     const excelRow = sheet.getRow(r)
+    let tallest = 18
     for (const [i, c] of columns.entries()) {
       const cell = excelRow.getCell(i + 1)
       const v = row[c.key]
@@ -172,15 +225,27 @@ function addTable(
         vertical: "top",
         horizontal: c.align ?? (typeof v === "number" ? "right" : "left"),
         wrapText: c.wrap ?? false,
+        indent: 1,
       }
       if (c.numFmt && typeof v === "number") cell.numFmt = c.numFmt
       if ((opts.zebra ?? true) && ri % 2 === 1) cell.fill = fill(C.surface)
+      if (c.wrap && typeof v === "string") {
+        tallest = Math.max(tallest, wrappedHeight(v, c.width ?? 18))
+      }
     }
+    excelRow.height = tallest
     r += 1
   }
   const lastData = r - 1
   for (const [i, c] of columns.entries()) {
-    if (c.bar && rows.length > 0) dataBar(sheet, i + 1, firstData, lastData)
+    if (c.bar && rows.length > 0) {
+      shareBars(
+        sheet,
+        i + 1,
+        firstData,
+        rows.map((row) => Number(row[c.key] ?? 0) || 0),
+      )
+    }
   }
   if (opts.filter && rows.length > 0) {
     sheet.autoFilter = {
@@ -201,8 +266,18 @@ function detailSheet(wb: ExcelJS.Workbook, name: string): Sheet {
 }
 
 // ── Dashboard pieces ───────────────────────────────────────────────
-function band(sheet: Sheet, row: number, cols: number, text: string, sub?: string) {
-  sheet.mergeCells(row, 1, row, cols)
+const COLS = 8
+/** Column widths of the dashboard: a wide label column and seven regular ones. */
+const DASH_WIDTHS = [22, 14, 14, 14, 14, 14, 14, 14]
+const DASH_WIDTH = DASH_WIDTHS.reduce((a, b) => a + b, 0)
+function spanWidth(fromCol: number, span: number): number {
+  let w = 0
+  for (let c = fromCol; c < fromCol + span; c++) w += DASH_WIDTHS[c - 1] ?? 14
+  return w
+}
+
+function band(sheet: Sheet, row: number, text: string, sub?: string) {
+  sheet.mergeCells(row, 1, row, COLS)
   const cell = sheet.getCell(row, 1)
   cell.value = text
   cell.font = font(16, { bold: true, color: C.white })
@@ -210,24 +285,24 @@ function band(sheet: Sheet, row: number, cols: number, text: string, sub?: strin
   cell.alignment = { vertical: "middle", horizontal: "left", indent: 1 }
   sheet.getRow(row).height = 34
   if (sub) {
-    sheet.mergeCells(row + 1, 1, row + 1, cols)
+    sheet.mergeCells(row + 1, 1, row + 1, COLS)
     const s = sheet.getCell(row + 1, 1)
     s.value = sub
     s.font = font(9, { color: C.white })
     s.fill = fill(C.blue)
-    s.alignment = { vertical: "middle", horizontal: "left", indent: 1 }
-    sheet.getRow(row + 1).height = 18
+    s.alignment = { vertical: "middle", horizontal: "left", indent: 1, wrapText: true }
+    sheet.getRow(row + 1).height = wrappedHeight(sub, DASH_WIDTH, 13, 18)
   }
 }
 
-function sectionLabel(sheet: Sheet, row: number, text: string, cols: number) {
-  sheet.mergeCells(row, 1, row, cols)
+function sectionLabel(sheet: Sheet, row: number, text: string) {
+  sheet.mergeCells(row, 1, row, COLS)
   const cell = sheet.getCell(row, 1)
   cell.value = text.toUpperCase()
   cell.font = font(9, { bold: true, color: C.muted })
   cell.alignment = { vertical: "bottom" }
   cell.border = { bottom: { style: "thin", color: { argb: C.line } } }
-  sheet.getRow(row).height = 20
+  sheet.getRow(row).height = 22
 }
 
 type Tile = {
@@ -268,15 +343,16 @@ function tileRow(sheet: Sheet, top: number, tiles: Tile[]) {
     delta.value = t.delta ?? t.hint ?? ""
     const color = t.direction === "up" ? C.green : t.direction === "down" ? C.red : C.muted
     delta.font = font(9, { color: t.delta ? color : C.muted, bold: Boolean(t.delta) })
-    delta.alignment = { vertical: "top", horizontal: "left", indent: 1 }
+    delta.alignment = { vertical: "top", horizontal: "left", indent: 1, wrapText: true }
   }
   sheet.getRow(top).height = 16
   sheet.getRow(top + 1).height = 30
-  sheet.getRow(top + 2).height = 16
+  sheet.getRow(top + 2).height = 24
 }
 
-function insightRows(sheet: Sheet, top: number, insights: Insight[], cols: number): number {
+function insightRows(sheet: Sheet, top: number, insights: Insight[]): number {
   let r = top
+  const textWidth = spanWidth(2, COLS - 1)
   for (const i of insights) {
     const mark = sheet.getCell(r, 1)
     mark.value = i.tone === "good" ? "▲" : i.tone === "warn" ? "▼" : "•"
@@ -285,7 +361,7 @@ function insightRows(sheet: Sheet, top: number, insights: Insight[], cols: numbe
       color: i.tone === "good" ? C.green : i.tone === "warn" ? C.orange : C.muted,
     })
     mark.alignment = { vertical: "top", horizontal: "center" }
-    sheet.mergeCells(r, 2, r, cols)
+    sheet.mergeCells(r, 2, r, COLS)
     const text = sheet.getCell(r, 2)
     text.value = {
       richText: [
@@ -295,13 +371,31 @@ function insightRows(sheet: Sheet, top: number, insights: Insight[], cols: numbe
       ],
     }
     text.alignment = { vertical: "top", wrapText: true }
-    sheet.getRow(r).height = Math.max(
-      30,
-      Math.ceil((i.title.length + i.what.length + i.action.length) / 95) * 15,
-    )
+    // Generous: merged cells never auto-fit, and bold runs are wider.
+    const full = `${i.title}. ${i.what} ${i.action}`
+    sheet.getRow(r).height = wrappedHeight(full, textWidth * 0.8, 15, 32) + 6
     r += 1
   }
   return r
+}
+
+/** Plain bullet lines (one merged row each). */
+function bulletRows(sheet: Sheet, top: number, lines: string[]): number {
+  let r = top
+  for (const line of lines) {
+    const mark = sheet.getCell(r, 1)
+    mark.value = "•"
+    mark.font = font(11, { bold: true, color: C.blue })
+    mark.alignment = { vertical: "top", horizontal: "center" }
+    sheet.mergeCells(r, 2, r, COLS)
+    const cell = sheet.getCell(r, 2)
+    cell.value = line
+    cell.font = font(10)
+    cell.alignment = { vertical: "top", wrapText: true }
+    sheet.getRow(r).height = wrappedHeight(line, spanWidth(2, COLS - 1) * 0.85, 15, 18) + 4
+    r += 1
+  }
+  return r + 1
 }
 
 /** Compact table inside the dashboard (keeps the sheet's column widths). */
@@ -319,9 +413,17 @@ function miniTable(
     cell.value = c.header
     cell.font = font(9, { bold: true, color: C.white })
     cell.fill = fill(C.blue)
-    cell.alignment = { vertical: "middle", horizontal: c.align ?? "left", indent: 1 }
+    cell.alignment = {
+      vertical: "middle",
+      horizontal: c.align ?? "left",
+      indent: 1,
+      wrapText: true,
+    }
   }
-  header.height = 18
+  header.height = headerHeight(
+    columns.map((c) => ({ header: c.header })),
+    (i) => spanWidth(columns[i].col, columns[i].span ?? 1),
+  )
   let r = top + 1
   for (const [ri, row] of rows.entries()) {
     const excelRow = sheet.getRow(r)
@@ -340,10 +442,18 @@ function miniTable(
       cell.border = { bottom: thin }
       if (ri % 2 === 1) cell.fill = fill(C.surface)
     }
+    excelRow.height = 18
     r += 1
   }
   for (const c of columns) {
-    if (c.bar && rows.length > 0) dataBar(sheet, c.col, top + 1, r - 1)
+    if (c.bar && rows.length > 0) {
+      shareBars(
+        sheet,
+        c.col,
+        top + 1,
+        rows.map((row) => Number(row[c.key] ?? 0) || 0),
+      )
+    }
   }
   return r + 1
 }
@@ -372,6 +482,11 @@ function dir(current: number | null, previous: number | null): Dir {
   return current > previous ? "up" : current < previous ? "down" : "flat"
 }
 
+/** Fraction 0-1 for a percent cell (formatted "0%"), or "" when there is no base. */
+function frac(part: number, total: number): number | "" {
+  return total > 0 ? part / total : ""
+}
+
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one linear pass that lays out every sheet of the workbook
 export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
@@ -380,32 +495,33 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
   const tz = data.tenant.timezone
   const isWeekly = data.kind === "weekly"
   const periodWord = isWeekly ? "semana" : "mes"
+  const here = isWeekly ? "esta semana" : "este mes"
   const prevWord = isWeekly ? "Semana anterior" : "Mes anterior"
   const isPoints = data.tenant.programType === "points"
   const rewardsWord = isPoints ? "Canjes" : "Premios canjeados"
   const insights = buildInsights(data)
+  const d = data.signals.depth
+  const k = data.kpis
 
   // ═══════════════ Resumen (dashboard) ═══════════════
   const dash = wb.addWorksheet("Resumen", {
     views: [{ showGridLines: false }],
     pageSetup: { fitToPage: true, fitToWidth: 1, fitToHeight: 0, orientation: "portrait" },
   })
-  const COLS = 8
-  for (let c = 1; c <= COLS; c++) dash.getColumn(c).width = 15
-  dash.getColumn(1).width = 16
+  DASH_WIDTHS.forEach((w, i) => {
+    dash.getColumn(i + 1).width = w
+  })
 
   band(
     dash,
     1,
-    COLS,
     `${data.tenant.name} · Reporte ${isWeekly ? "semanal" : "mensual"}`,
     `${capitalize(data.periodLabel)} · comparado con ${data.compareLabel} · hora local del comercio (${tz})`,
   )
 
   let r = 4
-  sectionLabel(dash, r, "Indicadores clave", COLS)
+  sectionLabel(dash, r, "Indicadores clave")
   r += 1
-  const k = data.kpis
   const kpiTile = (label: string, kp: ReportData["kpis"]["visits"]): Tile => ({
     label,
     value: kp.current,
@@ -421,9 +537,8 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
   ])
   r += 4
 
-  const d = data.signals.depth
-  const passPct =
-    d.funnel.registered > 0 ? Math.round((d.funnel.withPass / d.funnel.registered) * 100) : 0
+  const repeatShare =
+    k.uniqueClients.current > 0 ? data.repeatClients / k.uniqueClients.current : null
   const ticketTile: Tile = {
     label: "Ticket promedio",
     value: d.ticket.current ?? "—",
@@ -452,16 +567,18 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
     },
     {
       label: "Segunda visita (30 días)",
-      value: d.secondVisit.cohort > 0 ? `${d.secondVisit.pct} %` : "—",
+      value: d.secondVisit.cohort > 0 ? d.secondVisit.pct / 100 : "—",
+      numFmt: "0%",
       hint:
         d.secondVisit.cohort > 0
           ? `${d.secondVisit.returned} de ${d.secondVisit.cohort} que empezaron hace 1-2 meses`
           : "aún sin clientes de hace 1-2 meses",
     },
     {
-      label: "Con pase instalado",
-      value: d.funnel.registered > 0 ? `${passPct} %` : "—",
-      hint: `${d.funnel.withPass} de ${d.funnel.registered} registrados`,
+      label: `Repitieron ${here}`,
+      value: repeatShare ?? "—",
+      numFmt: "0%",
+      hint: `${data.repeatClients} de ${k.uniqueClients.current} vinieron 2 o más veces`,
     },
     isPoints || d.ticket.current != null ? ticketTile : riskTile,
   ])
@@ -469,9 +586,9 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
 
   // Insights
   if (insights.length > 0) {
-    sectionLabel(dash, r, "Lo más importante", COLS)
+    sectionLabel(dash, r, "Lo más importante")
     r += 1
-    r = insightRows(dash, r, insights.slice(0, 5), COLS)
+    r = insightRows(dash, r, insights.slice(0, 5))
     if (insights.length > 5) {
       const more = dash.getCell(r, 2)
       more.value = `${insights.length - 5} más en la hoja "Insights".`
@@ -481,16 +598,25 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
     r += 1
   }
 
+  // What happened
+  const happened = happenedItems(data, here)
+  if (happened.length > 0) {
+    sectionLabel(dash, r, "Lo que pasó")
+    r += 1
+    r = bulletRows(dash, r, happened)
+  }
+
   // Visits per day (weekly) / per week (monthly)
-  sectionLabel(dash, r, isWeekly ? "Visitas por día" : "Visitas por semana", COLS)
+  sectionLabel(dash, r, isWeekly ? "Visitas por día" : "Visitas por semana")
   r += 1
   if (isWeekly || !data.monthly) {
     r = miniTable(
       dash,
       r,
       [
-        { header: "Día", key: "day", col: 1, span: 2 },
-        { header: "Visitas", key: "visits", col: 3, span: 2, bar: true, numFmt: "#,##0" },
+        { header: "Día", key: "day", col: 1 },
+        { header: "Visitas", key: "visits", col: 2, span: 2, bar: true, numFmt: "#,##0" },
+        { header: "% de la semana", key: "share", col: 4, numFmt: "0%", align: "right" },
         { header: "Clientes", key: "uniqueClients", col: 5, numFmt: "#,##0" },
         { header: "Nuevos", key: "newClients", col: 6, numFmt: "#,##0" },
         { header: rewardsWord, key: "rewardsRedeemed", col: 7, numFmt: "#,##0" },
@@ -499,6 +625,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
       data.daily.map((x) => ({
         day: `${capitalize(x.weekday)} ${dayLabel(x.date).split(" de ")[0]}`,
         visits: x.visits,
+        share: frac(x.visits, k.visits.current),
         uniqueClients: x.uniqueClients,
         newClients: x.newClients,
         rewardsRedeemed: x.rewardsRedeemed,
@@ -510,57 +637,90 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
       dash,
       r,
       [
-        { header: "Semana", key: "label", col: 1, span: 3 },
-        { header: "Visitas", key: "visits", col: 4, span: 2, bar: true, numFmt: "#,##0" },
+        { header: "Semana", key: "label", col: 1, span: 2 },
+        { header: "Visitas", key: "visits", col: 3, span: 2, bar: true, numFmt: "#,##0" },
+        { header: "% del mes", key: "share", col: 5, numFmt: "0%", align: "right" },
         { header: "Nuevos", key: "newClients", col: 6, numFmt: "#,##0" },
         { header: rewardsWord, key: "rewardsRedeemed", col: 7, span: 2, numFmt: "#,##0" },
       ],
-      data.monthly.weeks.map((w) => ({ ...w })),
+      data.monthly.weeks.map((w) => ({ ...w, share: frac(w.visits, k.visits.current) })),
+    )
+  }
+
+  // Loyal clients
+  if (data.clients.length > 0) {
+    sectionLabel(
+      dash,
+      r,
+      isWeekly ? "Tus clientes más fieles de la semana" : "Tus clientes más fieles del mes",
+    )
+    r += 1
+    r = miniTable(
+      dash,
+      r,
+      [
+        { header: "Cliente", key: "name", col: 1, span: 2 },
+        {
+          header: `Visitas ${periodWord}`,
+          key: "periodVisits",
+          col: 3,
+          span: 2,
+          bar: true,
+          numFmt: "#,##0",
+        },
+        { header: "Visitas totales", key: "totalVisits", col: 5, numFmt: "#,##0" },
+        { header: progressHeader(data), key: "progress", col: 6, align: "right" },
+        { header: "Segmento", key: "segment", col: 7, span: 2 },
+      ],
+      data.clients.slice(0, 5).map((c) => ({
+        name: c.name,
+        periodVisits: c.periodVisits,
+        totalVisits: c.totalVisits,
+        progress: c.progress,
+        segment: c.segment,
+      })),
     )
   }
 
   // How clients behave
-  sectionLabel(dash, r, "Cómo se comportan tus clientes", COLS)
+  sectionLabel(dash, r, "Cómo se comportan tus clientes")
   r += 1
-  const b = d.buckets
-  const bucketTotal = b.one + b.twoThree + b.fourSeven + b.eightPlus
-  const bp = (n: number) => (bucketTotal > 0 ? `${Math.round((n / bucketTotal) * 100)} %` : "—")
+  const bucketTotal = d.buckets.reduce((acc, x) => acc + x.n, 0)
   r = miniTable(
     dash,
     r,
     [
-      { header: `Visitas en ${isWeekly ? "la semana" : "el mes"}`, key: "label", col: 1, span: 3 },
-      { header: "Clientes", key: "n", col: 4, span: 2, bar: true, numFmt: "#,##0" },
-      { header: "%", key: "pct", col: 6, align: "right" },
+      { header: `Visitas en ${isWeekly ? "la semana" : "el mes"}`, key: "label", col: 1, span: 2 },
+      { header: "Clientes", key: "n", col: 3, span: 2, bar: true, numFmt: "#,##0" },
+      { header: "% de clientes", key: "pct", col: 5, numFmt: "0%", align: "right" },
     ],
-    [
-      { label: "1 visita", n: b.one, pct: bp(b.one) },
-      { label: "2 a 3 visitas", n: b.twoThree, pct: bp(b.twoThree) },
-      { label: "4 a 7 visitas", n: b.fourSeven, pct: bp(b.fourSeven) },
-      { label: "8 o más", n: b.eightPlus, pct: bp(b.eightPlus) },
-    ],
+    d.buckets.map((x) => ({ label: x.label, n: x.n, pct: frac(x.n, bucketTotal) })),
   )
   const f = d.funnel
-  const fp = (n: number) => (f.registered > 0 ? `${Math.round((n / f.registered) * 100)} %` : "—")
   r = miniTable(
     dash,
     r,
     [
-      { header: "Embudo (al cierre)", key: "label", col: 1, span: 3 },
-      { header: "Clientes", key: "n", col: 4, span: 2, bar: true, numFmt: "#,##0" },
-      { header: "%", key: "pct", col: 6, align: "right" },
-      { header: `Nuevos ${periodWord}`, key: "nuevos", col: 7, span: 2, numFmt: "#,##0" },
+      { header: "Embudo (al cierre)", key: "label", col: 1, span: 2 },
+      { header: "Clientes", key: "n", col: 3, span: 2, bar: true, numFmt: "#,##0" },
+      { header: "% de registrados", key: "pct", col: 5, numFmt: "0%", align: "right" },
+      { header: `Nuevos ${periodWord}`, key: "nuevos", col: 6, numFmt: "#,##0" },
+      { header: "% de nuevos", key: "nuevosPct", col: 7, span: 2, numFmt: "0%", align: "right" },
     ],
     [
-      { label: "Registrados", n: f.registered, pct: fp(f.registered), nuevos: f.newRegistered },
-      { label: "Con pase instalado", n: f.withPass, pct: fp(f.withPass), nuevos: f.newWithPass },
+      { label: "Registrados", n: f.registered, nuevos: f.newRegistered },
+      { label: "Con al menos 1 visita", n: f.withVisit, nuevos: f.newWithVisit },
+      { label: "Volvieron (2 o más visitas)", n: f.repeaters, nuevos: f.newRepeaters },
       {
-        label: "Con al menos una visita",
-        n: f.withVisit,
-        pct: fp(f.withVisit),
-        nuevos: f.newWithVisit,
+        label: isPoints ? "Canjearon puntos" : "Cobraron un premio",
+        n: f.redeemers,
+        nuevos: f.newRedeemers,
       },
-    ],
+    ].map((x) => ({
+      ...x,
+      pct: frac(x.n, f.registered),
+      nuevosPct: frac(x.nuevos, f.newRegistered),
+    })),
   )
   if (d.timeToFirstReward.medianDays != null && d.timeToFirstReward.clients >= 3) {
     dash.mergeCells(r, 1, r, COLS)
@@ -570,35 +730,84 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
     r += 2
   }
 
+  // Points usage
+  const pts = data.signals.points
+  if (isPoints && pts) {
+    sectionLabel(dash, r, "Puntos")
+    r += 1
+    const ptsTotal = pts.earned || 1
+    r = miniTable(
+      dash,
+      r,
+      [
+        { header: `Puntos ${periodWord}`, key: "label", col: 1, span: 2 },
+        { header: "Puntos", key: "n", col: 3, span: 2, bar: true, numFmt: "#,##0" },
+        { header: "% de lo ganado", key: "pct", col: 5, numFmt: "0%", align: "right" },
+        { header: "Detalle", key: "note", col: 6, span: 3 },
+      ],
+      [
+        { label: "Ganados", n: pts.earned, pct: frac(pts.earned, ptsTotal), note: "" },
+        {
+          label: "Canjeados",
+          n: pts.redeemed,
+          pct: frac(pts.redeemed, ptsTotal),
+          note: `${k.rewardsRedeemed.current} canjes`,
+        },
+        {
+          label: "Vencidos",
+          n: pts.expired,
+          pct: frac(pts.expired, ptsTotal),
+          note: pts.expired > 0 ? "sin usar" : "",
+        },
+        {
+          label: "Por vencer (7 días)",
+          n: pts.expiringNext.points,
+          pct: frac(pts.expiringNext.points, ptsTotal),
+          note: `${pts.expiringNext.clients} ${pts.expiringNext.clients === 1 ? "cliente" : "clientes"} · aviso ${pts.warningEnabled ? "activo" : "apagado"}`,
+        },
+      ],
+    )
+  }
+
   // Branches
   if (data.team.showBranches) {
-    sectionLabel(dash, r, "Sucursales", COLS)
+    sectionLabel(dash, r, "Sucursales")
     r += 1
     r = miniTable(
       dash,
       r,
       [
-        { header: "Sucursal", key: "name", col: 1, span: 3 },
+        { header: "Sucursal", key: "name", col: 1, span: 2 },
         {
           header: `Visitas ${periodWord}`,
           key: "visits",
-          col: 4,
+          col: 3,
           span: 2,
           bar: true,
           numFmt: "#,##0",
         },
-        { header: "% del total", key: "share", col: 6, align: "right" },
+        { header: "% del total", key: "share", col: 5, numFmt: "0%", align: "right" },
+        { header: prevWord, key: "previousVisits", col: 6, numFmt: "#,##0" },
         { header: "Cambio", key: "change", col: 7, delta: true, align: "right" },
         { header: "Nuevos", key: "newClients", col: 8, numFmt: "#,##0" },
       ],
       data.team.branches.map((x) => ({
         name: x.id === null || x.active ? x.name : `${x.name} (inactiva)`,
         visits: x.visits,
-        share: `${x.share} %`,
+        share: x.share / 100,
+        previousVisits: x.previousVisits,
         change: deltaShort(x.visits, x.previousVisits),
         newClients: x.newClients,
       })),
     )
+  }
+
+  // To act on
+  const act = actItems(data, isWeekly)
+  if (act.length > 0) {
+    sectionLabel(dash, r, isWeekly ? "Para actuar esta semana" : "Para actuar este mes")
+    r += 1
+    r = bulletRows(dash, r, act)
   }
 
   // Footer
@@ -633,58 +842,25 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
     )
   }
 
-  // ═══════════════ Visitas por día ═══════════════
-  addTable(
-    detailSheet(wb, "Visitas por día"),
-    [
-      { header: "Fecha", key: "date", width: 12 },
-      { header: "Día", key: "weekday", width: 12 },
-      { header: "Visitas", key: "visits", width: 12, bar: true, numFmt: "#,##0" },
-      { header: "Clientes distintos", key: "uniqueClients", width: 18, numFmt: "#,##0" },
-      { header: "Nuevos", key: "newClients", width: 10, numFmt: "#,##0" },
-      { header: rewardsWord, key: "rewardsRedeemed", width: 18, numFmt: "#,##0" },
-      { header: "Hora pico", key: "peakHour", width: 10, align: "center" },
-    ],
-    data.daily.map((x) => ({ ...x, weekday: capitalize(x.weekday), peakHour: x.peakHour ?? "" })),
-    { title: `Visitas por día · ${capitalize(data.periodLabel)}`, freeze: true, filter: true },
-  )
-
-  // ═══════════════ Semanas del mes ═══════════════
-  if (data.monthly) {
-    addTable(
-      detailSheet(wb, "Semanas del mes"),
-      [
-        { header: "Semana", key: "label", width: 22 },
-        { header: "Desde", key: "start", width: 12 },
-        { header: "Hasta", key: "end", width: 12 },
-        { header: "Visitas", key: "visits", width: 12, bar: true, numFmt: "#,##0" },
-        { header: "Nuevos", key: "newClients", width: 10, numFmt: "#,##0" },
-        { header: rewardsWord, key: "rewardsRedeemed", width: 18, numFmt: "#,##0" },
-      ],
-      data.monthly.weeks.map((w) => ({ ...w })),
-      { title: "Semanas del mes", freeze: true },
-    )
-  }
-
   // ═══════════════ Sucursales / Cajeros ═══════════════
   if (data.team.showBranches) {
     addTable(
       detailSheet(wb, "Sucursales"),
       [
         { header: "Sucursal", key: "name", width: 28 },
-        { header: `Visitas ${periodWord}`, key: "visits", width: 14, bar: true, numFmt: "#,##0" },
+        { header: `Visitas ${periodWord}`, key: "visits", width: 16, bar: true, numFmt: "#,##0" },
+        { header: "% del total", key: "share", width: 12, numFmt: "0%", align: "right" },
         { header: prevWord, key: "previousVisits", width: 16, numFmt: "#,##0" },
         { header: "Cambio", key: "change", width: 12, delta: true, align: "right" },
-        { header: "% del total", key: "share", width: 12, align: "right" },
         { header: "Clientes distintos", key: "uniqueClients", width: 18, numFmt: "#,##0" },
         { header: "Clientes nuevos", key: "newClients", width: 16, numFmt: "#,##0" },
       ],
       data.team.branches.map((x) => ({
         name: x.id === null || x.active ? x.name : `${x.name} (inactiva)`,
         visits: x.visits,
+        share: x.share / 100,
         previousVisits: x.previousVisits,
         change: deltaShort(x.visits, x.previousVisits),
-        share: `${x.share} %`,
         uniqueClients: x.uniqueClients,
         newClients: x.newClients,
       })),
@@ -692,15 +868,17 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
     )
   }
   if (data.team.showCashiers) {
+    const cashierTotal = data.team.cashiers.reduce((a, c) => a + c.visits, 0)
     addTable(
       detailSheet(wb, "Cajeros"),
       [
         { header: "Nombre", key: "name", width: 26 },
         { header: "Rol", key: "role", width: 10 },
-        { header: `Visitas ${periodWord}`, key: "visits", width: 14, bar: true, numFmt: "#,##0" },
+        { header: `Visitas ${periodWord}`, key: "visits", width: 16, bar: true, numFmt: "#,##0" },
+        { header: "% del total", key: "share", width: 12, numFmt: "0%", align: "right" },
         { header: prevWord, key: "previousVisits", width: 16, numFmt: "#,##0" },
         { header: "Cambio", key: "change", width: 12, delta: true, align: "right" },
-        { header: "Días activos", key: "activeDays", width: 12, numFmt: "#,##0" },
+        { header: "Días activos", key: "activeDays", width: 13, numFmt: "#,##0" },
         { header: "Visitas por día activo", key: "perActiveDay", width: 20, numFmt: "0.0" },
         { header: "Clientes nuevos", key: "newClients", width: 16, numFmt: "#,##0" },
         { header: "Última visita registrada", key: "lastVisitAt", width: 22 },
@@ -710,6 +888,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
         name: c.name,
         role: c.role,
         visits: c.visits,
+        share: frac(c.visits, cashierTotal),
         previousVisits: c.previousVisits,
         change: deltaShort(c.visits, c.previousVisits),
         activeDays: c.activeDays,
@@ -718,7 +897,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
         lastVisitAt: formatDateForExport(c.lastVisitAt, tz),
         note:
           c.visits === 0
-            ? `No registró visitas ${isWeekly ? "esta semana" : "este mes"}`
+            ? `No registró visitas ${here}`
             : c.previousVisits > 0 && c.visits < c.previousVisits / 2
               ? "Cayó a menos de la mitad"
               : "",
@@ -735,11 +914,11 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
       {
         header: `Visitas ${periodWord}`,
         key: "periodVisits",
-        width: 14,
+        width: 16,
         bar: true,
         numFmt: "#,##0",
       },
-      { header: "Visitas totales", key: "totalVisits", width: 14, numFmt: "#,##0" },
+      { header: "Visitas totales", key: "totalVisits", width: 15, numFmt: "#,##0" },
       { header: "Última visita", key: "lastVisitAt", width: 20 },
       { header: progressHeader(data), key: "progress", width: 12, align: "right" },
       { header: "Segmento", key: "segment", width: 14 },
@@ -748,7 +927,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
             {
               header: `Compras ${periodWord} (S/)`,
               key: "amount",
-              width: 18,
+              width: 20,
               numFmt: '"S/ "#,##0.00',
             },
           ]
@@ -756,7 +935,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
             {
               header: "Premio pendiente",
               key: "pendingReward",
-              width: 16,
+              width: 17,
               align: "center" as const,
             },
           ]),
@@ -776,14 +955,14 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
     },
   )
 
-  // ═══════════════ Campañas (monthly) ═══════════════
-  if (data.monthly) {
+  // ═══════════════ Campañas ═══════════════
+  if (data.campaigns.length > 0) {
     addTable(
       detailSheet(wb, "Campañas"),
       [
         { header: "Campaña", key: "name", width: 32 },
         { header: "Enviada", key: "sentAt", width: 20 },
-        { header: "Push enviados", key: "sentCount", width: 14, numFmt: "#,##0" },
+        { header: "Push enviados", key: "sentCount", width: 15, numFmt: "#,##0" },
         { header: "Visitas 48 h después", key: "after", width: 20, numFmt: "#,##0" },
         { header: "Esperado", key: "expected", width: 12, numFmt: "0.0" },
         { header: "Efecto", key: "lift", width: 12, delta: true, align: "right" },
@@ -799,7 +978,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
         }
       }),
       {
-        title: "Campañas push del mes",
+        title: isWeekly ? "Campañas push de la semana" : "Campañas push del mes",
         subtitle:
           "Efecto = visitas en las 48 horas siguientes al envío frente a lo esperado en cualquier ventana de 48 horas.",
         freeze: true,
@@ -813,11 +992,11 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
       detailSheet(wb, "En riesgo"),
       [
         { header: "Nombre", key: "name", width: 26 },
-        { header: "Visitas totales", key: "totalVisits", width: 14, bar: true, numFmt: "#,##0" },
+        { header: "Visitas totales", key: "totalVisits", width: 16, bar: true, numFmt: "#,##0" },
         { header: "Última visita", key: "lastVisitAt", width: 20 },
-        { header: "Días sin venir", key: "daysSince", width: 14, numFmt: "#,##0" },
+        { header: "Días sin venir", key: "daysSince", width: 15, numFmt: "#,##0" },
         { header: progressHeader(data), key: "progress", width: 12, align: "right" },
-        { header: "Acción sugerida", key: "action", width: 40 },
+        { header: "Acción sugerida", key: "action", width: 44 },
       ],
       data.atRisk.map((c) => ({
         ...c,
@@ -845,8 +1024,37 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
     )
   }
 
-  // ═══════════════ Acumulado (monthly) ═══════════════
-  if (data.monthly) addCumulativeSheets(wb, data.monthly.cumulative, data, tz)
+  // ═══════════════ Monthly detail: days, weeks, cumulative ═══════════════
+  if (data.monthly) {
+    addTable(
+      detailSheet(wb, "Visitas por día"),
+      [
+        { header: "Fecha", key: "date", width: 12 },
+        { header: "Día", key: "weekday", width: 12 },
+        { header: "Visitas", key: "visits", width: 14, bar: true, numFmt: "#,##0" },
+        { header: "Clientes distintos", key: "uniqueClients", width: 18, numFmt: "#,##0" },
+        { header: "Nuevos", key: "newClients", width: 10, numFmt: "#,##0" },
+        { header: rewardsWord, key: "rewardsRedeemed", width: 18, numFmt: "#,##0" },
+        { header: "Hora pico", key: "peakHour", width: 10, align: "center" },
+      ],
+      data.daily.map((x) => ({ ...x, weekday: capitalize(x.weekday), peakHour: x.peakHour ?? "" })),
+      { title: `Visitas por día · ${capitalize(data.periodLabel)}`, freeze: true, filter: true },
+    )
+    addTable(
+      detailSheet(wb, "Semanas del mes"),
+      [
+        { header: "Semana", key: "label", width: 22 },
+        { header: "Desde", key: "start", width: 12 },
+        { header: "Hasta", key: "end", width: 12 },
+        { header: "Visitas", key: "visits", width: 14, bar: true, numFmt: "#,##0" },
+        { header: "Nuevos", key: "newClients", width: 10, numFmt: "#,##0" },
+        { header: rewardsWord, key: "rewardsRedeemed", width: 18, numFmt: "#,##0" },
+      ],
+      data.monthly.weeks.map((w) => ({ ...w })),
+      { title: "Semanas del mes", freeze: true },
+    )
+    addCumulativeSheets(wb, data.monthly.cumulative, data, tz)
+  }
 
   return Buffer.from(await wb.xlsx.writeBuffer())
 }
@@ -882,7 +1090,7 @@ export function addCumulativeSheets(
     detailSheet(wb, "Mes a mes"),
     [
       { header: "Mes", key: "label", width: 18 },
-      { header: "Visitas", key: "visits", width: 12, bar: true, numFmt: "#,##0" },
+      { header: "Visitas", key: "visits", width: 14, bar: true, numFmt: "#,##0" },
       { header: "Clientes nuevos", key: "newClients", width: 16, numFmt: "#,##0" },
       { header: "Premios canjeados", key: "rewardsRedeemed", width: 18, numFmt: "#,##0" },
     ],
@@ -894,7 +1102,7 @@ export function addCumulativeSheets(
     detailSheet(wb, "Top 20 histórico"),
     [
       { header: "Nombre", key: "name", width: 26 },
-      { header: "Visitas totales", key: "totalVisits", width: 14, bar: true, numFmt: "#,##0" },
+      { header: "Visitas totales", key: "totalVisits", width: 16, bar: true, numFmt: "#,##0" },
       { header: "Última visita", key: "lastVisitAt", width: 20 },
       {
         header: data.tenant.programType === "points" ? "Puntos" : "Sellos",
@@ -911,7 +1119,7 @@ export function addCumulativeSheets(
     detailSheet(wb, "Segmentos hoy"),
     [
       { header: "Segmento", key: "label", width: 18 },
-      { header: "Clientes", key: "count", width: 12, bar: true, numFmt: "#,##0" },
+      { header: "Clientes", key: "count", width: 14, bar: true, numFmt: "#,##0" },
     ],
     c.segments.map((s) => ({ ...s })),
     { title: "Segmentos hoy" },

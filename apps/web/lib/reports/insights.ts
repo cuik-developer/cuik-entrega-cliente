@@ -76,16 +76,20 @@ export type DepthKpis = {
   medianDaysBetween: number | null
   /** Clients whose first visit was 30-60 days before the period end: how many came back within 30 days. */
   secondVisit: { cohort: number; returned: number; pct: number }
-  /** Distinct visitors of the period by number of visits. */
-  buckets: { one: number; twoThree: number; fourSeven: number; eightPlus: number }
-  /** Registered → with pass → with a visit, all-time at the period end and for the period's new clients. */
+  /** Distinct visitors of the period by number of visits (labels depend on the period: weekly 1/2/3/4+, monthly 1/2/3-4/5+). */
+  buckets: Array<{ label: string; n: number }>
+  /** Registered → with a visit → came back (2+) → redeemed, all-time at the period end and for the period's new clients. Pass installs kept for the insight rule. */
   funnel: {
     registered: number
     withPass: number
     withVisit: number
+    repeaters: number
+    redeemers: number
     newRegistered: number
     newWithPass: number
     newWithVisit: number
+    newRepeaters: number
+    newRedeemers: number
   }
   /** Median days from registration to the first reward, over clients who ever redeemed. */
   timeToFirstReward: { medianDays: number | null; clients: number }
@@ -97,14 +101,18 @@ export const EMPTY_DEPTH: DepthKpis = {
   frequency: { current: 0, previous: 0 },
   medianDaysBetween: null,
   secondVisit: { cohort: 0, returned: 0, pct: 0 },
-  buckets: { one: 0, twoThree: 0, fourSeven: 0, eightPlus: 0 },
+  buckets: [],
   funnel: {
     registered: 0,
     withPass: 0,
     withVisit: 0,
+    repeaters: 0,
+    redeemers: 0,
     newRegistered: 0,
     newWithPass: 0,
     newWithVisit: 0,
+    newRepeaters: 0,
+    newRedeemers: 0,
   },
   timeToFirstReward: { medianDays: null, clients: 0 },
   ticket: { current: null, previous: null, visitsWithAmount: 0 },

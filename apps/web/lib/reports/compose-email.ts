@@ -109,7 +109,7 @@ export function composeReportEmail(
   }
 }
 
-function happenedItems(data: ReportData, here: string): string[] {
+export function happenedItems(data: ReportData, here: string): string[] {
   const happened: string[] = []
   if (data.bestDay) {
     const worst =
@@ -170,13 +170,10 @@ export function depthItems(data: ReportData, isWeekly: boolean): string[] {
         : ""),
   )
 
-  const b = d.buckets
-  const total = b.one + b.twoThree + b.fourSeven + b.eightPlus
-  if (total > 0) {
+  const total = d.buckets.reduce((acc, x) => acc + x.n, 0)
+  if (total > 1) {
     items.push(
-      total === 1
-        ? `El único cliente que vino hizo ${plural(b.one ? 1 : b.twoThree ? 2 : b.fourSeven ? 4 : 8, "visita", "visitas o más")}.`
-        : `De los ${total} que vinieron: ${b.one} una vez, ${b.twoThree} entre 2 y 3, ${b.fourSeven} entre 4 y 7 y ${b.eightPlus} ocho o más.`,
+      `De los ${total} que vinieron: ${d.buckets.map((x) => `${x.n} con ${x.label}`).join(", ")}.`,
     )
   }
 
@@ -188,11 +185,10 @@ export function depthItems(data: ReportData, isWeekly: boolean): string[] {
 
   const f = d.funnel
   if (f.registered > 0) {
-    const passPct = Math.round((f.withPass / f.registered) * 100)
-    const visitPct = Math.round((f.withVisit / f.registered) * 100)
-    let line = `Embudo: ${plural(f.registered, "registrado", "registrados")}, ${passPct} % con pase instalado y ${visitPct} % con al menos una visita.`
+    const p = (n: number) => Math.round((n / f.registered) * 100)
+    let line = `Embudo: ${plural(f.registered, "registrado", "registrados")}, ${p(f.withVisit)} % con al menos una visita, ${p(f.repeaters)} % volvieron dos o más veces y ${p(f.redeemers)} % ya ${data.tenant.programType === "points" ? "canjearon puntos" : "cobraron un premio"}.`
     if (f.newRegistered > 0) {
-      line += ` De ${plural(f.newRegistered, "nuevo", "nuevos")} ${here}, ${f.newWithPass} ${f.newWithPass === 1 ? "instaló" : "instalaron"} el pase y ${f.newWithVisit} ya ${f.newWithVisit === 1 ? "visitó" : "visitaron"}.`
+      line += ` De ${plural(f.newRegistered, "nuevo", "nuevos")} ${here}, ${f.newWithVisit} ya ${f.newWithVisit === 1 ? "visitó" : "visitaron"} y ${f.newRepeaters} ${f.newRepeaters === 1 ? "volvió" : "volvieron"}.`
     }
     items.push(line)
   }
@@ -269,7 +265,7 @@ export function teamItems(data: ReportData, isWeekly: boolean): string[] {
   return items
 }
 
-function loyalItems(data: ReportData): string[] {
+export function loyalItems(data: ReportData): string[] {
   return data.topClients.map((c) => {
     const extra =
       data.tenant.programType === "points"
@@ -281,7 +277,7 @@ function loyalItems(data: ReportData): string[] {
   })
 }
 
-function actItems(data: ReportData, isWeekly: boolean): string[] {
+export function actItems(data: ReportData, isWeekly: boolean): string[] {
   const act: string[] = []
   if (data.atRisk.length > 0) {
     act.push(
