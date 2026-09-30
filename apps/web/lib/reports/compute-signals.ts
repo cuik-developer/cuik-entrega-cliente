@@ -1,7 +1,7 @@
 import { db, sql } from "@cuik/db"
 import { automationsConfigSchema } from "@cuik/shared/validators"
 import type { CampaignRow, DailyRow, ProgramType } from "./compute-report"
-import type { CampaignLift, CohortRow, ReportSignals } from "./insights"
+import type { CampaignLift, CohortRow, DepthKpis, ReportSignals } from "./insights"
 import {
   monthName,
   type Period,
@@ -31,6 +31,11 @@ export async function computeSignals(params: {
   daily: DailyRow[]
   campaigns: CampaignRow[]
   periodVisits: number
+  /** Totals of the current and previous period (from computeReport). */
+  current: { visits: number; uniqueClients: number }
+  previousTotals: { visits: number; uniqueClients: number }
+  /** Visits in the period per distinct visitor (for the frequency buckets). */
+  visitsPerClient: number[]
   local: SqlHelper
   within: WithinHelper
   totalsFor: (p: Period) => Promise<{ visits: number; newClients: number; redeemed: number }>
@@ -203,7 +208,20 @@ export async function computeSignals(params: {
     }
   }
 
+  const depth = await computeDepth({
+    tenantId,
+    period,
+    previous,
+    programType,
+    local,
+    within,
+    current: params.current,
+    previousTotals: params.previousTotals,
+    visitsPerClient: params.visitsPerClient,
+  })
+
   return {
+    depth,
     baseline,
     returningClients: Number(mixRes.rows[0]?.returning ?? 0),
     newVisitors: Number(mixRes.rows[0]?.first_timers ?? 0),
@@ -220,5 +238,134 @@ export async function computeSignals(params: {
     points,
     stamps,
     cohorts,
+  }
+}
+
+function ratio(a: number, b: number): number {
+  return b > 0 ? Math.round((a / b) * 100) / 100 : 0
+}
+
+async function computeDepth(params: {
+  tenantId: string
+  period: Period
+  previous: Period
+  programType: ProgramType
+  local: SqlHelper
+  within: WithinHelper
+  current: { visits: number; uniqueClients: number }
+  previousTotals: { visits: number; uniqueClients: number }
+  visitsPerClient: number[]
+}): Promise<DepthKpis> {
+  const { tenantId, period, previous, programType, local, within } = params
+  const upTo = sql`${local("v.created_at")} < (${period.end}::date + 1)`
+
+  const firstRedeem =
+    programType === "points"
+      ? sql`SELECT t.client_id, MIN(t.created_at) AS first_at FROM loyalty.points_transactions t
+            WHERE t.tenant_id = ${tenantId} AND t.type = 'redeem' GROUP BY t.client_id`
+      : sql`SELECT r.client_id, MIN(r.redeemed_at) AS first_at FROM loyalty.rewards r
+            WHERE r.tenant_id = ${tenantId} AND r.status = 'redeemed' AND r.redeemed_at IS NOT NULL GROUP BY r.client_id`
+
+  const [gapRes, secondRes, funnelRes, rewardRes, ticketCur, ticketPrev] = await Promise.all([
+    db.execute<{ med: string | null }>(sql`
+      WITH iv AS (
+        SELECT v.created_at,
+          v.created_at - LAG(v.created_at) OVER (PARTITION BY v.client_id ORDER BY v.created_at) AS gap
+        FROM loyalty.visits v
+        WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' AND ${upTo}
+      )
+      SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM iv.gap) / 86400.0) AS med
+      FROM iv WHERE iv.gap IS NOT NULL AND ${within("iv.created_at", period)}`),
+    db.execute<{ cohort: number; returned: number }>(sql`
+      WITH f AS (
+        SELECT v.client_id, MIN(v.created_at) AS first_at FROM loyalty.visits v
+        WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' GROUP BY v.client_id
+      )
+      SELECT COUNT(*)::int AS cohort,
+        COUNT(*) FILTER (WHERE EXISTS (
+          SELECT 1 FROM loyalty.visits v2
+          WHERE v2.client_id = f.client_id AND v2.source <> 'bonus'
+            AND v2.created_at > f.first_at AND v2.created_at < f.first_at + interval '30 days'))::int AS returned
+      FROM f
+      WHERE ${local("f.first_at")} >= (${period.end}::date - 59) AND ${local("f.first_at")} <= (${period.end}::date - 30)`),
+    db.execute<{
+      registered: number
+      with_pass: number
+      with_visit: number
+      new_registered: number
+      new_with_pass: number
+      new_with_visit: number
+    }>(sql`
+      WITH c AS (
+        SELECT c.id, c.created_at,
+          EXISTS (SELECT 1 FROM passes.pass_instances p WHERE p.client_id = c.id) AS has_pass,
+          EXISTS (SELECT 1 FROM loyalty.visits v WHERE v.client_id = c.id AND v.source <> 'bonus' AND ${upTo}) AS has_visit
+        FROM loyalty.clients c
+        WHERE c.tenant_id = ${tenantId} AND c.status IN ('active', 'inactive')
+          AND ${local("c.created_at")} < (${period.end}::date + 1)
+      )
+      SELECT
+        COUNT(*)::int AS registered,
+        COUNT(*) FILTER (WHERE has_pass)::int AS with_pass,
+        COUNT(*) FILTER (WHERE has_visit)::int AS with_visit,
+        COUNT(*) FILTER (WHERE ${within("c.created_at", period)})::int AS new_registered,
+        COUNT(*) FILTER (WHERE has_pass AND ${within("c.created_at", period)})::int AS new_with_pass,
+        COUNT(*) FILTER (WHERE has_visit AND ${within("c.created_at", period)})::int AS new_with_visit
+      FROM c`),
+    db.execute<{ med: string | null; n: number }>(sql`
+      WITH fr AS (${firstRedeem})
+      SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (fr.first_at - c.created_at)) / 86400.0) AS med,
+        COUNT(*)::int AS n
+      FROM fr JOIN loyalty.clients c ON c.id = fr.client_id
+      WHERE ${local("fr.first_at")} < (${period.end}::date + 1)`),
+    db.execute<{ avg: string | null; n: number }>(sql`
+      SELECT AVG(v.amount) AS avg, COUNT(v.amount)::int AS n FROM loyalty.visits v
+      WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' AND v.amount IS NOT NULL AND ${within("v.created_at", period)}`),
+    db.execute<{ avg: string | null }>(sql`
+      SELECT AVG(v.amount) AS avg FROM loyalty.visits v
+      WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' AND v.amount IS NOT NULL AND ${within("v.created_at", previous)}`),
+  ])
+
+  const buckets = { one: 0, twoThree: 0, fourSeven: 0, eightPlus: 0 }
+  for (const n of params.visitsPerClient) {
+    if (n >= 8) buckets.eightPlus++
+    else if (n >= 4) buckets.fourSeven++
+    else if (n >= 2) buckets.twoThree++
+    else if (n >= 1) buckets.one++
+  }
+  const f = funnelRes.rows[0]
+  const sv = secondRes.rows[0]
+  const cohort = Number(sv?.cohort ?? 0)
+  const returned = Number(sv?.returned ?? 0)
+  const med = gapRes.rows[0]?.med
+  const rmed = rewardRes.rows[0]?.med
+  const tc = ticketCur.rows[0]
+  const tp = ticketPrev.rows[0]
+  const round1 = (x: number) => Math.round(x * 10) / 10
+  return {
+    frequency: {
+      current: ratio(params.current.visits, params.current.uniqueClients),
+      previous: ratio(params.previousTotals.visits, params.previousTotals.uniqueClients),
+    },
+    medianDaysBetween: med != null ? round1(Number(med)) : null,
+    secondVisit: { cohort, returned, pct: cohort > 0 ? Math.round((returned / cohort) * 100) : 0 },
+    buckets,
+    funnel: {
+      registered: Number(f?.registered ?? 0),
+      withPass: Number(f?.with_pass ?? 0),
+      withVisit: Number(f?.with_visit ?? 0),
+      newRegistered: Number(f?.new_registered ?? 0),
+      newWithPass: Number(f?.new_with_pass ?? 0),
+      newWithVisit: Number(f?.new_with_visit ?? 0),
+    },
+    timeToFirstReward: {
+      medianDays: rmed != null ? Math.round(Number(rmed)) : null,
+      clients: Number(rewardRes.rows[0]?.n ?? 0),
+    },
+    ticket: {
+      current: tc?.avg != null ? Math.round(Number(tc.avg) * 100) / 100 : null,
+      previous: tp?.avg != null ? Math.round(Number(tp.avg) * 100) / 100 : null,
+      visitsWithAmount: Number(tc?.n ?? 0),
+    },
   }
 }

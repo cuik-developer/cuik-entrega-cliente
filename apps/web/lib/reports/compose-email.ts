@@ -67,9 +67,12 @@ export function composeReportEmail(
   // Top 4, and only the ones worth opening the email with (score >= 30).
   const insights = buildInsights(data, 4, 30).map(insightLine)
 
+  const depth = depthItems(data, isWeekly)
+
   const sections: ReportSectionProps[] = [
     ...(insights.length > 0 ? [{ title: "Lo más importante", items: insights }] : []),
     { title: "Lo que pasó", items: happened },
+    ...(depth.length > 0 ? [{ title: "Cómo se comportan tus clientes", items: depth }] : []),
     ...(team.length > 0 ? [{ title: "Tus sucursales y cajeros", items: team }] : []),
     {
       title: isWeekly ? "Tus clientes más fieles de la semana" : "Tus clientes más fieles del mes",
@@ -148,6 +151,66 @@ function happenedItems(data: ReportData, here: string): string[] {
   }
 
   return happened
+}
+
+/** The six depth KPIs in words: habit, value and funnel. Empty when there were no visits. */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: six independent sentences, each guarded by its own data check
+export function depthItems(data: ReportData, isWeekly: boolean): string[] {
+  const d = data.signals.depth
+  const here = isWeekly ? "esta semana" : "este mes"
+  const items: string[] = []
+  if (data.kpis.uniqueClients.current === 0) return items
+
+  const freqDelta =
+    d.frequency.previous > 0 ? ` (${data.compareLabel}: ${d.frequency.previous})` : ""
+  items.push(
+    `Cada cliente vino en promedio ${d.frequency.current} ${d.frequency.current === 1 ? "vez" : "veces"} ${here}${freqDelta}.` +
+      (d.medianDaysBetween != null
+        ? ` Entre una visita y la siguiente pasan ${d.medianDaysBetween} días (mediana).`
+        : ""),
+  )
+
+  const b = d.buckets
+  const total = b.one + b.twoThree + b.fourSeven + b.eightPlus
+  if (total > 0) {
+    items.push(
+      total === 1
+        ? `El único cliente que vino hizo ${plural(b.one ? 1 : b.twoThree ? 2 : b.fourSeven ? 4 : 8, "visita", "visitas o más")}.`
+        : `De los ${total} que vinieron: ${b.one} una vez, ${b.twoThree} entre 2 y 3, ${b.fourSeven} entre 4 y 7 y ${b.eightPlus} ocho o más.`,
+    )
+  }
+
+  if (d.secondVisit.cohort > 0) {
+    items.push(
+      `Segunda visita: de ${plural(d.secondVisit.cohort, "cliente que empezó", "clientes que empezaron")} hace uno o dos meses, ${d.secondVisit.pct} % volvió dentro de los 30 días siguientes.`,
+    )
+  }
+
+  const f = d.funnel
+  if (f.registered > 0) {
+    const passPct = Math.round((f.withPass / f.registered) * 100)
+    const visitPct = Math.round((f.withVisit / f.registered) * 100)
+    let line = `Embudo: ${plural(f.registered, "registrado", "registrados")}, ${passPct} % con pase instalado y ${visitPct} % con al menos una visita.`
+    if (f.newRegistered > 0) {
+      line += ` De ${plural(f.newRegistered, "nuevo", "nuevos")} ${here}, ${f.newWithPass} ${f.newWithPass === 1 ? "instaló" : "instalaron"} el pase y ${f.newWithVisit} ya ${f.newWithVisit === 1 ? "visitó" : "visitaron"}.`
+    }
+    items.push(line)
+  }
+
+  if (d.timeToFirstReward.medianDays != null && d.timeToFirstReward.clients >= 3) {
+    items.push(
+      `Del registro al primer ${data.tenant.programType === "points" ? "canje" : "premio"} pasan ${d.timeToFirstReward.medianDays} días (mediana sobre ${d.timeToFirstReward.clients} clientes).`,
+    )
+  }
+
+  if (d.ticket.current != null && d.ticket.visitsWithAmount >= 3) {
+    const prev =
+      d.ticket.previous != null ? ` (${data.compareLabel}: S/ ${d.ticket.previous.toFixed(2)})` : ""
+    items.push(
+      `Ticket promedio: S/ ${d.ticket.current.toFixed(2)} sobre ${plural(d.ticket.visitsWithAmount, "compra con monto", "compras con monto")}${prev}.`,
+    )
+  }
+  return items
 }
 
 /** Branch and cashier highlights; empty when the tenant has a single branch and cashier. */

@@ -65,6 +65,49 @@ export type ReportSignals = {
   stamps: { rewardsEarned: number; pendingTotal: number } | null
   /** Monthly only: retention of the last registration cohorts. */
   cohorts: CohortRow[]
+  /** Depth KPIs: habit, value and funnel. */
+  depth: DepthKpis
+}
+
+export type DepthKpis = {
+  /** Visits per distinct visitor in the period (and the previous one). */
+  frequency: { current: number; previous: number }
+  /** Median days between consecutive visits, over the gaps that closed in the period. */
+  medianDaysBetween: number | null
+  /** Clients whose first visit was 30-60 days before the period end: how many came back within 30 days. */
+  secondVisit: { cohort: number; returned: number; pct: number }
+  /** Distinct visitors of the period by number of visits. */
+  buckets: { one: number; twoThree: number; fourSeven: number; eightPlus: number }
+  /** Registered → with pass → with a visit, all-time at the period end and for the period's new clients. */
+  funnel: {
+    registered: number
+    withPass: number
+    withVisit: number
+    newRegistered: number
+    newWithPass: number
+    newWithVisit: number
+  }
+  /** Median days from registration to the first reward, over clients who ever redeemed. */
+  timeToFirstReward: { medianDays: number | null; clients: number }
+  /** Average purchase amount on visits that recorded one. */
+  ticket: { current: number | null; previous: number | null; visitsWithAmount: number }
+}
+
+export const EMPTY_DEPTH: DepthKpis = {
+  frequency: { current: 0, previous: 0 },
+  medianDaysBetween: null,
+  secondVisit: { cohort: 0, returned: 0, pct: 0 },
+  buckets: { one: 0, twoThree: 0, fourSeven: 0, eightPlus: 0 },
+  funnel: {
+    registered: 0,
+    withPass: 0,
+    withVisit: 0,
+    newRegistered: 0,
+    newWithPass: 0,
+    newWithVisit: 0,
+  },
+  timeToFirstReward: { medianDays: null, clients: 0 },
+  ticket: { current: null, previous: null, visitsWithAmount: 0 },
 }
 
 export const EMPTY_SIGNALS: ReportSignals = {
@@ -78,6 +121,7 @@ export const EMPTY_SIGNALS: ReportSignals = {
   points: null,
   stamps: null,
   cohorts: [],
+  depth: EMPTY_DEPTH,
 }
 
 function plural(n: number, one: string, many: string): string {
@@ -345,6 +389,36 @@ export function buildInsights(data: ReportData, limit?: number, minScore = 0): I
         why: "Recuperar a un cliente que ya te conoce cuesta mucho menos que conseguir uno nuevo.",
         action:
           'Envía la campaña "te extrañamos" al segmento En riesgo con un incentivo concreto para volver.',
+      })
+    }
+  }
+
+  // 7b. Second-visit rate and pass installation (depth KPIs)
+  const d = s.depth
+  if (d.secondVisit.cohort >= 10 && d.secondVisit.pct < 40) {
+    out.push({
+      key: "second_visit_low",
+      tone: "warn",
+      score: 64,
+      title: `Solo ${d.secondVisit.pct} % vuelve a la segunda visita`,
+      what: `De ${plural(d.secondVisit.cohort, "cliente que empezó", "clientes que empezaron")} hace uno o dos meses, ${d.secondVisit.returned} regresaron dentro de los 30 días siguientes.`,
+      why: "La segunda visita es donde más clientes se pierden; los que la dan suelen quedarse.",
+      action:
+        "Programa un push a los 7 días del registro con el beneficio que les falta para el primer premio.",
+    })
+  }
+  if (d.funnel.newRegistered >= 10) {
+    const passPct = pct(d.funnel.newWithPass, d.funnel.newRegistered)
+    if (passPct < 60) {
+      out.push({
+        key: "pass_install_low",
+        tone: "warn",
+        score: 57,
+        title: `${100 - passPct} % de los nuevos no instaló el pase`,
+        what: `${d.funnel.newWithPass} de ${d.funnel.newRegistered} registrados ${here} tienen el pase en su celular.`,
+        why: "Sin pase no reciben notificaciones ni ven su saldo: están registrados, pero fuera del programa.",
+        action:
+          'Pide al cajero que espere a que el cliente toque "Agregar a Wallet" antes de despedirlo; toma 10 segundos.',
       })
     }
   }
