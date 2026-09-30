@@ -51,6 +51,8 @@ export type TeamData = {
 }
 
 export const NO_BRANCH_LABEL = "Sin sucursal"
+/** Label for the visits of a business that has no branches configured at all. */
+export const SINGLE_BRANCH_LABEL = "Sucursal única"
 
 type SqlHelper = (col: string) => ReturnType<typeof sql>
 type WithinHelper = (col: string, p: Period) => ReturnType<typeof sql>
@@ -124,6 +126,35 @@ export async function computeTeam(params: {
       share: totalVisits > 0 ? Math.round((visits / totalVisits) * 100) : 0,
     }
   })
+  // A business with a single branch (or none) has no "unassigned" concept: every
+  // visit belongs to that branch, so fold the null row into it instead of
+  // reporting "Sin sucursal".
+  const activeBranches = branches.filter((b) => b.id !== null && b.active)
+  const noneRow = branches.find((b) => b.id === null)
+  if (activeBranches.length <= 1 && noneRow) {
+    const target = activeBranches[0]
+    if (target) {
+      const merged = await db.execute<{ uniq: number; new_clients: number }>(sql`
+        WITH f AS (${firstVisit})
+        SELECT
+          (SELECT COUNT(DISTINCT v.client_id)::int FROM loyalty.visits v
+            WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' AND ${within("v.created_at", period)}
+              AND (v.location_id = ${target.id} OR v.location_id IS NULL)) AS uniq,
+          (SELECT COUNT(*)::int FROM f WHERE ${within("f.created_at", period)}
+              AND (f.location_id = ${target.id} OR f.location_id IS NULL)) AS new_clients`)
+      target.visits += noneRow.visits
+      target.previousVisits += noneRow.previousVisits
+      target.delta = delta(target.visits, target.previousVisits)
+      target.uniqueClients = Number(merged.rows[0]?.uniq ?? target.uniqueClients)
+      target.newClients = Number(merged.rows[0]?.new_clients ?? target.newClients)
+      target.share = totalVisits > 0 ? Math.round((target.visits / totalVisits) * 100) : 0
+      noneRow.visits = 0
+      noneRow.previousVisits = 0
+    } else {
+      noneRow.name = SINGLE_BRANCH_LABEL
+    }
+  }
+
   // Drop the "no branch" row when it is empty, and inactive branches without activity.
   const branchRows = branches
     .filter((b) => (b.id === null ? b.visits > 0 || b.previousVisits > 0 : true))
@@ -136,6 +167,29 @@ export async function computeTeam(params: {
   const realBranches = branchRows.filter((b) => b.id !== null)
   const showBranches = realBranches.length >= 2
 
+  const { cashiers, showCashiers } = await computeCashiers({
+    tenantId,
+    slug,
+    period,
+    previous,
+    local,
+    within,
+    firstVisit,
+  })
+
+  return { branches: branchRows, cashiers, showCashiers, showBranches }
+}
+
+async function computeCashiers(params: {
+  tenantId: string
+  slug: string
+  period: Period
+  previous: Period
+  local: SqlHelper
+  within: WithinHelper
+  firstVisit: ReturnType<typeof sql>
+}): Promise<{ cashiers: CashierRow[]; showCashiers: boolean }> {
+  const { tenantId, slug, period, previous, local, within, firstVisit } = params
   // ── Cashiers ──────────────────────────────────────────────────────
   const [members, curBy, prevBy, newBy] = await Promise.all([
     db.execute<{ id: string; name: string; email: string; role: string }>(sql`
@@ -205,5 +259,5 @@ export async function computeTeam(params: {
   )
   const showCashiers = cashierRows.filter((c) => c.role === "Cajero").length >= 2
 
-  return { branches: branchRows, cashiers: cashierRows, showBranches, showCashiers }
+  return { cashiers: cashierRows, showCashiers }
 }

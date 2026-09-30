@@ -1,7 +1,6 @@
 import ExcelJS from "exceljs"
 import { formatDateForExport } from "@/lib/format-date"
 import type { Cumulative, ReportData } from "./compute-report"
-import { NO_BRANCH_LABEL } from "./compute-team"
 import { dayLabel, deltaShort, weekdayName } from "./period"
 
 /**
@@ -175,7 +174,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
         { header: "Clientes nuevos", key: "newClients", width: 16 },
       ],
       data.team.branches.map((b) => ({
-        name: b.id === null ? NO_BRANCH_LABEL : b.active ? b.name : `${b.name} (inactiva)`,
+        name: b.id === null || b.active ? b.name : `${b.name} (inactiva)`,
         visits: b.visits,
         previousVisits: b.previousVisits,
         change: deltaShort(b.visits, b.previousVisits),
