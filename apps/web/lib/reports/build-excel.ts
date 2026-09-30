@@ -9,10 +9,6 @@ import { dayLabel, deltaShort, weekdayName } from "./period"
  * people. Column names match the panel's own exports where they overlap.
  */
 
-const BRANCHES_NOTE =
-  'Visitas registradas por sucursal. La fila "Sin sucursal" agrupa visitas anteriores a la creación de las sucursales ' +
-  'o registradas fuera de la caja (panel o API); en caja siempre se elige una sede. "Clientes nuevos" = clientes cuya primera visita fue en esa sede.'
-
 const CASHIERS_NOTE =
   'Visitas registradas por cada persona del equipo. "Días activos" = días de la semana en que registró al menos una visita. ' +
   "Un cajero con 0 visitas en una sede con movimiento suele significar que no está ofreciendo el programa: vale una conversación."
@@ -157,13 +153,8 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
 
   // ── Sucursales y cajeros (only when there is more than one) ───────
   if (data.team.showBranches) {
-    const sheet = wb.addWorksheet("Sucursales")
-    sheet.getCell("A1").value = BRANCHES_NOTE
-    sheet.getCell("A1").alignment = { wrapText: true, vertical: "top" }
-    sheet.mergeCells("A1:G1")
-    sheet.getRow(1).height = 48
     addTable(
-      sheet,
+      wb.addWorksheet("Sucursales"),
       [
         { header: "Sucursal", key: "name", width: 28 },
         { header: `Visitas ${periodWord}`, key: "visits", width: 14 },
@@ -182,7 +173,6 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
         uniqueClients: b.uniqueClients,
         newClients: b.newClients,
       })),
-      3,
     )
   }
   if (data.team.showCashiers) {
@@ -277,29 +267,31 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
     )
   }
 
-  // ── En riesgo ─────────────────────────────────────────────────────
-  const riesgo = wb.addWorksheet("En riesgo")
-  riesgo.getCell("A1").value = AT_RISK_NOTE
-  riesgo.getCell("A1").alignment = { wrapText: true, vertical: "top" }
-  riesgo.mergeCells("A1:F1")
-  riesgo.getRow(1).height = 48
-  addTable(
-    riesgo,
-    [
-      { header: "Nombre", key: "name", width: 26 },
-      { header: "Visitas totales", key: "totalVisits", width: 14 },
-      { header: "Última visita", key: "lastVisitAt", width: 20 },
-      { header: "Días sin venir", key: "daysSince", width: 14 },
-      { header: progressHeader(data), key: "progress", width: 12 },
-      { header: "Acción sugerida", key: "action", width: 40 },
-    ],
-    data.atRisk.map((c) => ({
-      ...c,
-      lastVisitAt: formatDateForExport(c.lastVisitAt, tz),
-      action: 'Campaña "te extrañamos" con incentivo para volver',
-    })),
-    3,
-  )
+  // ── En riesgo (only when there is someone at risk) ────────────────
+  if (data.atRisk.length > 0) {
+    const riesgo = wb.addWorksheet("En riesgo")
+    riesgo.getCell("A1").value = AT_RISK_NOTE
+    riesgo.getCell("A1").alignment = { wrapText: true, vertical: "top" }
+    riesgo.mergeCells("A1:F1")
+    riesgo.getRow(1).height = 48
+    addTable(
+      riesgo,
+      [
+        { header: "Nombre", key: "name", width: 26 },
+        { header: "Visitas totales", key: "totalVisits", width: 14 },
+        { header: "Última visita", key: "lastVisitAt", width: 20 },
+        { header: "Días sin venir", key: "daysSince", width: 14 },
+        { header: progressHeader(data), key: "progress", width: 12 },
+        { header: "Acción sugerida", key: "action", width: 40 },
+      ],
+      data.atRisk.map((c) => ({
+        ...c,
+        lastVisitAt: formatDateForExport(c.lastVisitAt, tz),
+        action: 'Campaña "te extrañamos" con incentivo para volver',
+      })),
+      3,
+    )
+  }
 
   // ── Cumpleaños (only when there is someone to list) ───────────────
   if (data.birthdays.length > 0) {
