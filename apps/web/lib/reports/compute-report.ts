@@ -451,6 +451,7 @@ export async function computeReport(params: {
     current: { visits: cur.visits, uniqueClients: cur.uniqueClients },
     previousTotals: { visits: prev.visits, uniqueClients: prev.uniqueClients },
     visitsPerClient: clientRows.map((c) => c.periodVisits),
+    thresholds,
     local,
     within,
     totalsFor,

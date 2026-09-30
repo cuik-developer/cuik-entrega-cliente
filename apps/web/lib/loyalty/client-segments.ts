@@ -166,8 +166,9 @@ export function getThresholds(
 export function computeClientSegment(
   client: ClientSegmentInput,
   thresholds: SegmentationThresholds = DEFAULT_THRESHOLDS,
+  /** Reference instant; lets reports compute the segment "as of" a past date. */
+  now: Date = new Date(),
 ): ClientSegment {
-  const now = new Date()
   const daysSinceCreation = daysBetween(client.createdAt, now)
 
   // nuevo: registered within newClientDays, whatever they did since

@@ -194,6 +194,25 @@ export function depthItems(data: ReportData, isWeekly: boolean): string[] {
     items.push(line)
   }
 
+  const rewards = data.signals.topRewards.filter((x) => x.redemptions > 0)
+  if (rewards.length > 0) {
+    const top = rewards
+      .slice(0, 3)
+      .map((x) => `${x.name} (${x.redemptions})`)
+      .join(", ")
+    items.push(`Premios más canjeados ${here}: ${top}${rewards.length > 3 ? " y más" : ""}.`)
+  }
+
+  const moved = data.signals.segments
+    .filter((x) => x.count !== x.previous && (x.count >= 3 || x.previous >= 3))
+    .sort((a, b) => Math.abs(b.count - b.previous) - Math.abs(a.count - a.previous))
+    .slice(0, 3)
+  if (moved.length > 0) {
+    items.push(
+      `Segmentos que se movieron: ${moved.map((x) => `${x.label} ${x.previous} → ${x.count}`).join(", ")}.`,
+    )
+  }
+
   if (d.timeToFirstReward.medianDays != null && d.timeToFirstReward.clients >= 3) {
     items.push(
       `Del registro al primer ${data.tenant.programType === "points" ? "canje" : "premio"} pasan ${d.timeToFirstReward.medianDays} días (mediana sobre ${d.timeToFirstReward.clients} clientes).`,

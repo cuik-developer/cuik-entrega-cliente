@@ -42,6 +42,21 @@ export type HeatRow = {
   evening: number
 }
 
+export type RewardRow = {
+  name: string
+  redemptions: number
+  previousRedemptions: number
+  /** Points spent on it (points programs), null for stamps. */
+  points: number | null
+}
+
+export type SegmentRow = {
+  key: string
+  label: string
+  count: number
+  previous: number
+}
+
 export type CohortRow = {
   /** "YYYY-MM" of registration. */
   ym: string
@@ -77,6 +92,10 @@ export type ReportSignals = {
   stamps: { rewardsEarned: number; pendingTotal: number } | null
   /** Monthly only: retention of the last registration cohorts. */
   cohorts: CohortRow[]
+  /** Rewards redeemed in the period, most redeemed first. */
+  topRewards: RewardRow[]
+  /** Client segments at the period end vs. the previous period end. */
+  segments: SegmentRow[]
   /** Depth KPIs: habit, value and funnel. */
   depth: DepthKpis
 }
@@ -142,6 +161,8 @@ export const EMPTY_SIGNALS: ReportSignals = {
   points: null,
   stamps: null,
   cohorts: [],
+  topRewards: [],
+  segments: [],
   depth: EMPTY_DEPTH,
 }
 
@@ -440,6 +461,38 @@ export function buildInsights(data: ReportData, limit?: number, minScore = 0): I
         why: "Sin pase no reciben notificaciones ni ven su saldo: están registrados, pero fuera del programa.",
         action:
           'Pide al cajero que espere a que el cliente toque "Agregar a Wallet" antes de despedirlo; toma 10 segundos.',
+      })
+    }
+  }
+
+  // 7c. Segment shifts: at risk / inactive growing
+  const risk = s.segments.find((x) => x.key === "en_riesgo")
+  if (risk && risk.previous >= 5 && risk.count >= risk.previous * 1.3) {
+    out.push({
+      key: "at_risk_growing",
+      tone: "warn",
+      score: 61,
+      title: `En riesgo pasó de ${risk.previous} a ${risk.count} clientes`,
+      what: `${risk.count - risk.previous} clientes más que venían seguido dejaron de pasar desde ${data.compareLabel}.`,
+      why: "El segmento En riesgo es la antesala de Inactivo; cuanto antes se les hable, más baratos son de recuperar.",
+      action: 'Campaña "te extrañamos" al segmento En riesgo esta misma semana.',
+    })
+  }
+
+  // 7d. Reward concentration (points): everyone goes for one reward
+  if (isPoints && s.topRewards.length >= 2) {
+    const total = s.topRewards.reduce((acc, x) => acc + x.redemptions, 0)
+    const top = s.topRewards[0]
+    if (total >= 10 && top.redemptions / total >= 0.8) {
+      out.push({
+        key: "reward_concentration",
+        tone: "info",
+        score: 28,
+        title: `${Math.round((top.redemptions / total) * 100)} % de los canjes son "${top.name}"`,
+        what: `${top.redemptions} de ${total} canjes ${here} fueron el mismo premio; el resto del catálogo casi no se usa.`,
+        why: "Un catálogo donde solo se canjea un premio suele tener los demás demasiado caros o poco deseados.",
+        action:
+          "Revisa el costo en puntos de los otros premios o cámbialos por algo que la gente pida en caja.",
       })
     }
   }

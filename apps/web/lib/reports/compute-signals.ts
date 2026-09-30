@@ -1,7 +1,18 @@
 import { db, sql } from "@cuik/db"
 import { automationsConfigSchema } from "@cuik/shared/validators"
+import type { ClientSegment, SegmentationThresholds } from "@/lib/loyalty/client-segments"
+import { computeClientSegment, SEGMENT_LABELS } from "@/lib/loyalty/client-segments"
+import { parseAvgDays, parseVisitDate } from "@/lib/loyalty/visit-stats"
 import type { CampaignRow, DailyRow, ProgramType } from "./compute-report"
-import type { CampaignLift, CohortRow, DepthKpis, HeatRow, ReportSignals } from "./insights"
+import type {
+  CampaignLift,
+  CohortRow,
+  DepthKpis,
+  HeatRow,
+  ReportSignals,
+  RewardRow,
+  SegmentRow,
+} from "./insights"
 import {
   monthName,
   type Period,
@@ -36,6 +47,7 @@ export async function computeSignals(params: {
   previousTotals: { visits: number; uniqueClients: number }
   /** Visits in the period per distinct visitor (for the frequency buckets). */
   visitsPerClient: number[]
+  thresholds: SegmentationThresholds
   local: SqlHelper
   within: WithinHelper
   totalsFor: (p: Period) => Promise<{ visits: number; newClients: number; redeemed: number }>
@@ -232,6 +244,11 @@ export async function computeSignals(params: {
     }
   }
 
+  const [topRewards, segments] = await Promise.all([
+    computeTopRewards({ tenantId, period, previous, programType, within }),
+    computeSegmentShift({ tenantId, period, previous, local, thresholds: params.thresholds }),
+  ])
+
   const depth = await computeDepth({
     tenantId,
     isWeekly,
@@ -264,7 +281,129 @@ export async function computeSignals(params: {
     points,
     stamps,
     cohorts,
+    topRewards,
+    segments,
   }
+}
+
+async function computeTopRewards(params: {
+  tenantId: string
+  period: Period
+  previous: Period
+  programType: ProgramType
+  within: WithinHelper
+}): Promise<RewardRow[]> {
+  const { tenantId, period, previous, programType, within } = params
+  if (programType === "points") {
+    const q = (p: Period) => sql`
+      SELECT COALESCE(rc.name, 'Premio eliminado') AS name, COUNT(*)::int AS n, COALESCE(SUM(-t.amount), 0)::int AS points
+      FROM loyalty.points_transactions t
+      LEFT JOIN loyalty.reward_catalog rc ON rc.id = t.catalog_item_id
+      WHERE t.tenant_id = ${tenantId} AND t.type = 'redeem' AND ${within("t.created_at", p)}
+      GROUP BY 1`
+    const [cur, prev] = await Promise.all([
+      db.execute<{ name: string; n: number; points: number }>(q(period)),
+      db.execute<{ name: string; n: number; points: number }>(q(previous)),
+    ])
+    const prevBy = new Map(prev.rows.map((r) => [r.name, Number(r.n)]))
+    const names = new Set([...cur.rows.map((r) => r.name), ...prev.rows.map((r) => r.name)])
+    const curBy = new Map(cur.rows.map((r) => [r.name, r]))
+    return [...names]
+      .map((name) => ({
+        name,
+        redemptions: Number(curBy.get(name)?.n ?? 0),
+        previousRedemptions: prevBy.get(name) ?? 0,
+        points: Number(curBy.get(name)?.points ?? 0),
+      }))
+      .sort((a, b) => b.redemptions - a.redemptions || a.name.localeCompare(b.name))
+  }
+  const q = (p: Period) => sql`
+    SELECT COALESCE(r.reward_type, 'Premio') AS name, COUNT(*)::int AS n
+    FROM loyalty.rewards r
+    WHERE r.tenant_id = ${tenantId} AND r.status = 'redeemed' AND r.redeemed_at IS NOT NULL AND ${within("r.redeemed_at", p)}
+    GROUP BY 1`
+  const [cur, prev] = await Promise.all([
+    db.execute<{ name: string; n: number }>(q(period)),
+    db.execute<{ name: string; n: number }>(q(previous)),
+  ])
+  const prevBy = new Map(prev.rows.map((r) => [r.name, Number(r.n)]))
+  const names = new Set([...cur.rows.map((r) => r.name), ...prev.rows.map((r) => r.name)])
+  const curBy = new Map(cur.rows.map((r) => [r.name, Number(r.n)]))
+  return [...names]
+    .map((name) => ({
+      name,
+      redemptions: curBy.get(name) ?? 0,
+      previousRedemptions: prevBy.get(name) ?? 0,
+      points: null,
+    }))
+    .sort((a, b) => b.redemptions - a.redemptions || a.name.localeCompare(b.name))
+}
+
+const SEGMENT_ORDER: ClientSegment[] = [
+  "nuevo",
+  "frecuente",
+  "regular",
+  "esporadico",
+  "one_time",
+  "en_riesgo",
+  "inactivo",
+]
+
+/** Segments "as of" the end of the period and of the previous one (derived, never stored). */
+async function computeSegmentShift(params: {
+  tenantId: string
+  period: Period
+  previous: Period
+  local: SqlHelper
+  thresholds: SegmentationThresholds
+}): Promise<SegmentRow[]> {
+  const { tenantId, local, thresholds } = params
+  const asOf = async (p: Period): Promise<Map<ClientSegment, number>> => {
+    const res = await db.execute<{
+      created_at: string
+      total_visits: number
+      last_visit_at: string | null
+      avg_days: string | null
+    }>(sql`
+      SELECT c.created_at,
+        COALESCE(s.n, 0)::int AS total_visits, s.last_visit_at, s.avg_days
+      FROM loyalty.clients c
+      LEFT JOIN (
+        SELECT v.client_id, COUNT(*) AS n, MAX(v.created_at) AS last_visit_at,
+          CASE WHEN COUNT(*) >= 2
+            THEN EXTRACT(EPOCH FROM (MAX(v.created_at) - MIN(v.created_at))) / 86400.0 / NULLIF(COUNT(*) - 1, 0)
+            ELSE NULL END AS avg_days
+        FROM loyalty.visits v
+        WHERE v.tenant_id = ${tenantId} AND v.source <> 'bonus' AND ${local("v.created_at")} < (${p.end}::date + 1)
+        GROUP BY v.client_id
+      ) s ON s.client_id = c.id
+      WHERE c.tenant_id = ${tenantId} AND c.status IN ('active', 'inactive')
+        AND ${local("c.created_at")} < (${p.end}::date + 1)`)
+    // "now" = the last instant of the period's last day.
+    const now = new Date(`${p.end}T23:59:59`)
+    const tally = new Map<ClientSegment, number>()
+    for (const r of res.rows) {
+      const seg = computeClientSegment(
+        {
+          createdAt: new Date(r.created_at),
+          totalVisits: Number(r.total_visits),
+          lastVisitAt: parseVisitDate(r.last_visit_at),
+          avgDaysBetweenVisits: parseAvgDays(r.avg_days),
+        },
+        thresholds,
+        now,
+      )
+      tally.set(seg, (tally.get(seg) ?? 0) + 1)
+    }
+    return tally
+  }
+  const [cur, prev] = await Promise.all([asOf(params.period), asOf(params.previous)])
+  return SEGMENT_ORDER.map((key) => ({
+    key,
+    label: SEGMENT_LABELS[key],
+    count: cur.get(key) ?? 0,
+    previous: prev.get(key) ?? 0,
+  }))
 }
 
 function ratio(a: number, b: number): number {

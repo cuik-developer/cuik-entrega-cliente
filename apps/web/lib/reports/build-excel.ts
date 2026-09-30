@@ -847,6 +847,69 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
     )
   }
 
+  // Rewards redeemed
+  const rewards = data.signals.topRewards.filter(
+    (x) => x.redemptions > 0 || x.previousRedemptions > 0,
+  )
+  if (rewards.length > 0) {
+    sectionLabel(dash, r, isPoints ? "Premios más canjeados" : "Premios cobrados")
+    r += 1
+    const redemptionsTotal = rewards.reduce((acc, x) => acc + x.redemptions, 0)
+    r = miniTable(
+      dash,
+      r,
+      [
+        { header: "Premio", key: "name", col: 1, span: 2 },
+        { header: rewardsWord, key: "redemptions", col: 3, span: 2, bar: true, numFmt: "#,##0" },
+        { header: "% de canjes", key: "share", col: 5, numFmt: "0%", align: "right" },
+        { header: prevWord, key: "previous", col: 6, numFmt: "#,##0" },
+        { header: "Cambio", key: "change", col: 7, delta: true, align: "right" },
+        ...(isPoints ? [{ header: "Puntos", key: "points", col: 8, numFmt: "#,##0" }] : []),
+      ],
+      rewards.map((x) => ({
+        name: x.name,
+        redemptions: x.redemptions,
+        share: frac(x.redemptions, redemptionsTotal),
+        previous: x.previousRedemptions,
+        change: deltaShort(x.redemptions, x.previousRedemptions),
+        points: x.points ?? "",
+      })),
+    )
+  }
+
+  // Segments now vs. previous period end
+  const segs = data.signals.segments.filter((x) => x.count > 0 || x.previous > 0)
+  if (segs.length > 0) {
+    sectionLabel(dash, r, "Segmentos de clientes")
+    r += 1
+    const segTotal = segs.reduce((acc, x) => acc + x.count, 0)
+    r = miniTable(
+      dash,
+      r,
+      [
+        { header: "Segmento", key: "label", col: 1, span: 2 },
+        { header: "Clientes hoy", key: "count", col: 3, span: 2, bar: true, numFmt: "#,##0" },
+        { header: "% del total", key: "share", col: 5, numFmt: "0%", align: "right" },
+        {
+          header: `Cierre ${isWeekly ? "semana" : "mes"} anterior`,
+          key: "previous",
+          col: 6,
+          numFmt: "#,##0",
+        },
+        { header: "Cambio", key: "change", col: 7, delta: true, align: "right" },
+        { header: "Tendencia", key: "trend", col: 8, align: "center" },
+      ],
+      segs.map((x) => ({
+        label: x.label,
+        count: x.count,
+        share: frac(x.count, segTotal),
+        previous: x.previous,
+        change: deltaShort(x.count, x.previous),
+        trend: x.count > x.previous ? "▲" : x.count < x.previous ? "▼" : "=",
+      })),
+    )
+  }
+
   // Branches
   if (data.team.showBranches) {
     sectionLabel(dash, r, "Sucursales")
