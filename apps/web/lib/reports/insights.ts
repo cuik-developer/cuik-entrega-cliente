@@ -59,6 +59,22 @@ export type SegmentRow = {
   previous: number
 }
 
+export type SegmentMoveClient = {
+  name: string
+  totalVisits: number
+  lastVisitAt: Date | null
+}
+
+/** Clients that changed segment between the previous period end and this one. */
+export type SegmentMove = {
+  /** Segment label at the previous period end; "Registro nuevo" for clients created in the period. */
+  from: string
+  /** Segment label at the period end. */
+  to: string
+  count: number
+  clients: SegmentMoveClient[]
+}
+
 export type CohortRow = {
   /** "YYYY-MM" of registration. */
   ym: string
@@ -98,6 +114,8 @@ export type ReportSignals = {
   topRewards: RewardRow[]
   /** Client segments at the period end vs. the previous period end. */
   segments: SegmentRow[]
+  /** Who moved between segments (from → to), largest moves first. */
+  segmentMoves: SegmentMove[]
   /** Depth KPIs: habit, value and funnel. */
   depth: DepthKpis
 }
@@ -165,6 +183,7 @@ export const EMPTY_SIGNALS: ReportSignals = {
   cohorts: [],
   topRewards: [],
   segments: [],
+  segmentMoves: [],
   depth: EMPTY_DEPTH,
 }
 

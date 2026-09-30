@@ -11,6 +11,7 @@ import type {
   HeatRow,
   ReportSignals,
   RewardRow,
+  SegmentMove,
   SegmentRow,
 } from "./insights"
 import {
@@ -288,10 +289,11 @@ export async function computeSignals(params: {
     }
   }
 
-  const [topRewards, segments] = await Promise.all([
+  const [topRewards, shift] = await Promise.all([
     computeTopRewards({ tenantId, period, previous, programType, within }),
     computeSegmentShift({ tenantId, period, previous, local, thresholds: params.thresholds }),
   ])
+  const { segments, segmentMoves } = shift
 
   const depth = await computeDepth({
     tenantId,
@@ -327,6 +329,7 @@ export async function computeSignals(params: {
     cohorts,
     topRewards,
     segments,
+    segmentMoves,
   }
 }
 
@@ -393,23 +396,35 @@ const SEGMENT_ORDER: ClientSegment[] = [
   "inactivo",
 ]
 
-/** Segments "as of" the end of the period and of the previous one (derived, never stored). */
+/**
+ * Segments "as of" the end of the period and of the previous one (derived,
+ * never stored), plus who moved between them.
+ */
 async function computeSegmentShift(params: {
   tenantId: string
   period: Period
   previous: Period
   local: SqlHelper
   thresholds: SegmentationThresholds
-}): Promise<SegmentRow[]> {
+}): Promise<{ segments: SegmentRow[]; segmentMoves: SegmentMove[] }> {
   const { tenantId, local, thresholds } = params
-  const asOf = async (p: Period): Promise<Map<ClientSegment, number>> => {
+  type ClientSeg = {
+    segment: ClientSegment
+    name: string
+    totalVisits: number
+    lastVisitAt: Date | null
+  }
+  const asOf = async (p: Period): Promise<Map<string, ClientSeg>> => {
     const res = await db.execute<{
+      id: string
+      name: string
+      last_name: string | null
       created_at: string
       total_visits: number
       last_visit_at: string | null
       avg_days: string | null
     }>(sql`
-      SELECT c.created_at,
+      SELECT c.id, c.name, c.last_name, c.created_at,
         COALESCE(s.n, 0)::int AS total_visits, s.last_visit_at, s.avg_days
       FROM loyalty.clients c
       LEFT JOIN (
@@ -425,29 +440,65 @@ async function computeSegmentShift(params: {
         AND ${local("c.created_at")} < (${p.end}::date + 1)`)
     // "now" = the last instant of the period's last day.
     const now = new Date(`${p.end}T23:59:59`)
-    const tally = new Map<ClientSegment, number>()
+    const out = new Map<string, ClientSeg>()
     for (const r of res.rows) {
-      const seg = computeClientSegment(
-        {
-          createdAt: new Date(r.created_at),
-          totalVisits: Number(r.total_visits),
-          lastVisitAt: parseVisitDate(r.last_visit_at),
-          avgDaysBetweenVisits: parseAvgDays(r.avg_days),
-        },
-        thresholds,
-        now,
-      )
-      tally.set(seg, (tally.get(seg) ?? 0) + 1)
+      const lastVisitAt = parseVisitDate(r.last_visit_at)
+      out.set(r.id, {
+        segment: computeClientSegment(
+          {
+            createdAt: new Date(r.created_at),
+            totalVisits: Number(r.total_visits),
+            lastVisitAt,
+            avgDaysBetweenVisits: parseAvgDays(r.avg_days),
+          },
+          thresholds,
+          now,
+        ),
+        name: [r.name, r.last_name].filter(Boolean).join(" "),
+        totalVisits: Number(r.total_visits),
+        lastVisitAt,
+      })
     }
-    return tally
+    return out
   }
   const [cur, prev] = await Promise.all([asOf(params.period), asOf(params.previous)])
-  return SEGMENT_ORDER.map((key) => ({
+
+  const tally = (m: Map<string, ClientSeg>) => {
+    const t = new Map<ClientSegment, number>()
+    for (const v of m.values()) t.set(v.segment, (t.get(v.segment) ?? 0) + 1)
+    return t
+  }
+  const curT = tally(cur)
+  const prevT = tally(prev)
+  const segments = SEGMENT_ORDER.map((key) => ({
     key,
     label: SEGMENT_LABELS[key],
-    count: cur.get(key) ?? 0,
-    previous: prev.get(key) ?? 0,
+    count: curT.get(key) ?? 0,
+    previous: prevT.get(key) ?? 0,
   }))
+
+  const NEW_LABEL = "Registro nuevo"
+  const moves = new Map<string, SegmentMove>()
+  for (const [id, now] of cur) {
+    const before = prev.get(id)
+    const from = before ? SEGMENT_LABELS[before.segment] : NEW_LABEL
+    const to = SEGMENT_LABELS[now.segment]
+    if (before && before.segment === now.segment) continue
+    const key = `${from}→${to}`
+    const m = moves.get(key) ?? { from, to, count: 0, clients: [] }
+    m.count += 1
+    m.clients.push({ name: now.name, totalVisits: now.totalVisits, lastVisitAt: now.lastVisitAt })
+    moves.set(key, m)
+  }
+  const segmentMoves = [...moves.values()]
+    .map((m) => ({
+      ...m,
+      clients: m.clients.sort(
+        (a, b) => b.totalVisits - a.totalVisits || a.name.localeCompare(b.name),
+      ),
+    }))
+    .sort((a, b) => b.count - a.count || a.from.localeCompare(b.from))
+  return { segments, segmentMoves }
 }
 
 function ratio(a: number, b: number): number {

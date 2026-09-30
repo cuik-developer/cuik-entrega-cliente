@@ -203,13 +203,18 @@ export function depthItems(data: ReportData, isWeekly: boolean): string[] {
     items.push(`Premios más canjeados ${here}: ${top}${rewards.length > 3 ? " y más" : ""}.`)
   }
 
-  const moved = data.signals.segments
-    .filter((x) => x.count !== x.previous && (x.count >= 3 || x.previous >= 3))
-    .sort((a, b) => Math.abs(b.count - b.previous) - Math.abs(a.count - a.previous))
-    .slice(0, 3)
-  if (moved.length > 0) {
+  // Real moves (excluding brand-new registrations), the biggest three, with names.
+  const moves = data.signals.segmentMoves.filter((m) => m.from !== "Registro nuevo").slice(0, 3)
+  if (moves.length > 0) {
+    const parts = moves.map((m) => {
+      const names = m.clients
+        .slice(0, 3)
+        .map((c) => c.name)
+        .join(", ")
+      return `${plural(m.count, "pasó", "pasaron")} de ${m.from} a ${m.to} (${names}${m.count > 3 ? " y más" : ""})`
+    })
     items.push(
-      `Segmentos que se movieron: ${moved.map((x) => `${x.label} ${x.previous} → ${x.count}`).join(", ")}.`,
+      `Movimientos entre segmentos: ${parts.join("; ")}. La lista completa está en la hoja "Movimientos".`,
     )
   }
 

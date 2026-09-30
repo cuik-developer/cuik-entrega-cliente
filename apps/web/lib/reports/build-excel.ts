@@ -3,7 +3,7 @@ import { formatDateForExport } from "@/lib/format-date"
 import { actItems, happenedItems } from "./compose-email"
 import type { Cumulative, ReportData } from "./compute-report"
 import { buildInsights, type Insight } from "./insights"
-import { dayLabel, deltaShort, weekdayName } from "./period"
+import { dayLabel, weekdayName } from "./period"
 
 /**
  * The xlsx attached to the report, in the Cuik brand kit.
@@ -45,6 +45,7 @@ const SEGMENT_CHIP: Record<string, { fill: Argb; text: Argb }> = {
   "Una visita": { fill: "FFF1F5F9", text: "FF64748B" },
   "En riesgo": { fill: "FFFFEDD5", text: "FFC2410C" },
   Inactivo: { fill: "FFFEE2E2", text: "FFB91C1C" },
+  "Registro nuevo": { fill: "FFF8F8F8", text: "FF6B7280" },
 }
 /** Approximate characters per Excel width unit at Poppins 10. */
 const CHARS_PER_UNIT = 0.95
@@ -83,12 +84,21 @@ function colLetter(n: number): string {
   return s
 }
 
-function deltaColor(text: unknown): Argb {
-  const t = String(text ?? "")
+function deltaColor(v: unknown): Argb {
+  if (typeof v === "number") return v > 0 ? C.green : v < 0 ? C.red : C.muted
+  const t = String(v ?? "")
   if (t.startsWith("+")) return C.green
   if (t.startsWith("-")) return C.red
   return C.muted
 }
+
+/** Percent change as a number (0.14 = +14 %), "" when there is no base to compare with. */
+function pctChange(current: number, previous: number): number | "" {
+  if (previous <= 0) return ""
+  return Math.round(((current - previous) / previous) * 100) / 100
+}
+/** Number format for a percent-change cell: sign always visible. */
+const PCT_DELTA = '+0%;-0%;"="'
 
 function capitalize(s: string): string {
   return s ? s[0].toUpperCase() + s.slice(1) : s
@@ -167,7 +177,6 @@ type TableOpts = {
   title?: string
   subtitle?: string
   zebra?: boolean
-  freeze?: boolean
   filter?: boolean
 }
 
@@ -279,7 +288,6 @@ function addTable(
       to: { row: lastData, column: columns.length },
     }
   }
-  if (opts.freeze) sheet.views = [{ state: "frozen", ySplit: headerRow }]
   return r + 1
 }
 
@@ -335,25 +343,30 @@ type Tile = {
   label: string
   value: string | number
   numFmt?: string
-  delta?: string
-  direction?: "up" | "down" | "flat"
+  /** Percent change vs. the previous period (0.14 = +14 %); "" when there is no base. */
+  delta?: number | ""
+  /** Short text next to the delta ("antes 13") or, without delta, the whole third line. */
   hint?: string
 }
 
 /** Four tiles across 8 columns (two columns each), three rows tall. */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: cell-by-cell layout of a tile
 function tileRow(sheet: Sheet, top: number, tiles: Tile[]) {
   for (const [i, t] of tiles.slice(0, 4).entries()) {
     const c1 = i * 2 + 1
     const c2 = c1 + 1
+    const hasDelta = typeof t.delta === "number"
     for (let r = top; r <= top + 2; r++) {
-      sheet.mergeCells(r, c1, r, c2)
-      const cell = sheet.getCell(r, c1)
-      cell.fill = fill(C.surface)
-      cell.border = {
-        top: r === top ? thin : undefined,
-        bottom: r === top + 2 ? thin : undefined,
-        left: thin,
-        right: thin,
+      if (r < top + 2 || !hasDelta) sheet.mergeCells(r, c1, r, c2)
+      for (const cc of [c1, c2]) {
+        const cell = sheet.getCell(r, cc)
+        cell.fill = fill(C.surface)
+        cell.border = {
+          top: r === top ? thin : undefined,
+          bottom: r === top + 2 ? thin : undefined,
+          left: cc === c1 ? thin : undefined,
+          right: cc === c2 ? thin : undefined,
+        }
       }
     }
     const label = sheet.getCell(top, c1)
@@ -366,10 +379,20 @@ function tileRow(sheet: Sheet, top: number, tiles: Tile[]) {
     value.font = font(20, { bold: true, color: C.blue })
     value.alignment = { vertical: "middle", horizontal: "left", indent: 1 }
     const delta = sheet.getCell(top + 2, c1)
-    delta.value = t.delta ?? t.hint ?? ""
-    const color = t.direction === "up" ? C.green : t.direction === "down" ? C.red : C.muted
-    delta.font = font(9, { color: t.delta ? color : C.muted, bold: Boolean(t.delta) })
-    delta.alignment = { vertical: "top", horizontal: "left", indent: 1, wrapText: true }
+    if (hasDelta) {
+      delta.value = t.delta as number
+      delta.numFmt = PCT_DELTA
+      delta.font = font(9, { color: deltaColor(t.delta), bold: true })
+      delta.alignment = { vertical: "top", horizontal: "left", indent: 1 }
+      const hint = sheet.getCell(top + 2, c2)
+      hint.value = t.hint ?? ""
+      hint.font = font(9, { color: C.muted })
+      hint.alignment = { vertical: "top", horizontal: "left", wrapText: true }
+    } else {
+      delta.value = t.hint ?? ""
+      delta.font = font(9, { color: C.muted })
+      delta.alignment = { vertical: "top", horizontal: "left", indent: 1, wrapText: true }
+    }
   }
   sheet.getRow(top).height = 16
   sheet.getRow(top + 1).height = 30
@@ -500,6 +523,27 @@ function progressHeader(data: ReportData): string {
   return data.tenant.programType === "points" ? "Puntos" : "Sellos"
 }
 
+/** Suggested action per destination segment. */
+function moveAction(to: string, isPoints: boolean): string {
+  switch (to) {
+    case "En riesgo":
+      return 'Push "te extrañamos" con un incentivo concreto para volver esta semana.'
+    case "Inactivo":
+      return "Última oportunidad: un beneficio fuerte con fecha límite; si no responde, deja de contarlo."
+    case "Frecuente":
+      return isPoints
+        ? "Cuídalo: asegúrate de que sepa cuántos puntos tiene y qué puede canjear."
+        : "Cuídalo: recuérdale cuántos sellos le faltan para el premio."
+    case "Regular":
+    case "Esporádico":
+      return "Empuja la siguiente visita: un push a los 7 días con el beneficio que le falta."
+    case "Una visita":
+      return "No volvió tras la primera: push de bienvenida con un motivo para la segunda visita."
+    default:
+      return "Bienvenida: confirma que instaló el pase y conoce el premio."
+  }
+}
+
 const AT_RISK_NOTE =
   "Estos clientes solían venir seguido y dejaron de hacerlo. " +
   "Recomendamos enviarles una campaña push con un incentivo para regresar (por ejemplo, un sello extra en su próxima visita). " +
@@ -507,12 +551,6 @@ const AT_RISK_NOTE =
 
 const CASHIERS_NOTE =
   '"Días activos" = días del período en que la persona registró al menos una visita.'
-
-type Dir = "up" | "down" | "flat"
-function dir(current: number | null, previous: number | null): Dir {
-  if (current == null || previous == null || previous === 0) return "flat"
-  return current > previous ? "up" : current < previous ? "down" : "flat"
-}
 
 /** Fraction 0-1 for a percent cell (formatted "0%"), or "" when there is no base. */
 function frac(part: number, total: number): number | "" {
@@ -558,8 +596,8 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
     label,
     value: kp.current,
     numFmt: "#,##0",
-    delta: `${deltaShort(kp.current, kp.previous)} · antes ${kp.previous}`,
-    direction: kp.delta.direction,
+    delta: pctChange(kp.current, kp.previous),
+    hint: `antes ${kp.previous}`,
   })
   tileRow(dash, r, [
     kpiTile("Visitas", k.visits),
@@ -577,10 +615,12 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
     numFmt: '"S/ "#,##0.00',
     delta:
       d.ticket.current != null && d.ticket.previous != null
-        ? `${deltaShort(Math.round(d.ticket.current * 100), Math.round(d.ticket.previous * 100))} · antes S/ ${d.ticket.previous.toFixed(2)}`
+        ? pctChange(d.ticket.current, d.ticket.previous)
         : undefined,
-    direction: dir(d.ticket.current, d.ticket.previous),
-    hint: `${d.ticket.visitsWithAmount} compras con monto`,
+    hint:
+      d.ticket.previous != null
+        ? `antes S/ ${d.ticket.previous.toFixed(2)} · ${d.ticket.visitsWithAmount} compras`
+        : `${d.ticket.visitsWithAmount} compras con monto`,
   }
   const riskTile: Tile = {
     label: "Clientes en riesgo",
@@ -593,9 +633,14 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
       label: "Visitas por cliente",
       value: d.frequency.current,
       numFmt: "0.0",
-      delta: d.frequency.previous > 0 ? `antes ${d.frequency.previous}` : undefined,
-      direction: dir(d.frequency.current, d.frequency.previous),
-      hint: d.medianDaysBetween != null ? `${d.medianDaysBetween} días entre visitas` : "sin dato",
+      delta:
+        d.frequency.previous > 0 ? pctChange(d.frequency.current, d.frequency.previous) : undefined,
+      hint:
+        d.frequency.previous > 0
+          ? `antes ${d.frequency.previous}${d.medianDaysBetween != null ? ` · ${d.medianDaysBetween} días entre visitas` : ""}`
+          : d.medianDaysBetween != null
+            ? `${d.medianDaysBetween} días entre visitas`
+            : "sin dato",
     },
     {
       label: "Tasa de retorno",
@@ -870,7 +915,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
         { header: rewardsWord, key: "redemptions", col: 3, span: 2, bar: true, numFmt: "#,##0" },
         { header: "% de canjes", key: "share", col: 5, numFmt: "0%", align: "right" },
         { header: prevWord, key: "previous", col: 6, numFmt: "#,##0" },
-        { header: "Cambio", key: "change", col: 7, delta: true, align: "right" },
+        { header: "Cambio", key: "change", col: 7, delta: true, numFmt: PCT_DELTA, align: "right" },
         ...(isPoints ? [{ header: "Puntos", key: "points", col: 8, numFmt: "#,##0" }] : []),
       ],
       rewards.map((x) => ({
@@ -878,7 +923,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
         redemptions: x.redemptions,
         share: frac(x.redemptions, redemptionsTotal),
         previous: x.previousRedemptions,
-        change: deltaShort(x.redemptions, x.previousRedemptions),
+        change: pctChange(x.redemptions, x.previousRedemptions),
         points: x.points ?? "",
       })),
     )
@@ -903,7 +948,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
           col: 6,
           numFmt: "#,##0",
         },
-        { header: "Cambio", key: "change", col: 7, delta: true, align: "right" },
+        { header: "Cambio", key: "change", col: 7, delta: true, numFmt: PCT_DELTA, align: "right" },
         { header: "Tendencia", key: "trend", col: 8, align: "center" },
       ],
       segs.map((x) => ({
@@ -911,10 +956,44 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
         count: x.count,
         share: frac(x.count, segTotal),
         previous: x.previous,
-        change: deltaShort(x.count, x.previous),
+        change: pctChange(x.count, x.previous),
         trend: x.count > x.previous ? "▲" : x.count < x.previous ? "▼" : "=",
       })),
     )
+  }
+
+  // Segment moves (who changed segment since the previous period end)
+  const moves = data.signals.segmentMoves
+  if (moves.length > 0) {
+    sectionLabel(dash, r, "Movimientos entre segmentos")
+    r += 1
+    const movesTotal = moves.reduce((acc, m) => acc + m.count, 0)
+    r = miniTable(
+      dash,
+      r,
+      [
+        { header: "Antes", key: "from", col: 1, chip: true },
+        { header: "Ahora", key: "to", col: 2, span: 2, chip: true },
+        { header: "Clientes", key: "count", col: 4, bar: true, numFmt: "#,##0" },
+        { header: "% de los movimientos", key: "share", col: 5, numFmt: "0%", align: "right" },
+        { header: "Quiénes", key: "who", col: 6, span: 3 },
+      ],
+      moves.slice(0, 8).map((m) => ({
+        from: m.from,
+        to: m.to,
+        count: m.count,
+        share: frac(m.count, movesTotal),
+        who: `${m.clients
+          .slice(0, 3)
+          .map((c) => c.name)
+          .join(", ")}${m.count > 3 ? ` y ${m.count - 3} más` : ""}`,
+      })),
+    )
+    if (moves.length > 8) {
+      const more = dash.getCell(r - 1, 1)
+      more.value = `${moves.length - 8} movimientos más en la hoja "Movimientos".`
+      more.font = font(9, { color: C.muted, italic: true })
+    }
   }
 
   // Branches
@@ -936,7 +1015,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
         },
         { header: "% del total", key: "share", col: 5, numFmt: "0%", align: "right" },
         { header: prevWord, key: "previousVisits", col: 6, numFmt: "#,##0" },
-        { header: "Cambio", key: "change", col: 7, delta: true, align: "right" },
+        { header: "Cambio", key: "change", col: 7, delta: true, numFmt: PCT_DELTA, align: "right" },
         { header: "Nuevos", key: "newClients", col: 8, numFmt: "#,##0" },
       ],
       data.team.branches.map((x) => ({
@@ -944,7 +1023,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
         visits: x.visits,
         share: x.share / 100,
         previousVisits: x.previousVisits,
-        change: deltaShort(x.visits, x.previousVisits),
+        change: pctChange(x.visits, x.previousVisits),
         newClients: x.newClients,
       })),
     )
@@ -964,6 +1043,36 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
   foot.value = "Cuik · cuik.org · El detalle para actuar está en las hojas siguientes."
   foot.font = font(9, { color: C.muted, italic: true })
 
+  // ═══════════════ Movimientos de segmento ═══════════════
+  if (data.signals.segmentMoves.length > 0) {
+    addTable(
+      detailSheet(wb, "Movimientos"),
+      [
+        { header: "Cliente", key: "name", width: 26 },
+        { header: "Antes", key: "from", width: 16, chip: true },
+        { header: "Ahora", key: "to", width: 16, chip: true },
+        { header: "Visitas totales", key: "totalVisits", width: 15, numFmt: "#,##0" },
+        { header: "Última visita", key: "lastVisitAt", width: 20 },
+        { header: "Qué hacer", key: "action", width: 52, wrap: true },
+      ],
+      data.signals.segmentMoves.flatMap((m) =>
+        m.clients.map((c) => ({
+          name: c.name,
+          from: m.from,
+          to: m.to,
+          totalVisits: c.totalVisits,
+          lastVisitAt: formatDateForExport(c.lastVisitAt, tz),
+          action: moveAction(m.to, isPoints),
+        })),
+      ),
+      {
+        title: "Quién cambió de segmento",
+        subtitle: `Segmento al cierre de ${data.compareLabel} frente al cierre de este período. "Registro nuevo" = se registró en el período.`,
+        filter: true,
+      },
+    )
+  }
+
   // ═══════════════ Cajeros ═══════════════
   if (data.team.showCashiers) {
     const cashierTotal = data.team.cashiers.reduce((a, c) => a + c.visits, 0)
@@ -975,7 +1084,14 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
         { header: `Visitas ${periodWord}`, key: "visits", width: 16, bar: true, numFmt: "#,##0" },
         { header: "% del total", key: "share", width: 12, numFmt: "0%", align: "right" },
         { header: prevWord, key: "previousVisits", width: 16, numFmt: "#,##0" },
-        { header: "Cambio", key: "change", width: 12, delta: true, align: "right" },
+        {
+          header: "Cambio",
+          key: "change",
+          width: 12,
+          delta: true,
+          numFmt: PCT_DELTA,
+          align: "right",
+        },
         { header: "Días activos", key: "activeDays", width: 13, numFmt: "#,##0" },
         { header: "Visitas por día activo", key: "perActiveDay", width: 20, numFmt: "0.0" },
         { header: "Clientes nuevos", key: "newClients", width: 16, numFmt: "#,##0" },
@@ -988,7 +1104,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
         visits: c.visits,
         share: frac(c.visits, cashierTotal),
         previousVisits: c.previousVisits,
-        change: deltaShort(c.visits, c.previousVisits),
+        change: pctChange(c.visits, c.previousVisits),
         activeDays: c.activeDays,
         perActiveDay: c.perActiveDay,
         newClients: c.newClients,
@@ -1000,7 +1116,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
               ? "Cayó a menos de la mitad"
               : "",
       })),
-      { title: "Visitas por cajero", subtitle: CASHIERS_NOTE, freeze: true, filter: true },
+      { title: "Visitas por cajero", subtitle: CASHIERS_NOTE, filter: true },
     )
   }
 
@@ -1048,7 +1164,6 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
       title: isWeekly ? "Clientes que visitaron esta semana" : "Clientes que visitaron este mes",
       subtitle:
         "Ordenados por visitas del período. Sin teléfonos ni correos: contáctalos desde el panel.",
-      freeze: true,
       filter: true,
     },
   )
@@ -1071,7 +1186,14 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
         },
         { header: "Visitas 48 h después (todas)", key: "after", width: 24, numFmt: "#,##0" },
         { header: "Esperado", key: "expected", width: 12, numFmt: "0.0" },
-        { header: "Efecto", key: "lift", width: 12, delta: true, align: "right" },
+        {
+          header: "Efecto",
+          key: "lift",
+          width: 12,
+          delta: true,
+          numFmt: PCT_DELTA,
+          align: "right",
+        },
       ],
       data.campaigns.map((c) => {
         const lift = data.signals.campaignLift.find((l) => l.name === c.name)
@@ -1083,14 +1205,13 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
           responseRate: frac(responders, c.sentCount),
           after: lift?.visitsAfter ?? "",
           expected: lift?.expected ?? "",
-          lift: lift?.liftPct != null ? `${lift.liftPct > 0 ? "+" : ""}${lift.liftPct} %` : "",
+          lift: lift?.liftPct != null ? lift.liftPct / 100 : "",
         }
       }),
       {
         title: isWeekly ? "Campañas push de la semana" : "Campañas push del mes",
         subtitle:
           "Respondieron = recibieron el push y visitaron dentro de las 48 horas siguientes. Efecto = todas las visitas de esas 48 horas frente a lo esperado en cualquier ventana de 48 horas.",
-        freeze: true,
       },
     )
     const responderRows = data.signals.campaignLift.flatMap((l) =>
@@ -1136,7 +1257,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
         lastVisitAt: formatDateForExport(c.lastVisitAt, tz),
         action: 'Campaña "te extrañamos" con incentivo para volver',
       })),
-      { title: "Clientes en riesgo", subtitle: AT_RISK_NOTE, freeze: true, filter: true },
+      { title: "Clientes en riesgo", subtitle: AT_RISK_NOTE, filter: true },
     )
   }
 
@@ -1171,7 +1292,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
         { header: "Hora pico", key: "peakHour", width: 10, align: "center" },
       ],
       data.daily.map((x) => ({ ...x, weekday: capitalize(x.weekday), peakHour: x.peakHour ?? "" })),
-      { title: `Visitas por día · ${capitalize(data.periodLabel)}`, freeze: true, filter: true },
+      { title: `Visitas por día · ${capitalize(data.periodLabel)}`, filter: true },
     )
     addTable(
       detailSheet(wb, "Semanas del mes"),
@@ -1184,7 +1305,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
         { header: rewardsWord, key: "rewardsRedeemed", width: 18, numFmt: "#,##0" },
       ],
       data.monthly.weeks.map((w) => ({ ...w })),
-      { title: "Semanas del mes", freeze: true },
+      { title: "Semanas del mes" },
     )
     addCumulativeSheets(wb, data.monthly.cumulative, data, tz)
   }
@@ -1228,7 +1349,7 @@ export function addCumulativeSheets(
       { header: "Premios canjeados", key: "rewardsRedeemed", width: 18, numFmt: "#,##0" },
     ],
     c.months.map((m) => ({ ...m, label: capitalize(m.label) })),
-    { title: "Mes a mes", freeze: true },
+    { title: "Mes a mes" },
   )
 
   addTable(
@@ -1245,7 +1366,7 @@ export function addCumulativeSheets(
       },
     ],
     c.topClients.map((t) => ({ ...t, lastVisitAt: formatDateForExport(t.lastVisitAt, tz) })),
-    { title: "Tus 20 clientes históricos", freeze: true },
+    { title: "Tus 20 clientes históricos" },
   )
 
   addTable(
