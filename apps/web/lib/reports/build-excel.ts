@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs"
 import { formatDateForExport } from "@/lib/format-date"
 import type { Cumulative, ReportData } from "./compute-report"
+import { buildInsights } from "./insights"
 import { dayLabel, deltaShort, weekdayName } from "./period"
 
 /**
@@ -134,6 +135,32 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
     rows,
     4,
   )
+
+  // ── Insights (only when a rule fired) ─────────────────────────────
+  const insights = buildInsights(data)
+  if (insights.length > 0) {
+    const sheet = wb.addWorksheet("Insights")
+    addTable(
+      sheet,
+      [
+        { header: "Prioridad", key: "prio", width: 10 },
+        { header: "Tema", key: "title", width: 34 },
+        { header: "Qué pasó", key: "what", width: 60 },
+        { header: "Por qué importa", key: "why", width: 60 },
+        { header: "Qué hacer", key: "action", width: 60 },
+      ],
+      insights.map((i, idx) => ({
+        prio: idx + 1,
+        title: `${i.tone === "good" ? "▲ " : i.tone === "warn" ? "▼ " : ""}${i.title}`,
+        what: i.what,
+        why: i.why,
+        action: i.action,
+      })),
+    )
+    for (let r = 2; r <= insights.length + 1; r++) {
+      sheet.getRow(r).alignment = { wrapText: true, vertical: "top" }
+    }
+  }
 
   // ── Visitas por día ───────────────────────────────────────────────
   addTable(

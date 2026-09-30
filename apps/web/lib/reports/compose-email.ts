@@ -1,5 +1,6 @@
 import type { ReportePeriodicoProps, ReportSectionProps } from "@cuik/email"
 import type { ReportData } from "./compute-report"
+import { buildInsights, insightLine } from "./insights"
 import { type Delta, dayLabel, deltaShort } from "./period"
 
 /**
@@ -63,7 +64,11 @@ export function composeReportEmail(
 
   const team = teamItems(data, isWeekly)
 
+  // Top 4, and only the ones worth opening the email with (score >= 30).
+  const insights = buildInsights(data, 4, 30).map(insightLine)
+
   const sections: ReportSectionProps[] = [
+    ...(insights.length > 0 ? [{ title: "Lo más importante", items: insights }] : []),
     { title: "Lo que pasó", items: happened },
     ...(team.length > 0 ? [{ title: "Tus sucursales y cajeros", items: team }] : []),
     {

@@ -6,7 +6,9 @@ import { getAtRiskClients } from "@/lib/loyalty/churn-detection"
 import type { ClientSegment, SegmentationThresholds } from "@/lib/loyalty/client-segments"
 import { computeClientSegment, getThresholds, SEGMENT_LABELS } from "@/lib/loyalty/client-segments"
 import { parseAvgDays, parseVisitDate } from "@/lib/loyalty/visit-stats"
+import { computeSignals } from "./compute-signals"
 import { computeTeam, type TeamData } from "./compute-team"
+import type { ReportSignals } from "./insights"
 import {
   addDays,
   type Delta,
@@ -147,6 +149,8 @@ export type ReportData = {
   birthdayAutomationEnabled: boolean
   /** Branch and cashier breakdown (who is registering visits and where). */
   team: TeamData
+  /** Extra aggregates for the insight rules (baseline, mix, rhythm, campaigns, usage, cohorts). */
+  signals: ReportSignals
   /** Only on monthly reports. */
   monthly: {
     weeks: WeekRow[]
@@ -434,6 +438,21 @@ export async function computeReport(params: {
   const compareLabel = kind === "weekly" ? "la semana anterior" : "el mes anterior"
   const topClients = clientRows.slice(0, 3)
 
+  const signals = await computeSignals({
+    tenantId,
+    kind,
+    period,
+    previous,
+    programType,
+    automations: tenant.automations,
+    daily,
+    campaigns: campaignRows,
+    periodVisits: cur.visits,
+    local,
+    within,
+    totalsFor,
+  })
+
   return {
     kind,
     tenant: {
@@ -466,6 +485,7 @@ export async function computeReport(params: {
     birthdays,
     birthdayAutomationEnabled: birthdayEnabled,
     team,
+    signals,
     monthly,
   }
 }

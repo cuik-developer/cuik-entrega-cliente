@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { composeReportEmail, reportPreview, reportSubject, teamItems } from "./compose-email"
 import type { ReportData } from "./compute-report"
+import { EMPTY_SIGNALS } from "./insights"
 import { delta } from "./period"
 
 function kpi(current: number, previous: number) {
@@ -95,7 +96,17 @@ const base: ReportData = {
   ],
   birthdayAutomationEnabled: true,
   team: { branches: [], cashiers: [], showBranches: false, showCashiers: false },
+  signals: EMPTY_SIGNALS,
   monthly: null,
+}
+
+const byTitle = (
+  e: { sections: Array<{ title: string; items: string[]; link?: unknown }> },
+  t: string,
+) => {
+  const s = e.sections.find((x) => x.title === t)
+  if (!s) throw new Error(`section ${t} missing`)
+  return s
 }
 
 const urls = {
@@ -129,7 +140,9 @@ describe("composeReportEmail", () => {
 
   it("writes the happened / loyal / act sections in plain Spanish", () => {
     const e = composeReportEmail(base, urls)
-    const [happened, loyal, act] = e.sections
+    const happened = byTitle(e, "Lo que pasó")
+    const loyal = byTitle(e, "Tus clientes más fieles de la semana")
+    const act = byTitle(e, "Para actuar esta semana")
     expect(happened.items[0]).toBe(
       "El día más fuerte fue el sábado 12 con 11 visitas. El más flojo, el martes 8 con 2.",
     )
@@ -167,8 +180,8 @@ describe("composeReportEmail", () => {
       campaigns: [],
     }
     const e = composeReportEmail(quiet, urls)
-    expect(e.sections[0].items[0]).toBe("No hubo visitas esta semana.")
-    expect(e.sections[2].link).toBeUndefined()
+    expect(byTitle(e, "Lo que pasó").items[0]).toBe("No hubo visitas esta semana.")
+    expect(byTitle(e, "Para actuar esta semana").link).toBeUndefined()
   })
 
   it("adds the all-time section on monthly reports", () => {
@@ -224,10 +237,10 @@ describe("composeReportEmail", () => {
     }
     const e = composeReportEmail(m, urls)
     expect(e.heading).toBe("Setiembre en Mascota Veloz")
-    expect(e.sections[0].items).toContain(
+    expect(byTitle(e, "Lo que pasó").items).toContain(
       "Tu mejor semana fue la semana 2 (7 al 13) con 42 visitas.",
     )
-    expect(e.sections[0].items).toContain(
+    expect(byTitle(e, "Lo que pasó").items).toContain(
       "El mismo mes del año pasado tuviste 120 visitas (-65 %).",
     )
     const last = e.sections[e.sections.length - 1]
@@ -310,6 +323,6 @@ describe("teamItems", () => {
     expect(items[2]).toContain("Cajero más activo: Rosa con 20 visitas en 5 días (4 por día)")
     expect(items[3]).toContain("2 cajeros no registraron ninguna visita esta semana: Luis, Pedro")
     const e = composeReportEmail(data, urls)
-    expect(e.sections[1].title).toBe("Tus sucursales y cajeros")
+    expect(byTitle(e, "Tus sucursales y cajeros").items).toEqual(items)
   })
 })
