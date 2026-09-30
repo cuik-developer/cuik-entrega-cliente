@@ -10,8 +10,7 @@ import { dayLabel, deltaShort, weekdayName } from "./period"
  */
 
 const CASHIERS_NOTE =
-  'Visitas registradas por cada persona del equipo. "Días activos" = días de la semana en que registró al menos una visita. ' +
-  "Un cajero con 0 visitas en una sede con movimiento suele significar que no está ofreciendo el programa: vale una conversación."
+  '"Días activos" = días del período en que la persona registró al menos una visita.'
 
 const AT_RISK_NOTE =
   "Estos clientes están en riesgo por su naturaleza: solían venir seguido y dejaron de hacerlo. " +
@@ -180,7 +179,7 @@ export async function buildReportXlsx(data: ReportData): Promise<Buffer> {
     sheet.getCell("A1").value = CASHIERS_NOTE
     sheet.getCell("A1").alignment = { wrapText: true, vertical: "top" }
     sheet.mergeCells("A1:H1")
-    sheet.getRow(1).height = 48
+    sheet.getRow(1).height = 20
     addTable(
       sheet,
       [
