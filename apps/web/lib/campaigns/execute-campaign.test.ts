@@ -120,6 +120,17 @@ vi.mock("@cuik/wallet/google", () => ({
 vi.mock("@cuik/wallet/shared", () => ({
   resolveTemplate: (template: string, ctx: { client: { name: string } }) =>
     template.replaceAll("{{client.name}}", ctx.client.name),
+  // Mirrors the real validator: issuer id + base64 service account, same vars as the rest of the app
+  validateGoogleEnv: () => {
+    const issuerId = process.env.GOOGLE_WALLET_ISSUER_ID
+    const b64 = process.env.GOOGLE_WALLET_SA_JSON_B64
+    if (!issuerId || !b64) return null
+    const sa = JSON.parse(Buffer.from(b64, "base64").toString("utf-8"))
+    return {
+      issuerId,
+      serviceAccountJson: { client_email: sa.client_email, private_key: sa.private_key },
+    }
+  },
 }))
 
 vi.mock("./client-template-context", () => ({
@@ -323,14 +334,16 @@ describe("executeCampaign", () => {
   describe("Google Wallet", () => {
     const withGoogleEnv = () => {
       process.env.GOOGLE_WALLET_ISSUER_ID = "3388000000012345678"
-      process.env.GOOGLE_SERVICE_ACCOUNT_JSON = JSON.stringify({
-        client_email: "sa@example.iam.gserviceaccount.com",
-        private_key: "-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----",
-      })
+      process.env.GOOGLE_WALLET_SA_JSON_B64 = Buffer.from(
+        JSON.stringify({
+          client_email: "sa@example.iam.gserviceaccount.com",
+          private_key: "-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----",
+        }),
+      ).toString("base64")
     }
     const clearGoogleEnv = () => {
       delete process.env.GOOGLE_WALLET_ISSUER_ID
-      delete process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+      delete process.env.GOOGLE_WALLET_SA_JSON_B64
     }
 
     const queueGoogleFlow = (message: string, type = "push") => {

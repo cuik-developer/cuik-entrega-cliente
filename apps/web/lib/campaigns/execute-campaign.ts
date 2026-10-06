@@ -12,7 +12,7 @@ import {
 import type { CampaignExecutionResult, SegmentFilter } from "@cuik/shared/types/campaign"
 import { sendApnsPush } from "@cuik/wallet/apple"
 import { addLoyaltyObjectMessage, getGoogleAccessToken } from "@cuik/wallet/google"
-import { resolveTemplate } from "@cuik/wallet/shared"
+import { resolveTemplate, validateGoogleEnv } from "@cuik/wallet/shared"
 import type { SegmentationThresholds } from "@/lib/loyalty/client-segments"
 import { getThresholds } from "@/lib/loyalty/client-segments"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
@@ -427,11 +427,12 @@ async function processGoogleBatches(
     return { sent: 0, failed: googleClients.length, errors: ["Empty message"] }
   }
 
-  // Load Google credentials from env
-  const issuerId = process.env.GOOGLE_WALLET_ISSUER_ID
-  const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+  // Same env as registration and visit updates (GOOGLE_WALLET_ISSUER_ID +
+  // GOOGLE_WALLET_SA_JSON_B64). The executor used to read a plain-text
+  // GOOGLE_SERVICE_ACCOUNT_JSON that prod never had, so every Android send failed.
+  const googleConfig = validateGoogleEnv()
 
-  if (!issuerId || !serviceAccountJson) {
+  if (!googleConfig) {
     for (const client of googleClients) {
       await recordNotification(
         campaignId,
@@ -447,14 +448,7 @@ async function processGoogleBatches(
   // Get access token for all Google operations
   let accessToken: string
   try {
-    const parsed = JSON.parse(serviceAccountJson)
-    accessToken = await getGoogleAccessToken({
-      issuerId,
-      serviceAccountJson: {
-        client_email: parsed.client_email,
-        private_key: parsed.private_key,
-      },
-    })
+    accessToken = await getGoogleAccessToken(googleConfig)
   } catch (_err) {
     for (const client of googleClients) {
       await recordNotification(

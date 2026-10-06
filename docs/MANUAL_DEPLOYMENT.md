@@ -252,7 +252,6 @@ base64 -i AuthKey_XXXXXXXXXX.p8 | tr -d '\n'
 |---|---|---|
 | `GOOGLE_WALLET_ISSUER_ID` | * | Issuer ID de Google Wallet API (numerico) |
 | `GOOGLE_WALLET_SA_JSON_B64` | * | JSON completo de la Service Account, codificado en base64 |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | No | JSON de Service Account en texto plano (alternativa para campanas) |
 
 **Como codificar la Service Account:**
 ```bash
