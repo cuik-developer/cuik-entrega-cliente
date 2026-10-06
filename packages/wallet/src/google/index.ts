@@ -7,6 +7,15 @@ export {
 } from "./add-message"
 export { clearGoogleTokenCache, getGoogleAccessToken } from "./auth"
 export {
+  clearGoogleCallbackKeyCache,
+  GOOGLE_WALLET_CALLBACK_PATH,
+  type GoogleCallbackEventType,
+  type GoogleCallbackMessage,
+  googleWalletCallbackUrl,
+  type VerifyCallbackResult,
+  verifyGoogleWalletCallback,
+} from "./callback"
+export {
   buildGoogleClassId,
   clearLoyaltyClassCache,
   type EnsureLoyaltyClassParams,

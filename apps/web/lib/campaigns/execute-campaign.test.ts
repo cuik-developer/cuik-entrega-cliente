@@ -475,6 +475,47 @@ describe("executeCampaign", () => {
       clearGoogleEnv()
     })
 
+    it("skips a pass that Google reported removed from the phone", async () => {
+      withGoogleEnv()
+      mockState.pushSelectResult([{ ...DRAFT_CAMPAIGN, message: "Promo", type: "push" }])
+      mockState.pushSelectResult([{ filter: { preset: "todos" } }])
+      mockState.pushSelectResult([{ businessType: "restaurant", segmentationConfig: null }])
+      mockState.pushSelectResult([
+        {
+          clientId: "client-1",
+          serialNumber: "serial-1",
+          googleObjectId: "issuer.serial-1",
+          googleSavedAt: new Date("2026-10-01"),
+          googleDeletedAt: new Date("2026-10-05"),
+        },
+        {
+          clientId: "client-2",
+          serialNumber: "serial-2",
+          googleObjectId: "issuer.serial-2",
+          googleSavedAt: new Date("2026-10-05"),
+          googleDeletedAt: new Date("2026-10-01"),
+        },
+      ])
+      mockState.pushSelectResult([])
+      mockState.pushSelectResult([{ name: "Cafe" }])
+      mockResolveSegment.mockResolvedValueOnce({ clientIds: ["client-1", "client-2"], count: 2 })
+      mockGetGoogleAccessToken.mockResolvedValueOnce("google-token")
+      mockBuildContexts.mockResolvedValueOnce(new Map([["client-2", { client: { name: "Ana" } }]]))
+      mockAddMessage.mockResolvedValueOnce({
+        ok: true,
+        objectId: "issuer.serial-2",
+        notified: true,
+      })
+
+      const result = await executeCampaign("campaign-1")
+
+      // client-1: "del" newer than "save" → not on the phone, skipped. client-2 re-saved → sent.
+      expect(result.sentCount).toBe(1)
+      expect(mockAddMessage).toHaveBeenCalledTimes(1)
+      expect(mockAddMessage.mock.calls[0]?.[0].objectId).toBe("issuer.serial-2")
+      clearGoogleEnv()
+    })
+
     it("records failures when Google credentials are missing", async () => {
       clearGoogleEnv()
       queueGoogleFlow("Promo")

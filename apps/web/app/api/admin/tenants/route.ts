@@ -116,7 +116,7 @@ export async function GET(request: Request) {
                  LEFT JOIN passes.apple_devices ad ON ad.serial_number = pi.serial_number
                  JOIN loyalty.clients c ON c.id = pi.client_id
                 WHERE c.tenant_id = t.id
-                  AND (ad.serial_number IS NOT NULL OR (pi.google_save_url IS NOT NULL AND pi.google_save_url <> ''))) AS installed
+                  AND (ad.serial_number IS NOT NULL OR (pi.google_save_url IS NOT NULL AND pi.google_save_url <> '' AND NOT (pi.google_deleted_at IS NOT NULL AND (pi.google_saved_at IS NULL OR pi.google_deleted_at > pi.google_saved_at))))) AS installed
             FROM tenants t WHERE t.id IN (${tenantIdList})`,
         ),
         (() => {

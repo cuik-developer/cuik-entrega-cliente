@@ -26,6 +26,8 @@ type ClientPassInfo = {
   clientId: string
   serialNumber: string
   googleObjectId: string | null
+  /** Google's "del" callback is newer than its last "save": the pass is gone from the phone. */
+  googleRemoved: boolean
   appleDeviceTokens: string[]
 }
 
@@ -189,13 +191,16 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
     // Process Google Wallet message batches. Google only notifies through
     // addMessage, so a silent "wallet_update" has nothing to send on Android:
     // those passes refresh on the next visit (triggerWalletUpdate).
-    // Every client gets a Google object at registration (Google has no install
-    // callback), so "Android" = has the object and no iPhone registered the pass.
-    // Same proxy as the wallet-distribution chart; avoids double-counting iPhones.
+    // Every client gets a Google object at registration, so "Android" = has the
+    // object, no iPhone registered the pass, and Google has not reported it
+    // removed (save/delete callback). Same rule as the wallet-distribution chart.
     const googleClients =
       campaign.type === "wallet_update"
         ? []
-        : clientPassMap.filter((c) => c.googleObjectId !== null && c.appleDeviceTokens.length === 0)
+        : clientPassMap.filter(
+            (c) =>
+              c.googleObjectId !== null && !c.googleRemoved && c.appleDeviceTokens.length === 0,
+          )
     if (googleClients.length > 0) {
       const googleResult = await processGoogleBatches(
         campaignId,
@@ -257,6 +262,8 @@ async function getClientPassInfo(clientIds: string[]): Promise<ClientPassInfo[]>
       clientId: passInstances.clientId,
       serialNumber: passInstances.serialNumber,
       googleObjectId: passInstances.googleObjectId,
+      googleSavedAt: passInstances.googleSavedAt,
+      googleDeletedAt: passInstances.googleDeletedAt,
     })
     .from(passInstances)
     .where(
@@ -297,6 +304,10 @@ async function getClientPassInfo(clientIds: string[]): Promise<ClientPassInfo[]>
     clientId: pass.clientId,
     serialNumber: pass.serialNumber,
     googleObjectId: pass.googleObjectId,
+    googleRemoved:
+      pass.googleDeletedAt !== null &&
+      pass.googleDeletedAt !== undefined &&
+      (!pass.googleSavedAt || pass.googleDeletedAt > pass.googleSavedAt),
     appleDeviceTokens: deviceTokenMap.get(pass.serialNumber) ?? [],
   }))
 }

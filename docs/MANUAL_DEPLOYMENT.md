@@ -665,6 +665,26 @@ Para verificar end-to-end:
 2. Registrar un cliente
 3. El cliente deberia ver el boton "Add to Google Wallet" en su pagina de bienvenida
 
+### 6.5 Callback de guardado / borrado (instalaciones Android)
+
+Google avisa cuando un usuario guarda o borra el pase llamando a la URL registrada
+en `callbackOptions.url` de cada clase. La app la registra sola:
+
+- URL: `${NEXT_PUBLIC_APP_URL}/api/webhooks/google-wallet` (solo si la app corre en HTTPS;
+  en local no se registra nada).
+- Clases nuevas: `callbackOptions` va en el POST. Clases existentes: en el siguiente
+  registro de un cliente (o al actualizar el diseno desde el super-admin) la app hace un
+  PATCH con la URL. Se ve en logs como `[Wallet:Google] callbackOptions registered for <classId>`.
+- Requiere la migracion `0023_google_wallet_callbacks.sql` aplicada ANTES de desplegar el codigo.
+- El endpoint no usa sesion: valida la firma ECv2SigningOnly contra
+  `https://pay.google.com/gp/m/issuer/keys` con el Issuer ID como destinatario. Un mensaje
+  invalido responde 401 y se loguea como `[Wallet:GoogleCallback] rejected: ...`.
+- Google documenta el callback como "best effort": reintenta, pero no garantiza entrega.
+  No hay `robots.txt` que bloquee a Googlebot (requisito de Google para el callback).
+
+Verificar en prod: guardar el pase en un Android y consultar
+`SELECT event_type, object_id, received_at FROM passes.google_callback_events ORDER BY received_at DESC LIMIT 5;`
+
 ---
 
 ## 7. Setup de almacenamiento (MinIO/S3)

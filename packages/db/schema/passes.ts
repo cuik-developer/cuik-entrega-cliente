@@ -1,4 +1,5 @@
 import {
+  bigint,
   boolean,
   index,
   integer,
@@ -82,9 +83,31 @@ export const passInstances = passesSchema.table(
     campaignMessage: text("campaign_message"),
     lastUpdatedAt: timestamp("last_updated_at"),
     deviceTokens: text("device_tokens").array(),
+    // Google save/delete callbacks (migration 0023). Both NULL = no callback
+    // yet; "not installed" only when deleted_at is newer than saved_at.
+    googleSavedAt: timestamp("google_saved_at"),
+    googleDeletedAt: timestamp("google_deleted_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (table) => [index("pass_instances_client_idx").on(table.clientId)],
+  (table) => [
+    index("pass_instances_client_idx").on(table.clientId),
+    index("pass_instances_google_object_idx").on(table.googleObjectId),
+  ],
+)
+
+/** Raw log of Google Wallet callbacks; `nonce` is Google's duplicate-delivery key. */
+export const googleCallbackEvents = passesSchema.table(
+  "google_callback_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nonce: text("nonce").notNull().unique(),
+    eventType: text("event_type").notNull(),
+    objectId: text("object_id").notNull(),
+    classId: text("class_id"),
+    expTimeMillis: bigint("exp_time_millis", { mode: "number" }),
+    receivedAt: timestamp("received_at").defaultNow().notNull(),
+  },
+  (table) => [index("google_callback_events_object_idx").on(table.objectId, table.receivedAt)],
 )
 
 export const appleDevices = passesSchema.table(

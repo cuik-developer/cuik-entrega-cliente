@@ -135,7 +135,7 @@ export async function GET(request: Request) {
       (SELECT count(DISTINCT pi.client_id)::int FROM passes.pass_instances pi
          LEFT JOIN passes.apple_devices ad ON ad.serial_number = pi.serial_number
          JOIN loyalty.clients c ON c.id = pi.client_id
-        WHERE c.tenant_id = t.id AND (ad.serial_number IS NOT NULL OR (pi.google_save_url IS NOT NULL AND pi.google_save_url <> ''))) AS installed,
+        WHERE c.tenant_id = t.id AND (ad.serial_number IS NOT NULL OR (pi.google_save_url IS NOT NULL AND pi.google_save_url <> '' AND NOT (pi.google_deleted_at IS NOT NULL AND (pi.google_saved_at IS NULL OR pi.google_deleted_at > pi.google_saved_at))))) AS installed,
       ((SELECT count(*)::int FROM loyalty.rewards r WHERE r.tenant_id = t.id AND r.status = 'redeemed' AND r.redeemed_at >= now() - interval '30 days')
        + (SELECT count(*)::int FROM loyalty.points_transactions pt WHERE pt.tenant_id = t.id AND pt.type = 'redeem' AND pt.created_at >= now() - interval '30 days')) AS redemptions_30d,
       t.apple_config->>'mode' AS apple_mode

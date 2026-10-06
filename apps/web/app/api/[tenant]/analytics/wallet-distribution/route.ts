@@ -28,8 +28,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     // - Apple: the pass is actually installed — an iPhone registered the serial
     //   in passes.apple_devices (Apple's web service callback). The pass URL
     //   alone is not a signal: every client gets one at registration.
-    // - Google: has a "save to Google Wallet" link and no Apple device. Google
-    //   has no install callback here, so this is the best available proxy.
+    // - Google: has a "save to Google Wallet" link, no Apple device, and Google's
+    //   save/delete callback has not reported the pass removed. Passes saved
+    //   before the callback existed have no "save" row, so absence of a
+    //   callback still counts as installed (best available proxy).
     // - Sin wallet: neither.
     const result = await db.execute(
       sql`
@@ -37,7 +39,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
           SELECT
             c."id" AS "client_id",
             BOOL_OR(ad."serial_number" IS NOT NULL) AS "has_apple",
-            BOOL_OR(pi."google_save_url" IS NOT NULL AND pi."google_save_url" <> '') AS "has_google"
+            BOOL_OR(
+              pi."google_save_url" IS NOT NULL AND pi."google_save_url" <> ''
+              AND NOT (pi."google_deleted_at" IS NOT NULL
+                       AND (pi."google_saved_at" IS NULL OR pi."google_deleted_at" > pi."google_saved_at"))
+            ) AS "has_google"
           FROM loyalty.clients c
           LEFT JOIN passes.pass_instances pi ON pi."client_id" = c."id"
           LEFT JOIN passes.apple_devices ad ON ad."serial_number" = pi."serial_number"

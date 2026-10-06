@@ -1,5 +1,7 @@
 // ─── Google Wallet Loyalty Class Management ──────────────────────────────
 
+import { googleWalletCallbackUrl } from "./callback"
+
 const LOYALTY_CLASS_API_BASE = "https://walletobjects.googleapis.com/walletobjects/v1/loyaltyClass"
 
 // ─── Types ────────────────────────────────────────────────────────────────
@@ -14,6 +16,12 @@ export type EnsureLoyaltyClassParams = {
   hexBackgroundColor?: string
   heroImageUrl?: string
   wideProgramLogoUrl?: string
+  /**
+   * HTTPS URL Google calls on every save/delete of an object of this class.
+   * Defaults to `${NEXT_PUBLIC_APP_URL}/api/webhooks/google-wallet`; omitted
+   * (no callback) when the app is not served over HTTPS.
+   */
+  callbackUrl?: string
 }
 
 export type EnsureLoyaltyClassResult =
@@ -61,6 +69,8 @@ export async function ensureLoyaltyClass(
     "Content-Type": "application/json",
   }
 
+  const callbackUrl = params.callbackUrl ?? googleWalletCallbackUrl()
+
   // GET — check if class exists
   try {
     const getResponse = await fetch(`${LOYALTY_CLASS_API_BASE}/${classId}`, {
@@ -69,7 +79,12 @@ export async function ensureLoyaltyClass(
     })
 
     if (getResponse.ok) {
-      confirmedClasses.set(classId, true)
+      // Classes created before callbacks existed: register the URL once.
+      // Failure there is logged, not fatal — the class still works without it.
+      const registered = callbackUrl
+        ? await registerCallbackUrl(classId, headers, getResponse, callbackUrl)
+        : true
+      if (registered) confirmedClasses.set(classId, true)
       return { ok: true, classId, created: false }
     }
 
@@ -119,6 +134,10 @@ export async function ensureLoyaltyClass(
     }
   }
 
+  if (callbackUrl) {
+    classPayload.callbackOptions = { url: callbackUrl }
+  }
+
   try {
     const postResponse = await fetch(LOYALTY_CLASS_API_BASE, {
       method: "POST",
@@ -163,6 +182,8 @@ export type UpdateLoyaltyClassParams = {
   hexBackgroundColor?: string
   heroImageUrl?: string
   wideProgramLogoUrl?: string
+  /** See EnsureLoyaltyClassParams.callbackUrl. PUT replaces the class, so it must be re-sent. */
+  callbackUrl?: string
 }
 
 export type UpdateLoyaltyClassResult =
@@ -215,6 +236,11 @@ export async function updateLoyaltyClass(
     }
   }
 
+  const callbackUrl = params.callbackUrl ?? googleWalletCallbackUrl()
+  if (callbackUrl) {
+    classPayload.callbackOptions = { url: callbackUrl }
+  }
+
   try {
     const putResponse = await fetch(`${LOYALTY_CLASS_API_BASE}/${classId}`, {
       method: "PUT",
@@ -243,6 +269,37 @@ export async function updateLoyaltyClass(
       error: `[Wallet:Google] PUT loyalty class error: ${message}`,
     }
   }
+}
+
+/**
+ * Makes sure an existing class carries our callback URL. Returns true when it
+ * already did or the PATCH succeeded (so the class can be cached as confirmed).
+ */
+async function registerCallbackUrl(
+  classId: string,
+  headers: Record<string, string>,
+  getResponse: Response,
+  callbackUrl: string,
+): Promise<boolean> {
+  const existing = (await getResponse.json().catch(() => null)) as {
+    callbackOptions?: { url?: string }
+  } | null
+  if (!existing || existing.callbackOptions?.url === callbackUrl) return true
+
+  const patchResponse = await fetch(`${LOYALTY_CLASS_API_BASE}/${classId}`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify({ callbackOptions: { url: callbackUrl } }),
+  })
+  if (!patchResponse.ok) {
+    const errorText = await patchResponse.text().catch(() => "Unknown error")
+    console.warn(
+      `[Wallet:Google] PATCH callbackOptions failed for ${classId}: ${patchResponse.status} ${errorText}`,
+    )
+    return false
+  }
+  console.info(`[Wallet:Google] callbackOptions registered for ${classId}`)
+  return true
 }
 
 /**

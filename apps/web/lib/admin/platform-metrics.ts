@@ -181,7 +181,7 @@ export async function computePlatformMetrics(f: MetricsFilters): Promise<Platfor
         inst AS (
           SELECT DISTINCT pi.client_id FROM passes.pass_instances pi
           LEFT JOIN passes.apple_devices ad ON ad.serial_number = pi.serial_number
-          WHERE ad.serial_number IS NOT NULL OR (pi.google_save_url IS NOT NULL AND pi.google_save_url <> '')
+          WHERE ad.serial_number IS NOT NULL OR (pi.google_save_url IS NOT NULL AND pi.google_save_url <> '' AND NOT (pi.google_deleted_at IS NOT NULL AND (pi.google_saved_at IS NULL OR pi.google_deleted_at > pi.google_saved_at)))
         ),
         red AS (
           SELECT r.tenant_id, r.redeemed_at AS at FROM loyalty.rewards r WHERE r.status = 'redeemed' AND r.redeemed_at IS NOT NULL AND r.tenant_id IN (SELECT id FROM s)
@@ -246,7 +246,7 @@ export async function computePlatformMetrics(f: MetricsFilters): Promise<Platfor
         inst AS (
           SELECT DISTINCT pi.client_id FROM passes.pass_instances pi
           LEFT JOIN passes.apple_devices ad ON ad.serial_number = pi.serial_number
-          WHERE ad.serial_number IS NOT NULL OR (pi.google_save_url IS NOT NULL AND pi.google_save_url <> '')
+          WHERE ad.serial_number IS NOT NULL OR (pi.google_save_url IS NOT NULL AND pi.google_save_url <> '' AND NOT (pi.google_deleted_at IS NOT NULL AND (pi.google_saved_at IS NULL OR pi.google_deleted_at > pi.google_saved_at)))
         )
         SELECT t.id, t.name, t.slug, t.status, p.name AS plan, (coalesce(p.price, 0) / 100.0)::numeric(12,2) AS plan_price,
           t.trial_ends_at,
@@ -295,7 +295,7 @@ export async function computePlatformMetrics(f: MetricsFilters): Promise<Platfor
         cw AS (
           SELECT c.id,
             bool_or(ad.serial_number IS NOT NULL) AS has_apple,
-            bool_or(pi.google_save_url IS NOT NULL AND pi.google_save_url <> '') AS has_google
+            bool_or(pi.google_save_url IS NOT NULL AND pi.google_save_url <> '' AND NOT (pi.google_deleted_at IS NOT NULL AND (pi.google_saved_at IS NULL OR pi.google_deleted_at > pi.google_saved_at))) AS has_google
           FROM loyalty.clients c
           LEFT JOIN passes.pass_instances pi ON pi.client_id = c.id
           LEFT JOIN passes.apple_devices ad ON ad.serial_number = pi.serial_number

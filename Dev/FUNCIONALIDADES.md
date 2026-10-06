@@ -237,7 +237,7 @@ Sidebar izquierdo. Rol requerido: `admin` o `super_admin`.
 
 **Top clientes**: tabla de clientes mas activos (lifetime count, no scope a rango), columnas `#`, Nombre, Visitas.
 
-**Distribucion de wallets**: donut chart con Apple / Google / Sin wallet. Logica (sep-2026): **Apple** = el iPhone registro el serial en `passes.apple_devices` (callback real de instalacion; la URL del pase no sirve porque todos la reciben al registrarse); **Google** = tiene `google_save_url` y ningun dispositivo Apple (Google no avisa la instalacion, es el mejor proxy); **Sin wallet** = ninguna de las dos. Sin double-count.
+**Distribucion de wallets**: donut chart con Apple / Google / Sin wallet. Logica (sep-2026): **Apple** = el iPhone registro el serial en `passes.apple_devices` (callback real de instalacion; la URL del pase no sirve porque todos la reciben al registrarse); **Google** = tiene `google_save_url`, ningun dispositivo Apple y Google no reporto el pase como borrado (callback save/del, oct-2026: `google_deleted_at` mas reciente que `google_saved_at` = desinstalado; sin callback se sigue asumiendo instalado porque los pases anteriores al callback no tienen fila "save"); **Sin wallet** = ninguna de las dos. Sin double-count.
 
 **Selector de rango**:
 - Presets: 7 / 30 / 90 dias
@@ -543,10 +543,10 @@ Configurado en `/panel/configuracion` → "Wallet locations":
 |---|---|---|
 | Formato | `.pkpass` firmado con PKCS#7 | `loyaltyObject` JSON vivo |
 | Update | APNs push → device hace fetch | Server POST/PUT a Google API |
-| Confirmacion de instalacion | Si (via Web Service Protocol registration) | No hay callback — se asume |
+| Confirmacion de instalacion | Si (via Web Service Protocol registration) | Callback save/del de Google (oct-2026): la clase lleva `callbackOptions.url` → `POST /api/webhooks/google-wallet`, firmado ECv2SigningOnly y verificado con las claves publicas de Google (`packages/wallet/src/google/callback.ts`). Escribe `pass_instances.google_saved_at` / `google_deleted_at` y loguea en `passes.google_callback_events` (nonce unico = dedupe). Best effort segun Google: puede no llegar |
 | Geofencing | Si | No en esta implementacion |
 | Mensaje de campania | `changeMessage` en APNs payload + backFields | `loyaltyObject.addMessage` con `TEXT_AND_NOTIFY`: Google agrega el mensaje al reverso y manda el push. Limite 3 avisos por pase cada 24 h; pasado el limite se agrega como `TEXT` y la notificacion queda `failed` con ese motivo |
-| A quien se envia la campana | Clientes con dispositivo en `apple_devices` | Clientes con `google_object_id` y sin dispositivo Apple (todos reciben objeto Google al registrarse; el callback de guardado de Google no esta implementado) |
+| A quien se envia la campana | Clientes con dispositivo en `apple_devices` | Clientes con `google_object_id`, sin dispositivo Apple y sin "del" de Google mas reciente que su "save" (todos reciben objeto Google al registrarse) |
 | Variables en el mensaje | Las resuelve el telefono al bajar el pase | Se resuelven en el servidor por cliente (`lib/campaigns/client-template-context.ts`) antes de `addMessage` |
 
 ---
