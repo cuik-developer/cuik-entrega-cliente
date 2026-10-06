@@ -527,8 +527,8 @@ El pase se actualiza **automaticamente** tras:
 | Visita registrada | sellos/puntos, barra de progreso | Apple: APNs silent push → refetch; Google: update silencioso |
 | Ciclo completo | "Premio disponible" en campo principal | Apple + Google: update silencioso |
 | Premio canjeado | Vuelve a "X de Y sellos" | Apple + Google: update silencioso |
-| Campana tipo `push` | `campaignMessage` visible en lock screen | Apple: APNs background push; Google: update con `messages` field |
-| Campana tipo `wallet_update` | Refresh silencioso del pase | Apple: APNs silent; Google: update silencioso |
+| Campana tipo `push` | `campaignMessage` visible en lock screen | Apple: APNs background push; Google: `addMessage` con `TEXT_AND_NOTIFY` (oct-2026; antes se hacia un PUT vacio que nunca notificaba) |
+| Campana tipo `wallet_update` | Refresh silencioso del pase | Apple: APNs silent; Google: no se envia nada (el objeto se refresca en la siguiente visita) |
 
 ### 8.3 Geofencing (locations relevantes)
 
@@ -545,7 +545,9 @@ Configurado en `/panel/configuracion` → "Wallet locations":
 | Update | APNs push → device hace fetch | Server POST/PUT a Google API |
 | Confirmacion de instalacion | Si (via Web Service Protocol registration) | No hay callback — se asume |
 | Geofencing | Si | No en esta implementacion |
-| Mensaje de campania | `changeMessage` en APNs payload + backFields | `messages` field en loyaltyObject |
+| Mensaje de campania | `changeMessage` en APNs payload + backFields | `loyaltyObject.addMessage` con `TEXT_AND_NOTIFY`: Google agrega el mensaje al reverso y manda el push. Limite 3 avisos por pase cada 24 h; pasado el limite se agrega como `TEXT` y la notificacion queda `failed` con ese motivo |
+| A quien se envia la campana | Clientes con dispositivo en `apple_devices` | Clientes con `google_object_id` y sin dispositivo Apple (todos reciben objeto Google al registrarse; el callback de guardado de Google no esta implementado) |
+| Variables en el mensaje | Las resuelve el telefono al bajar el pase | Se resuelven en el servidor por cliente (`lib/campaigns/client-template-context.ts`) antes de `addMessage` |
 
 ---
 

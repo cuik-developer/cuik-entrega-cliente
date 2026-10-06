@@ -114,8 +114,16 @@ vi.mock("@cuik/wallet/apple", () => ({
 
 vi.mock("@cuik/wallet/google", () => ({
   getGoogleAccessToken: vi.fn(),
-  upsertLoyaltyObject: vi.fn(),
-  buildGoogleClassId: vi.fn(() => "issuer.cuik_loyalty"),
+  addLoyaltyObjectMessage: vi.fn(),
+}))
+
+vi.mock("@cuik/wallet/shared", () => ({
+  resolveTemplate: (template: string, ctx: { client: { name: string } }) =>
+    template.replaceAll("{{client.name}}", ctx.client.name),
+}))
+
+vi.mock("./client-template-context", () => ({
+  buildClientTemplateContexts: vi.fn(),
 }))
 
 vi.mock("@/lib/wallet/tenant-apple-config", () => ({
@@ -136,11 +144,16 @@ vi.mock("./resolve-segment", () => ({
 }))
 
 import { sendApnsPush } from "@cuik/wallet/apple"
+import { addLoyaltyObjectMessage, getGoogleAccessToken } from "@cuik/wallet/google"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
+import { buildClientTemplateContexts } from "./client-template-context"
 import { executeCampaign } from "./execute-campaign"
 import { resolveSegment } from "./resolve-segment"
 
 const mockResolveSegment = vi.mocked(resolveSegment)
+const mockAddMessage = vi.mocked(addLoyaltyObjectMessage)
+const mockGetGoogleAccessToken = vi.mocked(getGoogleAccessToken)
+const mockBuildContexts = vi.mocked(buildClientTemplateContexts)
 const mockSendApnsPush = vi.mocked(sendApnsPush)
 const mockGetTenantAppleConfig = vi.mocked(getTenantAppleConfig)
 
@@ -305,6 +318,161 @@ describe("executeCampaign", () => {
     delete process.env.APPLE_APNS_P8_BASE64
     delete process.env.APPLE_APNS_TEAM_ID
     delete process.env.APPLE_APNS_KEY_ID
+  })
+
+  describe("Google Wallet", () => {
+    const withGoogleEnv = () => {
+      process.env.GOOGLE_WALLET_ISSUER_ID = "3388000000012345678"
+      process.env.GOOGLE_SERVICE_ACCOUNT_JSON = JSON.stringify({
+        client_email: "sa@example.iam.gserviceaccount.com",
+        private_key: "-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----",
+      })
+    }
+    const clearGoogleEnv = () => {
+      delete process.env.GOOGLE_WALLET_ISSUER_ID
+      delete process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+    }
+
+    const queueGoogleFlow = (message: string, type = "push") => {
+      mockState.pushSelectResult([{ ...DRAFT_CAMPAIGN, message, type }])
+      mockState.pushSelectResult([{ filter: { preset: "todos" } }])
+      mockState.pushSelectResult([{ businessType: "restaurant", segmentationConfig: null }])
+      // getClientPassInfo: pass instances (Android only: no Apple device rows)
+      mockState.pushSelectResult([
+        {
+          clientId: "client-1",
+          serialNumber: "cuik:dfrios:abc",
+          googleObjectId: "3388000000012345678.cuik-dfrios-abc",
+        },
+      ])
+      mockState.pushSelectResult([])
+      // processGoogleBatches: tenant name for the message header
+      mockState.pushSelectResult([{ name: "D'frios" }])
+      mockResolveSegment.mockResolvedValueOnce({ clientIds: ["client-1"], count: 1 })
+      mockGetGoogleAccessToken.mockResolvedValueOnce("google-token")
+      mockBuildContexts.mockResolvedValueOnce(new Map([["client-1", { client: { name: "Vito" } }]]))
+    }
+
+    it("sends the resolved message through addMessage with the business as header", async () => {
+      withGoogleEnv()
+      queueGoogleFlow("Hola {{client.name}}, tus puntos vencen el miércoles")
+      mockAddMessage.mockResolvedValueOnce({
+        ok: true,
+        objectId: "3388000000012345678.cuik-dfrios-abc",
+        notified: true,
+      })
+
+      const result = await executeCampaign("campaign-1")
+
+      expect(result.status).toBe("sent")
+      expect(result.sentCount).toBe(1)
+      expect(result.failedCount).toBe(0)
+      expect(mockAddMessage).toHaveBeenCalledTimes(1)
+      expect(mockAddMessage).toHaveBeenCalledWith({
+        objectId: "3388000000012345678.cuik-dfrios-abc",
+        header: "D'frios",
+        body: "Hola Vito, tus puntos vencen el miércoles",
+        messageId: "campaign-1",
+        accessToken: "google-token",
+      })
+      clearGoogleEnv()
+    })
+
+    it("counts the client as failed when Google only kept the text (quota exhausted)", async () => {
+      withGoogleEnv()
+      queueGoogleFlow("Promo del viernes")
+      mockAddMessage.mockResolvedValueOnce({
+        ok: true,
+        objectId: "3388000000012345678.cuik-dfrios-abc",
+        notified: false,
+      })
+
+      const result = await executeCampaign("campaign-1")
+
+      expect(result.sentCount).toBe(0)
+      expect(result.failedCount).toBe(1)
+      clearGoogleEnv()
+    })
+
+    it("skips Google entirely for silent wallet_update campaigns", async () => {
+      withGoogleEnv()
+      queueGoogleFlow("", "wallet_update")
+
+      const result = await executeCampaign("campaign-1")
+
+      expect(result.status).toBe("sent")
+      expect(result.sentCount).toBe(0)
+      expect(mockAddMessage).not.toHaveBeenCalled()
+      clearGoogleEnv()
+    })
+
+    it("does not send through Google to a client whose iPhone installed the pass", async () => {
+      withGoogleEnv()
+      mockState.pushSelectResult([{ ...DRAFT_CAMPAIGN, message: "Promo", type: "push" }])
+      mockState.pushSelectResult([{ filter: { preset: "todos" } }])
+      mockState.pushSelectResult([{ businessType: "restaurant", segmentationConfig: null }])
+      // Every client has a Google object (created at registration)...
+      mockState.pushSelectResult([
+        { clientId: "client-1", serialNumber: "serial-1", googleObjectId: "issuer.serial-1" },
+        { clientId: "client-2", serialNumber: "serial-2", googleObjectId: "issuer.serial-2" },
+      ])
+      // ...but only client-1 registered an iPhone
+      mockState.pushSelectResult([{ serialNumber: "serial-1", pushToken: "token-1" }])
+      // processGoogleBatches: tenant name
+      mockState.pushSelectResult([{ name: "Cafe" }])
+      mockResolveSegment.mockResolvedValueOnce({ clientIds: ["client-1", "client-2"], count: 2 })
+      mockGetGoogleAccessToken.mockResolvedValueOnce("google-token")
+      mockBuildContexts.mockResolvedValueOnce(new Map([["client-2", { client: { name: "Ana" } }]]))
+
+      process.env.APPLE_APNS_P8_BASE64 = Buffer.from("fake-key").toString("base64")
+      process.env.APPLE_APNS_TEAM_ID = "TEAM123"
+      process.env.APPLE_APNS_KEY_ID = "KEY123"
+      mockGetTenantAppleConfig.mockResolvedValueOnce({
+        passTypeId: "pass.com.cuik",
+        teamId: "TEAM123",
+        signerCertBase64: "",
+        signerKeyBase64: "",
+        wwdrBase64: "",
+        authSecret: "test-secret",
+        webServiceUrl: "https://example.com",
+      })
+      mockSendApnsPush.mockResolvedValueOnce({
+        sent: 1,
+        total: 1,
+        results: [{ ok: true, tokenPrefix: "token-1x", status: 200, envUsed: "sandbox" as const }],
+      })
+      mockAddMessage.mockResolvedValueOnce({
+        ok: true,
+        objectId: "issuer.serial-2",
+        notified: true,
+      })
+
+      const result = await executeCampaign("campaign-1")
+
+      // One Apple push + one Google message: 2 sent, no double count for client-1
+      expect(result.sentCount).toBe(2)
+      expect(result.failedCount).toBe(0)
+      expect(mockSendApnsPush).toHaveBeenCalledTimes(1)
+      expect(mockAddMessage).toHaveBeenCalledTimes(1)
+      expect(mockAddMessage.mock.calls[0]?.[0].objectId).toBe("issuer.serial-2")
+
+      delete process.env.APPLE_APNS_P8_BASE64
+      delete process.env.APPLE_APNS_TEAM_ID
+      delete process.env.APPLE_APNS_KEY_ID
+      clearGoogleEnv()
+    })
+
+    it("records failures when Google credentials are missing", async () => {
+      clearGoogleEnv()
+      queueGoogleFlow("Promo")
+
+      const result = await executeCampaign("campaign-1")
+
+      expect(result.status).toBe("failed")
+      expect(result.failedCount).toBe(1)
+      expect(result.errors).toContain("Google credentials not configured")
+      expect(mockAddMessage).not.toHaveBeenCalled()
+    })
   })
 
   it("accepts campaign with 'scheduled' status", async () => {

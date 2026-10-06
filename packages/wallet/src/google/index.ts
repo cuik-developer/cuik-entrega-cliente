@@ -1,5 +1,10 @@
 // ─── Google Wallet Exports ─────────────────────────────────────────────
 
+export {
+  type AddLoyaltyObjectMessageParams,
+  type AddLoyaltyObjectMessageResult,
+  addLoyaltyObjectMessage,
+} from "./add-message"
 export { clearGoogleTokenCache, getGoogleAccessToken } from "./auth"
 export {
   buildGoogleClassId,

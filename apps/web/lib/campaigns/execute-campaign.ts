@@ -11,10 +11,12 @@ import {
 } from "@cuik/db"
 import type { CampaignExecutionResult, SegmentFilter } from "@cuik/shared/types/campaign"
 import { sendApnsPush } from "@cuik/wallet/apple"
-import { buildGoogleClassId, getGoogleAccessToken, upsertLoyaltyObject } from "@cuik/wallet/google"
+import { addLoyaltyObjectMessage, getGoogleAccessToken } from "@cuik/wallet/google"
+import { resolveTemplate } from "@cuik/wallet/shared"
 import type { SegmentationThresholds } from "@/lib/loyalty/client-segments"
 import { getThresholds } from "@/lib/loyalty/client-segments"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
+import { buildClientTemplateContexts } from "./client-template-context"
 import { resolveSegment } from "./resolve-segment"
 
 const APPLE_BATCH_SIZE = 50
@@ -184,8 +186,16 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
       allErrors.push(...appleResult.errors)
     }
 
-    // Process Google wallet update batches
-    const googleClients = clientPassMap.filter((c) => c.googleObjectId !== null)
+    // Process Google Wallet message batches. Google only notifies through
+    // addMessage, so a silent "wallet_update" has nothing to send on Android:
+    // those passes refresh on the next visit (triggerWalletUpdate).
+    // Every client gets a Google object at registration (Google has no install
+    // callback), so "Android" = has the object and no iPhone registered the pass.
+    // Same proxy as the wallet-distribution chart; avoids double-counting iPhones.
+    const googleClients =
+      campaign.type === "wallet_update"
+        ? []
+        : clientPassMap.filter((c) => c.googleObjectId !== null && c.appleDeviceTokens.length === 0)
     if (googleClients.length > 0) {
       const googleResult = await processGoogleBatches(
         campaignId,
@@ -223,10 +233,7 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
     // Restoring to "scheduled" preserves the cron reintent — a transient
     // failure (APNs 5xx, Google API timeout) would otherwise silently
     // demote the campaign to "draft" and it would never be sent.
-    await db
-      .update(campaigns)
-      .set({ status: originalStatus })
-      .where(eq(campaigns.id, campaignId))
+    await db.update(campaigns).set({ status: originalStatus }).where(eq(campaigns.id, campaignId))
 
     return {
       campaignId,
@@ -390,19 +397,35 @@ async function processAppleBatches(
 }
 
 /**
- * Sends Google Wallet updates in batches of 100.
- * Updates textModulesData with the campaign message to trigger device notification.
- * Records a notification row per client.
+ * Sends the campaign message to Google Wallet passes in batches of 100.
+ *
+ * Google does not notify on object updates: the Android push only happens
+ * through `addMessage` with TEXT_AND_NOTIFY. The message is resolved per
+ * client here ({{client.name}}, {{points.balance}}...) because Google has no
+ * download hook like Apple's web service. Records a notification row per client.
  */
 async function processGoogleBatches(
   campaignId: string,
   tenantId: string,
   googleClients: ClientPassInfo[],
-  _message: string,
+  message: string,
 ): Promise<{ sent: number; failed: number; errors: string[] }> {
   let sent = 0
   let failed = 0
   const errors: string[] = []
+
+  if (!message.trim()) {
+    for (const client of googleClients) {
+      await recordNotification(
+        campaignId,
+        client.clientId,
+        "wallet_push",
+        "failed",
+        "Empty message",
+      )
+    }
+    return { sent: 0, failed: googleClients.length, errors: ["Empty message"] }
+  }
 
   // Load Google credentials from env
   const issuerId = process.env.GOOGLE_WALLET_ISSUER_ID
@@ -445,14 +468,17 @@ async function processGoogleBatches(
     return { sent: 0, failed: googleClients.length, errors: ["Failed to get Google access token"] }
   }
 
-  // Build classId from tenant name (deterministic)
+  // Business name as the message header + per-client variables for the body
   const [tenant] = await db
     .select({ name: tenants.name })
     .from(tenants)
     .where(eq(tenants.id, tenantId))
     .limit(1)
-
-  const classId = tenant ? buildGoogleClassId(issuerId, tenant.name) : `${issuerId}.cuik_loyalty` // fallback if tenant not found
+  const header = tenant?.name ?? "Cuik"
+  const contexts = await buildClientTemplateContexts(
+    tenantId,
+    googleClients.map((c) => c.clientId),
+  )
 
   // Process in batches
   for (let i = 0; i < googleClients.length; i += GOOGLE_BATCH_SIZE) {
@@ -460,28 +486,24 @@ async function processGoogleBatches(
 
     const results = await Promise.allSettled(
       batch.map(async (client) => {
-        // We use the upsertLoyaltyObject to update the textModulesData with campaign message
-        // This triggers a "pass updated" notification on the user's device
-        const result = await upsertLoyaltyObject({
-          issuerId,
-          classId,
-          serialNumber: client.serialNumber,
-          clientName: "", // Not updating name, just the message
-          stampsInCycle: 0,
-          maxVisits: 0,
-          totalVisits: 0,
-          hasReward: false,
-          rewardRedeemed: false,
-          qrValue: "",
+        const context = contexts.get(client.clientId) ?? { client: { name: "" } }
+        const body = resolveTemplate(message, context)
+        const result = await addLoyaltyObjectMessage({
+          objectId: client.googleObjectId as string,
+          header,
+          body,
+          messageId: campaignId,
           accessToken,
         })
 
-        if (result.ok) {
+        if (result.ok && result.notified) {
           await recordNotification(campaignId, client.clientId, "wallet_push", "sent", null)
           return { ok: true }
         }
 
-        const errorMsg = "error" in result ? result.error : "Google wallet update failed"
+        const errorMsg = result.ok
+          ? "Google: cuota de 3 notificaciones por 24 h agotada; el mensaje quedó en el pase sin aviso"
+          : result.error
         await recordNotification(campaignId, client.clientId, "wallet_push", "failed", errorMsg)
         return { ok: false, error: errorMsg }
       }),
