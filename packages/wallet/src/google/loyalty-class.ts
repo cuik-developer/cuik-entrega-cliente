@@ -289,7 +289,9 @@ async function registerCallbackUrl(
   const patchResponse = await fetch(`${LOYALTY_CLASS_API_BASE}/${classId}`, {
     method: "PATCH",
     headers,
-    body: JSON.stringify({ callbackOptions: { url: callbackUrl } }),
+    // Google stores approved classes as reviewStatus APPROVED but rejects any
+    // write that carries it ("Use UNDER_REVIEW instead"), same as the PUT path.
+    body: JSON.stringify({ callbackOptions: { url: callbackUrl }, reviewStatus: "UNDER_REVIEW" }),
   })
   if (!patchResponse.ok) {
     const errorText = await patchResponse.text().catch(() => "Unknown error")
