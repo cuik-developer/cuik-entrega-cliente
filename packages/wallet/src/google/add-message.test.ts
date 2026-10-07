@@ -9,10 +9,18 @@ const PARAMS = {
   body: "Vito, tus 19 puntos vencen el miércoles",
   messageId: "campaign-1",
   accessToken: "token",
+  replacePrevious: false,
 }
+const OBJECT_URL =
+  "https://walletobjects.googleapis.com/walletobjects/v1/loyaltyObject/3388000000012345678.cuik-dfrios-abc123"
 
 function response(status: number, body = "") {
-  return { ok: status >= 200 && status < 300, status, text: async () => body } as Response
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => body,
+    json: async () => JSON.parse(body),
+  } as Response
 }
 
 describe("addLoyaltyObjectMessage", () => {
@@ -69,6 +77,68 @@ describe("addLoyaltyObjectMessage", () => {
       expect(result.error).toContain("404 object not found")
     }
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  describe("replacePrevious (default)", () => {
+    it("adds directly when the pass has no messages (GET + addMessage only)", async () => {
+      fetchMock
+        .mockResolvedValueOnce(
+          response(200, JSON.stringify({ id: PARAMS.objectId, state: "ACTIVE" })),
+        )
+        .mockResolvedValueOnce(response(200, "{}"))
+
+      const result = await addLoyaltyObjectMessage({ ...PARAMS, replacePrevious: true })
+
+      expect(result).toEqual({ ok: true, objectId: PARAMS.objectId, notified: true })
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(fetchMock.mock.calls[0]?.[0]).toBe(OBJECT_URL)
+      expect(fetchMock.mock.calls[1]?.[0]).toBe(`${OBJECT_URL}/addMessage`)
+    })
+
+    it("wipes previous messages with a full PUT before adding the new one", async () => {
+      const stored = {
+        id: PARAMS.objectId,
+        classId: "3388000000012345678.Dfrios-Loyalty",
+        state: "ACTIVE",
+        accountName: "Vito",
+        kind: "walletobjects#loyaltyObject",
+        hasUsers: true,
+        classReference: { id: "3388000000012345678.Dfrios-Loyalty" },
+        messages: [
+          { id: "campaign-0", header: "D'frios", body: "Promo vieja", messageType: "TEXT" },
+        ],
+      }
+      fetchMock
+        .mockResolvedValueOnce(response(200, JSON.stringify(stored)))
+        .mockResolvedValueOnce(response(200, "{}"))
+        .mockResolvedValueOnce(response(200, "{}"))
+
+      const result = await addLoyaltyObjectMessage({ ...PARAMS, replacePrevious: true })
+
+      expect(result).toEqual({ ok: true, objectId: PARAMS.objectId, notified: true })
+      expect(fetchMock).toHaveBeenCalledTimes(3)
+      const [putUrl, putInit] = fetchMock.mock.calls[1] as [string, RequestInit]
+      expect(putUrl).toBe(OBJECT_URL)
+      expect(putInit.method).toBe("PUT")
+      const putBody = JSON.parse(putInit.body as string)
+      expect(putBody.messages).toBeUndefined()
+      expect(putBody.classReference).toBeUndefined()
+      expect(putBody.hasUsers).toBeUndefined()
+      expect(putBody.kind).toBeUndefined()
+      expect(putBody.accountName).toBe("Vito")
+      expect(putBody.classId).toBe("3388000000012345678.Dfrios-Loyalty")
+      expect(fetchMock.mock.calls[2]?.[0]).toBe(`${OBJECT_URL}/addMessage`)
+    })
+
+    it("does not add the message when clearing fails", async () => {
+      fetchMock.mockResolvedValueOnce(response(404, "object not found"))
+
+      const result = await addLoyaltyObjectMessage({ ...PARAMS, replacePrevious: true })
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.error).toContain("GET loyalty object failed: 404")
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
   })
 
   it("sends TEXT only when notify is false", async () => {

@@ -9,6 +9,12 @@
 // quota Google answers with QuotaExceededException. When that happens we fall
 // back to a plain TEXT message so the pass still shows it, and report
 // `notified: false` so the caller can record it honestly.
+//
+// Google also caps an object at 10 messages and does not say what happens to
+// the 11th. We never get there: the pass keeps only the latest campaign.
+// Before adding, any previous messages are wiped with a full PUT of the
+// object minus `messages` (the same PUT a visit does, which is verified to
+// clear them). A visit then clears that one too.
 
 const WALLET_API_BASE = "https://walletobjects.googleapis.com/walletobjects/v1/loyaltyObject"
 
@@ -24,6 +30,8 @@ export type AddLoyaltyObjectMessageParams = {
   accessToken: string
   /** TEXT_AND_NOTIFY (default) pushes a notification; TEXT only adds it to the pass. */
   notify?: boolean
+  /** Remove the pass's previous messages first (default true): one campaign at a time. */
+  replacePrevious?: boolean
 }
 
 export type AddLoyaltyObjectMessageResult =
@@ -40,6 +48,12 @@ export async function addLoyaltyObjectMessage(
   params: AddLoyaltyObjectMessageParams,
 ): Promise<AddLoyaltyObjectMessageResult> {
   const notify = params.notify ?? true
+
+  if (params.replacePrevious ?? true) {
+    const cleared = await clearMessages(params)
+    if (!cleared.ok) return cleared
+  }
+
   const first = await postMessage(params, notify ? "TEXT_AND_NOTIFY" : "TEXT")
   if (first.ok) return { ok: true, objectId: params.objectId, notified: notify }
 
@@ -51,6 +65,71 @@ export async function addLoyaltyObjectMessage(
   }
 
   return first
+}
+
+/**
+ * Drops every message the object currently carries. GET the object; if it has
+ * messages, PUT it back without them (PUT replaces the whole resource).
+ * No messages → nothing to do, no extra request.
+ */
+async function clearMessages(
+  params: AddLoyaltyObjectMessageParams,
+): Promise<{ ok: true } | { ok: false; error: string; status?: number }> {
+  const headers = {
+    Authorization: `Bearer ${params.accessToken}`,
+    "Content-Type": "application/json",
+  }
+
+  let getResponse: Response
+  try {
+    getResponse = await fetch(`${WALLET_API_BASE}/${params.objectId}`, { headers })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { ok: false, error: `[Wallet:Google] GET loyalty object error: ${message}` }
+  }
+  if (!getResponse.ok) {
+    const text = await getResponse.text().catch(() => "Unknown error")
+    return {
+      ok: false,
+      error: `[Wallet:Google] GET loyalty object failed: ${getResponse.status} ${text}`,
+      status: getResponse.status,
+    }
+  }
+
+  const object = (await getResponse.json().catch(() => null)) as Record<string, unknown> | null
+  if (!object || !Array.isArray(object.messages) || object.messages.length === 0)
+    return { ok: true }
+
+  // Drop the messages and the output-only fields Google adds on read.
+  const {
+    messages: _previous,
+    classReference: _cls,
+    hasUsers: _hu,
+    hasLinkedDevice: _hld,
+    kind: _kind,
+    version: _ver,
+    ...withoutMessages
+  } = object
+  let putResponse: Response
+  try {
+    putResponse = await fetch(`${WALLET_API_BASE}/${params.objectId}`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(withoutMessages),
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { ok: false, error: `[Wallet:Google] PUT (clear messages) error: ${message}` }
+  }
+  if (!putResponse.ok) {
+    const text = await putResponse.text().catch(() => "Unknown error")
+    return {
+      ok: false,
+      error: `[Wallet:Google] PUT (clear messages) failed: ${putResponse.status} ${text}`,
+      status: putResponse.status,
+    }
+  }
+  return { ok: true }
 }
 
 async function postMessage(
