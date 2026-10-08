@@ -1,12 +1,16 @@
+import { sql } from "drizzle-orm"
 import {
   boolean,
+  date,
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core"
 import { user } from "./auth"
@@ -111,6 +115,61 @@ export const tenantNotes = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [index("tenant_notes_tenant_created_idx").on(table.tenantId, table.createdAt)],
+)
+
+// Billing of a tenant (super-admin only, migration 0025): fiscal data, exact
+// monthly fee and billing day. One row per tenant.
+export const tenantBilling = pgTable("tenant_billing", {
+  tenantId: uuid("tenant_id")
+    .primaryKey()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  ruc: text("ruc"),
+  razonSocial: text("razon_social"),
+  direccionFiscal: text("direccion_fiscal"),
+  billingEmail: text("billing_email"),
+  contactoPagos: text("contacto_pagos"),
+  monthlyAmount: numeric("monthly_amount", { precision: 12, scale: 2 }),
+  currency: text("currency").$type<"PEN" | "USD">().default("PEN").notNull(),
+  /** Day the service started with the merchant; billing periods run monthly from it. */
+  serviceStartOn: date("service_start_on"),
+  /** Optional override 1..28; null = day of serviceStartOn (capped at 28). */
+  billingDay: integer("billing_day"),
+  notes: text("notes"),
+  updatedBy: text("updated_by").references(() => user.id),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+})
+
+// Invoices are issued outside Cuik and only recorded here (migration 0025).
+export const tenantInvoices = pgTable(
+  "tenant_invoices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    /** "YYYY-MM" of the due date the invoice covers. */
+    period: text("period").notNull(),
+    issuedOn: date("issued_on").notNull(),
+    number: text("number"),
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    currency: text("currency").$type<"PEN" | "USD">().default("PEN").notNull(),
+    status: text("status").$type<"pending" | "paid" | "void">().default("pending").notNull(),
+    paidOn: date("paid_on"),
+    note: text("note"),
+    /** Private storage keys (served through the super-admin files route only). */
+    invoiceFileKey: text("invoice_file_key"),
+    invoiceFileName: text("invoice_file_name"),
+    receiptFileKey: text("receipt_file_key"),
+    receiptFileName: text("receipt_file_name"),
+    createdBy: text("created_by").references(() => user.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("tenant_invoices_tenant_issued_idx").on(table.tenantId, table.issuedOn),
+    uniqueIndex("tenant_invoices_tenant_period_uidx")
+      .on(table.tenantId, table.period)
+      .where(sql`status <> 'void'`),
+  ],
 )
 
 export const globalConfig = pgTable("global_config", {

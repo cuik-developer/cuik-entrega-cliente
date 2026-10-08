@@ -16,6 +16,7 @@ const VALID_TABS = new Set([
   "registro",
   "segmentacion",
   "apple",
+  "facturacion",
   "notas",
   "editar",
 ])

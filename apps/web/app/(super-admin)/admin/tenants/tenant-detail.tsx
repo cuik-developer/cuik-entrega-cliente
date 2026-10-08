@@ -54,6 +54,7 @@ import {
 import { togglePromotionActive } from "./promotion-actions"
 import { PromotionFormDialog } from "./promotion-form-dialog"
 import { RegistrationConfigSection } from "./registration-config-section"
+import { TenantBillingSection } from "./tenant-billing-section"
 import { TenantNotesSection } from "./tenant-notes-section"
 import {
   type ApiTenant,
@@ -72,6 +73,7 @@ const SECTIONS: { value: string; label: string; icon: LucideIcon }[] = [
   { value: "registro", label: "Registro", icon: ClipboardList },
   { value: "segmentacion", label: "Segmentación", icon: Users },
   { value: "apple", label: "Apple", icon: Shield },
+  { value: "facturacion", label: "Facturación", icon: Receipt },
   { value: "notas", label: "Notas", icon: StickyNote },
   { value: "editar", label: "Datos del negocio", icon: Building2 },
 ]
@@ -589,16 +591,6 @@ export function TenantDetail({
               ) : null}
             </TabsTrigger>
           ))}
-          <TabsTrigger
-            value="facturacion"
-            disabled
-            title="Disponible en la siguiente entrega"
-            className="justify-start gap-2 rounded-lg px-3 py-2 text-sm whitespace-nowrap md:w-full text-slate-400 disabled:opacity-100"
-          >
-            <Receipt className="w-4 h-4 shrink-0" />
-            Facturación
-            <span className="ml-auto text-[10px] uppercase tracking-wide">pronto</span>
-          </TabsTrigger>
         </TabsList>
 
         <div className="flex-1 min-w-0 w-full">
@@ -1695,6 +1687,14 @@ export function TenantDetail({
                 Guardar cambios
               </Button>
             </div>
+          </TabsContent>
+          {/* ── Tab: Facturación ───────────────────────────── */}
+          <TabsContent
+            value="facturacion"
+            forceMount
+            className="data-[state=inactive]:hidden bg-white rounded-2xl border border-slate-200 shadow-sm"
+          >
+            <TenantBillingSection tenantId={tenant.id} tenantName={tenant.name} />
           </TabsContent>
           {/* ── Tab: Notas internas ────────────────────────── */}
           <TabsContent
