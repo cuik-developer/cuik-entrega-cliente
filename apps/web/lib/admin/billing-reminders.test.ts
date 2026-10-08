@@ -7,6 +7,7 @@ function row(name: string, outlook: Partial<BillingDueRow["outlook"]>): BillingD
     tenantId: name,
     tenantName: name,
     tenantSlug: name,
+    tenantStatus: "active",
     outlook: {
       status: "al_dia",
       currentDue: "2026-09-16",
@@ -45,6 +46,20 @@ describe("composeReminder", () => {
     expect(r?.paragraphs[0]).toContain("Dfrios")
     expect(r?.paragraphs[0]).toContain("11 oct")
     expect(r?.paragraphs[1]).toContain("Retail: periodo 2026-09, hace 9 días (S/ 350.00)")
+  })
+
+  it("widens the window when the cron missed days, and ignores upcoming invoices of paused tenants", () => {
+    const rows = [
+      row("Uno", { daysUntilNext: 1, nextDue: "2026-10-09" }),
+      row("Dos", { daysUntilNext: 2, nextDue: "2026-10-10" }),
+      { ...row("Pausado", { daysUntilNext: 3, nextDue: "2026-10-11" }), tenantStatus: "paused" },
+      { ...row("PausadoVencido", { status: "vencida", daysOverdue: 20 }), tenantStatus: "paused" },
+    ]
+    expect(composeReminder(rows, "2026-10-08", 0)?.upcoming).toBe(0)
+    const caughtUp = composeReminder(rows, "2026-10-08", 2)
+    expect(caughtUp?.upcoming).toBe(2)
+    expect(caughtUp?.overdue).toBe(1)
+    expect(caughtUp?.subject).toContain("1 sin registrar, 2 por emitir")
   })
 
   it("subject without overdue names the date", () => {

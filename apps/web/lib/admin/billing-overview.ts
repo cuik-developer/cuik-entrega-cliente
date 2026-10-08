@@ -59,30 +59,37 @@ export type BillingDueRow = {
   tenantId: string
   tenantName: string
   tenantSlug: string
+  tenantStatus: string
   outlook: TenantBillingOutlook
 }
 
 /**
  * Tenants with a configured service start, with their outlook, for the
- * manager summary and the reminder email. Paused/cancelled tenants are
- * skipped: nothing to bill there.
+ * manager summary and the reminder email. Every status is included: a
+ * paused or cancelled tenant can still owe an invoice (see `summarize`).
  */
 export async function billingDueRows(today = todayYmd()): Promise<BillingDueRow[]> {
   const rows = await db
-    .select({ id: tenants.id, name: tenants.name, slug: tenants.slug })
+    .select({ id: tenants.id, name: tenants.name, slug: tenants.slug, status: tenants.status })
     .from(tenants)
     .innerJoin(tenantBilling, sql`${tenantBilling.tenantId} = ${tenants.id}`)
-    .where(
-      sql`${tenantBilling.serviceStartOn} IS NOT NULL AND ${tenants.status} IN ('active', 'trial', 'expired')`,
-    )
+    .where(sql`${tenantBilling.serviceStartOn} IS NOT NULL`)
   const outlooks = await billingOutlookFor(
     rows.map((r) => r.id),
     today,
   )
   return rows
-    .map((r) => {
+    .map((r): BillingDueRow | null => {
       const outlook = outlooks.get(r.id)
-      return outlook ? { tenantId: r.id, tenantName: r.name, tenantSlug: r.slug, outlook } : null
+      return outlook
+        ? {
+            tenantId: r.id,
+            tenantName: r.name,
+            tenantSlug: r.slug,
+            tenantStatus: r.status,
+            outlook,
+          }
+        : null
     })
     .filter((r): r is BillingDueRow => r !== null)
 }
@@ -94,10 +101,14 @@ export type BillingSummary = {
   overdue: BillingDueRow[]
 }
 
+/** Statuses that keep generating invoices. Others only matter when already overdue. */
+const LIVE_STATUSES = new Set(["active", "trial", "expired"])
+
 export function summarize(rows: BillingDueRow[]): BillingSummary {
   const dueSoon = rows
     .filter(
       (r) =>
+        LIVE_STATUSES.has(r.tenantStatus) &&
         r.outlook.status !== "pendiente" &&
         r.outlook.status !== "vencida" &&
         r.outlook.daysUntilNext !== null &&

@@ -290,11 +290,9 @@ export default function TenantsPage() {
                             </div>
                           </div>
                         </div>
-                        {t.billing ? (
-                          <div className="text-xs">
-                            <BillingCell billing={t.billing} tenantId={t.id} />
-                          </div>
-                        ) : null}
+                        <div className="text-xs">
+                          <BillingCell billing={t.billing ?? null} tenantId={t.id} />
+                        </div>
                         <div className="grid grid-cols-3 gap-2">
                           <Button
                             size="sm"

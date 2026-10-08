@@ -963,7 +963,8 @@ La app tiene endpoints cron protegidos por `CRON_SECRET`:
 | `POST /api/cron/reports` | Cada hora (minuto 10) | Reportes semanal/mensual por correo cuando coincide el dia y la hora local de cada comercio; idempotente por periodo |
 | `POST /api/cron/loyalty-expiration` | Cada hora (minuto 15) | Vence los puntos cuya fecha paso (segun la politica de cada comercio) y, a la hora local configurada, envia el push "tus puntos vencen el ..." |
 | `POST /api/cron/clients-purge` | Una vez al dia (5 AM) | Anonimiza los clientes archivados hace mas de 30 dias (datos personales, notas, etiquetas y pases; las visitas quedan como historial anonimo) |
-| `POST /api/cron/billing-reminders` | Una vez al dia (8 AM Lima = 13:00 UTC) | Correo a los super-admins con las facturas que vencen en 3 dias y las que ya vencieron sin registrar (facturacion del super-admin; `?force=1` envia aunque no haya nada) |
+| `POST /api/cron/billing-reminders` | Una vez al dia (8 AM Lima = 13:00 UTC) | Correo a los super-admins con las facturas que vencen en 3 dias y las que ya vencieron sin registrar. Como maximo una vez por dia (marca en `global_config`); si un dia no corre, al siguiente avisa tambien las que vencen en 1 o 2 dias. `?force=1` ignora la marca y envia aunque no haya nada |
+
 Migraciones manuales recientes (aplicar con psql antes del deploy correspondiente): `0023_google_wallet_callbacks.sql`, `0024_recurring_campaigns.sql`, `0025_tenant_billing.sql` (facturacion del super-admin).
 
 ```bash
