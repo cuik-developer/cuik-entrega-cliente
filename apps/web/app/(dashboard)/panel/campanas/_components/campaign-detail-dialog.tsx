@@ -45,6 +45,7 @@ interface CampaignInfo {
   createdAt: string
   targetCount: number | null
   sentCount: number | null
+  skippedNoPass?: number
 }
 
 interface CampaignDetailDialogProps {
@@ -157,6 +158,11 @@ export function CampaignDetailDialog({
             <div className="font-medium">
               {campaign.sentCount ?? 0} / {campaign.targetCount ?? 0}
             </div>
+            {(campaign.skippedNoPass ?? 0) > 0 && (
+              <div className="text-[11px] text-muted-foreground mt-0.5">
+                {campaign.skippedNoPass} sin pase instalado
+              </div>
+            )}
           </div>
         </div>
 

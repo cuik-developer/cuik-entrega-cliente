@@ -62,5 +62,7 @@ export interface CampaignExecutionResult {
   sentCount: number
   deliveredCount: number
   failedCount: number
+  /** Clients in the segment that could not be reached: no pass installed on any wallet. */
+  skippedCount: number
   errors: string[]
 }

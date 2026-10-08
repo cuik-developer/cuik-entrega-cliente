@@ -1,5 +1,5 @@
 import { campaigns, db, eq, recurringCampaigns } from "@cuik/db"
-import { updateRecurringCampaignSchema } from "@cuik/shared/validators"
+import { type RecurrenceRuleInput, updateRecurringCampaignSchema } from "@cuik/shared/validators"
 
 import {
   errorResponse,
@@ -20,6 +20,20 @@ import {
 
 type Ctx = { params: Promise<{ tenant: string; id: string }> }
 
+function sameRule(a: RecurrenceRuleInput, b: ReturnType<typeof ruleOf>): boolean {
+  return (
+    a.frequency === b.frequency &&
+    a.intervalWeeks === b.intervalWeeks &&
+    JSON.stringify([...a.weekdays].sort()) === JSON.stringify([...b.weekdays].sort()) &&
+    (a.weekOfMonth ?? null) === (b.weekOfMonth ?? null) &&
+    a.sendHour === b.sendHour &&
+    a.sendMinute === b.sendMinute &&
+    a.startsOn === b.startsOn &&
+    (a.endsOn ?? null) === (b.endsOn ?? null) &&
+    (a.maxOccurrences ?? null) === (b.maxOccurrences ?? null)
+  )
+}
+
 async function guard(request: Request, ctx: Ctx) {
   const { session, error: authError } = await requireAuth(request)
   if (authError) return { error: authError }
@@ -30,7 +44,9 @@ async function guard(request: Request, ctx: Ctx) {
   if (!tenant) return { error: errorResponse("Tenant not found", 404) }
   const membershipError = await requireTenantMembership(session, tenant.id)
   if (membershipError) return { error: membershipError }
-  if (!/^[0-9a-f-]{36}$/i.test(id)) return { error: errorResponse("Not found", 404) }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return { error: errorResponse("Not found", 404) }
+  }
   const row = await loadOwned(id, tenant.id)
   if (!row) return { error: errorResponse("Not found", 404) }
   return { tenant, row, timezone: tenant.timezone ?? "America/Lima" }
@@ -73,12 +89,18 @@ export async function PATCH(request: Request, ctx: Ctx) {
       minDaysSincePush:
         body.minDaysSincePush === undefined ? g.row.minDaysSincePush : body.minDaysSincePush,
     }
+    // The form always sends every field, so "changed" is decided by comparing
+    // with what is stored: renaming a template must not restart the rotation
+    // nor move the next send (and must never overwrite a cron claim in flight).
+    const ruleChanged = body.rule !== undefined && !sameRule(body.rule, ruleOf(g.row))
+    const messagesChanged =
+      body.messages !== undefined &&
+      JSON.stringify(body.messages) !== JSON.stringify(g.row.messages)
     const nextStatus =
-      body.status ?? (g.row.status === "finished" && body.rule ? "active" : g.row.status)
-    const ruleChanged = body.rule !== undefined
+      body.status ?? (g.row.status === "finished" && ruleChanged ? "active" : g.row.status)
     const resumed = g.row.status !== "active" && nextStatus === "active"
 
-    let nextRunAt = g.row.nextRunAt
+    let nextRunAt: Date | null | undefined
     if (nextStatus === "active" && (ruleChanged || resumed)) {
       nextRunAt = computeNextRun(merged.rule, new Date(), g.timezone, g.row.occurrencesCount)
       if (!nextRunAt) {
@@ -91,9 +113,9 @@ export async function PATCH(request: Request, ctx: Ctx) {
       .set({
         ...columnsFrom(merged),
         status: nextStatus,
-        nextRunAt,
+        ...(nextRunAt !== undefined ? { nextRunAt } : {}),
         ...(resumed ? { pausedReason: null, emptyStreak: 0 } : {}),
-        ...(body.messages ? { nextMessageIndex: 0 } : {}),
+        ...(messagesChanged ? { nextMessageIndex: 0 } : {}),
         updatedAt: new Date(),
       })
       .where(eq(recurringCampaigns.id, g.row.id))

@@ -60,6 +60,7 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
       sentCount: 0,
       deliveredCount: 0,
       failedCount: 0,
+      skippedCount: 0,
       errors: ["Campaign not found"],
     }
   }
@@ -73,6 +74,7 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
       sentCount: 0,
       deliveredCount: 0,
       failedCount: 0,
+      skippedCount: 0,
       errors: [`Campaign status is '${campaign.status}', expected 'draft' or 'scheduled'`],
     }
   }
@@ -98,6 +100,7 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
       sentCount: 0,
       deliveredCount: 0,
       failedCount: 0,
+      skippedCount: 0,
       errors: ["Campaign is already being sent by another process"],
     }
   }
@@ -160,6 +163,7 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
         sentCount: 0,
         deliveredCount: 0,
         failedCount: 0,
+        skippedCount: 0,
         errors: [],
       }
     }
@@ -229,6 +233,13 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
             (c) =>
               c.googleObjectId !== null && !c.googleRemoved && c.appleDeviceTokens.length === 0,
           )
+    // Clients nobody can reach: no pass on an iPhone and no (live) Google pass.
+    const reachable = new Set<string>([
+      ...appleClients.map((c) => c.clientId),
+      ...googleClients.map((c) => c.clientId),
+    ])
+    const skippedCount = clientIds.filter((id) => !reachable.has(id)).length
+
     if (googleClients.length > 0) {
       const googleResult = await processGoogleBatches(
         campaignId,
@@ -264,6 +275,7 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
               sentAt: new Date(),
               sentCount: totalSent,
               deliveredCount: totalSent, // Initially same as sent
+              content: withSkipped(campaign.content, skippedCount),
               updatedAt: new Date(),
             },
       )
@@ -276,6 +288,7 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
       sentCount: totalSent,
       deliveredCount: totalSent,
       failedCount: totalFailed,
+      skippedCount,
       errors: allErrors,
     }
   } catch (error) {
@@ -301,6 +314,7 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
         sentCount: totalSent,
         deliveredCount: totalSent,
         failedCount: totalFailed,
+        skippedCount: 0,
         errors: [...allErrors, message],
       }
     }
@@ -319,9 +333,16 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
       sentCount: 0,
       deliveredCount: 0,
       failedCount: 0,
+      skippedCount: 0,
       errors: [message],
     }
   }
+}
+
+/** Records how many segment clients had no pass to deliver to (shown in the campaign detail). */
+function withSkipped(content: unknown, skippedNoPass: number) {
+  const base = content && typeof content === "object" ? (content as Record<string, unknown>) : {}
+  return { ...base, skippedNoPass }
 }
 
 /** Keeps whatever the row already carries in `content` and records the last error. */

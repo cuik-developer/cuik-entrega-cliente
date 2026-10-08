@@ -112,6 +112,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         sentAt: campaigns.sentAt,
         targetCount: campaigns.targetCount,
         sentCount: campaigns.sentCount,
+        // Segment clients with no pass on any wallet (recorded by executeCampaign).
+        skippedNoPass: sql<number>`coalesce((${campaigns.content}->>'skippedNoPass')::int, 0)`,
         deliveredCount: campaigns.deliveredCount,
         createdBy: campaigns.createdBy,
         createdAt: campaigns.createdAt,

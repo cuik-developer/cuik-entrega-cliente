@@ -125,12 +125,19 @@ async function runOne(template: Template, now: Date): Promise<RunOutcome> {
     .returning({ id: recurringCampaigns.id })
   if (claimed.length === 0) return { kind: "skipped" }
 
-  // Too late to be the campaign the admin meant: advance, don't send.
+  // Too late to be the campaign the admin meant: advance, don't send. The
+  // missed slot does not count as an occurrence, so "después de N envíos"
+  // still delivers N (the claim above assumed it would be sent).
   if (now.getTime() - scheduledFor.getTime() > MISSED_WINDOW_MS) {
+    const nextWithoutConsuming = computeNextRun(rule, now, timezone, template.occurrencesCount)
+    await db
+      .update(recurringCampaigns)
+      .set({ nextRunAt: nextWithoutConsuming, updatedAt: now })
+      .where(eq(recurringCampaigns.id, template.id))
     console.warn(
-      `[Recurring] ${template.id} missed its slot (${scheduledFor.toISOString()}), skipped`,
+      `[Recurring] ${template.id} missed its slot (${scheduledFor.toISOString()}), skipped; next=${nextWithoutConsuming?.toISOString() ?? "none"}`,
     )
-    await finishIfDone(template.id, next)
+    await finishIfDone(template.id, nextWithoutConsuming)
     return { kind: "skipped" }
   }
 

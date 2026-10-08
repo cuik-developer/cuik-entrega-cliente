@@ -105,6 +105,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     const membershipError = await requireTenantMembership(session, tenant.id)
     if (membershipError) return membershipError
 
+    // Refuse oversized uploads before buffering the whole body in memory.
+    const declared = Number(request.headers.get("content-length") ?? "0")
+    if (Number.isFinite(declared) && declared > MAX_FILE_BYTES + 64 * 1024) {
+      return errorResponse(
+        `Archivo demasiado grande (máximo ${MAX_FILE_BYTES / 1024 / 1024} MB)`,
+        413,
+      )
+    }
+
     let formData: FormData
     try {
       formData = await request.formData()

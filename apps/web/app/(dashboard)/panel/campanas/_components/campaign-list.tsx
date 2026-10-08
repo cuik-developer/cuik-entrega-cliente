@@ -48,6 +48,8 @@ interface CampaignRow {
   targetCount: number | null
   sentCount: number | null
   deliveredCount: number | null
+  /** Clients in the segment with no pass installed (not reachable). */
+  skippedNoPass?: number
   createdAt: string
   effectiveness: CampaignEffectiveness | null
 }
@@ -242,6 +244,12 @@ export function CampaignList({ tenantSlug, refreshKey, onEdit }: CampaignListPro
         return
       }
 
+      // Deleting the last row of page N>1 would strand the admin on an empty
+      // page with no pagination controls: step back and refetch.
+      if (json.data.data.length === 0 && page > 1 && json.data.pagination?.total > 0) {
+        setPage((p) => Math.max(1, p - 1))
+        return
+      }
       setCampaigns(json.data.data)
       setPagination(json.data.pagination)
     } catch {

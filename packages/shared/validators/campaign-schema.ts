@@ -105,6 +105,14 @@ export type CampaignListInput = z.infer<typeof campaignListSchema>
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/
 
+/** "2026-02-30" matches the regex but is not a date; Date.UTC would silently roll it to March. */
+function isRealDate(ymd: string): boolean {
+  if (!YMD.test(ymd)) return false
+  const [y, m, d] = ymd.split("-").map(Number)
+  const t = new Date(Date.UTC(y, m - 1, d))
+  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d
+}
+
 /**
  * Schedule of a recurring campaign, in the tenant timezone.
  * - weekly: every `intervalWeeks` weeks on each of `weekdays` (0 = domingo).
@@ -121,11 +129,18 @@ export const recurrenceRuleSchema = z
       .optional(),
     sendHour: z.number().int().min(0).max(23),
     sendMinute: z.number().int().min(0).max(59).default(0),
-    startsOn: z.string().regex(YMD, "Fecha de inicio inválida"),
-    endsOn: z.string().regex(YMD, "Fecha de fin inválida").nullable().optional(),
+    startsOn: z.string().refine(isRealDate, "Fecha de inicio inválida"),
+    endsOn: z.string().refine(isRealDate, "Fecha de fin inválida").nullable().optional(),
     maxOccurrences: z.number().int().min(1).max(1000).nullable().optional(),
   })
   .superRefine((r, ctx) => {
+    if (new Set(r.weekdays).size !== r.weekdays.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["weekdays"],
+        message: "Hay días repetidos",
+      })
+    }
     if (r.frequency === "monthly_weekday") {
       if (r.weekdays.length !== 1) {
         ctx.addIssue({
