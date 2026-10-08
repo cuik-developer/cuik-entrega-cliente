@@ -1,6 +1,7 @@
 import { and, db, eq, ne, plans, tenants } from "@cuik/db"
 import { updateTenantSchema } from "@cuik/shared/validators"
 import type { z } from "zod"
+import { enrichTenantRows } from "@/lib/admin/tenant-summary"
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -95,6 +96,53 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return successResponse(updated)
   } catch (error) {
     console.error("[PATCH /api/admin/tenants/[id]]", error)
+    return errorResponse("Internal server error", 500)
+  }
+}
+
+/** One tenant with the same counts and health the list shows (detail page). */
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { session, error: authError } = await requireAuth(request)
+    if (authError) return authError
+    const roleError = requireRole(session, "super_admin")
+    if (roleError) return roleError
+
+    const { id } = await params
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return errorResponse("Tenant not found", 404)
+    }
+
+    const rows = await db
+      .select({
+        id: tenants.id,
+        slug: tenants.slug,
+        name: tenants.name,
+        status: tenants.status,
+        planId: tenants.planId,
+        trialEndsAt: tenants.trialEndsAt,
+        activatedAt: tenants.activatedAt,
+        ownerId: tenants.ownerId,
+        createdAt: tenants.createdAt,
+        updatedAt: tenants.updatedAt,
+        branding: tenants.branding,
+        businessType: tenants.businessType,
+        address: tenants.address,
+        phone: tenants.phone,
+        contactEmail: tenants.contactEmail,
+        timezone: tenants.timezone,
+        segmentationConfig: tenants.segmentationConfig,
+        appleConfig: tenants.appleConfig,
+      })
+      .from(tenants)
+      .where(eq(tenants.id, id))
+      .limit(1)
+    if (rows.length === 0) return errorResponse("Tenant not found", 404)
+
+    const [item] = await enrichTenantRows(rows)
+    return successResponse(item)
+  } catch (error) {
+    console.error("[GET /api/admin/tenants/[id]]", error)
     return errorResponse("Internal server error", 500)
   }
 }
