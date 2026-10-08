@@ -2,6 +2,7 @@ import { campaigns, db, sql } from "@cuik/db"
 
 import { errorResponse, successResponse } from "@/lib/api-utils"
 import { executeCampaign } from "@/lib/campaigns"
+import { runDueRecurringCampaigns } from "@/lib/campaigns/recurring"
 
 export async function POST(request: Request) {
   try {
@@ -36,7 +37,19 @@ export async function POST(request: Request) {
       }
     }
 
-    return successResponse({ processed, errors })
+    // Recurring campaigns: materialize + send every template whose slot has come.
+    const recurring = await runDueRecurringCampaigns()
+    errors.push(...recurring.errors)
+
+    return successResponse({
+      processed,
+      recurring: {
+        processed: recurring.processed,
+        sent: recurring.sent,
+        skipped: recurring.skipped,
+      },
+      errors,
+    })
   } catch (error) {
     console.error("[POST /api/cron/campaigns-scheduled]", error)
     return errorResponse("Internal server error", 500)

@@ -1,5 +1,15 @@
 import { sql } from "drizzle-orm"
-import { index, integer, jsonb, pgEnum, pgSchema, text, timestamp, uuid } from "drizzle-orm/pg-core"
+import {
+  date,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgSchema,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core"
 import { authUsers } from "./auth"
 import { clients } from "./loyalty"
 import { tenants } from "./public"
@@ -35,6 +45,8 @@ export const campaigns = campaignsSchema.table(
     type: campaignTypeEnum("type").notNull(),
     message: text("message"),
     content: jsonb("content"),
+    /** Set when this row is one occurrence of a recurring campaign (migration 0024). */
+    recurringId: uuid("recurring_id"),
     scheduledAt: timestamp("scheduled_at"),
     sentAt: timestamp("sent_at"),
     status: campaignStatusEnum("status").default("draft").notNull(),
@@ -50,6 +62,63 @@ export const campaigns = campaignsSchema.table(
     index("campaigns_tenant_scheduled_idx")
       .on(table.tenantId, table.scheduledAt)
       .where(sql`status = 'scheduled'`),
+    index("campaigns_recurring_idx")
+      .on(table.recurringId, table.sentAt)
+      .where(sql`recurring_id IS NOT NULL`),
+  ],
+)
+
+/**
+ * Recurring campaign = template. The scheduled-campaigns cron materializes one
+ * `campaigns` row per occurrence (linked via `campaigns.recurringId`) and runs
+ * it through executeCampaign, so history, reports and metrics see ordinary sends.
+ *
+ * Schedule is interpreted in the tenant timezone:
+ * - weekly: every `intervalWeeks` weeks on each day in `weekdays` (0 = Sunday),
+ *   anchored on `startsOn`.
+ * - monthly_weekday: the `weekOfMonth`-th `weekdays[0]` of each month (-1 = last).
+ */
+export const recurringCampaigns = campaignsSchema.table(
+  "recurring_campaigns",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    name: text("name").notNull(),
+    type: campaignTypeEnum("type").default("push").notNull(),
+    /** Rotation: occurrence k sends messages[k mod n]. Variables resolve per client at send time. */
+    messages: jsonb("messages").$type<string[]>().notNull(),
+    nextMessageIndex: integer("next_message_index").default(0).notNull(),
+    /** Same shape as campaign_segments.filter; re-evaluated at every occurrence. */
+    segmentFilter: jsonb("segment_filter").notNull(),
+    frequency: text("frequency").$type<"weekly" | "monthly_weekday">().notNull(),
+    intervalWeeks: integer("interval_weeks").default(1).notNull(),
+    weekdays: integer("weekdays").array().notNull(),
+    weekOfMonth: integer("week_of_month"),
+    sendHour: integer("send_hour").notNull(),
+    sendMinute: integer("send_minute").default(0).notNull(),
+    startsOn: date("starts_on").notNull(),
+    endsOn: date("ends_on"),
+    maxOccurrences: integer("max_occurrences"),
+    /** Omit clients who visited in the last N days. */
+    skipIfVisitedDays: integer("skip_if_visited_days"),
+    /** Omit clients who got any campaign push in the last N days (protects Google's 3/24h quota). */
+    minDaysSincePush: integer("min_days_since_push"),
+    status: text("status").$type<"active" | "paused" | "finished">().default("active").notNull(),
+    pausedReason: text("paused_reason"),
+    emptyStreak: integer("empty_streak").default(0).notNull(),
+    /** UTC. Recomputed after every occurrence; what the cron scans. */
+    nextRunAt: timestamp("next_run_at"),
+    lastRunAt: timestamp("last_run_at"),
+    occurrencesCount: integer("occurrences_count").default(0).notNull(),
+    createdBy: text("created_by").references(() => authUsers.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("recurring_campaigns_due_idx").on(table.nextRunAt).where(sql`status = 'active'`),
+    index("recurring_campaigns_tenant_idx").on(table.tenantId, table.status),
   ],
 )
 
