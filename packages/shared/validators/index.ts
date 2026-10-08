@@ -44,14 +44,20 @@ export {
 export {
   type CampaignListInput,
   type CreateCampaignInput,
+  type CreateRecurringCampaignInput,
   campaignListSchema,
   createCampaignSchema,
+  createRecurringCampaignSchema,
+  type RecurrenceRuleInput,
+  recurrenceRuleSchema,
   type SegmentConditionInput,
   type SegmentFilterInput,
   segmentConditionSchema,
   segmentFilterSchema,
   type UpdateCampaignInput,
+  type UpdateRecurringCampaignInput,
   updateCampaignSchema,
+  updateRecurringCampaignSchema,
 } from "./campaign-schema"
 export {
   type CreateCatalogItemInput,

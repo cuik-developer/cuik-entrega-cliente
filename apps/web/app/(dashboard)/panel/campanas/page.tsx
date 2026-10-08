@@ -11,6 +11,7 @@ import { CampaignList } from "./_components/campaign-list"
 import { ChurnPreventionCard } from "./_components/churn-prevention-card"
 import { CreateCampaignForm } from "./_components/create-campaign-form"
 import { PointsExpiryAutomationCard } from "./_components/points-expiry-automation-card"
+import { RecurringCampaignsCard } from "./_components/recurring-campaigns-card"
 
 export default function CampanasPage() {
   const { tenantSlug, isLoading, error } = useTenant()
@@ -71,6 +72,9 @@ export default function CampanasPage() {
 
       {/* Points about to expire (only when the points program has an expiration policy) */}
       <PointsExpiryAutomationCard tenantSlug={tenantSlug} />
+
+      {/* Recurring campaigns (templates that send themselves on a calendar) */}
+      <RecurringCampaignsCard tenantSlug={tenantSlug} onSent={handleCampaignCreated} />
 
       {/* Campaign list */}
       <CampaignList tenantSlug={tenantSlug} refreshKey={refreshKey} onEdit={setEditId} />

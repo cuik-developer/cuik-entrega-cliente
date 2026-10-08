@@ -956,7 +956,7 @@ La app tiene endpoints cron protegidos por `CRON_SECRET`:
 
 | Endpoint | Frecuencia recomendada | Funcion |
 |---|---|---|
-| `POST /api/cron/campaigns-scheduled` | Cada 5 minutos | Ejecuta campanas programadas |
+| `POST /api/cron/campaigns-scheduled` | Cada 5 minutos | Ejecuta campanas programadas y campanas recurrentes (requiere migracion `0024_recurring_campaigns.sql`) |
 | `POST /api/cron/analytics-daily` | Una vez al dia (3 AM) | Genera metricas diarias |
 | `POST /api/cron/analytics-retention` | Una vez al dia (4 AM) | Calcula cohortes de retencion |
 | `POST /api/cron/campaigns-birthday` | Cada hora | Push de cumpleanos a la hora local configurada por cada comercio |

@@ -7,6 +7,8 @@ import { wallTimeToUtc } from "@/lib/zoned-time"
  * a UTC instant only at the end.
  */
 
+export type WeekOfMonth = 1 | 2 | 3 | 4 | -1
+
 export type RecurrenceRule = {
   frequency: "weekly" | "monthly_weekday"
   /** weekly: every N weeks (1 = every week). */
@@ -14,7 +16,7 @@ export type RecurrenceRule = {
   /** 0 = Sunday .. 6 = Saturday. weekly: one or more; monthly_weekday: exactly one. */
   weekdays: number[]
   /** monthly_weekday only: 1..4, or -1 for the last one of the month. */
-  weekOfMonth?: number | null
+  weekOfMonth?: WeekOfMonth | null
   sendHour: number
   sendMinute: number
   /** "YYYY-MM-DD" local. Also anchors which week is "week 1" when intervalWeeks > 1. */
@@ -58,7 +60,7 @@ export function isSendDay(rule: RecurrenceRule, ymd: string): boolean {
   }
   const weekday = rule.weekdays[0]
   if (weekday === undefined || dow !== weekday) return false
-  const ordinal = rule.weekOfMonth === -1 ? "last" : (rule.weekOfMonth as 1 | 2 | 3 | 4)
+  const ordinal = rule.weekOfMonth === -1 ? "last" : rule.weekOfMonth
   if (!ordinal) return false
   return nthWeekdayOfMonth(ymd, weekday, ordinal) === ymd
 }

@@ -66,7 +66,7 @@ describe("isSendDay", () => {
     expect(isSendDay(firstFri, "2026-10-09")).toBe(false)
     expect(isSendDay(firstFri, "2026-11-06")).toBe(true)
 
-    const lastSun = { ...firstFri, weekdays: [0], weekOfMonth: -1 }
+    const lastSun: RecurrenceRule = { ...firstFri, weekdays: [0], weekOfMonth: -1 }
     expect(isSendDay(lastSun, "2026-10-25")).toBe(true)
     expect(isSendDay(lastSun, "2026-10-18")).toBe(false)
     expect(isSendDay(lastSun, "2026-11-29")).toBe(true)

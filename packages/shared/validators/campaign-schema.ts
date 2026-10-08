@@ -100,3 +100,85 @@ export const campaignListSchema = z.object({
 })
 
 export type CampaignListInput = z.infer<typeof campaignListSchema>
+
+// ─── Recurring campaigns ────────────────────────────────────────────────
+
+const YMD = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Schedule of a recurring campaign, in the tenant timezone.
+ * - weekly: every `intervalWeeks` weeks on each of `weekdays` (0 = domingo).
+ * - monthly_weekday: the `weekOfMonth`-th `weekdays[0]` of every month (-1 = último).
+ */
+export const recurrenceRuleSchema = z
+  .object({
+    frequency: z.enum(["weekly", "monthly_weekday"]),
+    intervalWeeks: z.number().int().min(1).max(12).default(1),
+    weekdays: z.array(z.number().int().min(0).max(6)).min(1, "Elige al menos un día").max(7),
+    weekOfMonth: z
+      .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(-1)])
+      .nullable()
+      .optional(),
+    sendHour: z.number().int().min(0).max(23),
+    sendMinute: z.number().int().min(0).max(59).default(0),
+    startsOn: z.string().regex(YMD, "Fecha de inicio inválida"),
+    endsOn: z.string().regex(YMD, "Fecha de fin inválida").nullable().optional(),
+    maxOccurrences: z.number().int().min(1).max(1000).nullable().optional(),
+  })
+  .superRefine((r, ctx) => {
+    if (r.frequency === "monthly_weekday") {
+      if (r.weekdays.length !== 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["weekdays"],
+          message: "Para la repetición mensual elige un solo día de la semana",
+        })
+      }
+      if (!r.weekOfMonth) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["weekOfMonth"],
+          message: "Indica qué semana del mes (primera, segunda... o última)",
+        })
+      }
+    }
+    if (r.endsOn && r.endsOn < r.startsOn) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["endsOn"],
+        message: "La fecha de fin debe ser posterior al inicio",
+      })
+    }
+  })
+
+export type RecurrenceRuleInput = z.infer<typeof recurrenceRuleSchema>
+
+export const createRecurringCampaignSchema = z.object({
+  name: z.string().trim().min(1, "El nombre es obligatorio").max(200),
+  type: z.enum(["push", "wallet_update"]).default("push"),
+  /** Rotation: occurrence k sends messages[k mod n]. */
+  messages: z
+    .array(
+      z.string().trim().min(1, "El mensaje no puede estar vacío").max(150, "Máximo 150 caracteres"),
+    )
+    .min(1, "Escribe al menos un mensaje")
+    .max(6, "Máximo 6 mensajes en rotación"),
+  // Dynamic audience: an uploaded list is a snapshot, which defeats recurrence.
+  segment: segmentFilterSchema.refine((s) => !s.clientIds, {
+    message: "Una campaña recurrente usa un segmento, no una lista fija",
+  }),
+  rule: recurrenceRuleSchema,
+  /** Omit clients who visited in the last N days. */
+  skipIfVisitedDays: z.number().int().min(1).max(365).nullable().optional(),
+  /** Omit clients who received any campaign push in the last N days. */
+  minDaysSincePush: z.number().int().min(1).max(365).nullable().optional(),
+})
+
+export type CreateRecurringCampaignInput = z.infer<typeof createRecurringCampaignSchema>
+
+/** PATCH body. `status` only toggles active/paused; the cron sets `finished`. */
+export const updateRecurringCampaignSchema = createRecurringCampaignSchema.partial().extend({
+  status: z.enum(["active", "paused"]).optional(),
+})
+
+export type UpdateRecurringCampaignInput = z.infer<typeof updateRecurringCampaignSchema>

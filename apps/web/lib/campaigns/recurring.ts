@@ -15,7 +15,7 @@ import type { SegmentationThresholds } from "@/lib/loyalty/client-segments"
 import { getThresholds } from "@/lib/loyalty/client-segments"
 import { localDateString } from "@/lib/loyalty/expiration"
 import { executeCampaign } from "./execute-campaign"
-import { computeNextRun, type RecurrenceRule } from "./recurrence"
+import { computeNextRun, type RecurrenceRule, type WeekOfMonth } from "./recurrence"
 import { resolveSegment } from "./resolve-segment"
 
 /**
@@ -48,7 +48,8 @@ export function ruleOf(t: Template): RecurrenceRule {
     frequency: t.frequency,
     intervalWeeks: t.intervalWeeks,
     weekdays: t.weekdays,
-    weekOfMonth: t.weekOfMonth,
+    // DB stores an int with a CHECK (1..4, -1); narrow it back for the engine.
+    weekOfMonth: (t.weekOfMonth as WeekOfMonth | null) ?? null,
     sendHour: t.sendHour,
     sendMinute: t.sendMinute,
     startsOn: t.startsOn,
@@ -101,13 +102,19 @@ async function runOne(template: Template, now: Date): Promise<"sent" | "skipped"
   const rule = ruleOf(template)
   const scheduledFor = template.nextRunAt as Date
 
-  // Claim: whoever moves next_run_at first owns this occurrence.
+  // Claim: whoever moves next_run_at into the future first owns this
+  // occurrence. The condition re-checks "still due" instead of equality so a
+  // value with microseconds (or a concurrent tick) can never double-send.
   const next = computeNextRun(rule, now, timezone, template.occurrencesCount + 1)
   const claimed = await db
     .update(recurringCampaigns)
     .set({ nextRunAt: next, lastRunAt: now, updatedAt: now })
     .where(
-      and(eq(recurringCampaigns.id, template.id), eq(recurringCampaigns.nextRunAt, scheduledFor)),
+      and(
+        eq(recurringCampaigns.id, template.id),
+        eq(recurringCampaigns.status, "active"),
+        sql`${recurringCampaigns.nextRunAt} IS NOT NULL AND ${recurringCampaigns.nextRunAt} <= ${now.toISOString()}::timestamp`,
+      ),
     )
     .returning({ id: recurringCampaigns.id })
   if (claimed.length === 0) return "skipped"
