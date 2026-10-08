@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS "tenant_invoices" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   "tenant_id" uuid NOT NULL REFERENCES "tenants"("id") ON DELETE CASCADE,
   -- Billing period the invoice covers, "YYYY-MM" of its due date.
-  "period" text NOT NULL CHECK ("period" ~ '^[0-9]{4}-[0-9]{2}$'),
+  "period" text NOT NULL CHECK ("period" ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
   "issued_on" date NOT NULL,
   "number" text,
   "amount" numeric(12, 2) NOT NULL,

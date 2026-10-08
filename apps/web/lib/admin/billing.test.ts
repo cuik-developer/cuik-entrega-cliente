@@ -29,6 +29,9 @@ describe("monthsOfService", () => {
     expect(monthsOfService("2026-08-16", "2026-10-08")).toBe(1)
     expect(monthsOfService("2026-08-16", "2027-02-16")).toBe(6)
     expect(monthsOfService("2026-08-16", "2026-08-01")).toBe(0)
+    // Started on the 31st: the month completes on the 28th (capped billing day).
+    expect(monthsOfService("2026-01-31", "2026-02-28")).toBe(1)
+    expect(monthsOfService("2026-01-31", "2026-02-27")).toBe(0)
   })
 })
 

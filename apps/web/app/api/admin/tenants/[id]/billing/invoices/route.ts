@@ -1,6 +1,6 @@
 import { db, eq, tenantInvoices, tenants } from "@cuik/db"
 import { createInvoiceSchema } from "@cuik/shared/validators"
-import { loadBilling } from "@/lib/admin/billing-data"
+import { isPeriodConflict, loadBilling } from "@/lib/admin/billing-data"
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -40,7 +40,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       })
     } catch (err) {
       // Partial unique index: one live invoice per period.
-      if (err instanceof Error && /tenant_invoices_tenant_period_uidx/.test(err.message)) {
+      if (isPeriodConflict(err)) {
         return errorResponse(`Ya hay una factura registrada para el periodo ${i.period}`, 409)
       }
       throw err

@@ -36,7 +36,7 @@ export async function GET(
       .where(and(eq(tenantInvoices.id, invoiceId), eq(tenantInvoices.tenantId, id)))
       .limit(1)
     const key = kind === "invoice" ? row?.invoiceFileKey : row?.receiptFileKey
-    const name = (kind === "invoice" ? row?.invoiceFileName : row?.receiptFileName) ?? kind
+    const name = (kind === "invoice" ? row?.invoiceFileName : row?.receiptFileName) || kind
     if (!key) return errorResponse("Not found", 404)
 
     const { stream, contentType, size } = await getAsset(key)

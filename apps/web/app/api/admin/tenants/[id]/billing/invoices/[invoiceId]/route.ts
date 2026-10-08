@@ -1,7 +1,8 @@
 import { and, db, eq, tenantInvoices } from "@cuik/db"
 import { updateInvoiceSchema } from "@cuik/shared/validators"
-import { loadBilling } from "@/lib/admin/billing-data"
+import { isPeriodConflict, loadBilling } from "@/lib/admin/billing-data"
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
+import { deleteAsset } from "@/lib/storage"
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -52,7 +53,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
         })
         .where(eq(tenantInvoices.id, g.row.id))
     } catch (err) {
-      if (err instanceof Error && /tenant_invoices_tenant_period_uidx/.test(err.message)) {
+      if (isPeriodConflict(err)) {
         return errorResponse("Ya hay otra factura activa para ese periodo", 409)
       }
       throw err
@@ -69,6 +70,10 @@ export async function DELETE(request: Request, ctx: Ctx) {
     const g = await guard(request, ctx)
     if ("error" in g) return g.error
     await db.delete(tenantInvoices).where(eq(tenantInvoices.id, g.row.id))
+    // The attachments go with the record (best effort: a missing object is not an error).
+    for (const key of [g.row.invoiceFileKey, g.row.receiptFileKey]) {
+      if (key) await deleteAsset(key).catch(() => undefined)
+    }
     return successResponse(await loadBilling(g.id))
   } catch (error) {
     console.error("[DELETE /api/admin/tenants/[id]/billing/invoices/[invoiceId]]", error)

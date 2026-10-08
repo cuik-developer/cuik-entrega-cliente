@@ -94,7 +94,9 @@ export function monthsOfService(serviceStartOn: string, today: string): number {
   const [y1, m1, d1] = split(serviceStartOn)
   const [y2, m2, d2] = split(today)
   let months = (y2 - y1) * 12 + (m2 - m1)
-  if (d2 < d1) months -= 1
+  // Same cap as the billing day: a service started on the 31st completes its
+  // month on the 28th, when that month's invoice is due.
+  if (d2 < Math.min(d1, 28)) months -= 1
   return Math.max(0, months)
 }
 

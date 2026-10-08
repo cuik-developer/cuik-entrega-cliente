@@ -1,6 +1,16 @@
 import { db, desc, eq, tenantBilling, tenantInvoices } from "@cuik/db"
 import { billingOutlook, todayYmd } from "./billing"
 
+/**
+ * True when a failed insert/update hit the "one live invoice per period"
+ * index. Drizzle wraps the PG error (message = "Failed query: ..."), so the
+ * constraint name is only on `cause`.
+ */
+export function isPeriodConflict(err: unknown): boolean {
+  const cause = (err as { cause?: { code?: string; constraint?: string } } | null)?.cause
+  return cause?.code === "23505" && cause.constraint === "tenant_invoices_tenant_period_uidx"
+}
+
 /** Billing config + calendar outlook + invoice history of one tenant. */
 export async function loadBilling(tenantId: string) {
   const [config] = await db

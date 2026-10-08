@@ -302,8 +302,12 @@ export function TenantBillingSection({
 
   function openNewInvoice() {
     const o = data?.outlook
+    const todayLima = new Date().toLocaleDateString("en-CA", { timeZone: "America/Lima" })
+    // Current period when it still lacks an invoice; otherwise the next one.
     const period =
-      o?.currentPeriod ?? o?.nextDue?.slice(0, 7) ?? new Date().toISOString().slice(0, 7)
+      (o?.status === "al_dia" ? o.nextDue?.slice(0, 7) : o?.currentPeriod) ??
+      o?.nextDue?.slice(0, 7) ??
+      todayLima.slice(0, 7)
     const amount = data?.config?.monthlyAmount
     setInv({
       period,

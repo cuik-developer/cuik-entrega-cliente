@@ -36,7 +36,7 @@ export type TenantBillingInput = z.infer<typeof tenantBillingSchema>
 export const invoiceStatusSchema = z.enum(["pending", "paid", "void"])
 
 export const createInvoiceSchema = z.object({
-  period: z.string().regex(/^\d{4}-\d{2}$/, "Periodo inválido (AAAA-MM)"),
+  period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Periodo inválido (AAAA-MM)"),
   issuedOn: z.string().regex(YMD, "Fecha inválida"),
   number: z.preprocess(emptyToNull, z.string().trim().max(60).nullable().optional()),
   amount: z.number().min(0).max(1_000_000),
