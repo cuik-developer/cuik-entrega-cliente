@@ -1,4 +1,5 @@
 import { and, count, db, desc, eq, ilike, tenants } from "@cuik/db"
+import { billingOutlookFor } from "@/lib/admin/billing-overview"
 import { enrichTenantRows } from "@/lib/admin/tenant-summary"
 import {
   errorResponse,
@@ -69,7 +70,23 @@ export async function GET(request: Request) {
       .limit(limit)
       .offset(offset)
 
-    const results = await enrichTenantRows(tenantRows)
+    const enriched = await enrichTenantRows(tenantRows)
+    const billing = await billingOutlookFor(enriched.map((t) => t.id))
+    const results = enriched.map((t) => {
+      const b = billing.get(t.id)
+      return {
+        ...t,
+        billing: b
+          ? {
+              status: b.status,
+              nextDue: b.nextDue,
+              daysUntilNext: b.daysUntilNext,
+              daysOverdue: b.daysOverdue,
+              monthsOfService: b.monthsOfService,
+            }
+          : null,
+      }
+    })
 
     return successResponse({
       items: results,

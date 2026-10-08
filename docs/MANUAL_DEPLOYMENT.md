@@ -957,14 +957,14 @@ La app tiene endpoints cron protegidos por `CRON_SECRET`:
 | Endpoint | Frecuencia recomendada | Funcion |
 |---|---|---|
 | `POST /api/cron/campaigns-scheduled` | Cada 5 minutos | Ejecuta campanas programadas y campanas recurrentes (requiere migracion `0024_recurring_campaigns.sql`) |
-
-Migraciones manuales recientes (aplicar con psql antes del deploy correspondiente): `0023_google_wallet_callbacks.sql`, `0024_recurring_campaigns.sql`, `0025_tenant_billing.sql` (facturacion del super-admin).
 | `POST /api/cron/analytics-daily` | Una vez al dia (3 AM) | Genera metricas diarias |
 | `POST /api/cron/analytics-retention` | Una vez al dia (4 AM) | Calcula cohortes de retencion |
 | `POST /api/cron/campaigns-birthday` | Cada hora | Push de cumpleanos a la hora local configurada por cada comercio |
 | `POST /api/cron/reports` | Cada hora (minuto 10) | Reportes semanal/mensual por correo cuando coincide el dia y la hora local de cada comercio; idempotente por periodo |
 | `POST /api/cron/loyalty-expiration` | Cada hora (minuto 15) | Vence los puntos cuya fecha paso (segun la politica de cada comercio) y, a la hora local configurada, envia el push "tus puntos vencen el ..." |
 | `POST /api/cron/clients-purge` | Una vez al dia (5 AM) | Anonimiza los clientes archivados hace mas de 30 dias (datos personales, notas, etiquetas y pases; las visitas quedan como historial anonimo) |
+| `POST /api/cron/billing-reminders` | Una vez al dia (8 AM Lima = 13:00 UTC) | Correo a los super-admins con las facturas que vencen en 3 dias y las que ya vencieron sin registrar (facturacion del super-admin; `?force=1` envia aunque no haya nada) |
+Migraciones manuales recientes (aplicar con psql antes del deploy correspondiente): `0023_google_wallet_callbacks.sql`, `0024_recurring_campaigns.sql`, `0025_tenant_billing.sql` (facturacion del super-admin).
 
 ```bash
 # Ejemplo con crontab
@@ -973,6 +973,7 @@ Migraciones manuales recientes (aplicar con psql antes del deploy correspondient
 0 4 * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/analytics-retention
 5 * * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/campaigns-birthday
 10 * * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/reports
+0 13 * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/billing-reminders
 15 * * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/loyalty-expiration
 0 5 * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/clients-purge
 ```

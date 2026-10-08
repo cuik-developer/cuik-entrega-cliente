@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { BillingCell, BillingSummaryBar } from "./billing-widgets"
 import { TenantHealthCell } from "./tenant-health"
 import { type ApiTenant, openTenantPanel, type PaginationMeta, statusConfig } from "./tenant-shared"
 
@@ -153,6 +154,9 @@ export default function TenantsPage() {
           ))}
         </div>
       )}
+
+      {/* Invoices to issue / overdue */}
+      <BillingSummaryBar />
 
       {/* Tenants table with search/filter */}
       <Card className="border border-slate-200">
@@ -286,6 +290,11 @@ export default function TenantsPage() {
                             </div>
                           </div>
                         </div>
+                        {t.billing ? (
+                          <div className="text-xs">
+                            <BillingCell billing={t.billing} tenantId={t.id} />
+                          </div>
+                        ) : null}
                         <div className="grid grid-cols-3 gap-2">
                           <Button
                             size="sm"
@@ -326,6 +335,7 @@ export default function TenantsPage() {
                     <th className="pb-2 text-left font-semibold">Salud</th>
                     <th className="pb-2 text-right font-semibold">Clientes</th>
                     <th className="pb-2 text-right font-semibold">Visitas</th>
+                    <th className="pb-2 pl-4 text-left font-semibold">Próxima factura</th>
                     <th className="pb-2 text-right font-semibold">Acciones</th>
                   </tr>
                 </thead>
@@ -397,6 +407,9 @@ export default function TenantsPage() {
                           </td>
                           <td className="py-2.5 text-right text-slate-600">
                             {Number(t.visitCount).toLocaleString()}
+                          </td>
+                          <td className="py-2.5 pl-4">
+                            <BillingCell billing={t.billing ?? null} tenantId={t.id} />
                           </td>
                           <td className="py-2.5 text-right">
                             <div className="flex gap-1 justify-end">

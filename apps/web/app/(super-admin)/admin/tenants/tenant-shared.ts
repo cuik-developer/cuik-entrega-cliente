@@ -27,6 +27,14 @@ export interface ApiTenant {
   returnRate: number
   planName: string | null
   health?: TenantHealth
+  /** Billing outlook (list only); null when no service start is configured. */
+  billing?: {
+    status: "sin_configurar" | "sin_iniciar" | "al_dia" | "pendiente" | "vencida"
+    nextDue: string | null
+    daysUntilNext: number | null
+    daysOverdue: number | null
+    monthsOfService: number | null
+  } | null
   businessType: string | null
   address: string | null
   phone: string | null
