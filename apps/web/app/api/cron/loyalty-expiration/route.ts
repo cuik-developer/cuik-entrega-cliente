@@ -77,6 +77,9 @@ export async function POST(request: Request) {
           })
           if (w.status === "sent") {
             warned.push({ tenant: row.slug, campaigns: w.campaigns, sentCount: w.sentCount })
+            if (w.errors?.length) errors.push(`${row.slug}: ${w.errors[0]}`)
+          } else if (w.status === "failed") {
+            errors.push(`${row.slug}: ${w.errors?.[0] ?? "warning send failed"}`)
           } else {
             skipped.push({ tenant: row.slug, reason: `warning_${w.reason}` })
           }

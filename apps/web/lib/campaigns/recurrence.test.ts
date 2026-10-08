@@ -4,6 +4,7 @@ import {
   describeRecurrence,
   isSendDay,
   nextOccurrences,
+  pushGuardSince,
   type RecurrenceRule,
 } from "./recurrence"
 
@@ -147,6 +148,20 @@ describe("nextOccurrences", () => {
   it("is cut short by maxOccurrences", () => {
     const rule = { ...WEEKLY_WED, maxOccurrences: 2 }
     expect(nextOccurrences(rule, lima("2026-10-01", "00:00"), LIMA, 5)).toHaveLength(2)
+  })
+})
+
+describe("pushGuardSince", () => {
+  it("keeps last week's recipients eligible for a weekly guard even if this tick is early", () => {
+    const lastWeekSend = lima("2026-10-07", "10:01")
+    const thisTick = lima("2026-10-14", "10:00") // a minute earlier in the week than last send
+    expect(lastWeekSend.getTime() < pushGuardSince(thisTick, 7).getTime()).toBe(true)
+  })
+
+  it("still excludes a push from a few hours ago with a 1-day guard", () => {
+    const now = lima("2026-10-14", "10:00")
+    expect(lima("2026-10-14", "08:00").getTime() >= pushGuardSince(now, 1).getTime()).toBe(true)
+    expect(lima("2026-10-13", "10:00").getTime() >= pushGuardSince(now, 1).getTime()).toBe(false)
   })
 })
 

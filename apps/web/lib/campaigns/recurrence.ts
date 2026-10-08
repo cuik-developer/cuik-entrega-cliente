@@ -26,6 +26,16 @@ export type RecurrenceRule = {
 }
 
 const MAX_LOOKAHEAD_DAYS = 400
+
+/**
+ * Start of the "pushed in the last N days" window for the frequency guard.
+ * Half a day of tolerance: "máximo un aviso por semana" on a weekly campaign
+ * must not exclude last week's recipients just because this cron tick ran a
+ * few seconds earlier than last week's.
+ */
+export function pushGuardSince(now: Date, days: number): Date {
+  return new Date(now.getTime() - (days * 24 - 12) * 60 * 60 * 1000)
+}
 const MAX_LOOKAHEAD_MONTHS = 14
 const DAY_MS = 86_400_000
 

@@ -38,7 +38,12 @@ export type AddLoyaltyObjectMessageResult =
   | { ok: true; objectId: string; notified: boolean }
   | { ok: false; error: string; status?: number }
 
-const QUOTA_MARKER = /quota/i
+// Google's answer when the 3-notifications-per-24h budget of THIS pass is spent.
+// A plain 429 / rateLimitExceeded is the per-minute API limit: retryable, and
+// must not downgrade the message to silent TEXT.
+const NOTIFICATION_QUOTA_MARKER =
+  /QuotaExceededException|notification.{0,40}quota|quota.{0,40}notification/i
+const RATE_LIMIT_RETRY_MS = 1500
 
 /**
  * Adds a message to a loyalty object and (by default) triggers the Android
@@ -54,11 +59,20 @@ export async function addLoyaltyObjectMessage(
     if (!cleared.ok) return cleared
   }
 
-  const first = await postMessage(params, notify ? "TEXT_AND_NOTIFY" : "TEXT")
+  const type = notify ? "TEXT_AND_NOTIFY" : "TEXT"
+  let first = await postMessage(params, type)
   if (first.ok) return { ok: true, objectId: params.objectId, notified: notify }
 
-  // Quota exhausted (3 notifications / 24 h): keep the message on the pass without the push.
-  if (notify && (first.status === 429 || QUOTA_MARKER.test(first.error))) {
+  // Per-minute rate limit: wait and try the same request once more.
+  if (first.status === 429 && !NOTIFICATION_QUOTA_MARKER.test(first.error)) {
+    await new Promise((r) => setTimeout(r, RATE_LIMIT_RETRY_MS))
+    first = await postMessage(params, type)
+    if (first.ok) return { ok: true, objectId: params.objectId, notified: notify }
+  }
+
+  // Notification quota of this pass exhausted (3 / 24 h): keep the message on
+  // the pass without the push and say so.
+  if (notify && NOTIFICATION_QUOTA_MARKER.test(first.error)) {
     const second = await postMessage(params, "TEXT")
     if (second.ok) return { ok: true, objectId: params.objectId, notified: false }
     return second

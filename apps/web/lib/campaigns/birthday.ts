@@ -127,6 +127,7 @@ export async function birthdayCoverage(
 
 export type BirthdayRunResult =
   | { status: "skipped"; reason: "disabled" | "already_sent" | "no_birthdays" }
+  | { status: "failed"; campaignId: string; errors: string[] }
   | {
       status: "sent"
       campaignId: string
@@ -194,6 +195,10 @@ export async function runBirthdayAutomation(params: {
   })
 
   const result = await executeCampaign(campaign.id)
+  if (result.status === "failed") {
+    // The campaign row is back in draft with the error; surfaced to the cron log.
+    return { status: "failed", campaignId: campaign.id, errors: result.errors }
+  }
   return {
     status: "sent",
     campaignId: campaign.id,

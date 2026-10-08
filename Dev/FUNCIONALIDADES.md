@@ -311,6 +311,7 @@ Visible en el menu solo cuando la promocion activa es de **puntos** (`useTenant(
 
 **Ejecucion**:
 - Envio inmediato o cron job `campaigns-scheduled` cada 5 min.
+- **Robustez (oct-2026, revision post-bloque)**: (1) el ejecutor reclama la campana con `UPDATE ... WHERE status IN (draft, scheduled) RETURNING` → un solo proceso la envia aunque coincidan el cron y un "Enviar" manual; (2) si nada se entrego (credenciales caidas, todo rechazado) la campana vuelve a **borrador** con `content.lastError` y el envio manual responde 502 (no se reencola como programada a proposito: un certificado roto reintentaria cada 5 min); cumpleanos y puntos por vencer devuelven `failed` y no marcan `warnedAt`; (3) un error inesperado despues de empezar a enviar cierra la campana como `sent` con lo contado (nunca vuelve a `scheduled`, que reenviaria a todos); (4) el cron recupera campanas atascadas en `sending` mas de 30 min: si ya hay notificaciones `sent` la cierra con ese conteo, si no la devuelve a `scheduled`/`draft` (`content.recoveredFromSending`); (5) Google: lotes de 25, un 429 por limite por minuto se reintenta una vez; solo `QuotaExceededException` (3 avisos/pase/24 h) degrada a mensaje sin aviso; (6) recurrentes: la guarda "frecuencia maxima" usa N dias menos 12 h de tolerancia, y un envio fallido consume el turno pero no la rotacion ni cuenta como envio (error en la respuesta del cron).
 - Apple: APNs push en batches de 50 tokens.
 - Google: update de `loyaltyObject` en batches.
 - Cada envio inserta row en `notifications` con status (sent / delivered / failed).

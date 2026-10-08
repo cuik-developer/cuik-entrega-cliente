@@ -46,6 +46,14 @@ export async function POST(
     }
 
     const result = await executeCampaign(id)
+    if (result.status === "failed") {
+      // Nothing was delivered: tell the UI instead of answering 200 + "sent".
+      return errorResponse(
+        `No se pudo enviar: ${result.errors[0] ?? "error desconocido"}`,
+        502,
+        result,
+      )
+    }
 
     return successResponse(result)
   } catch (error) {

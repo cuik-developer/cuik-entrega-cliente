@@ -119,6 +119,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
 
     // Execute immediately
     const result = await executeCampaign(campaign.id)
+    if (result.status === "failed") {
+      return errorResponse(
+        `No se pudo enviar: ${result.errors[0] ?? "error desconocido"}`,
+        502,
+        result,
+      )
+    }
 
     return successResponse(result)
   } catch (error) {

@@ -53,6 +53,35 @@ describe("addLoyaltyObjectMessage", () => {
     })
   })
 
+  it("retries once on a per-minute rate limit and keeps the notification", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        response(
+          429,
+          '{"error":{"message":"Rate Limit Exceeded","errors":[{"reason":"rateLimitExceeded"}]}}',
+        ),
+      )
+      .mockResolvedValueOnce(response(200, "{}"))
+
+    const result = await addLoyaltyObjectMessage(PARAMS)
+
+    expect(result).toEqual({ ok: true, objectId: PARAMS.objectId, notified: true })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const [, second] = fetchMock.mock.calls[1] as [string, RequestInit]
+    expect(JSON.parse(second.body as string).message.messageType).toBe("TEXT_AND_NOTIFY")
+  })
+
+  it("fails (no silent fallback) when the rate limit persists after the retry", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(429, '{"error":{"errors":[{"reason":"rateLimitExceeded"}]}}'))
+      .mockResolvedValueOnce(response(429, '{"error":{"errors":[{"reason":"rateLimitExceeded"}]}}'))
+
+    const result = await addLoyaltyObjectMessage(PARAMS)
+
+    expect(result.ok).toBe(false)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it("falls back to a TEXT message when the notification quota is exhausted", async () => {
     fetchMock
       .mockResolvedValueOnce(response(429, '{"error":{"message":"QuotaExceededException"}}'))

@@ -128,7 +128,14 @@ export async function expireDuePoints(params: {
 
 export type WarningRunResult =
   | { status: "skipped"; reason: "disabled" | "already_sent" | "nobody" }
-  | { status: "sent"; campaigns: number; targetCount: number; sentCount: number }
+  | { status: "sent"; campaigns: number; targetCount: number; sentCount: number; errors?: string[] }
+  | {
+      status: "failed"
+      campaigns: number
+      targetCount: number
+      sentCount: number
+      errors: string[]
+    }
 
 /**
  * Push to clients who hold points that expire within `daysBefore` days and
@@ -201,6 +208,7 @@ export async function runPointsExpirationWarning(params: {
   let targetCount = 0
   let sentCount = 0
   let created = 0
+  const errors: string[] = []
   for (const group of byDay.values()) {
     const label = formatExpiry(group.expiresAt, timezone)
     // The date and the business name are the same for the whole group, so
@@ -229,11 +237,25 @@ export async function runPointsExpirationWarning(params: {
     created++
     targetCount += result.targetCount
     sentCount += result.sentCount
+    if (result.status === "failed") {
+      // Nothing delivered: leave the lots un-warned so the next run retries.
+      errors.push(...result.errors)
+      continue
+    }
     await db
       .update(pointsTransactions)
       .set({ warnedAt: now })
       .where(sql`${pointsTransactions.id} = ANY(${`{${group.lotIds.join(",")}}`}::uuid[])`)
   }
 
-  return { status: "sent", campaigns: created, targetCount, sentCount }
+  if (errors.length > 0 && sentCount === 0) {
+    return { status: "failed", campaigns: created, targetCount, sentCount, errors }
+  }
+  return {
+    status: "sent",
+    campaigns: created,
+    targetCount,
+    sentCount,
+    ...(errors.length > 0 ? { errors } : {}),
+  }
 }

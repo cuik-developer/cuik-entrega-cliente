@@ -15,7 +15,7 @@ import type { SegmentationThresholds } from "@/lib/loyalty/client-segments"
 import { getThresholds } from "@/lib/loyalty/client-segments"
 import { localDateString } from "@/lib/loyalty/expiration"
 import { executeCampaign } from "./execute-campaign"
-import { computeNextRun, type RecurrenceRule, type WeekOfMonth } from "./recurrence"
+import { computeNextRun, pushGuardSince, type RecurrenceRule, type WeekOfMonth } from "./recurrence"
 import { resolveSegment } from "./resolve-segment"
 
 /**
@@ -38,6 +38,7 @@ export type RecurringRunResult = {
   processed: number
   sent: number
   skipped: number
+  failed: number
   errors: string[]
 }
 
@@ -59,7 +60,7 @@ export function ruleOf(t: Template): RecurrenceRule {
 }
 
 export async function runDueRecurringCampaigns(now = new Date()): Promise<RecurringRunResult> {
-  const result: RecurringRunResult = { processed: 0, sent: 0, skipped: 0, errors: [] }
+  const result: RecurringRunResult = { processed: 0, sent: 0, skipped: 0, failed: 0, errors: [] }
 
   const due = await db
     .select()
@@ -77,8 +78,11 @@ export async function runDueRecurringCampaigns(now = new Date()): Promise<Recurr
     try {
       const outcome = await runOne(template, now)
       result.processed++
-      if (outcome === "sent") result.sent++
-      else result.skipped++
+      if (outcome.kind === "sent") result.sent++
+      else if (outcome.kind === "failed") {
+        result.failed++
+        result.errors.push(`Recurring ${template.id} (${template.name}): ${outcome.error}`)
+      } else result.skipped++
     } catch (err) {
       result.errors.push(
         `Recurring ${template.id}: ${err instanceof Error ? err.message : String(err)}`,
@@ -88,7 +92,9 @@ export async function runDueRecurringCampaigns(now = new Date()): Promise<Recurr
   return result
 }
 
-async function runOne(template: Template, now: Date): Promise<"sent" | "skipped"> {
+type RunOutcome = { kind: "sent" } | { kind: "skipped" } | { kind: "failed"; error: string }
+
+async function runOne(template: Template, now: Date): Promise<RunOutcome> {
   const [tenant] = await db
     .select({
       timezone: tenants.timezone,
@@ -117,7 +123,7 @@ async function runOne(template: Template, now: Date): Promise<"sent" | "skipped"
       ),
     )
     .returning({ id: recurringCampaigns.id })
-  if (claimed.length === 0) return "skipped"
+  if (claimed.length === 0) return { kind: "skipped" }
 
   // Too late to be the campaign the admin meant: advance, don't send.
   if (now.getTime() - scheduledFor.getTime() > MISSED_WINDOW_MS) {
@@ -125,7 +131,7 @@ async function runOne(template: Template, now: Date): Promise<"sent" | "skipped"
       `[Recurring] ${template.id} missed its slot (${scheduledFor.toISOString()}), skipped`,
     )
     await finishIfDone(template.id, next)
-    return "skipped"
+    return { kind: "skipped" }
   }
 
   // Audience: segment now, minus per-client guards.
@@ -163,7 +169,7 @@ async function runOne(template: Template, now: Date): Promise<"sent" | "skipped"
     console.info(
       `[Recurring] ${template.id} occurrence=${template.occurrencesCount + 1} segment=${clientIds.length} recipients=0 (no campaign created) streak=${emptyStreak}`,
     )
-    return "skipped"
+    return { kind: "skipped" }
   }
 
   const messages = template.messages
@@ -197,22 +203,31 @@ async function runOne(template: Template, now: Date): Promise<"sent" | "skipped"
   })
 
   const exec = await executeCampaign(campaign.id)
+  const delivered = exec.status !== "failed"
 
+  // A failed send (credentials down, every push rejected) consumes the slot
+  // but not the message: the same text goes out next time, and the error is
+  // surfaced in the cron response instead of being counted as a send.
   await db
     .update(recurringCampaigns)
     .set({
       occurrencesCount: template.occurrencesCount + 1,
-      nextMessageIndex: (template.nextMessageIndex + 1) % Math.max(messages.length, 1),
-      emptyStreak: 0,
+      ...(delivered
+        ? {
+            nextMessageIndex: (template.nextMessageIndex + 1) % Math.max(messages.length, 1),
+            emptyStreak: 0,
+          }
+        : {}),
       updatedAt: now,
     })
     .where(eq(recurringCampaigns.id, template.id))
   await finishIfDone(template.id, next)
 
   console.info(
-    `[Recurring] ${template.id} occurrence=${template.occurrencesCount + 1} segment=${clientIds.length} recipients=${recipients.length} sent=${exec.sentCount} next=${next?.toISOString() ?? "none"}`,
+    `[Recurring] ${template.id} occurrence=${template.occurrencesCount + 1} segment=${clientIds.length} recipients=${recipients.length} sent=${exec.sentCount} status=${exec.status} next=${next?.toISOString() ?? "none"}`,
   )
-  return "sent"
+  if (!delivered) return { kind: "failed", error: exec.errors[0] ?? "send failed" }
+  return { kind: "sent" }
 }
 
 /** No next run → the template has run its course. */
@@ -252,7 +267,7 @@ async function applyGuards(template: Template, clientIds: string[], now: Date): 
   }
 
   if (template.minDaysSincePush && kept.size > 0) {
-    const since = new Date(now.getTime() - template.minDaysSincePush * 86_400_000)
+    const since = pushGuardSince(now, template.minDaysSincePush)
     const rows = await db
       .selectDistinct({ clientId: notifications.clientId })
       .from(notifications)

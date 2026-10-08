@@ -20,7 +20,9 @@ import { buildClientTemplateContexts } from "./client-template-context"
 import { resolveSegment } from "./resolve-segment"
 
 const APPLE_BATCH_SIZE = 50
-const GOOGLE_BATCH_SIZE = 100
+// Google: 3 HTTP calls per client (GET, PUT, addMessage); 100 in flight tripped
+// the per-minute rate limit on large tenants.
+const GOOGLE_BATCH_SIZE = 25
 
 type ClientPassInfo = {
   clientId: string
@@ -40,6 +42,7 @@ type ClientPassInfo = {
  * 5. Records notifications in DB
  * 6. Updates campaign stats
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one linear pipeline (claim → audience → dispatch → finalize) whose branches are the failure modes; splitting it would hide the status transitions
 export async function executeCampaign(campaignId: string): Promise<CampaignExecutionResult> {
   // 1. Load campaign + segment
   const campaignRows = await db
@@ -74,11 +77,36 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
     }
   }
 
-  // 3. Capture original status so we can restore it on unhandled error, then
-  //    mark as sending. Without capturing, a scheduled campaign that fails
-  //    once would be demoted to "draft" and the cron would never retry it.
+  // 3. Claim the campaign atomically: only ONE caller can move it from
+  //    draft/scheduled to sending. The cron tick and a manual "Enviar" (or two
+  //    overlapping ticks) used to both pass the read-then-write check above and
+  //    push every recipient twice. The original status is kept so an early
+  //    failure restores it (a scheduled campaign must stay retryable).
   const originalStatus = campaign.status
-  await db.update(campaigns).set({ status: "sending" }).where(eq(campaigns.id, campaignId))
+  const claimed = await db
+    .update(campaigns)
+    .set({ status: "sending", updatedAt: new Date() })
+    .where(
+      sql`${campaigns.id} = ${campaignId}::uuid AND ${campaigns.status} IN ('draft', 'scheduled')`,
+    )
+    .returning({ id: campaigns.id })
+  if (claimed.length === 0) {
+    return {
+      campaignId,
+      status: "failed",
+      targetCount: 0,
+      sentCount: 0,
+      deliveredCount: 0,
+      failedCount: 0,
+      errors: ["Campaign is already being sent by another process"],
+    }
+  }
+
+  // Hoisted so the catch block knows whether pushes already went out.
+  const allErrors: string[] = []
+  let totalSent = 0
+  let totalFailed = 0
+  let dispatchStarted = false
 
   try {
     // 4. Load segment filter
@@ -121,6 +149,7 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
           sentAt: new Date(),
           sentCount: 0,
           deliveredCount: 0,
+          updatedAt: new Date(),
         })
         .where(eq(campaigns.id, campaignId))
 
@@ -164,10 +193,9 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
         )
     }
 
-    // 7. Send notifications
-    const allErrors: string[] = []
-    let totalSent = 0
-    let totalFailed = 0
+    // 7. Send notifications. From here on, a thrown error must NOT restore
+    //    draft/scheduled: some recipients may already have been pushed.
+    dispatchStarted = true
 
     // Process Apple push batches
     const appleClients = clientPassMap.filter((c) => c.appleDeviceTokens.length > 0)
@@ -213,20 +241,37 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
       allErrors.push(...googleResult.errors)
     }
 
-    // 8. Update campaign final stats
+    // 8. Final status. Nothing delivered at all (credentials down, every push
+    //    rejected) is a FAILURE, not a send: the campaign goes back to draft
+    //    with the error on the row so the admin can fix the cause and send
+    //    again. It is not re-queued as scheduled on purpose: a broken
+    //    certificate would otherwise retry every 5 minutes forever.
+    const nothingDelivered = totalSent === 0 && totalFailed > 0
     await db
       .update(campaigns)
-      .set({
-        status: "sent",
-        sentAt: new Date(),
-        sentCount: totalSent,
-        deliveredCount: totalSent, // Initially same as sent
-      })
+      .set(
+        nothingDelivered
+          ? {
+              status: "draft",
+              sentAt: null,
+              sentCount: 0,
+              deliveredCount: 0,
+              content: withLastError(campaign.content, allErrors),
+              updatedAt: new Date(),
+            }
+          : {
+              status: "sent",
+              sentAt: new Date(),
+              sentCount: totalSent,
+              deliveredCount: totalSent, // Initially same as sent
+              updatedAt: new Date(),
+            },
+      )
       .where(eq(campaigns.id, campaignId))
 
     return {
       campaignId,
-      status: totalFailed > 0 && totalSent === 0 ? "failed" : "sent",
+      status: nothingDelivered ? "failed" : "sent",
       targetCount,
       sentCount: totalSent,
       deliveredCount: totalSent,
@@ -234,11 +279,38 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
       errors: allErrors,
     }
   } catch (error) {
-    // On unhandled error, restore the ORIGINAL status (draft or scheduled).
-    // Restoring to "scheduled" preserves the cron reintent — a transient
-    // failure (APNs 5xx, Google API timeout) would otherwise silently
-    // demote the campaign to "draft" and it would never be sent.
-    await db.update(campaigns).set({ status: originalStatus }).where(eq(campaigns.id, campaignId))
+    const message = error instanceof Error ? error.message : String(error)
+    if (dispatchStarted) {
+      // Pushes may already be out: finalize with what was counted instead of
+      // restoring "scheduled" (which would re-send to everyone on the next tick).
+      await db
+        .update(campaigns)
+        .set({
+          status: "sent",
+          sentAt: new Date(),
+          sentCount: totalSent,
+          deliveredCount: totalSent,
+          content: withLastError(campaign.content, [...allErrors, message]),
+          updatedAt: new Date(),
+        })
+        .where(eq(campaigns.id, campaignId))
+      return {
+        campaignId,
+        status: totalSent > 0 ? "sent" : "failed",
+        targetCount: 0,
+        sentCount: totalSent,
+        deliveredCount: totalSent,
+        failedCount: totalFailed,
+        errors: [...allErrors, message],
+      }
+    }
+
+    // Nothing was sent yet: restore the ORIGINAL status (draft or scheduled).
+    // Restoring to "scheduled" preserves the cron retry for transient errors.
+    await db
+      .update(campaigns)
+      .set({ status: originalStatus, updatedAt: new Date() })
+      .where(eq(campaigns.id, campaignId))
 
     return {
       campaignId,
@@ -247,8 +319,18 @@ export async function executeCampaign(campaignId: string): Promise<CampaignExecu
       sentCount: 0,
       deliveredCount: 0,
       failedCount: 0,
-      errors: [error instanceof Error ? error.message : String(error)],
+      errors: [message],
     }
+  }
+}
+
+/** Keeps whatever the row already carries in `content` and records the last error. */
+function withLastError(content: unknown, errors: string[]) {
+  const base = content && typeof content === "object" ? (content as Record<string, unknown>) : {}
+  return {
+    ...base,
+    lastError: errors.slice(0, 5).join("; ").slice(0, 1000),
+    lastErrorAt: new Date().toISOString(),
   }
 }
 

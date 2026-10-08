@@ -303,7 +303,12 @@ export function RecurringCampaignForm({ open, onOpenChange, tenantSlug, editing,
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+          <form
+            onSubmit={form.handleSubmit(onSubmit, () =>
+              toast.error("Revisa los campos marcados antes de activar la campaña"),
+            )}
+            className="space-y-5"
+          >
             <FormField
               control={form.control}
               name="name"
@@ -538,6 +543,7 @@ export function RecurringCampaignForm({ open, onOpenChange, tenantSlug, editing,
                     value={rule.startsOn}
                     onChange={(e) => setRule("startsOn", e.target.value)}
                   />
+                  <FormMessage>{form.formState.errors.rule?.startsOn?.message}</FormMessage>
                 </div>
               </div>
 
@@ -579,6 +585,7 @@ export function RecurringCampaignForm({ open, onOpenChange, tenantSlug, editing,
                         setRule("maxOccurrences", e.target.value ? Number(e.target.value) : null)
                       }
                     />
+                    <FormMessage>{form.formState.errors.rule?.maxOccurrences?.message}</FormMessage>
                   </div>
                 )}
               </div>

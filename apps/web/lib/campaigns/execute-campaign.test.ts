@@ -4,9 +4,14 @@ const { mockState } = vi.hoisted(() => {
   const mockState = {
     selectResults: [] as unknown[],
     selectIdx: 0,
+    /** Rows the atomic claim UPDATE ... RETURNING yields (empty = someone else owns it). */
+    claimRows: [{ id: "campaign-1" }] as unknown[],
+    updates: [] as unknown[],
     reset() {
       mockState.selectResults = []
       mockState.selectIdx = 0
+      mockState.claimRows = [{ id: "campaign-1" }]
+      mockState.updates = []
     },
     pushSelectResult(result: unknown) {
       mockState.selectResults.push(result)
@@ -76,9 +81,19 @@ vi.mock("@cuik/db", () => {
     db: {
       select: vi.fn().mockImplementation(makeSelectChain),
       update: vi.fn().mockImplementation(() => ({
-        set: vi.fn().mockImplementation(() => ({
-          where: vi.fn().mockResolvedValue(undefined),
-        })),
+        set: vi.fn().mockImplementation((values: unknown) => {
+          mockState.updates.push(values)
+          return {
+            where: vi.fn().mockImplementation(() => {
+              const chain = {
+                returning: vi.fn().mockResolvedValue(mockState.claimRows),
+                // biome-ignore lint/suspicious/noThenProperty: thenable mock for awaited updates
+                then: (resolve: (v: unknown) => void) => resolve(undefined),
+              }
+              return chain
+            }),
+          }
+        }),
       })),
       insert: vi.fn().mockImplementation(() => ({
         values: vi.fn().mockResolvedValue(undefined),
@@ -527,6 +542,44 @@ describe("executeCampaign", () => {
       expect(result.errors).toContain("Google credentials not configured")
       expect(mockAddMessage).not.toHaveBeenCalled()
     })
+  })
+
+  it("does not send when another process already claimed the campaign", async () => {
+    mockState.pushSelectResult([DRAFT_CAMPAIGN])
+    mockState.claimRows = []
+
+    const result = await executeCampaign("campaign-1")
+
+    expect(result.status).toBe("failed")
+    expect(result.errors[0]).toContain("already being sent")
+    expect(mockResolveSegment).not.toHaveBeenCalled()
+    expect(mockSendApnsPush).not.toHaveBeenCalled()
+  })
+
+  it("puts an all-failed campaign back in draft with the error instead of marking it sent", async () => {
+    mockState.pushSelectResult([DRAFT_CAMPAIGN])
+    mockState.pushSelectResult([{ filter: { preset: "todos" } }])
+    mockState.pushSelectResult([{ businessType: "restaurant", segmentationConfig: null }])
+    mockState.pushSelectResult([
+      { clientId: "client-1", serialNumber: "serial-1", googleObjectId: null },
+    ])
+    mockState.pushSelectResult([{ serialNumber: "serial-1", pushToken: "device-token-1" }])
+    mockResolveSegment.mockResolvedValueOnce({ clientIds: ["client-1"], count: 1 })
+    // No Apple credentials in env → every push is recorded as failed
+    delete process.env.APPLE_APNS_P8_BASE64
+    mockGetTenantAppleConfig.mockResolvedValueOnce(null)
+
+    const result = await executeCampaign("campaign-1")
+
+    expect(result.status).toBe("failed")
+    expect(result.sentCount).toBe(0)
+    expect(result.failedCount).toBe(1)
+    const finalUpdate = mockState.updates.at(-1) as {
+      status: string
+      content?: { lastError?: string }
+    }
+    expect(finalUpdate.status).toBe("draft")
+    expect(finalUpdate.content?.lastError).toContain("Apple credentials not configured")
   })
 
   it("accepts campaign with 'scheduled' status", async () => {

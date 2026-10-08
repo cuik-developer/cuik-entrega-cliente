@@ -76,6 +76,9 @@ export function CreateCampaignForm({
   // +5h on every edit).
   const { timezone } = useTenant()
   const [scheduledLocal, setScheduledLocal] = useState("")
+  // Bumped when an edit finished loading: remounts the audience picker so its
+  // tab is computed from the loaded value, not from the previous campaign.
+  const [loadKey, setLoadKey] = useState(0)
 
   const form = useForm<CreateCampaignInput>({
     resolver: zodResolver(createCampaignSchema),
@@ -115,6 +118,7 @@ export function CreateCampaignForm({
         })
         setIsScheduled(Boolean(c.scheduledAt))
         setScheduledLocal(c.scheduledAt ? utcToWallTime(c.scheduledAt, timezone) : "")
+        setLoadKey((k) => k + 1)
       })
       .catch(() => {
         if (!cancelled) {
@@ -228,7 +232,7 @@ export function CreateCampaignForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Tipo de campaña</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Seleccionar tipo" />
@@ -312,7 +316,7 @@ export function CreateCampaignForm({
                 <FormItem>
                   <FormControl>
                     <SegmentPicker
-                      key={editId ?? "new"}
+                      key={`${editId ?? "new"}-${loadKey}`}
                       value={field.value}
                       onChange={handleSegmentChange}
                       tenantSlug={tenantSlug}

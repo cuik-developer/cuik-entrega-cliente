@@ -54,6 +54,8 @@ export async function POST(request: Request) {
             targetCount: r.targetCount,
             sentCount: r.sentCount,
           })
+        } else if (r.status === "failed") {
+          errors.push(`tenant=${tenant.slug}: ${r.errors[0] ?? "send failed"}`)
         } else {
           skipped.push({ tenant: tenant.slug, reason: r.reason })
         }
