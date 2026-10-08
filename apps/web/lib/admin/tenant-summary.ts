@@ -110,25 +110,3 @@ export async function enrichTenantRows<T extends { id: string; planId: string | 
     },
   }))
 }
-
-/** Columns the super-admin tenant views need; shared by the list and the detail GET. */
-export const TENANT_LIST_COLUMNS = {
-  id: true,
-  slug: true,
-  name: true,
-  status: true,
-  planId: true,
-  trialEndsAt: true,
-  activatedAt: true,
-  ownerId: true,
-  createdAt: true,
-  updatedAt: true,
-  branding: true,
-  businessType: true,
-  address: true,
-  phone: true,
-  contactEmail: true,
-  timezone: true,
-  segmentationConfig: true,
-  appleConfig: true,
-} as const

@@ -234,7 +234,12 @@ export default function TenantsPage() {
                       <div key={t.id} className="rounded-xl border border-slate-200 p-3 space-y-3">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <div className="font-semibold text-slate-900 truncate">{t.name}</div>
+                            <Link
+                              href={`/admin/tenants/${t.id}`}
+                              className="block font-semibold text-slate-900 truncate hover:text-[#0e70db]"
+                            >
+                              {t.name}
+                            </Link>
                             <div className="text-xs text-slate-400 truncate">{t.slug}</div>
                           </div>
                           <div className="flex flex-col items-end gap-1 shrink-0">

@@ -27,7 +27,7 @@ const VALID_TABS = new Set([
  */
 export default function TenantPage() {
   const { id } = useParams<{ id: string }>()
-  const _router = useRouter()
+  const router = useRouter()
   const search = useSearchParams()
   const tabParam = search.get("tab")
   const forcedTab = tabParam && VALID_TABS.has(tabParam) ? tabParam : null
@@ -41,11 +41,18 @@ export default function TenantPage() {
     action: PlanModalAction
   } | null>(null)
 
+  // Refetch after an action must never blank a page that is already showing
+  // the tenant: a failed refresh is a toast, only the first load can error out.
   const load = useCallback(async () => {
+    const hadTenant = tenant !== null
     try {
       const res = await fetch(`/api/admin/tenants/${id}`)
       const json = await res.json()
       if (!res.ok || !json.success) {
+        if (hadTenant) {
+          toast.error(json.error ?? "No se pudo actualizar la información del tenant")
+          return
+        }
         setError(
           res.status === 404 ? "Este tenant no existe." : (json.error ?? "No se pudo cargar"),
         )
@@ -53,16 +60,23 @@ export default function TenantPage() {
       }
       setTenant(json.data)
     } catch {
-      setError("Error de conexión")
+      if (hadTenant) toast.error("Error de conexión al actualizar")
+      else setError("Error de conexión")
     }
-  }, [id])
+  }, [id, tenant])
+
+  // The forced section is applied once at mount; drop it from the URL so a
+  // reload or back/forward respects the section the user picked afterwards.
+  useEffect(() => {
+    if (forcedTab) router.replace(`/admin/tenants/${id}`)
+  }, [forcedTab, id, router])
 
   useEffect(() => {
     load()
   }, [load])
 
-  async function handlePlanConfirm(planId: string) {
-    if (!planModal) return
+  async function handlePlanConfirm(planId: string): Promise<boolean> {
+    if (!planModal) return false
     const payload: Record<string, unknown> = { planId }
     if (planModal.action === "activate" || planModal.action === "reactivate") {
       payload.status = "active"
@@ -72,9 +86,10 @@ export default function TenantPage() {
       toast.success(`"${planModal.tenantName}" actualizado correctamente`)
       setPlanModal(null)
       load()
-    } else {
-      toast.error(result.error ?? "Error al actualizar tenant")
+      return true
     }
+    toast.error(result.error ?? "Error al actualizar tenant")
+    return false
   }
 
   return (
@@ -86,8 +101,18 @@ export default function TenantPage() {
       </Button>
 
       {error ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-sm text-slate-500">
-          {error}
+        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-sm text-slate-500 space-y-3">
+          <p>{error}</p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setError(null)
+              load()
+            }}
+          >
+            Reintentar
+          </Button>
         </div>
       ) : !tenant ? (
         <div className="flex justify-center py-16">

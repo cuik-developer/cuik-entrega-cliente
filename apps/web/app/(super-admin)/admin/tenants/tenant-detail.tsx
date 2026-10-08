@@ -76,12 +76,6 @@ const SECTIONS: { value: string; label: string; icon: LucideIcon }[] = [
   { value: "editar", label: "Datos del negocio", icon: Building2 },
 ]
 
-function businessTypeLabel(value: string | null): string | null {
-  if (!value) return null
-  // Options are stored as their label, so the value is already human-readable.
-  return value
-}
-
 /** Logo from the tenant branding (set in Admin → Branding); initial as fallback. */
 function TenantLogo({ branding, name }: { branding: unknown; name: string }) {
   const b = (branding ?? {}) as { logoUrl?: string | null; primaryColor?: string | null }
@@ -542,9 +536,7 @@ export function TenantDetail({
               <p className="text-sm text-slate-500 truncate">
                 {tenant.slug}
                 {tenant.planName ? ` · ${tenant.planName}` : " · Sin plan"}
-                {businessTypeLabel(tenant.businessType)
-                  ? ` · ${businessTypeLabel(tenant.businessType)}`
-                  : ""}
+                {tenant.businessType ? ` · ${tenant.businessType}` : ""}
               </p>
             </div>
           </div>
@@ -597,14 +589,16 @@ export function TenantDetail({
               ) : null}
             </TabsTrigger>
           ))}
-          <div
-            className="hidden md:flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400 cursor-not-allowed"
+          <TabsTrigger
+            value="facturacion"
+            disabled
             title="Disponible en la siguiente entrega"
+            className="justify-start gap-2 rounded-lg px-3 py-2 text-sm whitespace-nowrap md:w-full text-slate-400 disabled:opacity-100"
           >
             <Receipt className="w-4 h-4 shrink-0" />
             Facturación
             <span className="ml-auto text-[10px] uppercase tracking-wide">pronto</span>
-          </div>
+          </TabsTrigger>
         </TabsList>
 
         <div className="flex-1 min-w-0 w-full">

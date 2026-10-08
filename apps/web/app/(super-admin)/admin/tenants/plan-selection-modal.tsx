@@ -20,7 +20,8 @@ export function PlanSelectionModal({
   currentPlanId: string | null
   action: PlanModalAction
   onClose: () => void
-  onConfirm: (planId: string) => void
+  /** Resolves false when the change was rejected (modal stays open, button re-enabled). */
+  onConfirm: (planId: string) => Promise<boolean> | boolean | undefined
 }) {
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null)
   const [plans, setPlans] = useState<ApiPlan[]>([])
@@ -57,7 +58,12 @@ export function PlanSelectionModal({
   const handleConfirm = async () => {
     if (!selectedPlan) return
     setConfirming(true)
-    onConfirm(selectedPlan)
+    try {
+      const ok = await onConfirm(selectedPlan)
+      if (ok === false) setConfirming(false)
+    } catch {
+      setConfirming(false)
+    }
   }
 
   const isChangePlan = action === "change"
