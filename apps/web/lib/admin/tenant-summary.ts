@@ -21,7 +21,56 @@ export type TenantSummary = {
   health: TenantHealthSummary
 }
 
+/**
+ * Counts and health are recomputed at most every 2 minutes per tenant (the
+ * manager reloads them on every search keystroke). Super-admin writes that
+ * change what is shown (plan, status) call `invalidateTenantSummary`.
+ */
+const SUMMARY_TTL_MS = 120_000
+const summaryCache = new Map<
+  string,
+  { at: number; planId: string | null; summary: TenantSummary }
+>()
+
+export function invalidateTenantSummary(tenantId?: string): void {
+  if (tenantId) summaryCache.delete(tenantId)
+  else summaryCache.clear()
+}
+
 export async function enrichTenantRows<T extends { id: string; planId: string | null }>(
+  tenantRows: T[],
+): Promise<Array<T & TenantSummary>> {
+  if (tenantRows.length === 0) return []
+  const now = Date.now()
+  const stale = tenantRows.filter((t) => {
+    const c = summaryCache.get(t.id)
+    return !c || now - c.at >= SUMMARY_TTL_MS || c.planId !== t.planId
+  })
+  for (const row of await computeTenantRows(stale)) {
+    const { clientCount, visitCount, rewardCount, returnRate, planName, health } = row
+    summaryCache.set(row.id, {
+      at: now,
+      planId: row.planId,
+      summary: { clientCount, visitCount, rewardCount, returnRate, planName, health },
+    })
+  }
+  return tenantRows.map((t) => {
+    const cached = summaryCache.get(t.id)
+    return {
+      ...t,
+      ...(cached?.summary ?? {
+        clientCount: 0,
+        visitCount: 0,
+        rewardCount: 0,
+        returnRate: 0,
+        planName: null,
+        health: { lastVisitAt: null, visits30d: 0, newClients30d: 0, installed: 0 },
+      }),
+    }
+  })
+}
+
+async function computeTenantRows<T extends { id: string; planId: string | null }>(
   tenantRows: T[],
 ): Promise<Array<T & TenantSummary>> {
   if (tenantRows.length === 0) return []

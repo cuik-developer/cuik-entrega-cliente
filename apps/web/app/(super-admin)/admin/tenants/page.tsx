@@ -37,7 +37,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { BillingCell, BillingNotices, money, useBillingSummary } from "./billing-widgets"
+import { daysBetween } from "@/lib/admin/billing"
+import { AdminNotices } from "./admin-notices"
+import { BillingCell, money, useBillingSummary } from "./billing-widgets"
 import { TenantHealthCell } from "./tenant-health"
 import { type ApiTenant, openTenantPanel, type PaginationMeta, statusConfig } from "./tenant-shared"
 
@@ -59,9 +61,35 @@ function trialDaysLeft(t: ApiTenant): number | null {
   )
 }
 
+/** Calendar days until an ISO date in Lima (same count as the daily digest); null when absent or invalid. */
+function daysUntil(iso: string | null | undefined): number | null {
+  if (!iso) return null
+  const t = Date.parse(iso)
+  if (Number.isNaN(t)) return null
+  const lima = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima" }).format(d)
+  return daysBetween(lima(new Date()), lima(new Date(t)))
+}
+
 function AppleChip({ t }: { t: ApiTenant }) {
   const mode = t.appleConfig?.mode
-  if (mode === "production") return <StatusChip tone="ok">Apple</StatusChip>
+  if (mode === "production") {
+    const days = daysUntil(t.appleConfig?.expiresAt)
+    if (days !== null && days < 0) {
+      return (
+        <StatusChip tone="bad" title="El certificado Apple venció">
+          Apple · certificado vencido
+        </StatusChip>
+      )
+    }
+    if (days !== null && days <= 30) {
+      return (
+        <StatusChip tone={days <= 7 ? "bad" : "warn"} title="El certificado Apple vence pronto">
+          Apple · vence en {days} d
+        </StatusChip>
+      )
+    }
+    return <StatusChip tone="ok">Apple</StatusChip>
+  }
   if (mode === "configuring") return <StatusChip tone="warn">Apple en configuración</StatusChip>
   return null
 }
@@ -184,7 +212,7 @@ function TenantsPageInner() {
         />
       )}
 
-      <BillingNotices data={billingSummary} />
+      <AdminNotices />
 
       <Panel>
         <Toolbar>

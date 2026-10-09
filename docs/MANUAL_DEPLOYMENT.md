@@ -963,7 +963,7 @@ La app tiene endpoints cron protegidos por `CRON_SECRET`:
 | `POST /api/cron/reports` | Cada hora (minuto 10) | Reportes semanal/mensual por correo cuando coincide el dia y la hora local de cada comercio; idempotente por periodo |
 | `POST /api/cron/loyalty-expiration` | Cada hora (minuto 15) | Vence los puntos cuya fecha paso (segun la politica de cada comercio) y, a la hora local configurada, envia el push "tus puntos vencen el ..." |
 | `POST /api/cron/clients-purge` | Una vez al dia (5 AM) | Anonimiza los clientes archivados hace mas de 30 dias (datos personales, notas, etiquetas y pases; las visitas quedan como historial anonimo) |
-| `POST /api/cron/billing-reminders` | Una vez al dia (8 AM Lima = 13:00 UTC) | Correo a los super-admins con las facturas que vencen en 3 dias y las que ya vencieron sin registrar. Como maximo una vez por dia (marca en `global_config`); si un dia no corre, al siguiente avisa tambien las que vencen en 1 o 2 dias. `?force=1` ignora la marca y envia aunque no haya nada |
+| `POST /api/cron/admin-digest` | Una vez al dia (8 AM Lima = 13:00 UTC) | **Resumen diario** a los super-admins: facturacion (facturas por emitir en 3 dias y vencidas sin registrar), comercios con clientes y 14+ dias sin visitas (al cruzar y luego cada 7 dias), demos que vencen en 3 dias o menos, certificados Apple por vencer (30/14/7/1 dias y vencido; incluye el certificado compartido de `APPLE_SIGNER_CERT_BASE64`) y campanas que fallaron en las ultimas 24 h. Un correo por dia como maximo (marca `admin_digest` en `global_config`), sin repetir avisos ya enviados; sin nada que decir no envia. `?force=1` ignora la marca y la cadencia (manda todo lo vigente). Reemplaza a `billing-reminders`, que sigue existiendo pero no debe programarse a la vez (duplicaria el aviso de facturacion) |
 
 Migraciones manuales recientes (aplicar con psql antes del deploy correspondiente): `0023_google_wallet_callbacks.sql`, `0024_recurring_campaigns.sql`, `0025_tenant_billing.sql` (facturacion del super-admin).
 
@@ -974,7 +974,7 @@ Migraciones manuales recientes (aplicar con psql antes del deploy correspondient
 0 4 * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/analytics-retention
 5 * * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/campaigns-birthday
 10 * * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/reports
-0 13 * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/billing-reminders
+0 13 * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/admin-digest
 15 * * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/loyalty-expiration
 0 5 * * * curl -s -H "x-cron-secret: TU_CRON_SECRET" -X POST https://tu-dominio.com/api/cron/clients-purge
 ```

@@ -2,7 +2,7 @@ import { and, db, eq, ne, plans, tenants } from "@cuik/db"
 import { updateTenantSchema } from "@cuik/shared/validators"
 import type { z } from "zod"
 import { billingOutlookFor } from "@/lib/admin/billing-overview"
-import { enrichTenantRows } from "@/lib/admin/tenant-summary"
+import { enrichTenantRows, invalidateTenantSummary } from "@/lib/admin/tenant-summary"
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -96,6 +96,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     const updateData = buildUpdateData(parsed.data, existing.status)
     const [updated] = await db.update(tenants).set(updateData).where(eq(tenants.id, id)).returning()
+    invalidateTenantSummary(id)
 
     return successResponse(updated)
   } catch (error) {
