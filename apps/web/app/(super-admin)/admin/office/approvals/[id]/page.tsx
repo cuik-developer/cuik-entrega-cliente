@@ -78,13 +78,13 @@ export default function ApprovalDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+        <Loader2 className="w-6 h-6 animate-spin text-ent-fg-3" />
       </div>
     )
   }
 
   if (!execution) {
-    return <div className="text-center py-12 text-slate-400">Ejecucion no encontrada</div>
+    return <div className="text-center py-12 text-ent-fg-3">Ejecucion no encontrada</div>
   }
 
   const rawOutput = execution.output as Record<string, unknown> | string | null
@@ -117,15 +117,17 @@ export default function ApprovalDetailPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">{execution.taskTitle}</h1>
+            <h1 className="text-[17px] leading-6 font-semibold text-ent-fg tracking-[-0.005em]">
+              {execution.taskTitle}
+            </h1>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-sm text-slate-500">
+              <span className="text-sm text-ent-fg-3">
                 {(execution.agentsUsed as string[])
                   .map((a) => `${agentEmoji(a)} ${agentName(a)}`)
                   .join(" \u2192 ")}
               </span>
               <span className="text-slate-300">|</span>
-              <span className="text-sm text-slate-500 flex items-center gap-1">
+              <span className="text-sm text-ent-fg-3 flex items-center gap-1">
                 <Clock className="w-3 h-3" />
                 {execution.durationMs ? `${(execution.durationMs / 1000).toFixed(1)}s` : "\u2014"}
               </span>
@@ -177,7 +179,7 @@ export default function ApprovalDetailPage() {
           <CardTitle className="text-base">Prompt de la tarea</CardTitle>
         </CardHeader>
         <CardContent>
-          <pre className="text-sm text-slate-700 whitespace-pre-wrap bg-slate-50 p-4 rounded-lg">
+          <pre className="text-sm text-ent-fg-2 whitespace-pre-wrap bg-ent-panel-2 p-4 rounded-[4px]">
             {execution.taskPrompt}
           </pre>
         </CardContent>
@@ -194,7 +196,7 @@ export default function ApprovalDetailPage() {
         </CardHeader>
         <CardContent>
           <div className="prose prose-sm max-w-none">
-            <pre className="text-sm text-slate-700 whitespace-pre-wrap bg-slate-50 p-4 rounded-lg max-h-96 overflow-y-auto">
+            <pre className="text-sm text-ent-fg-2 whitespace-pre-wrap bg-ent-panel-2 p-4 rounded-[4px] max-h-96 overflow-y-auto">
               {outputText}
             </pre>
           </div>
@@ -233,10 +235,10 @@ export default function ApprovalDetailPage() {
               {execution.agentLogs.map((log, i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-2 text-xs font-mono bg-slate-50 p-2 rounded"
+                  className="flex items-center gap-2 text-xs font-mono bg-ent-panel-2 p-2 rounded"
                 >
                   {"agent" in log && <span>{agentEmoji(String(log.agent))}</span>}
-                  <span className="text-slate-500">{String(log.event)}</span>
+                  <span className="text-ent-fg-3">{String(log.event)}</span>
                   {"model" in log && (
                     <Badge variant="outline" className="text-xs">
                       {String(log.model)}

@@ -1,40 +1,80 @@
 "use client"
 
 import {
-  Building2,
   ChevronLeft,
   ChevronRight,
-  CreditCard,
   Edit,
   Eye,
-  Filter,
   Loader2,
+  MoreHorizontal,
+  Receipt,
   RefreshCw,
   Search,
   Shield,
-  TrendingUp,
-  Users,
   XCircle,
 } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
-import { Badge } from "@/components/ui/badge"
+import {
+  DataTable,
+  PageHeader,
+  Panel,
+  PanelFooter,
+  PanelMessage,
+  StatStrip,
+  StatusChip,
+  Td,
+  Th,
+  Toolbar,
+  Tr,
+} from "@/components/admin/enterprise"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { BillingCell, BillingSummaryBar } from "./billing-widgets"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { BillingCell, BillingNotices, money, useBillingSummary } from "./billing-widgets"
 import { TenantHealthCell } from "./tenant-health"
 import { type ApiTenant, openTenantPanel, type PaginationMeta, statusConfig } from "./tenant-shared"
 
+const STATUS_OPTIONS = [
+  ["all", "Todos los estados"],
+  ["active", "Activo"],
+  ["trial", "Demo"],
+  ["pending", "Pendiente"],
+  ["expired", "Vencido"],
+  ["paused", "Pausado"],
+  ["cancelled", "Cancelado"],
+] as const
+
+function trialDaysLeft(t: ApiTenant): number | null {
+  if (t.status !== "trial" || !t.trialEndsAt) return null
+  return Math.max(
+    0,
+    Math.ceil((new Date(t.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
+  )
+}
+
+function AppleChip({ t }: { t: ApiTenant }) {
+  const mode = t.appleConfig?.mode
+  if (mode === "production") return <StatusChip tone="ok">Apple</StatusChip>
+  if (mode === "configuring") return <StatusChip tone="warn">Apple en configuración</StatusChip>
+  return null
+}
+
 /* ────────────────────────────────────────────────────────────
-   Main Page
+   Tenant manager
    ──────────────────────────────────────────────────────────── */
 export default function TenantsPage() {
   const [tenants, setTenants] = useState<ApiTenant[]>([])
   const [pagination, setPagination] = useState<PaginationMeta | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const billingSummary = useBillingSummary()
 
   const router = useRouter()
   const openTenant = (id: string, tab?: string) =>
@@ -42,13 +82,17 @@ export default function TenantsPage() {
 
   // Search & filter state
   const [searchQuery, setSearchQuery] = useState("")
-  // Deep link from Metricas ("comercios sin visitas"): /admin/tenants?q=<nombre>
-  useEffect(() => {
-    const q = new URLSearchParams(window.location.search).get("q")
-    if (q) setSearchQuery(q)
-  }, [])
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [currentPage, setCurrentPage] = useState(1)
+  // Deep link from Metricas and the top-bar search: /admin/tenants?q=<nombre>.
+  // Read reactively: the top-bar search pushes a new `?q=` while this page is open.
+  const urlQuery = useSearchParams().get("q") ?? ""
+  useEffect(() => {
+    if (urlQuery) {
+      setSearchQuery(urlQuery)
+      setCurrentPage(1)
+    }
+  }, [urlQuery])
 
   const fetchTenants = useCallback(async () => {
     setLoading(true)
@@ -57,17 +101,11 @@ export default function TenantsPage() {
       const params = new URLSearchParams()
       params.set("page", String(currentPage))
       params.set("limit", "20")
-      if (statusFilter !== "all") {
-        params.set("status", statusFilter)
-      }
-      if (searchQuery.trim()) {
-        params.set("search", searchQuery.trim())
-      }
+      if (statusFilter !== "all") params.set("status", statusFilter)
+      if (searchQuery.trim()) params.set("search", searchQuery.trim())
 
       const res = await fetch(`/api/admin/tenants?${params.toString()}`)
-      if (!res.ok) {
-        throw new Error(`Error ${res.status}: ${res.statusText}`)
-      }
+      if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`)
       const json = await res.json()
       setTenants(json.data.items)
       setPagination(json.data.pagination)
@@ -85,407 +123,357 @@ export default function TenantsPage() {
     return () => clearTimeout(timeout)
   }, [fetchTenants])
 
-  // Compute KPIs from real data
+  // Figures for the strip, from the visible page
   const activeTenants = tenants.filter((t) => t.status === "active").length
   const pendingTenants = tenants.filter((t) => t.status === "pending").length
   const totalClients = tenants.reduce((sum, t) => sum + (Number(t.clientCount) || 0), 0)
   const totalVisits = tenants.reduce((sum, t) => sum + (Number(t.visitCount) || 0), 0)
+  const total = pagination?.total ?? tenants.length
+  const overdue = billingSummary?.overdue.length ?? 0
+  const dueSoon = billingSummary?.dueSoon.length ?? 0
 
-  const kpis = [
-    {
-      label: "Tenants Activos",
-      value: String(activeTenants),
-      sub: pendingTenants > 0 ? `+${pendingTenants} pendientes` : "0 pendientes",
-      subColor: pendingTenants > 0 ? "text-amber-600" : "text-slate-400",
-      icon: Building2,
-      color: "bg-blue-50 text-[#0e70db]",
-    },
-    {
-      label: "Clientes Totales",
-      value: totalClients.toLocaleString(),
-      sub: "En tenants visibles",
-      subColor: "text-slate-400",
-      icon: Users,
-      color: "bg-emerald-50 text-emerald-600",
-    },
-    {
-      label: "Visitas Totales",
-      value: totalVisits.toLocaleString(),
-      sub: "En tenants visibles",
-      subColor: "text-slate-400",
-      icon: TrendingUp,
-      color: "bg-amber-50 text-amber-600",
-    },
-    {
-      label: "Total Tenants",
-      value: String(pagination?.total ?? tenants.length),
-      sub: "En la plataforma",
-      subColor: "text-slate-400",
-      icon: CreditCard,
-      color: "bg-orange-50 text-[#ff4810]",
-    },
-  ]
+  const from = pagination ? (pagination.page - 1) * pagination.limit + 1 : 1
+  const to = pagination ? Math.min(pagination.page * pagination.limit, pagination.total) : 0
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold text-slate-900">Gestion de Tenants</h1>
-        <p className="text-slate-500 text-sm">Administra todos los comercios de la plataforma.</p>
-      </div>
+    <div className="space-y-3">
+      <PageHeader
+        crumbs={[{ label: "Inicio", href: "/admin/tenants" }, { label: "Tenants" }]}
+        title="Tenants"
+        subtitle="Todos los comercios de la plataforma"
+        actions={
+          <Button asChild size="sm" variant="outline" className="h-7 text-[12.5px]">
+            <Link href="/admin/solicitudes">Ver solicitudes</Link>
+          </Button>
+        }
+      />
 
-      {/* KPIs */}
-      {!loading && !error && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {kpis.map((kpi) => (
-            <Card key={kpi.label} className="border border-slate-200">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-slate-500 font-medium">{kpi.label}</span>
-                  <div
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center ${kpi.color}`}
-                  >
-                    <kpi.icon className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-extrabold text-slate-900">{kpi.value}</div>
-                <div className={`text-xs mt-0.5 font-medium ${kpi.subColor}`}>{kpi.sub}</div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+      {!error && (tenants.length > 0 || !loading) && (
+        <StatStrip
+          stats={[
+            {
+              label: "Activos",
+              value: activeTenants,
+              hint: `de ${total}${pendingTenants ? ` · ${pendingTenants} pendiente${pendingTenants === 1 ? "" : "s"}` : ""}`,
+              tone: pendingTenants ? "warn" : "mute",
+            },
+            { label: "Clientes", value: totalClients.toLocaleString("es-PE") },
+            { label: "Visitas", value: totalVisits.toLocaleString("es-PE") },
+            {
+              label: "Facturación",
+              value: billingSummary ? (
+                <span className={overdue ? "text-ent-bad" : undefined}>{overdue}</span>
+              ) : (
+                "—"
+              ),
+              hint: billingSummary
+                ? `sin registrar · ${dueSoon} esta semana`
+                : "cargando facturación",
+              tone: "mute",
+            },
+          ]}
+        />
       )}
 
-      {/* Invoices to issue / overdue */}
-      <BillingSummaryBar />
+      <BillingNotices data={billingSummary} />
 
-      {/* Tenants table with search/filter */}
-      <Card className="border border-slate-200">
-        <CardHeader className="pb-2">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <CardTitle className="text-base font-bold text-slate-900">Todos los Tenants</CardTitle>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <Input
-                  placeholder="Buscar por nombre..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value)
-                    setCurrentPage(1)
-                  }}
-                  className="pl-9 h-9 sm:h-8 text-sm sm:text-xs w-full sm:w-48"
-                />
-              </div>
-              <div className="relative">
-                <Filter className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                <select
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value)
-                    setCurrentPage(1)
-                  }}
-                  className="h-9 sm:h-8 w-full sm:w-auto pl-8 pr-3 rounded-md border border-slate-200 bg-white text-sm sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0e70db] focus:border-transparent appearance-none cursor-pointer"
-                >
-                  <option value="all">Todos los estados</option>
-                  <option value="active">Activo</option>
-                  <option value="trial">Demo</option>
-                  <option value="pending">Pendiente</option>
-                  <option value="expired">Vencido</option>
-                  <option value="paused">Pausado</option>
-                  <option value="cancelled">Cancelado</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="overflow-x-auto">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
-              <span className="ml-2 text-sm text-slate-500">Cargando tenants...</span>
-            </div>
-          ) : error ? (
-            <div className="text-center py-12 space-y-3">
-              <XCircle className="w-8 h-8 text-red-400 mx-auto" />
-              <p className="text-sm text-red-600">{error}</p>
-              <Button variant="outline" size="sm" onClick={fetchTenants} className="text-xs gap-1">
-                <RefreshCw className="w-3 h-3" /> Reintentar
-              </Button>
-            </div>
-          ) : (
-            <>
-              {/* Phone: one card per tenant with big tap targets. */}
-              <div className="md:hidden space-y-3">
-                {tenants.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-slate-400">
-                    No se encontraron tenants con esos filtros.
-                  </p>
-                ) : (
-                  tenants.map((t) => {
-                    const cfg = statusConfig[t.status]
-                    const trialDaysLeft =
-                      t.status === "trial" && t.trialEndsAt
-                        ? Math.max(
-                            0,
-                            Math.ceil(
-                              (new Date(t.trialEndsAt).getTime() - Date.now()) /
-                                (1000 * 60 * 60 * 24),
-                            ),
-                          )
-                        : null
-                    const open = (tab: string) => openTenant(t.id, tab)
-                    return (
-                      <div key={t.id} className="rounded-xl border border-slate-200 p-3 space-y-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <Link
-                              href={`/admin/tenants/${t.id}`}
-                              className="block font-semibold text-slate-900 truncate hover:text-[#0e70db]"
-                            >
-                              {t.name}
-                            </Link>
-                            <div className="text-xs text-slate-400 truncate">{t.slug}</div>
-                          </div>
-                          <div className="flex flex-col items-end gap-1 shrink-0">
-                            <Badge className={`text-xs border ${cfg?.color ?? ""}`}>
-                              {cfg?.label ?? t.status}
-                              {trialDaysLeft !== null && ` \u2014 ${trialDaysLeft}d`}
-                            </Badge>
-                            {t.appleConfig?.mode === "production" ? (
-                              <Badge className="text-xs border bg-emerald-100 text-emerald-700 border-emerald-200">
-                                <Shield className="w-3 h-3 mr-0.5" />
-                                Apple
-                              </Badge>
-                            ) : t.appleConfig?.mode === "configuring" ? (
-                              <Badge className="text-xs border bg-amber-100 text-amber-700 border-amber-200">
-                                <Shield className="w-3 h-3 mr-0.5" />
-                                Configurando
-                              </Badge>
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between gap-3 text-sm">
-                          <div className="min-w-0">
-                            {t.health ? (
-                              <TenantHealthCell
-                                health={t.health}
-                                clientCount={Number(t.clientCount)}
-                              />
-                            ) : (
-                              <span className="text-xs text-slate-300">—</span>
-                            )}
-                          </div>
-                          <div className="flex gap-4 shrink-0 text-right">
-                            <div>
-                              <div className="text-[11px] text-slate-400">Clientes</div>
-                              <div className="font-semibold tabular-nums">
-                                {Number(t.clientCount).toLocaleString()}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-[11px] text-slate-400">Visitas</div>
-                              <div className="font-semibold tabular-nums text-slate-600">
-                                {Number(t.visitCount).toLocaleString()}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-xs">
-                          <BillingCell billing={t.billing ?? null} tenantId={t.id} />
-                        </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-10 gap-1.5 text-xs"
-                            onClick={() => openTenantPanel(t.id)}
-                          >
-                            <Eye className="w-3.5 h-3.5" /> Panel
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-10 gap-1.5 text-xs"
-                            onClick={() => open("apple")}
-                          >
-                            <Shield className="w-3.5 h-3.5" /> Apple
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-10 gap-1.5 text-xs"
-                            onClick={() => open("editar")}
-                          >
-                            <Edit className="w-3.5 h-3.5" /> Editar
-                          </Button>
+      <Panel>
+        <Toolbar>
+          <label className="relative block">
+            <Search
+              className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-ent-fg-3"
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              placeholder="Buscar por nombre"
+              aria-label="Buscar tenant por nombre"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                setCurrentPage(1)
+              }}
+              className="h-[26px] w-full sm:w-52 pl-7 pr-2 rounded-[4px] border border-ent-line-strong bg-ent-panel text-[12.5px] text-ent-fg placeholder:text-ent-fg-3 focus:outline-none focus:border-ent-accent"
+            />
+          </label>
+          <select
+            value={statusFilter}
+            aria-label="Filtrar por estado"
+            onChange={(e) => {
+              setStatusFilter(e.target.value)
+              setCurrentPage(1)
+            }}
+            className="h-[26px] pl-2 pr-6 rounded-[4px] border border-ent-line-strong bg-ent-panel text-[12.5px] text-ent-fg focus:outline-none focus:border-ent-accent cursor-pointer"
+          >
+            {STATUS_OPTIONS.map(([v, l]) => (
+              <option key={v} value={v}>
+                {v === "all" ? "Estado: todos" : `Estado: ${l}`}
+              </option>
+            ))}
+          </select>
+          <span className="ml-auto text-[11.5px] text-ent-fg-3 tabular-nums">
+            {loading ? "…" : `${total} ${total === 1 ? "tenant" : "tenants"}`}
+          </span>
+        </Toolbar>
+
+        {loading && tenants.length === 0 ? (
+          <PanelMessage>
+            <Loader2 className="w-5 h-5 animate-spin" />
+            Cargando tenants…
+          </PanelMessage>
+        ) : error ? (
+          <PanelMessage>
+            <XCircle className="w-6 h-6 text-ent-bad" />
+            <p className="text-ent-bad">{error}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchTenants}
+              className="h-7 text-[12px] gap-1"
+            >
+              <RefreshCw className="w-3 h-3" /> Reintentar
+            </Button>
+          </PanelMessage>
+        ) : tenants.length === 0 ? (
+          <PanelMessage>No se encontraron tenants con esos filtros.</PanelMessage>
+        ) : (
+          <>
+            {/* Phone: one row-card per tenant with big tap targets. */}
+            <div className="md:hidden divide-y divide-ent-line">
+              {tenants.map((t) => {
+                const cfg = statusConfig[t.status]
+                const days = trialDaysLeft(t)
+                return (
+                  <div key={t.id} className="p-3 space-y-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <Link
+                          href={`/admin/tenants/${t.id}`}
+                          className="block font-semibold text-ent-accent truncate hover:underline"
+                        >
+                          {t.name}
+                        </Link>
+                        <div className="text-[11px] text-ent-fg-3 truncate">
+                          {t.slug}
+                          {t.planName ? ` · ${t.planName}` : ""}
                         </div>
                       </div>
-                    )
-                  })
-                )}
-              </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <StatusChip tone={cfg?.tone ?? "mute"}>
+                          {days !== null ? `Demo · ${days} d` : (cfg?.label ?? t.status)}
+                        </StatusChip>
+                        <AppleChip t={t} />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        {t.health ? (
+                          <TenantHealthCell health={t.health} clientCount={Number(t.clientCount)} />
+                        ) : (
+                          <span className="text-ent-fg-3">—</span>
+                        )}
+                      </div>
+                      <div className="flex gap-4 shrink-0 text-right tabular-nums">
+                        <div>
+                          <div className="text-[11px] text-ent-fg-3">Clientes</div>
+                          <div className="font-semibold">
+                            {Number(t.clientCount).toLocaleString("es-PE")}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[11px] text-ent-fg-3">Visitas</div>
+                          <div className="font-semibold text-ent-fg-2">
+                            {Number(t.visitCount).toLocaleString("es-PE")}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <BillingCell billing={t.billing ?? null} tenantId={t.id} />
+                      <span className="text-[12px] text-ent-fg-2 tabular-nums">
+                        {t.billing?.monthlyAmount != null
+                          ? money(t.billing.monthlyAmount, t.billing.currency ?? "PEN")
+                          : ""}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 gap-1.5 text-[12px]"
+                        onClick={() => openTenantPanel(t.id)}
+                      >
+                        <Eye className="w-3.5 h-3.5" /> Panel
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 gap-1.5 text-[12px]"
+                        onClick={() => openTenant(t.id, "apple")}
+                      >
+                        <Shield className="w-3.5 h-3.5" /> Apple
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 gap-1.5 text-[12px]"
+                        onClick={() => openTenant(t.id, "editar")}
+                      >
+                        <Edit className="w-3.5 h-3.5" /> Editar
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
 
-              <table className="w-full text-sm hidden md:table">
+            <div className="hidden md:block">
+              <DataTable>
                 <thead>
-                  <tr className="text-xs text-slate-500 border-b border-slate-100">
-                    <th className="pb-2 text-left font-semibold">Tenant</th>
-                    <th className="pb-2 text-left font-semibold">Estado</th>
-                    <th className="pb-2 text-left font-semibold">Salud</th>
-                    <th className="pb-2 text-right font-semibold">Clientes</th>
-                    <th className="pb-2 text-right font-semibold">Visitas</th>
-                    <th className="pb-2 pl-4 text-left font-semibold">Próxima factura</th>
-                    <th className="pb-2 text-right font-semibold">Acciones</th>
+                  <tr>
+                    <Th>Tenant</Th>
+                    <Th>Estado</Th>
+                    <Th>Salud</Th>
+                    <Th align="right">Clientes</Th>
+                    <Th align="right">Visitas</Th>
+                    <Th>Próxima factura</Th>
+                    <Th align="right">Monto</Th>
+                    <Th align="right" className="w-10">
+                      <span className="sr-only">Acciones</span>
+                    </Th>
                   </tr>
                 </thead>
                 <tbody>
-                  {tenants.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="py-8 text-center text-sm text-slate-400">
-                        No se encontraron tenants con esos filtros.
-                      </td>
-                    </tr>
-                  ) : (
-                    tenants.map((t) => {
-                      const cfg = statusConfig[t.status]
-                      const trialDaysLeft =
-                        t.status === "trial" && t.trialEndsAt
-                          ? Math.max(
-                              0,
-                              Math.ceil(
-                                (new Date(t.trialEndsAt).getTime() - Date.now()) /
-                                  (1000 * 60 * 60 * 24),
-                              ),
-                            )
-                          : null
-                      return (
-                        <tr
-                          key={t.id}
-                          className="border-b border-slate-50 hover:bg-slate-50 transition-colors"
-                        >
-                          <td className="py-2.5">
-                            <Link
-                              href={`/admin/tenants/${t.id}`}
-                              className="font-medium text-slate-900 hover:text-[#0e70db] hover:underline"
-                            >
-                              {t.name}
-                            </Link>
-                            <div className="text-xs text-slate-400">{t.slug}</div>
-                          </td>
-                          <td className="py-2.5">
-                            <div className="flex items-center gap-1 flex-wrap">
-                              <Badge className={`text-xs border ${cfg?.color ?? ""}`}>
-                                {cfg?.label ?? t.status}
-                                {trialDaysLeft !== null && ` \u2014 ${trialDaysLeft}d`}
-                              </Badge>
-                              {t.appleConfig?.mode === "production" ? (
-                                <Badge className="text-xs border bg-emerald-100 text-emerald-700 border-emerald-200">
-                                  <Shield className="w-3 h-3 mr-0.5" />
-                                  Apple
-                                </Badge>
-                              ) : t.appleConfig?.mode === "configuring" ? (
-                                <Badge className="text-xs border bg-amber-100 text-amber-700 border-amber-200">
-                                  <Shield className="w-3 h-3 mr-0.5" />
-                                  Configurando
-                                </Badge>
-                              ) : null}
-                            </div>
-                          </td>
-                          <td className="py-2.5">
-                            {t.health ? (
-                              <TenantHealthCell
-                                health={t.health}
-                                clientCount={Number(t.clientCount)}
-                              />
-                            ) : (
-                              <span className="text-xs text-slate-300">—</span>
-                            )}
-                          </td>
-                          <td className="py-2.5 text-right font-medium">
-                            {Number(t.clientCount).toLocaleString()}
-                          </td>
-                          <td className="py-2.5 text-right text-slate-600">
-                            {Number(t.visitCount).toLocaleString()}
-                          </td>
-                          <td className="py-2.5 pl-4">
-                            <BillingCell billing={t.billing ?? null} tenantId={t.id} />
-                          </td>
-                          <td className="py-2.5 text-right">
-                            <div className="flex gap-1 justify-end">
+                  {tenants.map((t) => {
+                    const cfg = statusConfig[t.status]
+                    const days = trialDaysLeft(t)
+                    return (
+                      <Tr key={t.id}>
+                        <Td className="whitespace-normal">
+                          <Link
+                            href={`/admin/tenants/${t.id}`}
+                            className="font-medium text-ent-accent hover:underline leading-tight"
+                          >
+                            {t.name}
+                          </Link>
+                          <div className="text-[11px] text-ent-fg-3 leading-tight">
+                            {t.slug}
+                            {t.planName ? ` · ${t.planName}` : " · Sin plan"}
+                          </div>
+                        </Td>
+                        <Td>
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <StatusChip tone={cfg?.tone ?? "mute"}>
+                              {days !== null ? `Demo · ${days} d` : (cfg?.label ?? t.status)}
+                            </StatusChip>
+                            <AppleChip t={t} />
+                          </div>
+                        </Td>
+                        <Td>
+                          {t.health ? (
+                            <TenantHealthCell
+                              health={t.health}
+                              clientCount={Number(t.clientCount)}
+                            />
+                          ) : (
+                            <span className="text-ent-fg-3">—</span>
+                          )}
+                        </Td>
+                        <Td align="right" className="font-medium">
+                          {Number(t.clientCount).toLocaleString("es-PE")}
+                        </Td>
+                        <Td align="right" className="text-ent-fg-2">
+                          {Number(t.visitCount).toLocaleString("es-PE")}
+                        </Td>
+                        <Td>
+                          <BillingCell billing={t.billing ?? null} tenantId={t.id} />
+                        </Td>
+                        <Td align="right" className="text-ent-fg-2">
+                          {t.billing?.monthlyAmount != null ? (
+                            money(t.billing.monthlyAmount, t.billing.currency ?? "PEN")
+                          ) : (
+                            <span className="text-ent-fg-3">—</span>
+                          )}
+                        </Td>
+                        <Td align="right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
                               <Button
-                                size="sm"
+                                size="icon-sm"
                                 variant="ghost"
-                                className="h-7 px-2 text-xs"
-                                title="Ver panel del comercio"
-                                aria-label="Ver panel del comercio"
-                                onClick={() => openTenantPanel(t.id)}
+                                className="h-7 w-7 text-ent-fg-3 hover:text-ent-fg"
+                                aria-label={`Acciones de ${t.name}`}
                               >
-                                <Eye className="w-3 h-3" />
+                                <MoreHorizontal className="w-4 h-4" />
                               </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 px-2 text-xs"
-                                title="Certificado Apple"
-                                aria-label="Certificado Apple"
-                                onClick={() => openTenant(t.id, "apple")}
-                              >
-                                <Shield className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 px-2 text-xs"
-                                title="Editar tenant"
-                                aria-label="Editar tenant"
-                                onClick={() => openTenant(t.id, "editar")}
-                              >
-                                <Edit className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="text-[12.5px]">
+                              <DropdownMenuItem onClick={() => openTenant(t.id)}>
+                                Abrir tenant
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openTenantPanel(t.id)}>
+                                <Eye className="w-3.5 h-3.5" /> Ver panel del comercio
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => openTenant(t.id, "facturacion")}>
+                                <Receipt className="w-3.5 h-3.5" /> Facturación
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openTenant(t.id, "apple")}>
+                                <Shield className="w-3.5 h-3.5" /> Certificado Apple
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openTenant(t.id, "editar")}>
+                                <Edit className="w-3.5 h-3.5" /> Datos del negocio
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </Td>
+                      </Tr>
+                    )
+                  })}
                 </tbody>
-              </table>
+              </DataTable>
+            </div>
 
-              {/* Pagination */}
+            <PanelFooter>
+              <span>
+                {pagination
+                  ? `${from} a ${to} de ${pagination.total}`
+                  : `${tenants.length} tenants`}
+              </span>
               {pagination && pagination.totalPages > 1 && (
-                <div className="flex items-center justify-between pt-4 border-t border-slate-100 mt-2">
-                  <span className="text-xs text-slate-500">
-                    Pagina {pagination.page} de {pagination.totalPages} ({pagination.total} tenants)
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="icon-sm"
+                    variant="outline"
+                    className="h-6 w-6"
+                    disabled={pagination.page <= 1}
+                    title="Página anterior"
+                    aria-label="Página anterior"
+                    onClick={() => setCurrentPage((p) => p - 1)}
+                  >
+                    <ChevronLeft className="w-3 h-3" />
+                  </Button>
+                  <span className="min-w-6 h-6 px-1.5 grid place-items-center rounded-[3px] border border-ent-line-strong bg-ent-panel text-ent-fg tabular-nums">
+                    {pagination.page}
                   </span>
-                  <div className="flex gap-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 px-2 text-xs"
-                      disabled={pagination.page <= 1}
-                      title="Pagina anterior"
-                      aria-label="Pagina anterior"
-                      onClick={() => setCurrentPage((p) => p - 1)}
-                    >
-                      <ChevronLeft className="w-3 h-3" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 px-2 text-xs"
-                      disabled={pagination.page >= pagination.totalPages}
-                      title="Pagina siguiente"
-                      aria-label="Pagina siguiente"
-                      onClick={() => setCurrentPage((p) => p + 1)}
-                    >
-                      <ChevronRight className="w-3 h-3" />
-                    </Button>
-                  </div>
+                  <span>de {pagination.totalPages}</span>
+                  <Button
+                    size="icon-sm"
+                    variant="outline"
+                    className="h-6 w-6"
+                    disabled={pagination.page >= pagination.totalPages}
+                    title="Página siguiente"
+                    aria-label="Página siguiente"
+                    onClick={() => setCurrentPage((p) => p + 1)}
+                  >
+                    <ChevronRight className="w-3 h-3" />
+                  </Button>
                 </div>
               )}
-            </>
-          )}
-        </CardContent>
-      </Card>
+            </PanelFooter>
+          </>
+        )}
+      </Panel>
     </div>
   )
 }

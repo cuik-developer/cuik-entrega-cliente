@@ -34,6 +34,10 @@ export interface ApiTenant {
     daysUntilNext: number | null
     daysOverdue: number | null
     monthsOfService: number | null
+    monthlyAmount?: number | null
+    currency?: "PEN" | "USD"
+    /** Detail GET only. */
+    serviceStartOn?: string | null
   } | null
   businessType: string | null
   address: string | null
@@ -86,13 +90,34 @@ export interface TenantPromotion {
   passDesignId: string | null
 }
 
-export const statusConfig: Record<TenantStatus, { label: string; color: string }> = {
-  pending: { label: "Pendiente", color: "bg-amber-100 text-amber-700 border-amber-200" },
-  trial: { label: "Demo 7 dias", color: "bg-blue-100 text-blue-700 border-blue-200" },
-  active: { label: "Activo", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  expired: { label: "Vencido", color: "bg-red-100 text-red-700 border-red-200" },
-  cancelled: { label: "Cancelado", color: "bg-slate-100 text-slate-600 border-slate-200" },
-  paused: { label: "Pausado", color: "bg-orange-100 text-orange-700 border-orange-200" },
+export type StatusTone = "ok" | "info" | "warn" | "bad" | "mute"
+
+export const statusConfig: Record<
+  TenantStatus,
+  { label: string; color: string; tone: StatusTone }
+> = {
+  pending: {
+    label: "Pendiente",
+    color: "bg-amber-100 text-amber-700 border-amber-200",
+    tone: "mute",
+  },
+  trial: { label: "Demo 7 días", color: "bg-blue-100 text-blue-700 border-blue-200", tone: "info" },
+  active: {
+    label: "Activo",
+    color: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    tone: "ok",
+  },
+  expired: { label: "Vencido", color: "bg-red-100 text-red-700 border-red-200", tone: "bad" },
+  cancelled: {
+    label: "Cancelado",
+    color: "bg-slate-100 text-slate-600 border-slate-200",
+    tone: "mute",
+  },
+  paused: {
+    label: "Pausado",
+    color: "bg-orange-100 text-orange-700 border-orange-200",
+    tone: "warn",
+  },
 }
 
 // ── Shared PATCH helper ──────────────────────────────────────────────

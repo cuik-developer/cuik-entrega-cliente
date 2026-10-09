@@ -102,7 +102,7 @@ export function TenantsTable({
       >
         <button
           type="button"
-          className={`inline-flex items-center gap-1 hover:text-slate-900 ${active ? "text-slate-900" : ""}`}
+          className={`inline-flex items-center gap-1 hover:text-ent-fg ${active ? "text-ent-fg" : ""}`}
           onClick={() => setSort({ key, dir: active && sort.dir === "desc" ? "asc" : "desc" })}
         >
           {label}
@@ -113,11 +113,11 @@ export function TenantsTable({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5">
+    <div className="rounded-[4px] border border-ent-line bg-white p-5">
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <div>
-          <h3 className="text-sm font-bold text-slate-700">Comercios</h3>
-          <p className="text-xs text-slate-400">
+          <h3 className="text-sm font-bold text-ent-fg-2">Comercios</h3>
+          <p className="text-xs text-ent-fg-3">
             {sorted.length} de {rows.length} · clic en una columna para ordenar, en el nombre para
             abrir el tenant
           </p>
@@ -127,13 +127,13 @@ export function TenantsTable({
             <button
               type="button"
               onClick={onClearHighlight}
-              className="text-xs text-[#0e70db] hover:underline"
+              className="text-xs text-ent-accent hover:underline"
             >
               Quitar foco ({highlight.size})
             </button>
           )}
           <div className="relative">
-            <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-ent-fg-3" />
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -146,7 +146,7 @@ export function TenantsTable({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-xs text-slate-500 border-b border-slate-100">
+            <tr className="text-xs text-ent-fg-3 border-b border-ent-line">
               <th className="pb-2 text-left font-semibold sticky left-0 bg-white z-10 w-6">
                 Salud
               </th>
@@ -165,7 +165,7 @@ export function TenantsTable({
           <tbody>
             {sorted.length === 0 ? (
               <tr>
-                <td colSpan={11} className="py-8 text-center text-sm text-slate-400">
+                <td colSpan={11} className="py-8 text-center text-sm text-ent-fg-3">
                   Ningún comercio coincide.
                 </td>
               </tr>
@@ -173,7 +173,7 @@ export function TenantsTable({
               sorted.map((t) => {
                 const d = t.visits - t.visitsPrev
                 return (
-                  <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50">
+                  <tr key={t.id} className="border-b border-slate-50 hover:bg-ent-panel-2">
                     <td className="py-2 pr-2 sticky left-0 bg-white z-10 w-6">
                       <span
                         className={`inline-block w-2.5 h-2.5 rounded-full ${HEALTH_DOT[t.health]}`}
@@ -183,11 +183,11 @@ export function TenantsTable({
                     <td className="py-2 pr-3 sticky left-6 bg-white z-10 max-w-[160px] md:max-w-none">
                       <Link
                         href={`/admin/tenants?q=${encodeURIComponent(t.name)}`}
-                        className="font-medium text-slate-900 hover:text-[#0e70db]"
+                        className="font-medium text-ent-fg hover:text-ent-accent"
                       >
                         {t.name}
                       </Link>
-                      <div className="text-[11px] text-slate-400">
+                      <div className="text-[11px] text-ent-fg-3">
                         {t.status === "trial"
                           ? "Demo"
                           : t.status === "active"
@@ -204,7 +204,7 @@ export function TenantsTable({
                     </td>
                     <td className="py-2 text-right tabular-nums font-semibold">{t.visits}</td>
                     <td
-                      className={`py-2 text-right tabular-nums text-xs hidden md:table-cell ${d > 0 ? "text-emerald-600" : d < 0 ? "text-red-500" : "text-slate-400"}`}
+                      className={`py-2 text-right tabular-nums text-xs hidden md:table-cell ${d > 0 ? "text-emerald-600" : d < 0 ? "text-red-500" : "text-ent-fg-3"}`}
                     >
                       {d > 0 ? "+" : ""}
                       {d}
@@ -218,10 +218,10 @@ export function TenantsTable({
                     <td className="py-2 text-right tabular-nums hidden md:table-cell">
                       {t.redemptions}
                       {t.program === "points" && t.canRedeem > 0 && (
-                        <span className="text-[10px] text-slate-400"> · {t.canRedeem} pueden</span>
+                        <span className="text-[10px] text-ent-fg-3"> · {t.canRedeem} pueden</span>
                       )}
                     </td>
-                    <td className="py-2 text-right text-xs text-slate-500 whitespace-nowrap hidden md:table-cell">
+                    <td className="py-2 text-right text-xs text-ent-fg-3 whitespace-nowrap hidden md:table-cell">
                       {daysAgo(t.lastVisitAt)}
                     </td>
                     <td className="py-2 text-right text-xs whitespace-nowrap hidden md:table-cell">
@@ -230,7 +230,7 @@ export function TenantsTable({
                       ) : (
                         <span
                           className={
-                            t.trialDaysLeft <= 7 ? "text-amber-600 font-medium" : "text-slate-500"
+                            t.trialDaysLeft <= 7 ? "text-amber-600 font-medium" : "text-ent-fg-3"
                           }
                         >
                           {t.trialDaysLeft <= 0 ? "vencida" : `${t.trialDaysLeft} d`}

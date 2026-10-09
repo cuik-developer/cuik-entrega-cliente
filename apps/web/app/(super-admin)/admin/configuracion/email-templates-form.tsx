@@ -83,12 +83,12 @@ export function EmailTemplatesForm({ initialData }: { initialData: SolicitudEmai
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-          <Mail className="w-4 h-4 text-slate-600" />
+        <div className="w-9 h-9 rounded-[4px] bg-ent-panel-2 flex items-center justify-center shrink-0">
+          <Mail className="w-4 h-4 text-ent-fg-2" />
         </div>
         <div>
-          <h2 className="text-base font-bold text-slate-900">Correos de solicitudes</h2>
-          <p className="text-sm text-slate-500">
+          <h2 className="text-base font-bold text-ent-fg">Correos de solicitudes</h2>
+          <p className="text-sm text-ent-fg-3">
             El texto de los correos que reciben los comercios al aprobar o rechazar su solicitud. El
             diseño (logo, colores, pie) no cambia.
           </p>
@@ -105,10 +105,10 @@ export function EmailTemplatesForm({ initialData }: { initialData: SolicitudEmai
 
         {(["approval", "rejection"] as SolicitudEmailKind[]).map((kind) => (
           <TabsContent key={kind} value={kind} className="mt-4 space-y-4">
-            <p className="text-xs text-slate-500">{KIND_META[kind].hint}</p>
+            <p className="text-xs text-ent-fg-3">{KIND_META[kind].hint}</p>
 
             {kind === "rejection" && (
-              <div className="flex items-center justify-between rounded-lg border px-3 py-2">
+              <div className="flex items-center justify-between rounded-[4px] border px-3 py-2">
                 <Label htmlFor="rej-enabled" className="text-sm">
                   Enviar correo al rechazar
                 </Label>
@@ -133,7 +133,7 @@ export function EmailTemplatesForm({ initialData }: { initialData: SolicitudEmai
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor={`${kind}-body`}>Mensaje</Label>
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-ent-fg-3">
                   {data[kind].body.length}/5000 · una línea en blanco separa párrafos
                 </span>
               </div>
@@ -153,11 +153,11 @@ export function EmailTemplatesForm({ initialData }: { initialData: SolicitudEmai
                     key={v.key}
                     type="button"
                     onClick={() => insertVar(kind, v.key)}
-                    className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600 hover:border-slate-300 hover:bg-slate-100"
+                    className="rounded-md border border-ent-line bg-ent-panel-2 px-2 py-0.5 text-[11px] text-ent-fg-2 hover:border-ent-line-strong hover:bg-ent-panel-2"
                     title={v.label}
                   >
                     <span className="font-mono text-blue-600">{v.key}</span>{" "}
-                    <span className="text-slate-400">{v.label}</span>
+                    <span className="text-ent-fg-3">{v.label}</span>
                   </button>
                 ))}
               </div>
@@ -183,7 +183,7 @@ export function EmailTemplatesForm({ initialData }: { initialData: SolicitudEmai
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="gap-1.5 text-slate-500"
+                className="gap-1.5 text-ent-fg-3"
                 onClick={() =>
                   setData((d) => ({ ...d, [kind]: { ...DEFAULT_SOLICITUD_EMAIL_TEMPLATES[kind] } }))
                 }

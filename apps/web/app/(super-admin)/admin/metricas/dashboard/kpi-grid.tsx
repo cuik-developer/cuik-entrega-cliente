@@ -152,7 +152,7 @@ export function KpiGrid({
       label: "Ingreso mensual estimado",
       value: money(k.mrr.cur),
       delta: deltaPct(k.mrr.cur, k.mrr.prev),
-      hint: "comercios activos × precio de su plan",
+      hint: "monto mensual de Facturación, o el precio del plan si no está definido",
       icon: Coins,
     },
   ]
@@ -167,22 +167,22 @@ export function KpiGrid({
         return (
           <div
             key={kpi.key}
-            className="rounded-xl border border-slate-200 bg-white p-3.5 flex flex-col gap-2 min-w-0"
+            className="rounded-[4px] border border-ent-line bg-white p-3.5 flex flex-col gap-2 min-w-0"
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] font-medium text-slate-500 leading-tight">
+              <span className="text-[11px] font-medium text-ent-fg-3 leading-tight">
                 {kpi.label}
               </span>
               <kpi.icon className="w-4 h-4 text-slate-300 shrink-0" />
             </div>
-            <p className="text-2xl font-extrabold tracking-tight text-slate-900 tabular-nums leading-none">
+            <p className="text-2xl font-extrabold tracking-tight text-ent-fg tabular-nums leading-none">
               {kpi.value}
             </p>
             {kpi.spark && <Spark data={kpi.spark} />}
             <div className="text-[11px] leading-tight">
               {kpi.delta !== null ? (
                 <span
-                  className={`font-semibold tabular-nums ${good ? "text-emerald-600" : bad ? "text-red-500" : "text-slate-400"}`}
+                  className={`font-semibold tabular-nums ${good ? "text-emerald-600" : bad ? "text-red-500" : "text-ent-fg-3"}`}
                 >
                   {kpi.delta > 0 ? "+" : ""}
                   {kpi.delta}
@@ -191,7 +191,7 @@ export function KpiGrid({
               ) : (
                 <span className="text-slate-300">sin base de comparación</span>
               )}
-              <span className="text-slate-400"> · {kpi.hint}</span>
+              <span className="text-ent-fg-3"> · {kpi.hint}</span>
             </div>
           </div>
         )

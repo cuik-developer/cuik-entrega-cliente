@@ -113,6 +113,22 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  /* Enterprise (super-admin) palette, defined under .ent below */
+  --color-ent-bg: var(--ent-bg);
+  --color-ent-panel: var(--ent-panel);
+  --color-ent-panel-2: var(--ent-panel-2);
+  --color-ent-line: var(--ent-line);
+  --color-ent-line-strong: var(--ent-line-strong);
+  --color-ent-fg: var(--ent-fg);
+  --color-ent-fg-2: var(--ent-fg-2);
+  --color-ent-fg-3: var(--ent-fg-3);
+  --color-ent-accent: var(--ent-accent);
+  --color-ent-accent-soft: var(--ent-accent-soft);
+  --color-ent-topbar: var(--ent-topbar);
+  --color-ent-ok: var(--ent-ok);
+  --color-ent-warn: var(--ent-warn);
+  --color-ent-bad: var(--ent-bad);
+  --color-ent-info: var(--ent-info);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -125,6 +141,63 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/*
+ * Enterprise shell (super-admin). One neutral palette with a slight blue
+ * bias, a single accent, semantic colors reserved for state, 4px radius and
+ * no shadows. The palette lives on :root so dialogs, dropdowns and other
+ * portalled surfaces (rendered under <body>, outside the shell) still resolve
+ * the ent-* colors; the shadcn overrides and the font stay scoped to `.ent`
+ * so the merchant panel, cashier and landing keep their own look.
+ */
+:root {
+  --ent-bg: #f3f4f6;
+  --ent-panel: #ffffff;
+  --ent-panel-2: #f7f8fa;
+  --ent-line: #d9dde3;
+  --ent-line-strong: #b9c0ca;
+  --ent-fg: #161a20;
+  --ent-fg-2: #4a5260;
+  --ent-fg-3: #7a8392;
+  --ent-accent: #0b5fc0;
+  --ent-accent-soft: #e7f0fb;
+  --ent-topbar: #1d2733;
+  --ent-ok: #1f7a3f;
+  --ent-warn: #9a6700;
+  --ent-bad: #b3261e;
+  --ent-info: #2b5fa6;
+}
+.ent {
+  /* shadcn primitives follow the enterprise look inside the shell */
+  --radius: 0.25rem;
+  --background: var(--ent-bg);
+  --foreground: var(--ent-fg);
+  --card: var(--ent-panel);
+  --card-foreground: var(--ent-fg);
+  --popover: var(--ent-panel);
+  --popover-foreground: var(--ent-fg);
+  --primary: var(--ent-accent);
+  --muted: var(--ent-panel-2);
+  --muted-foreground: var(--ent-fg-3);
+  --accent: var(--ent-accent-soft);
+  --accent-foreground: var(--ent-fg);
+  --border: var(--ent-line);
+  --input: var(--ent-line-strong);
+  --ring: var(--ent-accent);
+
+  font-family: var(--font-ibm-plex), "IBM Plex Sans", system-ui, sans-serif;
+  font-size: 13px;
+  background: var(--ent-bg);
+  color: var(--ent-fg);
+  font-variant-numeric: tabular-nums;
+}
+.ent .shadow-sm,
+.ent .shadow,
+.ent .shadow-md,
+.ent .shadow-lg,
+.ent .shadow-xl {
+  box-shadow: none;
 }
 
 @layer base {

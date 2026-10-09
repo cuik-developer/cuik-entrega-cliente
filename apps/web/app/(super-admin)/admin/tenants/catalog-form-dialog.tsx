@@ -194,7 +194,7 @@ export function CatalogFormDialog({ open, onOpenChange, tenantId, item }: Catalo
               placeholder="0"
               {...register("sortOrder", { valueAsNumber: true })}
             />
-            <p className="text-xs text-slate-400">Menor numero aparece primero. Default: 0.</p>
+            <p className="text-xs text-ent-fg-3">Menor numero aparece primero. Default: 0.</p>
             {errors.sortOrder && <p className="text-sm text-red-600">{errors.sortOrder.message}</p>}
           </div>
 

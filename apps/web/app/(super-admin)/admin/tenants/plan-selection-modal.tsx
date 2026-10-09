@@ -81,19 +81,19 @@ export function PlanSelectionModal({
     >
       <div
         role="dialog"
-        className="bg-white rounded-2xl w-full max-w-md shadow-2xl"
+        className="bg-white rounded-[4px] w-full max-w-md shadow-2xl"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
       >
-        <div className="p-6 border-b border-slate-100">
+        <div className="p-6 border-b border-ent-line">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-bold text-slate-900">{title}</h3>
-              <p className="text-sm text-slate-500">
+              <h3 className="text-lg font-bold text-ent-fg">{title}</h3>
+              <p className="text-sm text-ent-fg-3">
                 Selecciona un plan para <strong>{tenantName}</strong>
               </p>
             </div>
-            <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <button type="button" onClick={onClose} className="text-ent-fg-3 hover:text-ent-fg-2">
               &#10005;
             </button>
           </div>
@@ -101,8 +101,8 @@ export function PlanSelectionModal({
         <div className="p-6 space-y-3">
           {loadingPlans ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
-              <span className="ml-2 text-sm text-slate-500">Cargando planes...</span>
+              <Loader2 className="w-5 h-5 animate-spin text-ent-fg-3" />
+              <span className="ml-2 text-sm text-ent-fg-3">Cargando planes...</span>
             </div>
           ) : plansError ? (
             <div className="text-center py-8">
@@ -118,25 +118,25 @@ export function PlanSelectionModal({
                   key={plan.id}
                   onClick={() => !isCurrent && setSelectedPlan(plan.id)}
                   disabled={isCurrent}
-                  className={`w-full text-left rounded-xl p-4 border-2 transition-colors ${
+                  className={`w-full text-left rounded-[4px] p-4 border-2 transition-colors ${
                     isCurrent
-                      ? "border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed"
+                      ? "border-ent-line bg-ent-panel-2 opacity-60 cursor-not-allowed"
                       : selectedPlan === plan.id
-                        ? "border-[#0e70db] bg-blue-50"
-                        : "border-slate-200 hover:border-slate-300"
+                        ? "border-ent-accent bg-ent-accent-soft"
+                        : "border-ent-line hover:border-ent-line-strong"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900">{plan.name}</span>
+                      <span className="font-bold text-ent-fg">{plan.name}</span>
                       {isCurrent && (
-                        <Badge className="text-[10px] bg-slate-200 text-slate-600 border-0">
+                        <Badge className="text-[10px] bg-slate-200 text-ent-fg-2 border-0">
                           Plan actual
                         </Badge>
                       )}
                     </div>
                   </div>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-ent-fg-3">
                     {plan.maxClients.toLocaleString()} clientes, {plan.maxLocations} locales,{" "}
                     {plan.maxPromos} promos
                   </p>

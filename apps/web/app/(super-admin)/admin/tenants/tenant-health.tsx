@@ -55,8 +55,8 @@ export function TenantHealthCell({
     <div className="flex items-start gap-2" title={DOT[level].label}>
       <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${DOT[level].cls}`} />
       <div className="leading-tight">
-        <div className="text-xs text-slate-700">{last}</div>
-        <div className="text-[11px] text-slate-400 tabular-nums">
+        <div className="text-xs text-ent-fg-2">{last}</div>
+        <div className="text-[11px] text-ent-fg-3 tabular-nums">
           +{health.newClients30d} nuevos · {health.visits30d} visitas · {health.installed} pases
         </div>
       </div>

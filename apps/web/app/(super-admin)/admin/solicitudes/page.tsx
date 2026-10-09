@@ -212,8 +212,10 @@ export default function SolicitudesAdminPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Solicitudes</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-[17px] leading-6 font-semibold text-ent-fg tracking-[-0.005em]">
+            Solicitudes
+          </h1>
+          <p className="text-sm text-ent-fg-3 mt-1">
             Gestionar solicitudes de registro de comercios
           </p>
         </div>
@@ -224,16 +226,14 @@ export default function SolicitudesAdminPage() {
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit max-w-full overflow-x-auto [scrollbar-width:none]">
+      <div className="flex gap-1 bg-gray-100 rounded-[4px] p-1 w-fit max-w-full overflow-x-auto [scrollbar-width:none]">
         {FILTER_TABS.map((tab) => (
           <button
             key={tab.value}
             type="button"
             onClick={() => setFilter(tab.value)}
             className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              filter === tab.value
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
+              filter === tab.value ? "bg-white text-ent-fg" : "text-ent-fg-3 hover:text-gray-700"
             }`}
           >
             {tab.label}
@@ -250,7 +250,7 @@ export default function SolicitudesAdminPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <ClipboardList className="size-12 text-gray-300 mb-3" />
-            <p className="text-gray-500 font-medium">No hay solicitudes</p>
+            <p className="text-ent-fg-3 font-medium">No hay solicitudes</p>
             <p className="text-sm text-gray-400 mt-1">
               {filter !== "all"
                 ? "No hay solicitudes con este filtro"
@@ -266,7 +266,7 @@ export default function SolicitudesAdminPage() {
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-semibold text-gray-900">{s.businessName}</h3>
+                      <h3 className="font-semibold text-ent-fg">{s.businessName}</h3>
                       <Badge variant="outline" className={STATUS_CONFIG[s.status].className}>
                         {STATUS_CONFIG[s.status].label}
                       </Badge>
@@ -276,7 +276,7 @@ export default function SolicitudesAdminPage() {
                         </Badge>
                       )}
                     </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-gray-500">
+                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-ent-fg-3">
                       <span>{s.contactName}</span>
                       <span>{s.email}</span>
                       {s.city && <span>{s.city}</span>}
@@ -299,7 +299,7 @@ export default function SolicitudesAdminPage() {
                       </p>
                     )}
                     {s.notes && (
-                      <p className="text-xs text-gray-500 italic mt-1">
+                      <p className="text-xs text-ent-fg-3 italic mt-1">
                         {s.status === "rejected" ? "Motivo" : "Nota"}: {s.notes}
                       </p>
                     )}
@@ -359,7 +359,7 @@ export default function SolicitudesAdminPage() {
       )}
 
       {filter === "rejected" && (archivedCount > 0 || showArchived) && (
-        <div className="flex items-center justify-between rounded-lg border border-dashed border-gray-200 px-4 py-2 text-xs text-gray-500">
+        <div className="flex items-center justify-between rounded-[4px] border border-dashed border-ent-line px-4 py-2 text-xs text-ent-fg-3">
           <span>
             {showArchived
               ? "Mostrando rechazadas archivadas (más de 30 días)."
@@ -437,10 +437,10 @@ export default function SolicitudesAdminPage() {
           </DialogHeader>
 
           {credentials && (
-            <div className="space-y-3 rounded-lg border bg-gray-50 p-4">
+            <div className="space-y-3 rounded-[4px] border bg-ent-panel-2 p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-gray-500">Email</p>
+                  <p className="text-xs text-ent-fg-3">Email</p>
                   <p className="font-mono text-sm">{credentials.email}</p>
                 </div>
                 <Button
@@ -454,7 +454,7 @@ export default function SolicitudesAdminPage() {
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-gray-500">Contrasena temporal</p>
+                  <p className="text-xs text-ent-fg-3">Contrasena temporal</p>
                   <p className="font-mono text-sm font-semibold">{credentials.tempPassword}</p>
                 </div>
                 <Button

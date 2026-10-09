@@ -1,10 +1,13 @@
 import { and, db, eq, ne, plans, tenants } from "@cuik/db"
 import { updateTenantSchema } from "@cuik/shared/validators"
 import type { z } from "zod"
+import { billingOutlookFor } from "@/lib/admin/billing-overview"
 import { enrichTenantRows } from "@/lib/admin/tenant-summary"
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
 
 // ── Helpers ─────────────────────────────────────────────────────────
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 async function validateSlugUniqueness(slug: string, currentSlug: string, tenantId: string) {
   if (slug === currentSlug) return null
@@ -68,6 +71,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (roleError) return roleError
 
     const { id } = await params
+    if (!UUID_RE.test(id)) return errorResponse("Tenant not found", 404)
     const body = await request.json()
     const parsed = updateTenantSchema.safeParse(body)
 
@@ -109,9 +113,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (roleError) return roleError
 
     const { id } = await params
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-      return errorResponse("Tenant not found", 404)
-    }
+    if (!UUID_RE.test(id)) return errorResponse("Tenant not found", 404)
 
     const rows = await db
       .select({
@@ -139,8 +141,26 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       .limit(1)
     if (rows.length === 0) return errorResponse("Tenant not found", 404)
 
-    const [item] = await enrichTenantRows(rows)
-    return successResponse(item)
+    const [[item], billingMap] = await Promise.all([
+      enrichTenantRows(rows),
+      billingOutlookFor([id]),
+    ])
+    const b = billingMap.get(id)
+    return successResponse({
+      ...item,
+      billing: b
+        ? {
+            status: b.status,
+            nextDue: b.nextDue,
+            daysUntilNext: b.daysUntilNext,
+            daysOverdue: b.daysOverdue,
+            monthsOfService: b.monthsOfService,
+            monthlyAmount: b.monthlyAmount,
+            currency: b.currency,
+            serviceStartOn: b.serviceStartOn,
+          }
+        : null,
+    })
   } catch (error) {
     console.error("[GET /api/admin/tenants/[id]]", error)
     return errorResponse("Internal server error", 500)

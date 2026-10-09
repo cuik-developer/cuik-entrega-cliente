@@ -83,8 +83,10 @@ export default function NewTaskPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Nueva tarea</h1>
-          <p className="text-slate-500">Configura una tarea para los agentes</p>
+          <h1 className="text-[17px] leading-6 font-semibold text-ent-fg tracking-[-0.005em]">
+            Nueva tarea
+          </h1>
+          <p className="text-ent-fg-3">Configura una tarea para los agentes</p>
         </div>
       </div>
 
@@ -96,7 +98,7 @@ export default function NewTaskPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-slate-700">Titulo</label>
+              <label className="text-sm font-medium text-ent-fg-2">Titulo</label>
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -105,7 +107,7 @@ export default function NewTaskPage() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-slate-700">Prompt</label>
+              <label className="text-sm font-medium text-ent-fg-2">Prompt</label>
               <Textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
@@ -129,17 +131,17 @@ export default function NewTaskPage() {
                   key={agent.id}
                   type="button"
                   onClick={() => toggleAgent(agent.id)}
-                  className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all text-left ${
+                  className={`flex items-center gap-3 p-3 rounded-[4px] border-2 transition-all text-left ${
                     selectedAgents.includes(agent.id)
-                      ? "border-[#0e70db] bg-blue-50"
-                      : "border-slate-200 hover:border-slate-300"
+                      ? "border-ent-accent bg-ent-accent-soft"
+                      : "border-ent-line hover:border-ent-line-strong"
                   } ${!agent.active ? "opacity-50" : ""}`}
                   disabled={!agent.active}
                 >
                   <span className="text-2xl">{agent.emoji}</span>
                   <div>
-                    <p className="font-medium text-slate-900">{agent.name}</p>
-                    <p className="text-xs text-slate-500">{agent.description}</p>
+                    <p className="font-medium text-ent-fg">{agent.name}</p>
+                    <p className="text-xs text-ent-fg-3">{agent.description}</p>
                   </div>
                 </button>
               ))}
@@ -147,7 +149,7 @@ export default function NewTaskPage() {
 
             {selectedAgents.length > 1 && (
               <div className="pt-2">
-                <label className="text-sm font-medium text-slate-700">Tipo de ejecucion</label>
+                <label className="text-sm font-medium text-ent-fg-2">Tipo de ejecucion</label>
                 <div className="flex gap-3 mt-2">
                   <Button
                     type="button"
@@ -178,18 +180,18 @@ export default function NewTaskPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-slate-700">Cron (opcional)</label>
+              <label className="text-sm font-medium text-ent-fg-2">Cron (opcional)</label>
               <Input
                 value={cronExpression}
                 onChange={(e) => setCronExpression(e.target.value)}
                 placeholder="Ej: 0 9 * * 1 (lunes a las 9am)"
                 className="mt-1"
               />
-              <p className="text-xs text-slate-400 mt-1">Dejar vacio para ejecucion manual</p>
+              <p className="text-xs text-ent-fg-3 mt-1">Dejar vacio para ejecucion manual</p>
             </div>
 
             <div>
-              <label className="text-sm font-medium text-slate-700">Destinatarios (opcional)</label>
+              <label className="text-sm font-medium text-ent-fg-2">Destinatarios (opcional)</label>
               <Input
                 value={recipients}
                 onChange={(e) => setRecipients(e.target.value)}
@@ -204,7 +206,7 @@ export default function NewTaskPage() {
                 checked={requiresApproval}
                 onCheckedChange={(checked) => setRequiresApproval(checked === true)}
               />
-              <label htmlFor="requires-approval" className="text-sm text-slate-700">
+              <label htmlFor="requires-approval" className="text-sm text-ent-fg-2">
                 Requiere aprobacion antes de enviar
               </label>
             </div>
@@ -212,7 +214,7 @@ export default function NewTaskPage() {
         </Card>
 
         {/* Error */}
-        {error && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</p>}
+        {error && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-[4px]">{error}</p>}
 
         {/* Submit */}
         <div className="flex justify-end gap-3">

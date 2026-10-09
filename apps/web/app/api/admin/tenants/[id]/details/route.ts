@@ -1,4 +1,16 @@
-import { db, desc, eq, locations, passDesigns, promotions, sql, tenants } from "@cuik/db"
+import {
+  and,
+  asc,
+  db,
+  desc,
+  eq,
+  locations,
+  passDesigns,
+  promotions,
+  rewardCatalog,
+  sql,
+  tenants,
+} from "@cuik/db"
 import { registrationConfigSchema } from "@cuik/shared/validators"
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
 
@@ -104,8 +116,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       clients: Number(team?.clients ?? 0),
     }
 
+    // Active catalog rewards, for the Resumen summary of points programs.
+    const catalog = await db
+      .select({ name: rewardCatalog.name, pointsCost: rewardCatalog.pointsCost })
+      .from(rewardCatalog)
+      .where(and(eq(rewardCatalog.tenantId, id), eq(rewardCatalog.active, true)))
+      .orderBy(asc(rewardCatalog.sortOrder), asc(rewardCatalog.pointsCost))
+
     return successResponse({
       promotions: promotionsList,
+      catalog,
       registrationConfig: regConfig,
       locations: locationRows,
       checklist,

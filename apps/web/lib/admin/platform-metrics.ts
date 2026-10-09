@@ -78,6 +78,8 @@ export type PlatformMetrics = {
     dates: string[] // current period, YYYY-MM-DD
     prevDates: string[]
     visits: { cur: number[]; prev: number[] }
+    /** Points earned (sum of `earn` transactions), points programs only. */
+    points: { cur: number[]; prev: number[] }
     newClients: { cur: number[]; prev: number[] }
     installs: { cur: number[]; prev: number[] }
     redemptions: { cur: number[]; prev: number[] }
@@ -206,11 +208,19 @@ export async function computePlatformMetrics(f: MetricsFilters): Promise<Platfor
           (SELECT avg(amount)::numeric(10,2) FROM v WHERE amount > 0 AND ${inPrev("v.created_at")}) AS ticket_prev,
           (SELECT count(*)::int FROM red WHERE ${inCur("red.at")}) AS red_cur,
           (SELECT count(*)::int FROM red WHERE ${inPrev("red.at")}) AS red_prev,
-          (SELECT (coalesce(sum(p.price), 0) / 100.0)::numeric(12,2) FROM tenants t JOIN plans p ON p.id = t.plan_id
-             WHERE t.id IN (SELECT id FROM s) AND t.status = 'active') AS mrr_cur,
-          (SELECT (coalesce(sum(p.price), 0) / 100.0)::numeric(12,2) FROM tenants t JOIN plans p ON p.id = t.plan_id
-             WHERE t.id IN (SELECT id FROM s) AND t.status = 'active'
-               AND coalesce(t.activated_at, t.created_at) <= (${prevTo}::date + 1)) AS mrr_prev
+          -- Monthly revenue in soles: the amount agreed in Facturación when set in
+          -- PEN (USD amounts fall back to the plan price rather than being added as
+          -- if they were soles), else the plan price. A tenant counts once it is
+          -- active or its service has started.
+          (SELECT coalesce(sum(coalesce(CASE WHEN tb.currency = 'PEN' THEN tb.monthly_amount END, p.price / 100.0)), 0)::numeric(12,2)
+             FROM tenants t LEFT JOIN plans p ON p.id = t.plan_id LEFT JOIN tenant_billing tb ON tb.tenant_id = t.id
+             WHERE t.id IN (SELECT id FROM s) AND t.status NOT IN ('cancelled', 'paused', 'pending')
+               AND (t.status = 'active' OR tb.service_start_on <= ${f.to}::date)) AS mrr_cur,
+          (SELECT coalesce(sum(coalesce(CASE WHEN tb.currency = 'PEN' THEN tb.monthly_amount END, p.price / 100.0)), 0)::numeric(12,2)
+             FROM tenants t LEFT JOIN plans p ON p.id = t.plan_id LEFT JOIN tenant_billing tb ON tb.tenant_id = t.id
+             WHERE t.id IN (SELECT id FROM s) AND t.status NOT IN ('cancelled', 'paused', 'pending')
+               AND ((t.status = 'active' AND coalesce(t.activated_at, t.created_at) <= (${prevTo}::date + 1))
+                 OR tb.service_start_on <= ${prevTo}::date)) AS mrr_prev
       `),
       // ── Daily series for both periods ──
       db.execute<{ kind: string; day: string; cnt: Num }>(sql`
@@ -218,6 +228,10 @@ export async function computePlatformMetrics(f: MetricsFilters): Promise<Platfor
         SELECT 'visits' AS kind, to_char(${local("v.created_at")}, 'YYYY-MM-DD') AS day, count(*)::int AS cnt
           FROM loyalty.visits v WHERE v.tenant_id IN (SELECT id FROM s) AND v.source <> 'bonus'
            AND ${local("v.created_at")} BETWEEN ${prevFrom}::date AND ${f.to}::date GROUP BY 2
+        UNION ALL
+        SELECT 'points', to_char(${local("pt.created_at")}, 'YYYY-MM-DD'), coalesce(sum(pt.amount), 0)::int
+          FROM loyalty.points_transactions pt WHERE pt.type = 'earn' AND pt.tenant_id IN (SELECT id FROM s)
+           AND ${local("pt.created_at")} BETWEEN ${prevFrom}::date AND ${f.to}::date GROUP BY 2
         UNION ALL
         SELECT 'newClients', to_char(${local("c.created_at")}, 'YYYY-MM-DD'), count(*)::int
           FROM loyalty.clients c WHERE c.tenant_id IN (SELECT id FROM s)
@@ -375,6 +389,7 @@ export async function computePlatformMetrics(f: MetricsFilters): Promise<Platfor
     dates,
     prevDates,
     visits: series("visits"),
+    points: series("points"),
     newClients: series("newClients"),
     installs: series("installs"),
     redemptions: series("redemptions"),
@@ -613,7 +628,7 @@ function buildInsights(ctx: {
     const d = kpis.mrr.cur - kpis.mrr.prev
     out.push({
       severity: d > 0 ? "positive" : "warning",
-      text: `El ingreso mensual estimado ${d > 0 ? "subió" : "bajó"} S/ ${Math.abs(d).toLocaleString("es-PE")} respecto al período anterior (comercios activos × precio de plan).`,
+      text: `El ingreso mensual estimado ${d > 0 ? "subió" : "bajó"} S/ ${Math.abs(d).toLocaleString("es-PE")} respecto al período anterior.`,
     })
   }
 

@@ -63,8 +63,10 @@ export function PlanGrid({ plans }: PlanGridProps) {
     <>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Planes</h1>
-          <p className="mt-1 text-sm text-zinc-500">
+          <h1 className="text-[17px] leading-6 font-semibold text-ent-fg tracking-[-0.005em]">
+            Planes
+          </h1>
+          <p className="mt-1 text-sm text-ent-fg-3">
             {plans.length} {plans.length === 1 ? "plan" : "planes"} configurados
           </p>
         </div>
@@ -75,8 +77,8 @@ export function PlanGrid({ plans }: PlanGridProps) {
       </div>
 
       {plans.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-zinc-300 py-16 text-center">
-          <p className="text-sm text-zinc-500">No hay planes configurados todavia.</p>
+        <div className="rounded-[4px] border border-dashed border-zinc-300 py-16 text-center">
+          <p className="text-sm text-ent-fg-3">No hay planes configurados todavia.</p>
           <Button variant="link" onClick={handleCreate} className="mt-2 text-sm">
             Crear el primer plan
           </Button>

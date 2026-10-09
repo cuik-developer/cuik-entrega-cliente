@@ -123,13 +123,13 @@ function ColorPicker({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <Label className="text-slate-600 text-xs font-semibold uppercase tracking-wide">
+        <Label className="text-ent-fg-2 text-xs font-semibold uppercase tracking-wide">
           {label}
         </Label>
         {suggestion && (
           <Badge
             variant="outline"
-            className="text-[10px] px-1.5 py-0 border-blue-200 text-blue-600 bg-blue-50/60"
+            className="text-[10px] px-1.5 py-0 border-blue-200 text-blue-600 bg-ent-accent-soft/60"
           >
             <Sparkles className="w-2.5 h-2.5 mr-0.5" />
             Sugerido del pase
@@ -139,7 +139,7 @@ function ColorPicker({
       <div className="flex items-center gap-3">
         <label className="relative cursor-pointer group" aria-label={`Elegir ${label}`}>
           <div
-            className="w-11 h-11 rounded-lg shadow-sm ring-1 ring-slate-200/80 transition-shadow group-hover:ring-2 group-hover:ring-slate-300"
+            className="w-11 h-11 rounded-[4px] ring-1 ring-slate-200/80 transition-shadow group-hover:ring-2 group-hover:ring-slate-300"
             style={{ backgroundColor: value }}
           />
           <input
@@ -234,9 +234,9 @@ function LogoUploader({
   if (logoUrl) {
     return (
       <div className="space-y-2">
-        <Label className="text-slate-600 text-xs font-semibold uppercase tracking-wide">Logo</Label>
+        <Label className="text-ent-fg-2 text-xs font-semibold uppercase tracking-wide">Logo</Label>
         <div className="flex items-center gap-4">
-          <div className="relative w-16 h-16 rounded-xl overflow-hidden ring-1 ring-slate-200/80 bg-slate-50">
+          <div className="relative w-16 h-16 rounded-[4px] overflow-hidden ring-1 ring-slate-200/80 bg-ent-panel-2">
             <Image
               src={logoUrl}
               alt="Logo del comercio"
@@ -249,7 +249,7 @@ function LogoUploader({
             variant="outline"
             size="sm"
             onClick={onRemove}
-            className="text-slate-500 hover:text-red-600 hover:border-red-200 gap-1.5"
+            className="text-ent-fg-3 hover:text-red-600 hover:border-red-200 gap-1.5"
           >
             <Trash2 className="w-3.5 h-3.5" />
             Quitar
@@ -261,7 +261,7 @@ function LogoUploader({
 
   return (
     <div className="space-y-2">
-      <Label className="text-slate-600 text-xs font-semibold uppercase tracking-wide">Logo</Label>
+      <Label className="text-ent-fg-2 text-xs font-semibold uppercase tracking-wide">Logo</Label>
       {/* biome-ignore lint/a11y/useSemanticElements: drop zone requires div for drag events; hidden file input provides accessible interaction */}
       <div
         role="button"
@@ -280,27 +280,27 @@ function LogoUploader({
           }
         }}
         className={`
-          relative cursor-pointer rounded-xl border-2 border-dashed px-6 py-8
+          relative cursor-pointer rounded-[4px] border-2 border-dashed px-6 py-8
           transition-colors text-center
           ${
             dragOver
-              ? "border-blue-400 bg-blue-50/50"
-              : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
+              ? "border-blue-400 bg-ent-accent-soft/50"
+              : "border-ent-line hover:border-ent-line-strong hover:bg-ent-panel-2/50"
           }
         `}
       >
         {uploading ? (
           <div className="flex flex-col items-center gap-2">
             <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-            <span className="text-sm text-slate-500">Subiendo...</span>
+            <span className="text-sm text-ent-fg-3">Subiendo...</span>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
-            <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
-              <ImagePlus className="w-5 h-5 text-slate-400" />
+            <div className="w-10 h-10 rounded-[4px] bg-ent-panel-2 flex items-center justify-center">
+              <ImagePlus className="w-5 h-5 text-ent-fg-3" />
             </div>
-            <p className="text-sm text-slate-600 font-medium">Arrastra o haz clic para subir</p>
-            <p className="text-xs text-slate-400">PNG, JPG, SVG &middot; Max 2MB</p>
+            <p className="text-sm text-ent-fg-2 font-medium">Arrastra o haz clic para subir</p>
+            <p className="text-xs text-ent-fg-3">PNG, JPG, SVG &middot; Max 2MB</p>
           </div>
         )}
         <input
@@ -342,10 +342,10 @@ function SidebarPreview({
 
   return (
     <div className="space-y-2">
-      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+      <p className="text-xs font-semibold text-ent-fg-3 uppercase tracking-wide">
         Sidebar del panel
       </p>
-      <div className="rounded-xl overflow-hidden shadow-md ring-1 ring-slate-900/5">
+      <div className="rounded-[4px] overflow-hidden ring-1 ring-slate-900/5">
         {/* Sidebar mockup */}
         <div className="w-full bg-[#0f172a] p-3" style={{ minHeight: 320 }}>
           {/* Logo area */}
@@ -379,7 +379,7 @@ function SidebarPreview({
             {previewNavItems.map((item) => (
               <div
                 key={item.label}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-colors"
+                className="flex items-center gap-2 px-2 py-1.5 rounded-[4px] text-[10px] font-medium transition-colors"
                 style={
                   item.active
                     ? {
@@ -413,8 +413,8 @@ function SidebarPreview({
         </div>
 
         {/* Simulated top bar to complete the mockup */}
-        <div className="bg-white border-t border-slate-100 px-3 py-2 flex items-center justify-between">
-          <div className="w-8 h-1.5 rounded bg-slate-100" />
+        <div className="bg-white border-t border-ent-line px-3 py-2 flex items-center justify-between">
+          <div className="w-8 h-1.5 rounded bg-ent-panel-2" />
           <div className="flex items-center gap-1.5">
             <div className="relative">
               <Bell className="w-3 h-3 text-slate-300" />
@@ -456,10 +456,10 @@ function RegistrationPreview({
 
   return (
     <div className="space-y-2">
-      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+      <p className="text-xs font-semibold text-ent-fg-3 uppercase tracking-wide">
         Pagina de registro
       </p>
-      <div className="rounded-xl overflow-hidden shadow-md ring-1 ring-slate-900/5 bg-slate-50">
+      <div className="rounded-[4px] overflow-hidden ring-1 ring-slate-900/5 bg-ent-panel-2">
         {/* Header band */}
         <div
           className="px-4 py-5 text-center"
@@ -468,13 +468,13 @@ function RegistrationPreview({
           }}
         >
           {logoUrl ? (
-            <div className="mx-auto mb-2 w-10 h-10 rounded-full overflow-hidden bg-white/20 shadow-sm">
+            <div className="mx-auto mb-2 w-10 h-10 rounded-full overflow-hidden bg-white/20">
               {/* biome-ignore lint/performance/noImgElement: preview mockup with external/data URIs, next/image incompatible */}
               <img src={logoUrl} alt="" className="w-full h-full object-contain p-0.5" />
             </div>
           ) : (
             <div
-              className="mx-auto mb-2 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-sm"
+              className="mx-auto mb-2 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold"
               style={{
                 backgroundColor: "rgba(255,255,255,0.2)",
                 color: contrastText(primaryColor),
@@ -496,13 +496,13 @@ function RegistrationPreview({
 
         {/* Form mockup */}
         <div className="px-4 py-3 -mt-2 relative">
-          <div className="bg-white rounded-lg shadow-sm ring-1 ring-slate-100 p-3 space-y-2">
-            <div className="h-3 w-12 rounded bg-slate-100" />
-            <div className="h-6 rounded border border-slate-150 bg-slate-50/80" />
-            <div className="h-3 w-10 rounded bg-slate-100" />
-            <div className="h-6 rounded border border-slate-150 bg-slate-50/80" />
-            <div className="h-3 w-14 rounded bg-slate-100" />
-            <div className="h-6 rounded border border-slate-150 bg-slate-50/80" />
+          <div className="bg-white rounded-[4px] ring-1 ring-slate-100 p-3 space-y-2">
+            <div className="h-3 w-12 rounded bg-ent-panel-2" />
+            <div className="h-6 rounded border border-slate-150 bg-ent-panel-2/80" />
+            <div className="h-3 w-10 rounded bg-ent-panel-2" />
+            <div className="h-6 rounded border border-slate-150 bg-ent-panel-2/80" />
+            <div className="h-3 w-14 rounded bg-ent-panel-2" />
+            <div className="h-6 rounded border border-slate-150 bg-ent-panel-2/80" />
             <div
               className="h-7 rounded-md flex items-center justify-center text-[9px] font-semibold mt-1"
               style={{
@@ -653,7 +653,9 @@ export default function BrandingPage() {
     } catch (err) {
       console.error("[branding handleSave]", err)
       toast.error(
-        err instanceof Error ? `Error al guardar: ${err.message}` : "Error de conexión al guardar branding",
+        err instanceof Error
+          ? `Error al guardar: ${err.message}`
+          : "Error de conexión al guardar branding",
       )
     } finally {
       setSaving(false)
@@ -673,16 +675,16 @@ export default function BrandingPage() {
       <div className="mb-8">
         <div className="flex items-center gap-2.5 mb-1">
           <Palette className="w-5 h-5 text-blue-600" />
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Identidad de Marca</h1>
+          <h1 className="text-xl font-bold text-ent-fg tracking-tight">Identidad de Marca</h1>
         </div>
-        <p className="text-sm text-slate-500 ml-[30px]">
+        <p className="text-sm text-ent-fg-3 ml-[30px]">
           Configura los colores y logo que el comercio vera en su panel y paginas publicas
         </p>
       </div>
 
       {/* Tenant selector */}
       <div className="mb-8">
-        <Label className="text-slate-600 text-xs font-semibold uppercase tracking-wide mb-2">
+        <Label className="text-ent-fg-2 text-xs font-semibold uppercase tracking-wide mb-2">
           Comercio
         </Label>
         {tenantsLoading ? (
@@ -707,7 +709,7 @@ export default function BrandingPage() {
                     </span>
                     <span>{t.businessName}</span>
                     {t.branding && (
-                      <span className="ml-auto text-[10px] text-slate-400">configurado</span>
+                      <span className="ml-auto text-[10px] text-ent-fg-3">configurado</span>
                     )}
                   </div>
                 </SelectItem>
@@ -720,10 +722,10 @@ export default function BrandingPage() {
       {/* Empty state */}
       {!selectedTenantId && !tenantsLoading && (
         <div className="py-20 text-center">
-          <div className="inline-flex w-14 h-14 rounded-2xl bg-slate-100 items-center justify-center mb-4">
+          <div className="inline-flex w-14 h-14 rounded-[4px] bg-ent-panel-2 items-center justify-center mb-4">
             <Palette className="w-6 h-6 text-slate-300" />
           </div>
-          <p className="text-sm text-slate-400 max-w-xs mx-auto">
+          <p className="text-sm text-ent-fg-3 max-w-xs mx-auto">
             Selecciona un comercio para configurar su identidad visual
           </p>
         </div>
@@ -733,12 +735,12 @@ export default function BrandingPage() {
       {brandingLoading && (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr] gap-10">
           <div className="space-y-6">
-            <Skeleton className="h-32 rounded-xl" />
-            <Skeleton className="h-28 rounded-xl" />
+            <Skeleton className="h-32 rounded-[4px]" />
+            <Skeleton className="h-28 rounded-[4px]" />
           </div>
           <div className="space-y-6">
-            <Skeleton className="h-64 rounded-xl" />
-            <Skeleton className="h-48 rounded-xl" />
+            <Skeleton className="h-64 rounded-[4px]" />
+            <Skeleton className="h-48 rounded-[4px]" />
           </div>
         </div>
       )}
@@ -750,8 +752,8 @@ export default function BrandingPage() {
           <div className="space-y-8">
             {/* Colors section */}
             <section>
-              <h2 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-1.5">
-                <span className="w-1 h-4 rounded-full bg-blue-500 inline-block" />
+              <h2 className="text-sm font-bold text-ent-fg mb-4 flex items-center gap-1.5">
+                <span className="w-1 h-4 rounded-full bg-ent-accent-soft0 inline-block" />
                 Colores
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -771,12 +773,12 @@ export default function BrandingPage() {
             </section>
 
             {/* Divider */}
-            <div className="border-t border-slate-100" />
+            <div className="border-t border-ent-line" />
 
             {/* Logo section */}
             <section>
-              <h2 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-1.5">
-                <span className="w-1 h-4 rounded-full bg-blue-500 inline-block" />
+              <h2 className="text-sm font-bold text-ent-fg mb-4 flex items-center gap-1.5">
+                <span className="w-1 h-4 rounded-full bg-ent-accent-soft0 inline-block" />
                 Logo
               </h2>
               <LogoUploader
@@ -788,7 +790,7 @@ export default function BrandingPage() {
             </section>
 
             {/* Divider */}
-            <div className="border-t border-slate-100" />
+            <div className="border-t border-ent-line" />
 
             {/* Actions */}
             <div className="flex items-center gap-3">
@@ -808,7 +810,7 @@ export default function BrandingPage() {
                 variant="ghost"
                 onClick={handleReset}
                 disabled={!hasChanges}
-                className="text-slate-500 gap-1.5"
+                className="text-ent-fg-3 gap-1.5"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 Deshacer

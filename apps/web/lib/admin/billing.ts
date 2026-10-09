@@ -101,6 +101,29 @@ export function monthsOfService(serviceStartOn: string, today: string): number {
 }
 
 /**
+ * "5 meses y 4 días" since `serviceStartOn` (calendar months, then days),
+ * for the tenant summary. Empty string when the start is in the future.
+ */
+export function activeTimeLabel(serviceStartOn: string, today: string): string {
+  if (today < serviceStartOn) return `Empieza el ${formatYmd(serviceStartOn)}`
+  const [y1, m1, d1] = split(serviceStartOn)
+  const [y2, m2, d2] = split(today)
+  // Same 28-day cap as monthsOfService, so "Tiempo activo" and the invoice
+  // count never disagree (a service started on the 31st completes its month on the 28th).
+  const day = Math.min(d1, 28)
+  let months = (y2 - y1) * 12 + (m2 - m1)
+  if (d2 < day) months -= 1
+  // Day remainder: distance from the last monthly anniversary to today.
+  const anchor = new Date(Date.UTC(y1, m1 - 1 + months, day))
+  const days = Math.max(0, Math.round((Date.UTC(y2, m2 - 1, d2) - anchor.getTime()) / 86_400_000))
+  const m = months === 1 ? "1 mes" : `${months} meses`
+  const d = days === 1 ? "1 día" : `${days} días`
+  if (months === 0) return d
+  if (days === 0) return m
+  return `${m} y ${d}`
+}
+
+/**
  * Where the tenant stands today given its rule and the periods that already
  * have a (non-void) invoice. Due dates: service start, then every month on
  * the billing day.

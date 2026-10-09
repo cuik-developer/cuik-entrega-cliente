@@ -10,10 +10,7 @@ import {
   successResponse,
 } from "@/lib/api-utils"
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ tenant: string }> },
-) {
+export async function POST(request: Request, { params }: { params: Promise<{ tenant: string }> }) {
   try {
     const { session, error: authError } = await requireAuth(request)
     if (authError) return authError

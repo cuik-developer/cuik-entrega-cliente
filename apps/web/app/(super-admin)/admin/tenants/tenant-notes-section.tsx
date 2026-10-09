@@ -110,10 +110,10 @@ export function TenantNotesSection({
 
   return (
     <div className="p-6 space-y-4">
-      <div className="bg-slate-50 rounded-xl p-4 space-y-3">
+      <div className="bg-ent-panel-2 rounded-[4px] p-4 space-y-3">
         <div className="flex items-center gap-2">
-          <StickyNote className="w-4 h-4 text-slate-500" />
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+          <StickyNote className="w-4 h-4 text-ent-fg-3" />
+          <p className="text-xs font-semibold text-ent-fg-3 uppercase tracking-wide">
             Nueva nota interna
           </p>
         </div>
@@ -143,10 +143,10 @@ export function TenantNotesSection({
 
       {loading ? (
         <div className="flex justify-center py-8">
-          <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+          <Loader2 className="w-5 h-5 animate-spin text-ent-fg-3" />
         </div>
       ) : notes.length === 0 ? (
-        <p className="text-sm text-slate-400 text-center py-8">
+        <p className="text-sm text-ent-fg-3 text-center py-8">
           Todavía no hay notas sobre este comercio.
         </p>
       ) : (
@@ -156,15 +156,15 @@ export function TenantNotesSection({
             return (
               <li
                 key={n.id}
-                className={`rounded-xl border p-3 text-sm ${overdue ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white"}`}
+                className={`rounded-[4px] border p-3 text-sm ${overdue ? "border-amber-300 bg-amber-50" : "border-ent-line bg-white"}`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <p className="whitespace-pre-wrap text-slate-800 flex-1">{n.content}</p>
+                  <p className="whitespace-pre-wrap text-ent-fg flex-1">{n.content}</p>
                   {n.mine && (
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-7 w-7 p-0 text-slate-400 hover:text-red-600 shrink-0"
+                      className="h-7 w-7 p-0 text-ent-fg-3 hover:text-red-600 shrink-0"
                       onClick={() => remove(n.id)}
                       aria-label="Borrar nota"
                     >
@@ -172,7 +172,7 @@ export function TenantNotesSection({
                     </Button>
                   )}
                 </div>
-                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ent-fg-3">
                   <span>
                     {n.author.name ?? "Equipo Cuik"} · {fmt(n.createdAt)}
                   </span>

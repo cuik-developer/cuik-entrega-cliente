@@ -83,6 +83,8 @@ export async function GET(request: Request) {
               daysUntilNext: b.daysUntilNext,
               daysOverdue: b.daysOverdue,
               monthsOfService: b.monthsOfService,
+              monthlyAmount: b.monthlyAmount,
+              currency: b.currency,
             }
           : null,
       }

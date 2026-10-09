@@ -22,11 +22,7 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   // Verify execution exists and is pending
-  const [execution] = await db
-    .select()
-    .from(executions)
-    .where(eq(executions.id, id))
-    .limit(1)
+  const [execution] = await db.select().from(executions).where(eq(executions.id, id)).limit(1)
 
   if (!execution) return errorResponse("Execution not found", 404)
   if (execution.status !== "pending_approval") {
@@ -55,11 +51,7 @@ export async function POST(request: Request, { params }: Params) {
 
 async function sendReportEmail(taskId: string, output: unknown) {
   // Get task with recipients
-  const [task] = await db
-    .select()
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .limit(1)
+  const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
 
   if (!task) return
 
@@ -88,7 +80,10 @@ async function sendReportEmail(taskId: string, output: unknown) {
   }
 
   // Extract output data
-  const outputData = output as { text?: string; attachments?: Array<{ name: string; url: string }> } | null
+  const outputData = output as {
+    text?: string
+    attachments?: Array<{ name: string; url: string }>
+  } | null
   const summary = outputData?.text?.slice(0, 200) ?? ""
   const attachment = outputData?.attachments?.[0]
   const downloadUrl = attachment?.url ?? ""

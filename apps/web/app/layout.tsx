@@ -1,8 +1,7 @@
 import type { Metadata } from "next"
-import { JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google"
+import { IBM_Plex_Sans, JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google"
 import { Toaster } from "sonner"
 import "./globals.css"
-
 
 export const metadata: Metadata = {
   title: "Cuik — Fidelización Digital para Comercios",
@@ -22,6 +21,12 @@ export const metadata: Metadata = {
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
   variable: "--font-plus-jakarta",
+  display: "swap",
+})
+const ibmPlexSans = IBM_Plex_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-ibm-plex",
   display: "swap",
 })
 const jetbrainsMono = JetBrains_Mono({
@@ -44,7 +49,7 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body
-        className={`${plusJakartaSans.variable} ${jetbrainsMono.variable} font-sans antialiased`}
+        className={`${plusJakartaSans.variable} ${ibmPlexSans.variable} ${jetbrainsMono.variable} font-sans antialiased`}
       >
         {children}
         <Toaster richColors position="bottom-right" />

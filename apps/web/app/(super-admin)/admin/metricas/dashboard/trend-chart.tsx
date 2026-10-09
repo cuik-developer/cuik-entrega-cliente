@@ -20,9 +20,10 @@ import {
 } from "@/components/ui/select"
 import type { PlatformMetrics } from "@/lib/admin/platform-metrics"
 
-type MetricKey = "visits" | "newClients" | "installs" | "redemptions"
+type MetricKey = "visits" | "points" | "newClients" | "installs" | "redemptions"
 const METRICS: Record<MetricKey, string> = {
   visits: "Visitas",
+  points: "Puntos otorgados",
   newClients: "Clientes nuevos",
   installs: "Pases instalados (Apple)",
   redemptions: "Canjes",
@@ -78,11 +79,11 @@ export function TrendChart({ data }: { data: PlatformMetrics }) {
   const totalPrev = rows.reduce((a, r) => a + r.anterior, 0)
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5">
+    <div className="rounded-[4px] border border-ent-line bg-white p-5">
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <div>
-          <h3 className="text-sm font-bold text-slate-700">Tendencia</h3>
-          <p className="text-xs text-slate-400">
+          <h3 className="text-sm font-bold text-ent-fg-2">Tendencia</h3>
+          <p className="text-xs text-ent-fg-3">
             {METRICS[metric]}: {totalCur.toLocaleString("es-PE")} ahora ·{" "}
             {totalPrev.toLocaleString("es-PE")} en el período anterior
           </p>
@@ -113,7 +114,7 @@ export function TrendChart({ data }: { data: PlatformMetrics }) {
         </div>
       </div>
       {totalCur === 0 && totalPrev === 0 ? (
-        <div className="h-64 flex items-center justify-center text-sm text-slate-400">
+        <div className="h-64 flex items-center justify-center text-sm text-ent-fg-3">
           Sin datos en este rango.
         </div>
       ) : (

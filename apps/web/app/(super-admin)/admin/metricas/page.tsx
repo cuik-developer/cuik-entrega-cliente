@@ -6,10 +6,10 @@ export default function MetricasPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
+        <h1 className="text-[17px] leading-6 font-semibold text-ent-fg tracking-[-0.005em]">
           Métricas de plataforma
         </h1>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-ent-fg-3">
           ¿Crece el negocio? ¿Quién necesita atención? ¿Qué hago hoy? Todo comparado con el período
           anterior.
         </p>

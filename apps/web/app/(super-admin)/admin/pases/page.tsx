@@ -143,15 +143,17 @@ export default function PasesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Diseños de Pases</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-[17px] leading-6 font-semibold text-ent-fg tracking-[-0.005em]">
+            Diseños de Pases
+          </h1>
+          <p className="text-sm text-ent-fg-3 mt-1">
             Gestioná los diseños de pases de wallet para cada comercio.
           </p>
         </div>
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-[#0e70db] text-white gap-1.5">
+            <Button className="bg-ent-accent text-white gap-1.5">
               <Plus className="w-4 h-4" />
               Nuevo Diseño
             </Button>
@@ -221,7 +223,7 @@ export default function PasesPage() {
               <Button
                 onClick={handleCreate}
                 disabled={creating || !newName.trim() || !newTenantId}
-                className="w-full bg-[#0e70db] text-white"
+                className="w-full bg-ent-accent text-white"
               >
                 {creating ? (
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -239,7 +241,7 @@ export default function PasesPage() {
       {Object.keys(groupedByTenant).length === 0 ? (
         <div className="text-center py-20">
           <Paintbrush className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500">No hay diseños creados todavía.</p>
+          <p className="text-ent-fg-3">No hay diseños creados todavía.</p>
           <p className="text-sm text-gray-400 mt-1">Crea un nuevo diseño para empezar.</p>
         </div>
       ) : (
@@ -261,15 +263,13 @@ export default function PasesPage() {
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-gray-900 truncate">
-                            {row.design.name}
-                          </h3>
+                          <h3 className="font-semibold text-ent-fg truncate">{row.design.name}</h3>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <Badge
                               variant="outline"
                               className={
                                 row.design.type === "apple_store"
-                                  ? "bg-gray-900/5 text-gray-900 border-gray-200 text-xs"
+                                  ? "bg-gray-900/5 text-ent-fg border-ent-line text-xs"
                                   : "bg-[#34a853]/10 text-[#34a853] border-[#34a853]/20 text-xs"
                               }
                             >
@@ -291,7 +291,7 @@ export default function PasesPage() {
                                 className={
                                   row.promotionType === "stamps"
                                     ? "bg-violet-50 text-violet-600 border-violet-200 text-xs"
-                                    : "bg-blue-50 text-blue-600 border-blue-200 text-xs"
+                                    : "bg-ent-accent-soft text-blue-600 border-blue-200 text-xs"
                                 }
                               >
                                 {row.promotionType === "stamps" ? (

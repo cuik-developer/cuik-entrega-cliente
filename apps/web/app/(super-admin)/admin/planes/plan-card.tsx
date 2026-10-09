@@ -22,21 +22,21 @@ export function PlanCard({ plan, onEdit, onToggle }: PlanCardProps) {
 
   return (
     <div
-      className={`relative rounded-xl border p-5 transition-all ${
+      className={`relative rounded-[4px] border p-5 transition-all ${
         isInactive
-          ? "border-zinc-200 bg-zinc-50 opacity-60"
-          : "border-zinc-200 bg-white hover:border-zinc-300 hover:shadow-sm"
+          ? "border-ent-line bg-ent-panel-2 opacity-60"
+          : "border-ent-line bg-white hover:border-zinc-300 hover:shadow-sm"
       }`}
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-3 mb-4">
         <div>
-          <h3 className="text-base font-semibold text-zinc-900">{plan.name}</h3>
+          <h3 className="text-base font-semibold text-ent-fg">{plan.name}</h3>
           <div className="mt-1 flex items-baseline gap-1">
-            <span className="text-2xl font-bold tracking-tight text-zinc-900">
+            <span className="text-2xl font-bold tracking-tight text-ent-fg">
               {formatPrice(plan.price)}
             </span>
-            {plan.price > 0 && <span className="text-sm text-zinc-500">/mes</span>}
+            {plan.price > 0 && <span className="text-sm text-ent-fg-3">/mes</span>}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -97,7 +97,7 @@ function LimitRow({
 }) {
   return (
     <div className="flex items-center justify-between text-sm">
-      <span className="flex items-center gap-2 text-zinc-500">
+      <span className="flex items-center gap-2 text-ent-fg-3">
         <Icon className="h-3.5 w-3.5" />
         {label}
       </span>

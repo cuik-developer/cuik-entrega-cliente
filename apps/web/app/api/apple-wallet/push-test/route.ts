@@ -69,13 +69,16 @@ export async function POST(request: Request) {
     // 4. Resolve APNs config
     const apnsConfig = validateAppleApnsEnv()
     if (!apnsConfig) {
-      return Response.json({
-        error: "APNs env not configured",
-        devices: deviceRows.length,
-        tokens: tokens.length,
-        lastUpdatedAt: now.toISOString(),
-        etag,
-      }, { status: 503 })
+      return Response.json(
+        {
+          error: "APNs env not configured",
+          devices: deviceRows.length,
+          tokens: tokens.length,
+          lastUpdatedAt: now.toISOString(),
+          etag,
+        },
+        { status: 503 },
+      )
     }
 
     if (tokens.length === 0) {

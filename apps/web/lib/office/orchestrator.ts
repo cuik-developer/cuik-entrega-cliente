@@ -261,7 +261,7 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
 
       // SESSION 2 — Excel generation (same session, new turn)
       const attachments: Array<{ name: string; url: string }> = []
-      let analysisText = stream1.text
+      const analysisText = stream1.text
 
       try {
         const prompt2 = `Lee el archivo ${reportFile} y genera un Excel profesional con openpyxl en ${excelFile} con estas 9 hojas: Dashboard Ejecutivo, Patrones Temporales, Segmentación Clientes, Retención, Performance por Local, Digital & Rewards, Crecimiento, Plan de Acción, Anomalías. Usa headers en negrita con color #4A90D9, bordes en todas las celdas, y colores alternos en filas. Cuando termines, imprime el resultado de: base64 ${excelFile}`
@@ -301,7 +301,9 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
           })
           console.log("[orchestrator] agent-generated Excel uploaded:", url)
         } else {
-          console.warn("[orchestrator] no base64 Excel found in session 2 output, falling back to ExcelJS...")
+          console.warn(
+            "[orchestrator] no base64 Excel found in session 2 output, falling back to ExcelJS...",
+          )
           const excelBuffer = await generateReport(tenantName, reportData, analysisText)
           const key = `office/reports/${execution.id}.xlsx`
           const url = await uploadAsset(
@@ -316,7 +318,10 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
           console.log("[orchestrator] fallback Excel uploaded:", url)
         }
       } catch (session2Err) {
-        console.error("[orchestrator] session 2 failed (non-fatal), saving analysis only:", session2Err)
+        console.error(
+          "[orchestrator] session 2 failed (non-fatal), saving analysis only:",
+          session2Err,
+        )
         agentLogs.push({
           agent: primaryAgent,
           event: "session2_failed",
@@ -349,9 +354,7 @@ export async function executeTask(taskId: string): Promise<ExecutionResult> {
         : ("approved" as const)
 
       const output =
-        attachments.length > 0
-          ? { text: analysisText, attachments }
-          : { text: analysisText }
+        attachments.length > 0 ? { text: analysisText, attachments } : { text: analysisText }
 
       console.log(
         `[orchestrator] saving execution ${execution.id}: status=${finalStatus}, chars=${analysisText.length}, attachments=${attachments.length}`,

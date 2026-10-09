@@ -223,13 +223,13 @@ export function EditorPageClient({
       {/* The editor has fixed 320px / 480px panels: below md it is unusable, say so. */}
       <div className="md:hidden flex-1 flex items-center justify-center p-6 text-center">
         <div className="max-w-xs space-y-2">
-          <p className="text-base font-semibold text-slate-900">Editor solo para computadora</p>
-          <p className="text-sm text-slate-500">
+          <p className="text-base font-semibold text-ent-fg">Editor solo para computadora</p>
+          <p className="text-sm text-ent-fg-3">
             El editor de pases necesita una pantalla ancha. Ábrelo desde una laptop o PC.
           </p>
           <Link
             href="/admin/pases"
-            className="inline-block mt-2 text-sm font-medium text-[#0e70db] hover:underline"
+            className="inline-block mt-2 text-sm font-medium text-ent-accent hover:underline"
           >
             Volver a Diseños de Pases
           </Link>
@@ -265,7 +265,7 @@ export function EditorPageClient({
           </DialogHeader>
 
           {isPromoInactive && (
-            <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3">
+            <div className="flex items-start gap-3 rounded-[4px] border border-red-200 bg-red-50 p-3">
               <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
               <p className="text-sm text-red-700">
                 Promocion &quot;{promotionContext?.rewardValue}&quot; esta inactiva. Activa la
@@ -285,7 +285,7 @@ export function EditorPageClient({
             <Button
               onClick={handleConfirmPublish}
               disabled={publishing || !!isPromoInactive}
-              className="bg-[#0e70db] text-white"
+              className="bg-ent-accent text-white"
             >
               {publishing ? (
                 <>

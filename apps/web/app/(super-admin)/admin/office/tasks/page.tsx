@@ -105,8 +105,10 @@ export default function TasksListPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Tareas</h1>
-            <p className="text-slate-500">Tareas programadas y manuales</p>
+            <h1 className="text-[17px] leading-6 font-semibold text-ent-fg tracking-[-0.005em]">
+              Tareas
+            </h1>
+            <p className="text-ent-fg-3">Tareas programadas y manuales</p>
           </div>
         </div>
         <Button asChild>
@@ -134,11 +136,11 @@ export default function TasksListPage() {
       {/* Task list */}
       {loading ? (
         <div className="flex justify-center py-12">
-          <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+          <Loader2 className="w-6 h-6 animate-spin text-ent-fg-3" />
         </div>
       ) : tasks.length === 0 ? (
         <Card>
-          <CardContent className="py-12 text-center text-slate-400">
+          <CardContent className="py-12 text-center text-ent-fg-3">
             No hay tareas{" "}
             {filter === "active" ? "activas" : filter === "paused" ? "pausadas" : "archivadas"}
           </CardContent>
@@ -154,8 +156,8 @@ export default function TasksListPage() {
                       {(task.agents as string[]).map((a) => agentEmoji(a)).join("")}
                     </span>
                     <div>
-                      <p className="font-medium text-slate-900">{task.title}</p>
-                      <p className="text-sm text-slate-500 mt-1 line-clamp-2">{task.prompt}</p>
+                      <p className="font-medium text-ent-fg">{task.title}</p>
+                      <p className="text-sm text-ent-fg-3 mt-1 line-clamp-2">{task.prompt}</p>
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
                         <Badge variant="outline" className="text-xs">
                           {task.type === "collaborative" ? "Colaborativo" : "Individual"}

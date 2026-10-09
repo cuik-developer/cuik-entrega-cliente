@@ -308,7 +308,7 @@ export function RegistrationConfigDialog({
             </div>
 
             {fields.length === 0 && (
-              <p className="text-xs text-slate-400 py-2">
+              <p className="text-xs text-ent-fg-3 py-2">
                 Sin campos estrategicos. Agrega campos personalizados para recolectar informacion
                 adicional durante el registro.
               </p>
@@ -316,13 +316,13 @@ export function RegistrationConfigDialog({
 
             {fields.map((field, index) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: field.key changes on keystroke causing React remount
-              <div key={index} className="bg-slate-50 rounded-xl p-3 space-y-3 relative">
+              <div key={index} className="bg-ent-panel-2 rounded-[4px] p-3 space-y-3 relative">
                 {/* Remove button */}
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
-                  className="absolute top-2 right-2 h-6 w-6 p-0 text-slate-400 hover:text-red-600"
+                  className="absolute top-2 right-2 h-6 w-6 p-0 text-ent-fg-3 hover:text-red-600"
                   onClick={() => removeField(index)}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -342,7 +342,7 @@ export function RegistrationConfigDialog({
                 {/* Key (auto-generated, editable) */}
                 <div className="space-y-1">
                   <Label className="text-xs">
-                    Key <span className="text-slate-400 font-normal">(auto-generado)</span>
+                    Key <span className="text-ent-fg-3 font-normal">(auto-generado)</span>
                   </Label>
                   <Input
                     value={field.key}
@@ -393,7 +393,7 @@ export function RegistrationConfigDialog({
                 {field.type === "select" && (
                   <div className="space-y-1">
                     <Label className="text-xs">
-                      Opciones <span className="text-slate-400 font-normal">(una por linea)</span>
+                      Opciones <span className="text-ent-fg-3 font-normal">(una por linea)</span>
                     </Label>
                     <textarea
                       value={field.optionsText}
@@ -412,7 +412,7 @@ export function RegistrationConfigDialog({
                 {/* Placeholder (optional) */}
                 <div className="space-y-1">
                   <Label className="text-xs">
-                    Placeholder <span className="text-slate-400 font-normal">(opcional)</span>
+                    Placeholder <span className="text-ent-fg-3 font-normal">(opcional)</span>
                   </Label>
                   <Input
                     value={field.placeholder}
@@ -428,7 +428,7 @@ export function RegistrationConfigDialog({
             ))}
 
             {fields.length > 0 && (
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[10px] text-ent-fg-3">
                 {fields.length}/{MAX_FIELDS} campos configurados
               </p>
             )}
@@ -441,13 +441,13 @@ export function RegistrationConfigDialog({
               <Switch checked={birthdayEnabled} onCheckedChange={setBirthdayEnabled} />
             </div>
 
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-ent-fg-3">
               Pide la fecha de cumpleaños en el registro. Necesario para el saludo automático de
               cumpleaños que el comercio configura en Campañas.
             </p>
 
             {birthdayEnabled && (
-              <div className="bg-slate-50 rounded-xl p-3 space-y-3">
+              <div className="bg-ent-panel-2 rounded-[4px] p-3 space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs">Obligatorio</Label>
                   <Switch checked={birthdayRequired} onCheckedChange={setBirthdayRequired} />
@@ -461,7 +461,7 @@ export function RegistrationConfigDialog({
                     className="h-8 text-sm"
                     maxLength={60}
                   />
-                  <p className="text-[10px] text-slate-400">
+                  <p className="text-[10px] text-ent-fg-3">
                     Como se le pregunta al cliente en el registro. Ej.: "Cumpleaños de tu engreid@"
                     para una petshop. Vacío = "Fecha de cumpleaños".
                   </p>
@@ -477,7 +477,7 @@ export function RegistrationConfigDialog({
               <Switch checked={bonusEnabled} onCheckedChange={setBonusEnabled} />
             </div>
 
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-ent-fg-3">
               {promotionType === "points"
                 ? "Otorga puntos extra cuando el cliente acepta recibir marketing durante el registro."
                 : promotionType === "stamps"
@@ -486,7 +486,7 @@ export function RegistrationConfigDialog({
             </p>
 
             {bonusEnabled && (
-              <div className="bg-slate-50 rounded-xl p-3 space-y-3">
+              <div className="bg-ent-panel-2 rounded-[4px] p-3 space-y-3">
                 {promotionType !== "points" && (
                   <div className="space-y-1">
                     <Label className="text-xs">Sellos bonus</Label>
@@ -500,7 +500,7 @@ export function RegistrationConfigDialog({
                       }
                       className="h-8 text-sm"
                     />
-                    <p className="text-[10px] text-slate-400">Sellos extra al registrarse (0-10)</p>
+                    <p className="text-[10px] text-ent-fg-3">Sellos extra al registrarse (0-10)</p>
                   </div>
                 )}
 
@@ -517,7 +517,7 @@ export function RegistrationConfigDialog({
                       }
                       className="h-8 text-sm"
                     />
-                    <p className="text-[10px] text-slate-400">
+                    <p className="text-[10px] text-ent-fg-3">
                       Puntos extra al registrarse (0-1000)
                     </p>
                   </div>

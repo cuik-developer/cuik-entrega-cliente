@@ -33,12 +33,12 @@ export function InternalTenantsForm({
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-          <FlaskConical className="w-4 h-4 text-slate-600" />
+        <div className="w-9 h-9 rounded-[4px] bg-ent-panel-2 flex items-center justify-center shrink-0">
+          <FlaskConical className="w-4 h-4 text-ent-fg-2" />
         </div>
         <div>
-          <h2 className="text-base font-bold text-slate-900">Comercios internos</h2>
-          <p className="text-sm text-slate-500">
+          <h2 className="text-base font-bold text-ent-fg">Comercios internos</h2>
+          <p className="text-sm text-ent-fg-3">
             Demos y cuentas de prueba del equipo Cuik. Se excluyen de Métricas (y de su Excel) para
             que los números reflejen solo clientes reales. En Métricas podés incluirlos con un clic
             cuando los necesites.
@@ -47,7 +47,7 @@ export function InternalTenantsForm({
       </div>
 
       {tenants.length === 0 ? (
-        <p className="text-sm text-slate-400">No hay comercios.</p>
+        <p className="text-sm text-ent-fg-3">No hay comercios.</p>
       ) : (
         <ul className="grid gap-2 sm:grid-cols-2">
           {tenants.map((t) => {
@@ -55,7 +55,7 @@ export function InternalTenantsForm({
             return (
               <li key={t.id}>
                 <label
-                  className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-sm cursor-pointer ${checked ? "border-slate-400 bg-slate-50" : "border-slate-200"}`}
+                  className={`flex items-center gap-3 rounded-[4px] border px-3 py-2 text-sm cursor-pointer ${checked ? "border-slate-400 bg-ent-panel-2" : "border-ent-line"}`}
                 >
                   <Checkbox
                     checked={checked}
@@ -67,8 +67,8 @@ export function InternalTenantsForm({
                     }}
                   />
                   <span className="min-w-0">
-                    <span className="block font-medium text-slate-900 truncate">{t.name}</span>
-                    <span className="block text-xs text-slate-400">
+                    <span className="block font-medium text-ent-fg truncate">{t.name}</span>
+                    <span className="block text-xs text-ent-fg-3">
                       {t.slug} · {t.status === "trial" ? "demo" : t.status}
                     </span>
                   </span>
@@ -80,7 +80,7 @@ export function InternalTenantsForm({
       )}
 
       <div className="flex items-center justify-between border-t pt-4">
-        <span className="text-xs text-slate-400">
+        <span className="text-xs text-ent-fg-3">
           {selected.size} marcado{selected.size === 1 ? "" : "s"} como interno
           {selected.size === 1 ? "" : "s"}
         </span>

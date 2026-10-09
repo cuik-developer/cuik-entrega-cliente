@@ -54,7 +54,9 @@ export async function POST(request: Request) {
           })
           .where(eq(tasks.id, task.id))
 
-        console.log(`[cron/office-tasks] Task "${task.title}" done, next run: ${nextRun.toISOString()}`)
+        console.log(
+          `[cron/office-tasks] Task "${task.title}" done, next run: ${nextRun.toISOString()}`,
+        )
       } catch (err) {
         const msg = `Task ${task.id} ("${task.title}"): ${err instanceof Error ? err.message : String(err)}`
         errors.push(msg)

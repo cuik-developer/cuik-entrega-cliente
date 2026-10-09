@@ -111,9 +111,9 @@ export function FiltersBar({
     (filters.tenantIds.length > 0 ? 1 : 0)
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-3">
+    <div className="rounded-[4px] border border-ent-line bg-white p-3 space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <CalendarDays className="w-4 h-4 text-slate-400" />
+        <CalendarDays className="w-4 h-4 text-ent-fg-3" />
         {PRESETS.map((p) => (
           <Button
             key={p.v}
@@ -136,7 +136,7 @@ export function FiltersBar({
           minDate={minDate}
           active={filters.preset === "custom"}
         />
-        <span className="ml-auto text-xs text-slate-400 tabular-nums">
+        <span className="ml-auto text-xs text-ent-fg-3 tabular-nums">
           {filters.from} → {filters.to} · comparado con el período anterior
         </span>
       </div>
@@ -219,7 +219,7 @@ export function FiltersBar({
                 <DropdownMenuSeparator />
                 <button
                   type="button"
-                  className="w-full px-2 py-1.5 text-left text-xs text-slate-500 hover:bg-slate-50"
+                  className="w-full px-2 py-1.5 text-left text-xs text-ent-fg-3 hover:bg-ent-panel-2"
                   onClick={() => onChange({ ...filters, tenantIds: [] })}
                 >
                   Quitar selección
@@ -229,7 +229,7 @@ export function FiltersBar({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer select-none">
+        <label className="flex items-center gap-1.5 text-xs text-ent-fg-3 cursor-pointer select-none">
           <input
             type="checkbox"
             className="accent-[#0e70db]"
@@ -238,7 +238,7 @@ export function FiltersBar({
           />
           Incluir demos internas
           {!filters.includeInternal && internalExcluded > 0 && (
-            <span className="text-slate-400">
+            <span className="text-ent-fg-3">
               ({internalExcluded} excluida{internalExcluded > 1 ? "s" : ""})
             </span>
           )}
@@ -248,7 +248,7 @@ export function FiltersBar({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 text-xs text-slate-500 gap-1"
+            className="h-8 text-xs text-ent-fg-3 gap-1"
             onClick={() =>
               onChange({ ...filters, status: "all", program: "all", planId: null, tenantIds: [] })
             }
@@ -258,7 +258,7 @@ export function FiltersBar({
         )}
 
         <div className="ml-auto flex items-center gap-2">
-          {loading && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+          {loading && <Loader2 className="w-4 h-4 animate-spin text-ent-fg-3" />}
           <Button
             variant="outline"
             size="sm"
@@ -276,7 +276,7 @@ export function FiltersBar({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 text-xs text-slate-500"
+            className="h-8 text-xs text-ent-fg-3"
             onClick={onExportDetail}
             title="Excel con una hoja por comercio y una fila por visita (nivel cliente)"
           >
@@ -285,7 +285,7 @@ export function FiltersBar({
         </div>
       </div>
       {activeCount > 0 && (
-        <p className="text-[11px] text-slate-400 flex items-center gap-1">
+        <p className="text-[11px] text-ent-fg-3 flex items-center gap-1">
           <Check className="w-3 h-3" /> Todos los bloques de la página respetan estos filtros.
         </p>
       )}

@@ -24,10 +24,10 @@ export default async function SuperAdminConfigPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-extrabold text-slate-900 dark:text-slate-100">
+        <h1 className="text-[17px] leading-6 font-semibold text-ent-fg tracking-[-0.005em]">
           Configuracion
         </h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+        <p className="mt-1 text-sm text-ent-fg-3 dark:text-ent-fg-3">
           Ajustes globales de la plataforma.
         </p>
       </div>

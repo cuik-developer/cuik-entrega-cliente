@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  activeTimeLabel,
   billingOutlook,
   daysBetween,
   effectiveBillingDay,
@@ -104,5 +105,21 @@ describe("helpers", () => {
   it("daysBetween and formatYmd", () => {
     expect(daysBetween("2026-10-08", "2026-10-16")).toBe(8)
     expect(formatYmd("2026-11-16")).toMatch(/16.*nov.*2026/)
+  })
+})
+
+describe("activeTimeLabel", () => {
+  it("counts calendar months then days", () => {
+    expect(activeTimeLabel("2026-08-12", "2026-10-09")).toBe("1 mes y 27 días")
+    expect(activeTimeLabel("2026-08-12", "2026-08-12")).toBe("0 días")
+    expect(activeTimeLabel("2026-08-12", "2026-09-12")).toBe("1 mes")
+    expect(activeTimeLabel("2025-10-09", "2026-10-10")).toBe("12 meses y 1 día")
+  })
+  it("caps the anniversary on the 28th like monthsOfService", () => {
+    expect(activeTimeLabel("2026-01-31", "2026-02-28")).toBe("1 mes")
+    expect(activeTimeLabel("2026-01-31", "2026-03-01")).toBe("1 mes y 1 día")
+  })
+  it("handles a future start", () => {
+    expect(activeTimeLabel("2026-12-01", "2026-10-09")).toBe("Empieza el 1 dic. 2026")
   })
 })

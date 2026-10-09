@@ -99,7 +99,7 @@ export default function OfficeDashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+        <Loader2 className="w-6 h-6 animate-spin text-ent-fg-3" />
       </div>
     )
   }
@@ -110,10 +110,12 @@ export default function OfficeDashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <Bot className="w-6 h-6 text-[#0e70db]" />
-            <h1 className="text-2xl font-bold text-slate-900">Office</h1>
+            <Bot className="w-6 h-6 text-ent-accent" />
+            <h1 className="text-[17px] leading-6 font-semibold text-ent-fg tracking-[-0.005em]">
+              Office
+            </h1>
           </div>
-          <p className="text-slate-500 mt-1">Orquestacion de agentes IA</p>
+          <p className="text-ent-fg-3 mt-1">Orquestacion de agentes IA</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" asChild>
@@ -131,7 +133,7 @@ export default function OfficeDashboardPage() {
       {/* Pending Approvals */}
       <section>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-ent-fg flex items-center gap-2">
             <AlertCircle className="w-5 h-5 text-amber-500" />
             Aprobaciones pendientes
             {pendingApprovals.length > 0 && (
@@ -142,7 +144,7 @@ export default function OfficeDashboardPage() {
           </h2>
           <Link
             href="/admin/office/approvals"
-            className="text-sm text-[#0e70db] hover:underline flex items-center gap-1"
+            className="text-sm text-ent-accent hover:underline flex items-center gap-1"
           >
             Ver todas <ArrowRight className="w-3 h-3" />
           </Link>
@@ -150,7 +152,7 @@ export default function OfficeDashboardPage() {
 
         {pendingApprovals.length === 0 ? (
           <Card>
-            <CardContent className="py-8 text-center text-slate-400">
+            <CardContent className="py-8 text-center text-ent-fg-3">
               <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-green-400" />
               No hay aprobaciones pendientes
             </CardContent>
@@ -159,15 +161,15 @@ export default function OfficeDashboardPage() {
           <div className="grid gap-3">
             {pendingApprovals.slice(0, 5).map((exec) => (
               <Link key={exec.id} href={`/admin/office/approvals/${exec.id}`}>
-                <Card className="hover:border-[#0e70db]/30 transition-colors cursor-pointer">
+                <Card className="hover:border-ent-accent/30 transition-colors cursor-pointer">
                   <CardContent className="py-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className="text-lg">
                         {(exec.agentsUsed as string[]).map((a) => agentEmoji(a)).join("")}
                       </span>
                       <div>
-                        <p className="font-medium text-slate-900">{exec.taskTitle}</p>
-                        <p className="text-xs text-slate-400">
+                        <p className="font-medium text-ent-fg">{exec.taskTitle}</p>
+                        <p className="text-xs text-ent-fg-3">
                           {new Date(exec.createdAt).toLocaleString("es-MX")}
                           {exec.durationMs && ` \u00B7 ${(exec.durationMs / 1000).toFixed(1)}s`}
                         </p>
@@ -185,13 +187,13 @@ export default function OfficeDashboardPage() {
       {/* Scheduled Tasks */}
       <section>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-[#0e70db]" />
+          <h2 className="text-lg font-semibold text-ent-fg flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-ent-accent" />
             Tareas programadas
           </h2>
           <Link
             href="/admin/office/tasks"
-            className="text-sm text-[#0e70db] hover:underline flex items-center gap-1"
+            className="text-sm text-ent-accent hover:underline flex items-center gap-1"
           >
             Ver todas <ArrowRight className="w-3 h-3" />
           </Link>
@@ -199,7 +201,7 @@ export default function OfficeDashboardPage() {
 
         {scheduledTasks.length === 0 ? (
           <Card>
-            <CardContent className="py-8 text-center text-slate-400">
+            <CardContent className="py-8 text-center text-ent-fg-3">
               No hay tareas programadas
             </CardContent>
           </Card>
@@ -213,8 +215,8 @@ export default function OfficeDashboardPage() {
                       {(task.agents as string[]).map((a) => agentEmoji(a)).join("")}
                     </span>
                     <div>
-                      <p className="font-medium text-slate-900">{task.title}</p>
-                      <p className="text-xs text-slate-400">
+                      <p className="font-medium text-ent-fg">{task.title}</p>
+                      <p className="text-xs text-ent-fg-3">
                         {task.cronExpression ? `Cron: ${task.cronExpression}` : "Manual"}
                         {task.lastRun &&
                           ` \u00B7 Ultima: ${new Date(task.lastRun).toLocaleString("es-MX")}`}
@@ -222,7 +224,7 @@ export default function OfficeDashboardPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {task.cronExpression && <Clock className="w-4 h-4 text-slate-400" />}
+                    {task.cronExpression && <Clock className="w-4 h-4 text-ent-fg-3" />}
                     <Badge variant="outline" className="text-xs">
                       {(task.agents as string[]).map((a) => agentName(a)).join(" \u2192 ")}
                     </Badge>
@@ -236,14 +238,14 @@ export default function OfficeDashboardPage() {
 
       {/* Recent Activity */}
       <section>
-        <h2 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
-          <Clock className="w-5 h-5 text-slate-400" />
+        <h2 className="text-lg font-semibold text-ent-fg mb-4 flex items-center gap-2">
+          <Clock className="w-5 h-5 text-ent-fg-3" />
           Actividad reciente
         </h2>
 
         {recentActivity.length === 0 ? (
           <Card>
-            <CardContent className="py-8 text-center text-slate-400">
+            <CardContent className="py-8 text-center text-ent-fg-3">
               No hay actividad reciente
             </CardContent>
           </Card>
@@ -252,12 +254,12 @@ export default function OfficeDashboardPage() {
             {recentActivity.map((exec) => (
               <div
                 key={exec.id}
-                className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-slate-100 transition-colors"
+                className="flex items-center gap-3 py-2 px-3 rounded-[4px] hover:bg-ent-panel-2 transition-colors"
               >
                 <span>{(exec.agentsUsed as string[]).map((a) => agentEmoji(a)).join("")}</span>
-                <span className="text-sm text-slate-700 flex-1">{exec.taskTitle}</span>
+                <span className="text-sm text-ent-fg-2 flex-1">{exec.taskTitle}</span>
                 <StatusBadge status={exec.status} />
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-ent-fg-3">
                   {new Date(exec.createdAt).toLocaleString("es-MX")}
                 </span>
               </div>

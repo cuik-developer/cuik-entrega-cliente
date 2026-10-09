@@ -1,10 +1,10 @@
 "use client"
 
-import { ArrowLeft, Loader2 } from "lucide-react"
-import Link from "next/link"
+import { Loader2 } from "lucide-react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import { Crumbs } from "@/components/admin/enterprise"
 import { Button } from "@/components/ui/button"
 import { PlanSelectionModal } from "../plan-selection-modal"
 import { TenantDetail } from "../tenant-detail"
@@ -32,6 +32,8 @@ export default function TenantPage() {
   const search = useSearchParams()
   const tabParam = search.get("tab")
   const forcedTab = tabParam && VALID_TABS.has(tabParam) ? tabParam : null
+  // Frozen at mount: the URL is cleaned below before the tenant finishes loading.
+  const [initialTab] = useState(forcedTab)
 
   const [tenant, setTenant] = useState<ApiTenant | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -44,8 +46,10 @@ export default function TenantPage() {
 
   // Refetch after an action must never blank a page that is already showing
   // the tenant: a failed refresh is a toast, only the first load can error out.
+  const tenantRef = useRef<ApiTenant | null>(null)
+  tenantRef.current = tenant
   const load = useCallback(async () => {
-    const hadTenant = tenant !== null
+    const hadTenant = tenantRef.current !== null
     try {
       const res = await fetch(`/api/admin/tenants/${id}`)
       const json = await res.json()
@@ -64,7 +68,7 @@ export default function TenantPage() {
       if (hadTenant) toast.error("Error de conexión al actualizar")
       else setError("Error de conexión")
     }
-  }, [id, tenant])
+  }, [id])
 
   // The forced section is applied once at mount; drop it from the URL so a
   // reload or back/forward respects the section the user picked afterwards.
@@ -94,15 +98,17 @@ export default function TenantPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <Button asChild variant="ghost" size="sm" className="h-8 px-2 gap-1 text-xs -ml-2">
-        <Link href="/admin/tenants">
-          <ArrowLeft className="w-3.5 h-3.5" /> Tenants
-        </Link>
-      </Button>
+    <div className="space-y-2">
+      <Crumbs
+        items={[
+          { label: "Inicio", href: "/admin/tenants" },
+          { label: "Tenants", href: "/admin/tenants" },
+          { label: tenant?.name ?? "Tenant" },
+        ]}
+      />
 
       {error ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-sm text-slate-500 space-y-3">
+        <div className="bg-white rounded-[4px] border border-ent-line p-8 text-center text-sm text-ent-fg-3 space-y-3">
           <p>{error}</p>
           <Button
             size="sm"
@@ -117,14 +123,14 @@ export default function TenantPage() {
         </div>
       ) : !tenant ? (
         <div className="flex justify-center py-16">
-          <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+          <Loader2 className="w-6 h-6 animate-spin text-ent-fg-3" />
         </div>
       ) : (
         <TenantDetail
           key={tenant.id}
           tenant={tenant}
-          defaultTab={forcedTab ?? "general"}
-          forceTab={forcedTab !== null}
+          defaultTab={initialTab ?? "general"}
+          forceTab={initialTab !== null}
           onActionComplete={load}
           onOpenPlanModal={(tenantId, action) =>
             setPlanModal({

@@ -196,8 +196,8 @@ export function AppleCertWizard({ tenantId, tenantSlug, initialConfig }: AppleCe
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
-        <span className="ml-2 text-sm text-slate-500">Cargando...</span>
+        <Loader2 className="w-5 h-5 animate-spin text-ent-fg-3" />
+        <span className="ml-2 text-sm text-ent-fg-3">Cargando...</span>
       </div>
     )
   }
@@ -213,7 +213,7 @@ export function AppleCertWizard({ tenantId, tenantSlug, initialConfig }: AppleCe
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-5 h-5 text-emerald-600" />
-          <h4 className="font-semibold text-slate-900">Certificado Apple</h4>
+          <h4 className="font-semibold text-ent-fg">Certificado Apple</h4>
           <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs border">
             Produccion
           </Badge>
@@ -221,21 +221,21 @@ export function AppleCertWizard({ tenantId, tenantSlug, initialConfig }: AppleCe
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <div>
-            <span className="text-slate-500">Pass Type ID</span>
-            <p className="font-medium text-slate-900">{config?.passTypeId}</p>
+            <span className="text-ent-fg-3">Pass Type ID</span>
+            <p className="font-medium text-ent-fg">{config?.passTypeId}</p>
           </div>
           <div>
-            <span className="text-slate-500">Team ID</span>
-            <p className="font-medium text-slate-900">{config?.teamId}</p>
+            <span className="text-ent-fg-3">Team ID</span>
+            <p className="font-medium text-ent-fg">{config?.teamId}</p>
           </div>
           <div>
-            <span className="text-slate-500">Configurado</span>
-            <p className="font-medium text-slate-900">{formatDate(config?.configuredAt ?? null)}</p>
+            <span className="text-ent-fg-3">Configurado</span>
+            <p className="font-medium text-ent-fg">{formatDate(config?.configuredAt ?? null)}</p>
           </div>
           <div>
-            <span className="text-slate-500">Expira</span>
+            <span className="text-ent-fg-3">Expira</span>
             <div className="flex items-center gap-2">
-              <p className="font-medium text-slate-900">{formatDate(config?.expiresAt ?? null)}</p>
+              <p className="font-medium text-ent-fg">{formatDate(config?.expiresAt ?? null)}</p>
               {isExpiringSoon && (
                 <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs border">
                   <AlertTriangle className="w-3 h-3 mr-1" />
@@ -286,10 +286,10 @@ export function AppleCertWizard({ tenantId, tenantSlug, initialConfig }: AppleCe
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <Shield className="w-5 h-5 text-blue-600" />
-          <h4 className="font-semibold text-slate-900">Activar Modo Produccion</h4>
+          <h4 className="font-semibold text-ent-fg">Activar Modo Produccion</h4>
         </div>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm space-y-2">
+        <div className="bg-ent-accent-soft border border-blue-200 rounded-[4px] p-4 text-sm space-y-2">
           <p className="font-medium text-blue-900">Resumen de configuracion:</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-blue-800">
             <div>
@@ -312,7 +312,7 @@ export function AppleCertWizard({ tenantId, tenantSlug, initialConfig }: AppleCe
           </div>
         </div>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+        <div className="bg-amber-50 border border-amber-200 rounded-[4px] p-3 text-sm text-amber-800">
           <AlertTriangle className="w-4 h-4 inline mr-1" />
           Los pases existentes se regeneraran con el nuevo certificado.
         </div>
@@ -335,16 +335,16 @@ export function AppleCertWizard({ tenantId, tenantSlug, initialConfig }: AppleCe
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <Upload className="w-5 h-5 text-blue-600" />
-          <h4 className="font-semibold text-slate-900">Subir Certificado</h4>
+          <h4 className="font-semibold text-ent-fg">Subir Certificado</h4>
           <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-xs border">
             Paso 3/4
           </Badge>
         </div>
 
-        <div className="text-sm text-slate-600 space-y-2">
+        <div className="text-sm text-ent-fg-2 space-y-2">
           <p>
-            Subi el archivo <code className="bg-slate-100 px-1 rounded">.cer</code> que descargaste
-            del Apple Developer Portal.
+            Subi el archivo <code className="bg-ent-panel-2 px-1 rounded">.cer</code> que
+            descargaste del Apple Developer Portal.
           </p>
         </div>
 
@@ -377,28 +377,27 @@ export function AppleCertWizard({ tenantId, tenantSlug, initialConfig }: AppleCe
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <Download className="w-5 h-5 text-blue-600" />
-          <h4 className="font-semibold text-slate-900">Descargar CSR</h4>
+          <h4 className="font-semibold text-ent-fg">Descargar CSR</h4>
           <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-xs border">
             Paso 2/4
           </Badge>
         </div>
 
-        <div className="text-sm text-slate-600 space-y-2">
+        <div className="text-sm text-ent-fg-2 space-y-2">
           <p>Descarga el archivo CSR y subilo al Apple Developer Portal:</p>
-          <ol className="list-decimal list-inside space-y-1 text-slate-500">
+          <ol className="list-decimal list-inside space-y-1 text-ent-fg-3">
             <li>
               Anda a{" "}
-              <span className="font-medium text-slate-700">
+              <span className="font-medium text-ent-fg-2">
                 Certificates, Identifiers & Profiles
               </span>
             </li>
             <li>
-              Selecciona{" "}
-              <span className="font-medium text-slate-700">Pass Type ID Certificate</span>
+              Selecciona <span className="font-medium text-ent-fg-2">Pass Type ID Certificate</span>
             </li>
             <li>Subi el archivo CSR descargado</li>
             <li>
-              Descarga el archivo <code className="bg-slate-100 px-1 rounded">.cer</code> generado
+              Descarga el archivo <code className="bg-ent-panel-2 px-1 rounded">.cer</code> generado
             </li>
           </ol>
         </div>
@@ -420,10 +419,10 @@ export function AppleCertWizard({ tenantId, tenantSlug, initialConfig }: AppleCe
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <Shield className="w-5 h-5 text-blue-600" />
-        <h4 className="font-semibold text-slate-900">Configurar Certificado Apple</h4>
+        <h4 className="font-semibold text-ent-fg">Configurar Certificado Apple</h4>
       </div>
 
-      <p className="text-sm text-slate-600">
+      <p className="text-sm text-ent-fg-2">
         Para usar certificados propios, necesitas una cuenta de Apple Developer con acceso a
         Certificates, Identifiers & Profiles.
       </p>

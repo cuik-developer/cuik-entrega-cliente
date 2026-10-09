@@ -41,7 +41,9 @@ export async function POST(request: Request, { params }: Params) {
     // Run synchronously — wait for the full result so the execution record is complete
     const result = await execute(id)
 
-    console.log(`[office/run] Task ${id} finished: status=${result.status}, executionId=${result.executionId}`)
+    console.log(
+      `[office/run] Task ${id} finished: status=${result.status}, executionId=${result.executionId}`,
+    )
 
     return successResponse(
       {

@@ -170,10 +170,7 @@ function semaforo(value: number, green: number, yellow: number): { label: string
 
 // ─── AI Narrative Parser ─────────────────────────────────────────────
 
-function extractNarrativeSection(
-  aiNarrative: string | undefined,
-  sectionNames: string[],
-): string {
+function extractNarrativeSection(aiNarrative: string | undefined, sectionNames: string[]): string {
   if (!aiNarrative) return ""
   const lines = aiNarrative.split("\n")
   let capturing = false
@@ -195,10 +192,7 @@ function extractNarrativeSection(
   return captured.join("\n").trim()
 }
 
-function extractSheetNarrative(
-  aiNarrative: string | undefined,
-  sectionNames: string[],
-): string {
+function extractSheetNarrative(aiNarrative: string | undefined, sectionNames: string[]): string {
   const text = extractNarrativeSection(aiNarrative, sectionNames)
   return text || ""
 }
@@ -227,7 +221,11 @@ export async function generateReport(
     "resumen general",
     "executive summary",
   ])
-  addNarrativeRow(dash, dashNarr || `Reporte generado el ${new Date().toLocaleDateString("es-MX")}`, dashCols)
+  addNarrativeRow(
+    dash,
+    dashNarr || `Reporte generado el ${new Date().toLocaleDateString("es-MX")}`,
+    dashCols,
+  )
   addSpacerRow(dash)
 
   // KPI cards
@@ -330,7 +328,11 @@ export async function generateReport(
     "temporal",
     "dia de la semana",
   ])
-  addNarrativeRow(pat, patNarr || "Distribucion de visitas por dia de la semana y por semana.", patCols)
+  addNarrativeRow(
+    pat,
+    patNarr || "Distribucion de visitas por dia de la semana y por semana.",
+    patCols,
+  )
   addSpacerRow(pat)
 
   // Visitas por dia
@@ -439,7 +441,11 @@ export async function generateReport(
     "cohorte",
     "cohort",
   ])
-  addNarrativeRow(ret, retNarr || "Porcentaje de clientes que retornan despues de registrarse.", retCols)
+  addNarrativeRow(
+    ret,
+    retNarr || "Porcentaje de clientes que retornan despues de registrarse.",
+    retCols,
+  )
   addSpacerRow(ret)
 
   addTableHeaders(ret, ["Mes", "Registrados", "Retornaron", "Retencion %"])
@@ -568,7 +574,11 @@ export async function generateReport(
     "nuevos clientes",
     "adquisicion",
   ])
-  addNarrativeRow(crec, crecNarr || "Nuevos clientes por semana, top clientes y visitas recientes.", crecCols)
+  addNarrativeRow(
+    crec,
+    crecNarr || "Nuevos clientes por semana, top clientes y visitas recientes.",
+    crecCols,
+  )
   addSpacerRow(crec)
 
   // New clients by week
@@ -642,7 +652,9 @@ export async function generateReport(
     }
   } else {
     addSpacerRow(plan)
-    const row = plan.addRow(["Sin datos de analisis — ejecuta el agente Data para generar recomendaciones."])
+    const row = plan.addRow([
+      "Sin datos de analisis — ejecuta el agente Data para generar recomendaciones.",
+    ])
     row.font = { ...FONT_BASE, color: { argb: MUTED_TEXT }, italic: true }
     row.alignment = { wrapText: true }
   }
@@ -680,7 +692,9 @@ export async function generateReport(
     }
   } else {
     addSpacerRow(anom)
-    const row = anom.addRow(["Sin anomalias detectadas — ejecuta el agente Data para analizar los datos."])
+    const row = anom.addRow([
+      "Sin anomalias detectadas — ejecuta el agente Data para analizar los datos.",
+    ])
     row.font = { ...FONT_BASE, color: { argb: MUTED_TEXT }, italic: true }
     row.alignment = { wrapText: true }
   }

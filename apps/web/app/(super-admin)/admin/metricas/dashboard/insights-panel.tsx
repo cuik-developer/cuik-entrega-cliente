@@ -17,7 +17,7 @@ const META = {
   },
   info: {
     icon: Lightbulb,
-    cls: "border-blue-200 bg-blue-50 text-blue-900",
+    cls: "border-blue-200 bg-ent-accent-soft text-blue-900",
     iconCls: "text-blue-500",
   },
   positive: {
@@ -36,10 +36,10 @@ export function InsightsPanel({
   onFocusTenants: (ids: string[]) => void
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5">
+    <div className="rounded-[4px] border border-ent-line bg-white p-5">
       <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h3 className="text-sm font-bold text-slate-700">Qué está pasando</h3>
-        <span className="text-xs text-slate-400">
+        <h3 className="text-sm font-bold text-ent-fg-2">Qué está pasando</h3>
+        <span className="text-xs text-ent-fg-3">
           Reglas sobre los datos del filtro. Ordenado por urgencia.
         </span>
       </div>
@@ -49,7 +49,7 @@ export function InsightsPanel({
           return (
             <li
               key={`${i.severity}-${idx}-${i.text.slice(0, 20)}`}
-              className={`rounded-lg border px-3 py-2.5 text-sm flex items-start gap-2.5 ${m.cls}`}
+              className={`rounded-[4px] border px-3 py-2.5 text-sm flex items-start gap-2.5 ${m.cls}`}
             >
               <m.icon className={`w-4 h-4 mt-0.5 shrink-0 ${m.iconCls}`} />
               <span className="flex-1">{i.text}</span>

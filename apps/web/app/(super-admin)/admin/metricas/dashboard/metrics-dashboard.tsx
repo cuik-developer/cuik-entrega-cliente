@@ -118,13 +118,13 @@ export function MetricsDashboard() {
       />
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-[4px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
       {!data && loading ? (
-        <div className="flex items-center justify-center py-24 text-slate-400">
+        <div className="flex items-center justify-center py-24 text-ent-fg-3">
           <Loader2 className="w-6 h-6 animate-spin" />
         </div>
       ) : data ? (

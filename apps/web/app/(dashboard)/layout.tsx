@@ -4,6 +4,7 @@ import {
   BarChart3,
   Bell,
   CreditCard,
+  Download,
   Gift,
   LayoutDashboard,
   LogOut,
@@ -32,6 +33,7 @@ const navItems = [
   { href: "/panel/premios", label: "Premios", icon: Gift, pointsOnly: true },
   { href: "/panel/cajeros", label: "Cajeros", icon: UserCheck },
   { href: "/panel/analitica", label: "Analítica", icon: BarChart3 },
+  { href: "/panel/exportar", label: "Exportar datos", icon: Download },
   { href: "/panel/campanas", label: "Campañas", icon: Megaphone },
   { href: "/panel/configuracion", label: "Configuración", icon: Settings },
 ]
@@ -173,9 +175,14 @@ function SuperAdminViewBanner() {
 
 function SidebarNav({ onNavClick }: { onNavClick: () => void }) {
   const pathname = usePathname()
-  const { branding, promotionType } = useTenant()
+  const { branding, promotionType, readOnly } = useTenant()
   const primaryColor = branding?.primaryColor ?? CUIK_PRIMARY
-  const visibleItems = navItems.filter((item) => !item.pointsOnly || promotionType === "points")
+  // Exportar is a bulk PII download: not offered in the super-admin's read-only view.
+  const visibleItems = navItems.filter(
+    (item) =>
+      (!item.pointsOnly || promotionType === "points") &&
+      !(readOnly && item.href === "/panel/exportar"),
+  )
 
   const isActive = (href: string) => {
     if (href === "/panel") return pathname === "/panel"

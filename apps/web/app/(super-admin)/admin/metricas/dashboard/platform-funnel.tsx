@@ -31,10 +31,10 @@ export function PlatformFunnel({ funnel }: { funnel: PlatformMetrics["funnel"] }
   ]
   const base = steps[0].value || 1
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5">
+    <div className="rounded-[4px] border border-ent-line bg-white p-5">
       <div className="mb-3">
-        <h3 className="text-sm font-bold text-slate-700">De solicitud a comercio que usa Cuik</h3>
-        <p className="text-xs text-slate-400">
+        <h3 className="text-sm font-bold text-ent-fg-2">De solicitud a comercio que usa Cuik</h3>
+        <p className="text-xs text-ent-fg-3">
           Dónde se cae un comercio nuevo. No depende del rango de fechas.
         </p>
       </div>
@@ -46,15 +46,15 @@ export function PlatformFunnel({ funnel }: { funnel: PlatformMetrics["funnel"] }
           return (
             <li key={s.label}>
               <div className="flex items-baseline justify-between text-xs mb-1 gap-2">
-                <span className="font-medium text-slate-800">{s.label}</span>
-                <span className="tabular-nums text-slate-500">
-                  <span className="font-bold text-slate-900">{s.value}</span>
+                <span className="font-medium text-ent-fg">{s.label}</span>
+                <span className="tabular-nums text-ent-fg-3">
+                  <span className="font-bold text-ent-fg">{s.value}</span>
                   {conv !== null && (
                     <span className="ml-2 text-[11px]">({conv}% del paso anterior)</span>
                   )}
                 </span>
               </div>
-              <div className="h-4 w-full rounded bg-slate-100 overflow-hidden">
+              <div className="h-4 w-full rounded bg-ent-panel-2 overflow-hidden">
                 <div
                   className="h-full rounded"
                   style={{
@@ -63,7 +63,7 @@ export function PlatformFunnel({ funnel }: { funnel: PlatformMetrics["funnel"] }
                   }}
                 />
               </div>
-              <p className="text-[11px] text-slate-400 mt-0.5">{s.hint}</p>
+              <p className="text-[11px] text-ent-fg-3 mt-0.5">{s.hint}</p>
             </li>
           )
         })}

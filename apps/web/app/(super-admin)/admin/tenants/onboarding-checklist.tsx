@@ -138,18 +138,18 @@ export function OnboardingChecklist({
   const pct = Math.round((done / items.length) * 100)
 
   return (
-    <div className="bg-slate-50 rounded-xl p-4 space-y-3">
+    <div className="bg-ent-panel-2 rounded-[4px] p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+        <p className="text-xs font-semibold text-ent-fg-3 uppercase tracking-wide">
           Puesta en marcha
         </p>
-        <span className="text-xs font-semibold text-slate-700 tabular-nums">
+        <span className="text-xs font-semibold text-ent-fg-2 tabular-nums">
           {done}/{items.length} listo
         </span>
       </div>
       <div className="h-1.5 w-full rounded-full bg-slate-200 overflow-hidden">
         <div
-          className={`h-full rounded-full transition-[width] ${pct === 100 ? "bg-emerald-500" : "bg-[#0e70db]"}`}
+          className={`h-full rounded-full transition-[width] ${pct === 100 ? "bg-emerald-500" : "bg-ent-accent"}`}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -168,14 +168,14 @@ export function OnboardingChecklist({
               <div className="min-w-0 flex-1 text-left">
                 <div className="flex items-center justify-between gap-2">
                   <span
-                    className={`text-sm ${item.state === "ok" ? "text-slate-700" : "font-medium text-slate-900"}`}
+                    className={`text-sm ${item.state === "ok" ? "text-ent-fg-2" : "font-medium text-ent-fg"}`}
                   >
                     {item.label}
                   </span>
                   {item.action && (
                     <span
                       className={`inline-flex items-center gap-0.5 text-[11px] shrink-0 ${
-                        item.state === "ok" ? "text-slate-400" : "text-[#0e70db] font-medium"
+                        item.state === "ok" ? "text-ent-fg-3" : "text-ent-accent font-medium"
                       }`}
                     >
                       {item.action.label}
@@ -187,7 +187,7 @@ export function OnboardingChecklist({
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-slate-500">{item.detail}</p>
+                <p className="text-xs text-ent-fg-3">{item.detail}</p>
               </div>
             </>
           )
@@ -197,7 +197,7 @@ export function OnboardingChecklist({
                 <button
                   type="button"
                   onClick={go}
-                  className="w-full flex items-start gap-2.5 rounded-lg -mx-2 px-2 py-1.5 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0e70db]/40 transition-colors"
+                  className="w-full flex items-start gap-2.5 rounded-[4px] -mx-2 px-2 py-1.5 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ent-accent/40 transition-colors"
                 >
                   {body}
                 </button>

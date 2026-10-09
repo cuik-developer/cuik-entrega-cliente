@@ -577,11 +577,9 @@ export function PromotionFormDialog({
               <Input
                 value={promotionType === "points" ? "Puntos (points)" : "Sellos (stamps)"}
                 disabled
-                className="bg-slate-50"
+                className="bg-ent-panel-2"
               />
-              <p className="text-xs text-slate-400">
-                El tipo no se puede cambiar despues de crear.
-              </p>
+              <p className="text-xs text-ent-fg-3">El tipo no se puede cambiar despues de crear.</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -631,7 +629,7 @@ export function PromotionFormDialog({
                   placeholder="Ej: Tarjeta de sellos, Programa premium"
                   {...register("rewardValue")}
                 />
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-ent-fg-3">
                   El nombre identifica esta promocion. Para sellos, tambien indica el premio al
                   completar el ciclo.
                 </p>
@@ -676,7 +674,7 @@ export function PromotionFormDialog({
                     placeholder="4.50"
                     {...register("solesPerPoint", { valueAsNumber: true })}
                   />
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-ent-fg-3">
                     Cuantos soles de compra hacen 1 punto. Ej: 4.50 = 1 punto por cada S/ 4.50.
                   </p>
                   {errors.solesPerPoint && (
@@ -694,7 +692,7 @@ export function PromotionFormDialog({
                     placeholder="1"
                     {...register("pointsPerCurrency", { valueAsNumber: true })}
                   />
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-ent-fg-3">
                     Cuantos puntos gana el cliente por cada S/ 1.00 de compra.
                   </p>
                   {errors.pointsPerCurrency && (
@@ -704,8 +702,8 @@ export function PromotionFormDialog({
               )}
 
               {rateReady ? (
-                <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                  <span className="font-medium text-slate-700">{describePointsRate(rate)}</span>
+                <p className="rounded-md bg-ent-panel-2 px-3 py-2 text-xs text-ent-fg-3">
+                  <span className="font-medium text-ent-fg-2">{describePointsRate(rate)}</span>
                   {" · "}S/ 4.50 = {previewPoints(4.5)} pt · S/ 10 = {previewPoints(10)} pt · S/
                   13.50 = {previewPoints(13.5)} pt · S/ 50 = {previewPoints(50)} pt
                 </p>
@@ -732,7 +730,7 @@ export function PromotionFormDialog({
                     </Select>
                   )}
                 />
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-ent-fg-3">
                   Como se redondean los puntos cuando el monto no es exacto.
                 </p>
               </div>
@@ -751,7 +749,7 @@ export function PromotionFormDialog({
                 {errors.birthdayMultiplier && (
                   <p className="text-sm text-red-600">{errors.birthdayMultiplier.message}</p>
                 )}
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-ent-fg-3">
                   Cuantas veces se multiplican los puntos el dia del cumpleanos del cliente. 1 = sin
                   bono, 2 = puntos dobles. Requiere que el registro pida la fecha de cumpleanos.
                 </p>
@@ -762,7 +760,7 @@ export function PromotionFormDialog({
                 <div className="flex items-center justify-between">
                   <Label htmlFor="hasMinimumPurchaseForPoints">Monto minimo para puntos</Label>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-500">Sin minimo</span>
+                    <span className="text-xs text-ent-fg-3">Sin minimo</span>
                     <Controller
                       control={control}
                       name="hasMinimumPurchaseForPoints"
@@ -837,7 +835,7 @@ export function PromotionFormDialog({
               <div className="flex items-center justify-between">
                 <Label htmlFor="hasExpiration">Dias de expiracion del premio</Label>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500">Sin expiracion</span>
+                  <span className="text-xs text-ent-fg-3">Sin expiracion</span>
                   <Controller
                     control={control}
                     name="hasExpiration"
@@ -868,7 +866,7 @@ export function PromotionFormDialog({
           )}
 
           {/* Expiration of points / stamps */}
-          <div className="space-y-3 rounded-lg border border-slate-200 p-3">
+          <div className="space-y-3 rounded-[4px] border border-ent-line p-3">
             <div className="space-y-2">
               <Label>
                 {selectedType === "points" ? "Vencimiento de puntos" : "Vencimiento de sellos"}
@@ -891,7 +889,7 @@ export function PromotionFormDialog({
                   </Select>
                 )}
               />
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-ent-fg-3">
                 El corte es al final del dia elegido, en la hora local del comercio.
               </p>
             </div>
@@ -976,7 +974,7 @@ export function PromotionFormDialog({
             )}
 
             {expMode !== "never" && (
-              <p className="text-xs text-slate-400 border-t border-slate-100 pt-3">
+              <p className="text-xs text-ent-fg-3 border-t border-ent-line pt-3">
                 El aviso por push antes del vencimiento lo configura el comercio en Panel &gt;
                 Campanas.
               </p>
@@ -989,7 +987,7 @@ export function PromotionFormDialog({
               <div className="flex items-center justify-between">
                 <Label htmlFor="hasMinimumPurchase">Monto minimo de compra</Label>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500">Sin minimo</span>
+                  <span className="text-xs text-ent-fg-3">Sin minimo</span>
                   <Controller
                     control={control}
                     name="hasMinimumPurchase"
@@ -1021,20 +1019,18 @@ export function PromotionFormDialog({
           )}
 
           {/* Tiers info */}
-          <div className="bg-slate-50 rounded-lg p-3 space-y-1">
-            <p className="text-xs font-semibold text-slate-600">Niveles de cliente (default)</p>
-            <div className="flex gap-2 text-xs text-slate-500">
-              <span className="bg-white px-2 py-0.5 rounded border border-slate-200">
+          <div className="bg-ent-panel-2 rounded-[4px] p-3 space-y-1">
+            <p className="text-xs font-semibold text-ent-fg-2">Niveles de cliente (default)</p>
+            <div className="flex gap-2 text-xs text-ent-fg-3">
+              <span className="bg-white px-2 py-0.5 rounded border border-ent-line">
                 Nuevo (0-4)
               </span>
-              <span className="bg-white px-2 py-0.5 rounded border border-slate-200">
+              <span className="bg-white px-2 py-0.5 rounded border border-ent-line">
                 Frecuente (5-19)
               </span>
-              <span className="bg-white px-2 py-0.5 rounded border border-slate-200">
-                VIP (20+)
-              </span>
+              <span className="bg-white px-2 py-0.5 rounded border border-ent-line">VIP (20+)</span>
             </div>
-            <p className="text-[10px] text-slate-400">Los niveles no son editables en esta fase.</p>
+            <p className="text-[10px] text-ent-fg-3">Los niveles no son editables en esta fase.</p>
           </div>
 
           <DialogFooter>

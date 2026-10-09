@@ -3,13 +3,7 @@
 import { useRouter } from "next/navigation"
 import { signOut } from "@/lib/auth-client"
 
-export function LogoutButton({
-  children,
-  className,
-}: {
-  children: React.ReactNode
-  className?: string
-}) {
+export function LogoutButton({ children, className, ...rest }: React.ComponentProps<"button">) {
   const router = useRouter()
 
   const handleLogout = async () => {
@@ -23,7 +17,7 @@ export function LogoutButton({
   }
 
   return (
-    <button type="button" onClick={handleLogout} className={className}>
+    <button type="button" {...rest} onClick={handleLogout} className={className}>
       {children}
     </button>
   )

@@ -76,8 +76,10 @@ export default function ApprovalsPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Aprobaciones</h1>
-          <p className="text-slate-500">Revisa y aprueba los resultados de los agentes</p>
+          <h1 className="text-[17px] leading-6 font-semibold text-ent-fg tracking-[-0.005em]">
+            Aprobaciones
+          </h1>
+          <p className="text-ent-fg-3">Revisa y aprueba los resultados de los agentes</p>
         </div>
       </div>
 
@@ -102,11 +104,11 @@ export default function ApprovalsPage() {
 
       {loading ? (
         <div className="flex justify-center py-12">
-          <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+          <Loader2 className="w-6 h-6 animate-spin text-ent-fg-3" />
         </div>
       ) : executions.length === 0 ? (
         <Card>
-          <CardContent className="py-12 text-center text-slate-400">
+          <CardContent className="py-12 text-center text-ent-fg-3">
             <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-green-400" />
             No hay ejecuciones con este estado
           </CardContent>
@@ -115,15 +117,15 @@ export default function ApprovalsPage() {
         <div className="grid gap-3">
           {executions.map((exec) => (
             <Link key={exec.id} href={`/admin/office/approvals/${exec.id}`}>
-              <Card className="hover:border-[#0e70db]/30 transition-colors cursor-pointer">
+              <Card className="hover:border-ent-accent/30 transition-colors cursor-pointer">
                 <CardContent className="py-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span className="text-lg">
                       {(exec.agentsUsed as string[]).map((a) => agentEmoji(a)).join("")}
                     </span>
                     <div>
-                      <p className="font-medium text-slate-900">{exec.taskTitle}</p>
-                      <p className="text-xs text-slate-400">
+                      <p className="font-medium text-ent-fg">{exec.taskTitle}</p>
+                      <p className="text-xs text-ent-fg-3">
                         {new Date(exec.createdAt).toLocaleString("es-MX")}
                         {exec.durationMs && ` \u00B7 ${(exec.durationMs / 1000).toFixed(1)}s`}
                       </p>

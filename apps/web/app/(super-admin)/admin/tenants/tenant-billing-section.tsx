@@ -57,7 +57,7 @@ type Invoice = {
 type Data = { config: Config | null; outlook: BillingOutlook; invoices: Invoice[] }
 
 const STATUS_CLASS: Record<BillingStatus, string> = {
-  sin_configurar: "bg-slate-100 text-slate-600 border-slate-200",
+  sin_configurar: "bg-ent-panel-2 text-ent-fg-2 border-ent-line",
   sin_iniciar: "bg-blue-100 text-blue-700 border-blue-200",
   al_dia: "bg-emerald-100 text-emerald-700 border-emerald-200",
   pendiente: "bg-amber-100 text-amber-700 border-amber-200",
@@ -69,7 +69,7 @@ const INVOICE_STATUS: Record<Invoice["status"], { label: string; className: stri
     className: "bg-amber-100 text-amber-700 border-amber-200",
   },
   paid: { label: "Pagada", className: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  void: { label: "Anulada", className: "bg-slate-100 text-slate-500 border-slate-200" },
+  void: { label: "Anulada", className: "bg-ent-panel-2 text-ent-fg-3 border-ent-line" },
 }
 const DAYS = Array.from({ length: 28 }, (_, i) => i + 1)
 
@@ -185,17 +185,17 @@ function FileSlot({
           href={href}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 text-xs text-[#0e70db] hover:underline"
+          className="inline-flex items-center gap-1 text-xs text-ent-accent hover:underline"
           title={current.name}
         >
           <FileText className="w-3.5 h-3.5" /> {label}
         </a>
       ) : (
-        <span className="text-xs text-slate-400">{label}: —</span>
+        <span className="text-xs text-ent-fg-3">{label}: —</span>
       )}
       <button
         type="button"
-        className="text-slate-400 hover:text-slate-700 disabled:opacity-50"
+        className="text-ent-fg-3 hover:text-ent-fg-2 disabled:opacity-50"
         title={
           current
             ? `Reemplazar ${label.toLowerCase()}`
@@ -393,7 +393,7 @@ export function TenantBillingSection({
   if (!data) {
     return (
       <div className="flex justify-center py-10">
-        <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+        <Loader2 className="w-5 h-5 animate-spin text-ent-fg-3" />
       </div>
     )
   }
@@ -405,18 +405,18 @@ export function TenantBillingSection({
   return (
     <div className="p-4 sm:p-6 space-y-6">
       {/* Outlook */}
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 flex flex-col sm:flex-row sm:items-center gap-4">
-        <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
-          <CalendarClock className="w-5 h-5 text-[#0e70db]" />
+      <div className="rounded-[4px] border border-ent-line bg-ent-panel-2 p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="w-10 h-10 rounded-[4px] bg-white border border-ent-line flex items-center justify-center shrink-0">
+          <CalendarClock className="w-5 h-5 text-ent-accent" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-slate-900">{outlookTitle(o)}</span>
+            <span className="text-sm font-semibold text-ent-fg">{outlookTitle(o)}</span>
             <Badge className={`text-[11px] border ${STATUS_CLASS[o.status]}`}>
               {BILLING_STATUS_LABEL[o.status]}
             </Badge>
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-ent-fg-3 mt-0.5">
             {o.status === "pendiente" || o.status === "vencida"
               ? `El periodo ${o.currentPeriod} venció el ${formatYmd(o.currentDue ?? "")} y no tiene factura registrada${o.daysOverdue ? ` (hace ${o.daysOverdue} días)` : ""}.`
               : data.config?.monthlyAmount !== null && data.config?.monthlyAmount !== undefined
@@ -427,7 +427,7 @@ export function TenantBillingSection({
         </div>
         <Button
           size="sm"
-          className="bg-[#0e70db] hover:bg-[#0c5fb8] text-white gap-1.5 shrink-0"
+          className="bg-ent-accent hover:bg-ent-accent/90 text-white gap-1.5 shrink-0"
           onClick={openNewInvoice}
         >
           <Plus className="w-4 h-4" /> Registrar factura
@@ -436,8 +436,8 @@ export function TenantBillingSection({
 
       {/* New invoice form */}
       {showNew && (
-        <div className="rounded-xl border border-[#0e70db]/30 bg-[#0e70db]/5 p-4 space-y-3">
-          <div className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+        <div className="rounded-[4px] border border-ent-accent/30 bg-ent-accent/5 p-4 space-y-3">
+          <div className="text-sm font-semibold text-ent-fg flex items-center gap-2">
             <Receipt className="w-4 h-4" /> Registrar factura emitida a {tenantName}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -478,7 +478,7 @@ export function TenantBillingSection({
             <div className="space-y-1">
               <Label className="text-xs">Estado</Label>
               <select
-                className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
+                className="h-9 w-full rounded-md border border-ent-line bg-white px-2 text-sm"
                 value={inv.status}
                 onChange={(e) => setInv({ ...inv, status: e.target.value as Invoice["status"] })}
               >
@@ -495,7 +495,7 @@ export function TenantBillingSection({
               />
             </div>
           </div>
-          <p className="text-[11px] text-slate-500 flex items-center gap-1">
+          <p className="text-[11px] text-ent-fg-3 flex items-center gap-1">
             <Paperclip className="w-3 h-3" /> La factura en PDF y el voucher se adjuntan desde la
             lista, una vez registrada.
           </p>
@@ -505,7 +505,7 @@ export function TenantBillingSection({
             </Button>
             <Button
               size="sm"
-              className="bg-[#0e70db] hover:bg-[#0c5fb8] text-white gap-1.5"
+              className="bg-ent-accent hover:bg-ent-accent/90 text-white gap-1.5"
               disabled={creating || !inv.period || !inv.issuedOn || inv.amount === ""}
               onClick={createInvoice}
             >
@@ -523,7 +523,7 @@ export function TenantBillingSection({
       {/* Config */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-3">
-          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+          <h3 className="text-xs font-semibold text-ent-fg-3 uppercase tracking-wide">
             Datos fiscales
           </h3>
           <div className="space-y-1">
@@ -564,7 +564,7 @@ export function TenantBillingSection({
           </div>
         </div>
         <div className="space-y-3">
-          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+          <h3 className="text-xs font-semibold text-ent-fg-3 uppercase tracking-wide">
             Servicio y cobro
           </h3>
           <div className="grid grid-cols-2 gap-3">
@@ -579,7 +579,7 @@ export function TenantBillingSection({
             <div className="space-y-1">
               <Label className="text-xs">Día de facturación</Label>
               <select
-                className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
+                className="h-9 w-full rounded-md border border-ent-line bg-white px-2 text-sm"
                 value={form.billingDay}
                 onChange={(e) => set("billingDay", e.target.value)}
               >
@@ -592,7 +592,7 @@ export function TenantBillingSection({
               </select>
             </div>
           </div>
-          <p className="text-[11px] text-slate-500">
+          <p className="text-[11px] text-ent-fg-3">
             La primera factura corresponde al día de inicio y las siguientes cada mes el mismo día
             (tope 28). Una factura cuenta como pendiente desde ese día y como vencida a los 7 días
             sin registrar.
@@ -612,7 +612,7 @@ export function TenantBillingSection({
             <div className="space-y-1">
               <Label className="text-xs">Moneda</Label>
               <select
-                className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
+                className="h-9 w-full rounded-md border border-ent-line bg-white px-2 text-sm"
                 value={form.currency}
                 onChange={(e) => set("currency", e.target.value as "PEN" | "USD")}
               >
@@ -634,7 +634,7 @@ export function TenantBillingSection({
       </div>
       <div className="flex justify-end">
         <Button
-          className="bg-[#0e70db] hover:bg-[#0c5fb8] text-white gap-2"
+          className="bg-ent-accent hover:bg-ent-accent/90 text-white gap-2"
           disabled={saving}
           onClick={save}
         >
@@ -645,18 +645,18 @@ export function TenantBillingSection({
 
       {/* Invoices */}
       <div className="space-y-2">
-        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+        <h3 className="text-xs font-semibold text-ent-fg-3 uppercase tracking-wide">
           Facturas registradas
         </h3>
         {data.invoices.length === 0 ? (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-ent-fg-3">
             Todavía no hay facturas registradas para este comercio.
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-xs text-slate-500 border-b border-slate-100">
+                <tr className="text-left text-xs text-ent-fg-3 border-b border-ent-line">
                   <th className="py-2 pr-3 font-medium">Periodo</th>
                   <th className="py-2 pr-3 font-medium">Emitida</th>
                   <th className="py-2 pr-3 font-medium">Número</th>
@@ -672,16 +672,16 @@ export function TenantBillingSection({
                   const busy = busyInvoice === i.id
                   return (
                     <tr key={i.id} className="border-b border-slate-50 align-top">
-                      <td className="py-2 pr-3 font-medium text-slate-900">{i.period}</td>
-                      <td className="py-2 pr-3 text-slate-600">{formatYmd(i.issuedOn)}</td>
-                      <td className="py-2 pr-3 text-slate-600">{i.number ?? "—"}</td>
+                      <td className="py-2 pr-3 font-medium text-ent-fg">{i.period}</td>
+                      <td className="py-2 pr-3 text-ent-fg-2">{formatYmd(i.issuedOn)}</td>
+                      <td className="py-2 pr-3 text-ent-fg-2">{i.number ?? "—"}</td>
                       <td className="py-2 pr-3 text-right tabular-nums">
                         {money(i.amount, i.currency)}
                       </td>
                       <td className="py-2 pr-3">
                         <Badge className={`text-[10px] border ${st.className}`}>{st.label}</Badge>
                         {i.status === "paid" && i.paidOn ? (
-                          <span className="ml-1 text-[11px] text-slate-400">
+                          <span className="ml-1 text-[11px] text-ent-fg-3">
                             {formatYmd(i.paidOn)}
                           </span>
                         ) : null}
