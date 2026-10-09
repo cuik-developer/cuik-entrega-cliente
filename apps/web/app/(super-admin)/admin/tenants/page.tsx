@@ -15,7 +15,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useCallback, useEffect, useState } from "react"
+import { Suspense, useCallback, useEffect, useState } from "react"
 import {
   DataTable,
   PageHeader,
@@ -69,7 +69,16 @@ function AppleChip({ t }: { t: ApiTenant }) {
 /* ────────────────────────────────────────────────────────────
    Tenant manager
    ──────────────────────────────────────────────────────────── */
+/** `useSearchParams` needs a Suspense boundary for the production build to prerender the page. */
 export default function TenantsPage() {
+  return (
+    <Suspense fallback={null}>
+      <TenantsPageInner />
+    </Suspense>
+  )
+}
+
+function TenantsPageInner() {
   const [tenants, setTenants] = useState<ApiTenant[]>([])
   const [pagination, setPagination] = useState<PaginationMeta | null>(null)
   const [loading, setLoading] = useState(true)
