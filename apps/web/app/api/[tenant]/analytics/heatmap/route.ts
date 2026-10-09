@@ -4,8 +4,7 @@ import { computeVisitsHeatmap } from "@/lib/analytics/compute-heatmap"
 import {
   errorResponse,
   requireAuth,
-  requireRole,
-  requireTenantMembership,
+  requireTenantAdmin,
   resolveTenant,
   successResponse,
 } from "@/lib/api-utils"
@@ -19,14 +18,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     const { session, error: authError } = await requireAuth(request)
     if (authError) return authError
 
-    const roleError = requireRole(session, "admin")
-    if (roleError) return roleError
-
     const { tenant: slug } = await params
     const tenant = await resolveTenant(slug)
     if (!tenant) return errorResponse("Tenant not found", 404)
 
-    const membershipError = await requireTenantMembership(session, tenant.id)
+    const membershipError = await requireTenantAdmin(session, tenant.id)
     if (membershipError) return membershipError
 
     const url = new URL(request.url)

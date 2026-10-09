@@ -8,6 +8,8 @@ export interface InvitacionCajeroProps {
   inviterEmail: string
   inviteLink: string
   expiresAt?: string
+  /** Role in the merchant: "admin" (panel access) or "member" (cashier, default). */
+  role?: "admin" | "member"
 }
 
 export function InvitacionCajero({
@@ -16,19 +18,23 @@ export function InvitacionCajero({
   inviterEmail,
   inviteLink,
   expiresAt,
+  role = "member",
 }: InvitacionCajeroProps) {
+  const isAdmin = role === "admin"
+  const roleLabel = isAdmin ? "administrador/a" : "cajero/a"
   return (
-    <EmailLayout preview={`Fuiste invitado/a a ${organizationName} como cajero/a en Cuik`}>
+    <EmailLayout preview={`Fuiste invitado/a a ${organizationName} como ${roleLabel} en Cuik`}>
       <Text style={heading}>Te invitaron a unirte a {organizationName}</Text>
       <Text style={paragraph}>
         <strong>{inviterName}</strong> ({inviterEmail}) te invitó a unirte a{" "}
-        <strong>{organizationName}</strong> como cajero/a en Cuik.
+        <strong>{organizationName}</strong> como {roleLabel} en Cuik.
       </Text>
 
       <Section style={infoBox}>
         <Text style={infoText}>
-          Como cajero/a vas a poder registrar visitas y canjear premios para los clientes del
-          comercio directamente desde tu celular.
+          {isAdmin
+            ? "Como administrador/a vas a tener acceso al panel del comercio: clientes, campañas, analítica, premios y el equipo de cajeros."
+            : "Como cajero/a vas a poder registrar visitas y canjear premios para los clientes del comercio directamente desde tu celular."}
         </Text>
       </Section>
 

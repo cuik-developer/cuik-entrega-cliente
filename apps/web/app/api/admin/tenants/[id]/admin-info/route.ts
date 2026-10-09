@@ -1,5 +1,6 @@
 import { db, eq, tenants, user } from "@cuik/db"
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
+import { listTeam, organizationOfTenant } from "@/lib/tenant-roles"
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -33,7 +34,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return errorResponse("Owner user not found", 404)
     }
 
-    return successResponse({ email: owner.email, name: owner.name })
+    // Every admin of the tenant (owner first), for the credentials block.
+    const org = await organizationOfTenant(id)
+    const admins = org
+      ? (await listTeam(org.orgId))
+          .filter((m) => m.role !== "member")
+          .map((m) => ({ userId: m.userId, name: m.name, email: m.email, role: m.role }))
+      : []
+    return successResponse({ email: owner.email, name: owner.name, admins })
   } catch (error) {
     console.error("[GET /api/admin/tenants/[id]/admin-info]", error)
     return errorResponse("Internal server error", 500)

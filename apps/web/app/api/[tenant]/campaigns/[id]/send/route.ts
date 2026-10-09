@@ -3,8 +3,7 @@ import { and, campaigns, db, eq } from "@cuik/db"
 import {
   errorResponse,
   requireAuth,
-  requireRole,
-  requireTenantMembership,
+  requireTenantAdmin,
   resolveTenant,
   successResponse,
 } from "@/lib/api-utils"
@@ -18,14 +17,11 @@ export async function POST(
     const { session, error: authError } = await requireAuth(request)
     if (authError) return authError
 
-    const roleError = requireRole(session, "admin")
-    if (roleError) return roleError
-
     const { tenant: slug, id } = await params
     const tenant = await resolveTenant(slug)
     if (!tenant) return errorResponse("Tenant not found", 404)
 
-    const membershipError = await requireTenantMembership(session, tenant.id)
+    const membershipError = await requireTenantAdmin(session, tenant.id)
     if (membershipError) return membershipError
 
     // Validate campaign exists and belongs to tenant

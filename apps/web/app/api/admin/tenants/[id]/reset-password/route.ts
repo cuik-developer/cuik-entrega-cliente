@@ -1,5 +1,6 @@
 import { account, db, eq, tenants } from "@cuik/db"
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
+import { getMemberRole, isTenantAdmin, organizationOfTenant } from "@/lib/tenant-roles"
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -22,6 +23,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return errorResponse("Tenant or owner not found", 404)
     }
 
+    // Optional target: any admin of the tenant (default: the owner).
+    let targetUserId = tenant.ownerId
+    const body = await request.json().catch(() => null)
+    const requested = typeof body?.userId === "string" ? body.userId : null
+    if (requested && requested !== tenant.ownerId) {
+      const org = await organizationOfTenant(id)
+      const role = org ? await getMemberRole(requested, org.orgId) : null
+      if (!isTenantAdmin(role)) return errorResponse("User is not an admin of this tenant", 400)
+      targetUserId = requested
+    }
+
     // Generate temp password
     const tempPassword = `cuik-${crypto.randomUUID().slice(0, 8)}`
 
@@ -33,11 +45,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     await db
       .update(account)
       .set({ password: hashedPassword })
-      .where(eq(account.userId, tenant.ownerId))
+      .where(eq(account.userId, targetUserId))
 
-    console.log(
-      `[reset-password] Password reset for tenant ${tenant.name} (owner: ${tenant.ownerId})`,
-    )
+    console.log(`[reset-password] Password reset for tenant ${tenant.name} (user: ${targetUserId})`)
 
     return successResponse({ tempPassword })
   } catch (error) {

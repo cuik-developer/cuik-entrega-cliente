@@ -190,7 +190,7 @@ export function TodayBlock({ items, timezone, points }: Props) {
         </>
       ),
       href: "/panel/cajeros",
-      cta: "Ver cajeros",
+      cta: "Ver equipo",
     })
   }
 

@@ -13,7 +13,7 @@ import {
 } from "@cuik/db"
 import ExcelJS from "exceljs"
 
-import { requireAuth, requireRole, requireTenantMembership, resolveTenant } from "@/lib/api-utils"
+import { requireAuth, requireTenantAdmin, resolveTenant } from "@/lib/api-utils"
 
 function formatDateOnly(d: Date | null | undefined, tz: string): string {
   if (!d) return ""
@@ -30,16 +30,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     const { session, error: authError } = await requireAuth(request)
     if (authError) return authError
 
-    const roleError = requireRole(session, "admin")
-    if (roleError) return roleError
-
     const { tenant: slug } = await params
     const tenant = await resolveTenant(slug)
     if (!tenant) {
       return new Response(JSON.stringify({ error: "Tenant not found" }), { status: 404 })
     }
 
-    const membershipError = await requireTenantMembership(session, tenant.id)
+    const membershipError = await requireTenantAdmin(session, tenant.id)
     if (membershipError) return membershipError
 
     const url = new URL(request.url)

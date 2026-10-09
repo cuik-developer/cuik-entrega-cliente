@@ -4,8 +4,7 @@ import { type RecurrenceRuleInput, updateRecurringCampaignSchema } from "@cuik/s
 import {
   errorResponse,
   requireAuth,
-  requireRole,
-  requireTenantMembership,
+  requireTenantAdmin,
   resolveTenant,
   successResponse,
 } from "@/lib/api-utils"
@@ -37,12 +36,10 @@ function sameRule(a: RecurrenceRuleInput, b: ReturnType<typeof ruleOf>): boolean
 async function guard(request: Request, ctx: Ctx) {
   const { session, error: authError } = await requireAuth(request)
   if (authError) return { error: authError }
-  const roleError = requireRole(session, "admin")
-  if (roleError) return { error: roleError }
   const { tenant: slug, id } = await ctx.params
   const tenant = await resolveTenant(slug)
   if (!tenant) return { error: errorResponse("Tenant not found", 404) }
-  const membershipError = await requireTenantMembership(session, tenant.id)
+  const membershipError = await requireTenantAdmin(session, tenant.id)
   if (membershipError) return { error: membershipError }
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
     return { error: errorResponse("Not found", 404) }

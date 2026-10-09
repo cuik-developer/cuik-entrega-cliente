@@ -1,13 +1,7 @@
 import ExcelJS from "exceljs"
 import { z } from "zod"
 
-import {
-  errorResponse,
-  requireAuth,
-  requireRole,
-  requireTenantMembership,
-  resolveTenant,
-} from "@/lib/api-utils"
+import { errorResponse, requireAuth, requireTenantAdmin, resolveTenant } from "@/lib/api-utils"
 
 const bodySchema = z.object({
   rejected: z
@@ -41,14 +35,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     const { session, error: authError } = await requireAuth(request)
     if (authError) return authError
 
-    const roleError = requireRole(session, "admin")
-    if (roleError) return roleError
-
     const { tenant: slug } = await params
     const tenant = await resolveTenant(slug)
     if (!tenant) return errorResponse("Tenant not found", 404)
 
-    const membershipError = await requireTenantMembership(session, tenant.id)
+    const membershipError = await requireTenantAdmin(session, tenant.id)
     if (membershipError) return membershipError
 
     const parsed = bodySchema.safeParse(await request.json().catch(() => null))

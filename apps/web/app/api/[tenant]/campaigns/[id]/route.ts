@@ -4,8 +4,7 @@ import { updateCampaignSchema } from "@cuik/shared/validators"
 import {
   errorResponse,
   requireAuth,
-  requireRole,
-  requireTenantMembership,
+  requireTenantAdmin,
   resolveTenant,
   successResponse,
 } from "@/lib/api-utils"
@@ -19,14 +18,11 @@ export async function GET(
     const { session, error: authError } = await requireAuth(request)
     if (authError) return authError
 
-    const roleError = requireRole(session, "admin")
-    if (roleError) return roleError
-
     const { tenant: slug, id } = await params
     const tenant = await resolveTenant(slug)
     if (!tenant) return errorResponse("Tenant not found", 404)
 
-    const membershipError = await requireTenantMembership(session, tenant.id)
+    const membershipError = await requireTenantAdmin(session, tenant.id)
     if (membershipError) return membershipError
 
     // Load campaign
@@ -103,13 +99,11 @@ export async function PATCH(
   try {
     const { session, error: authError } = await requireAuth(request)
     if (authError) return authError
-    const roleError = requireRole(session, "admin")
-    if (roleError) return roleError
 
     const { tenant: slug, id } = await params
     const tenant = await resolveTenant(slug)
     if (!tenant) return errorResponse("Tenant not found", 404)
-    const membershipError = await requireTenantMembership(session, tenant.id)
+    const membershipError = await requireTenantAdmin(session, tenant.id)
     if (membershipError) return membershipError
 
     const parsed = updateCampaignSchema.safeParse(await request.json().catch(() => null))
@@ -184,13 +178,11 @@ export async function DELETE(
   try {
     const { session, error: authError } = await requireAuth(request)
     if (authError) return authError
-    const roleError = requireRole(session, "admin")
-    if (roleError) return roleError
 
     const { tenant: slug, id } = await params
     const tenant = await resolveTenant(slug)
     if (!tenant) return errorResponse("Tenant not found", 404)
-    const membershipError = await requireTenantMembership(session, tenant.id)
+    const membershipError = await requireTenantAdmin(session, tenant.id)
     if (membershipError) return membershipError
 
     const [existing] = await db

@@ -3,7 +3,7 @@ import { z } from "zod"
 import {
   errorResponse,
   requireAuth,
-  requireRole,
+  requireTenantAdmin,
   requireTenantMembership,
   resolveTenant,
   successResponse,
@@ -73,14 +73,11 @@ export async function PATCH(
     const { session, error: authError } = await requireAuth(request)
     if (authError) return authError
 
-    const roleError = requireRole(session, "admin")
-    if (roleError) return roleError
-
     const { tenant: slug, id } = await params
     const tenant = await resolveTenant(slug)
     if (!tenant) return errorResponse("Tenant not found", 404)
 
-    const membershipError = await requireTenantMembership(session, tenant.id)
+    const membershipError = await requireTenantAdmin(session, tenant.id)
     if (membershipError) return membershipError
 
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

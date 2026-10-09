@@ -31,7 +31,7 @@ const navItems = [
   { href: "/panel/clientes", label: "Clientes", icon: Users },
   // Only shown to points programs (see SidebarNav).
   { href: "/panel/premios", label: "Premios", icon: Gift, pointsOnly: true },
-  { href: "/panel/cajeros", label: "Cajeros", icon: UserCheck },
+  { href: "/panel/cajeros", label: "Equipo", icon: UserCheck },
   { href: "/panel/analitica", label: "Analítica", icon: BarChart3 },
   { href: "/panel/exportar", label: "Exportar datos", icon: Download },
   { href: "/panel/campanas", label: "Campañas", icon: Megaphone },

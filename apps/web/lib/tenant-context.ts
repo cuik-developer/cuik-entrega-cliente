@@ -1,4 +1,4 @@
-import { and, db, eq, member, organization, promotions, tenants, user } from "@cuik/db"
+import { and, db, eq, member, organization, promotions, sql, tenants, user } from "@cuik/db"
 import { type TenantBranding, tenantBrandingSchema } from "@cuik/shared/validators"
 import { cookies } from "next/headers"
 
@@ -50,6 +50,11 @@ export async function getTenantForUser(userId: string): Promise<TenantContextDat
       .from(member)
       .innerJoin(organization, eq(member.organizationId, organization.id))
       .where(eq(member.userId, userId))
+      // A user in several organizations lands on the one where they rank highest.
+      .orderBy(
+        sql`CASE ${member.role} WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END`,
+        member.createdAt,
+      )
       .limit(1)
 
     const org = memberRows[0]

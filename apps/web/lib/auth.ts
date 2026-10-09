@@ -12,8 +12,16 @@ import { InvitacionCajero, ResetPassword, sendEmail } from "@cuik/email"
 import { betterAuth } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { admin, organization } from "better-auth/plugins"
+import { createAccessControl } from "better-auth/plugins/access"
+import { adminAc, defaultStatements, userAc } from "better-auth/plugins/admin/access"
 
 const trustedOrigins = process.env.TRUSTED_ORIGINS?.split(",").map((o) => o.trim()) ?? []
+
+// Better Auth admin plugin roles: only "super_admin" gets the platform
+// statements (list/ban/impersonate users); "admin" (merchant) and "user" get none.
+const adminAccess = createAccessControl(defaultStatements)
+const platformAdminRole = adminAccess.newRole(adminAc.statements)
+const plainUserRole = adminAccess.newRole(userAc.statements)
 
 export const auth = betterAuth({
   trustedOrigins,
@@ -66,6 +74,9 @@ export const auth = betterAuth({
   },
   plugins: [
     organization({
+      // Only super-admins create organizations (tenants come from Solicitudes);
+      // otherwise any user could create one and become "owner" of something.
+      allowUserToCreateOrganization: async (u) => u.role === "super_admin",
       async sendInvitationEmail(data) {
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
         const inviteLink = `${baseUrl}/accept-invitation/${data.id}`
@@ -89,6 +100,7 @@ export const auth = betterAuth({
             inviterEmail: data.inviter.user.email,
             inviteLink,
             expiresAt,
+            role: data.invitation.role === "admin" ? "admin" : "member",
           }),
         })
           .then((result) => {
@@ -101,7 +113,13 @@ export const auth = betterAuth({
           })
       },
     }),
-    admin(),
+    // Platform admin API (/api/auth/admin/*) is for super-admins only; merchant
+    // admins carry user.role "admin" but must not manage other users.
+    admin({
+      ac: adminAccess,
+      roles: { super_admin: platformAdminRole, admin: plainUserRole, user: plainUserRole },
+      adminRoles: ["super_admin"],
+    }),
   ],
 })
 

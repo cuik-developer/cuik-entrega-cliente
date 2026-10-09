@@ -136,3 +136,36 @@ export function paginationMeta(total: number, page: number, limit: number) {
     totalPages: Math.ceil(total / limit),
   }
 }
+
+/**
+ * Admin-level access to a tenant: the organization owner or an admin member
+ * (`member.role`), or the super-admin read-only view of this tenant. Replaces
+ * "global role admin + any membership" on the merchant panel routes, so a
+ * cashier who happens to be admin of ANOTHER tenant cannot administer this one.
+ */
+export async function requireTenantAdmin(
+  session: { user: { id: string; role?: string }; saViewTenantId?: string | null },
+  tenantId: string,
+) {
+  if (session.user.role === "super_admin" && session.saViewTenantId === tenantId) return null
+
+  const [tenant] = await db
+    .select({ slug: tenants.slug, ownerId: tenants.ownerId })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1)
+  if (!tenant) return errorResponse("Tenant not found", 404)
+  if (tenant.ownerId === session.user.id) return null
+
+  const [row] = await db
+    .select({ role: member.role })
+    .from(member)
+    .innerJoin(organization, eq(organization.id, member.organizationId))
+    .where(and(eq(member.userId, session.user.id), eq(organization.slug, tenant.slug)))
+    .limit(1)
+  if (!row) return errorResponse("Forbidden — not a member of this tenant", 403)
+  if (row.role !== "owner" && row.role !== "admin") {
+    return errorResponse("Forbidden — admin role required in this tenant", 403)
+  }
+  return null
+}

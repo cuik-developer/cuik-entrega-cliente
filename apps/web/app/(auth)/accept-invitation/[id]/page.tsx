@@ -7,6 +7,7 @@ import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
+import { syncMyRole } from "@/app/(dashboard)/panel/cajeros/actions"
 import { CuikLogo } from "@/components/cuik-logo"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -98,10 +99,9 @@ export default function AcceptInvitationPage() {
       toast.success(`¡Te uniste a ${orgName}!`)
       setPageState("accepted")
 
-      // Redirect based on role
-      const sessionRes = await authClient.getSession()
-      const userRole = ((sessionRes.data?.user as { role?: string } | undefined)?.role ??
-        "user") as Role
+      // Derive the global role from the new membership (admin → /panel, cashier → /cajero).
+      const synced = await syncMyRole()
+      const userRole = (synced.success ? synced.data.role : "user") as Role
       const redirectTo = ROLE_REDIRECTS[userRole] ?? "/cajero/escanear"
 
       setTimeout(() => {

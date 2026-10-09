@@ -4,8 +4,7 @@ import { createCatalogItemSchema } from "@cuik/shared/validators"
 import {
   errorResponse,
   requireAuth,
-  requireRole,
-  requireTenantMembership,
+  requireTenantAdmin,
   resolveTenant,
   successResponse,
 } from "@/lib/api-utils"
@@ -15,12 +14,10 @@ type Params = { params: Promise<{ tenant: string }> }
 async function guard(request: Request, params: Params["params"]) {
   const { session, error: authError } = await requireAuth(request)
   if (authError) return { error: authError }
-  const roleError = requireRole(session, "admin")
-  if (roleError) return { error: roleError }
   const { tenant: slug } = await params
   const tenant = await resolveTenant(slug)
   if (!tenant) return { error: errorResponse("Tenant not found", 404) }
-  const membershipError = await requireTenantMembership(session, tenant.id)
+  const membershipError = await requireTenantAdmin(session, tenant.id)
   if (membershipError) return { error: membershipError }
   return { tenant }
 }

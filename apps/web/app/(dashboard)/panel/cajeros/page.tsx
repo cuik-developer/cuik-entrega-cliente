@@ -46,10 +46,22 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useTenant } from "@/hooks/use-tenant"
-import { authClient, useSession } from "@/lib/auth-client"
+import { useSession } from "@/lib/auth-client"
 import { formatDateTime } from "@/lib/format-date"
+import { TENANT_ROLE_LABEL, type TenantRole } from "@/lib/tenant-roles-shared"
 import type { CajeroStatsMap } from "./actions"
-import { getCajeroStats, resetCajeroPassword, toggleCajeroBan, updateCajeroName } from "./actions"
+import {
+  cancelTeamInvitation,
+  changeTeamRole,
+  getCajeroStats,
+  getTeam,
+  inviteTeamMember,
+  removeTeamMember,
+  resetCajeroPassword,
+  toggleCajeroBan,
+  transferOwnership,
+  updateCajeroName,
+} from "./actions"
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -79,6 +91,7 @@ interface OrgInvitation {
 
 const inviteFormSchema = z.object({
   email: z.string().min(1, "El email es requerido").email("Email inválido"),
+  role: z.enum(["admin", "member"]),
 })
 
 type InviteFormValues = z.infer<typeof inviteFormSchema>
@@ -94,8 +107,14 @@ function getInitial(name: string): string {
 }
 
 function roleLabel(role: string): string {
-  if (role === "owner") return "Propietario"
-  return "Cajero"
+  return TENANT_ROLE_LABEL[(role === "owner" || role === "admin" ? role : "member") as TenantRole]
+}
+
+/** What the viewer may do to this member (mirrors `canManage` on the server). */
+function canManage(viewerRole: TenantRole, targetRole: string): boolean {
+  if (targetRole === "owner") return false
+  if (targetRole === "admin") return viewerRole === "owner"
+  return true
 }
 
 // ── Components ──────────────────────────────────────────────────────
@@ -104,23 +123,31 @@ function MemberRow({
   member,
   stats,
   isSelf,
+  viewerRole,
   timezone = "America/Lima",
   onRemove,
   onResetPassword,
   onEdit,
   onToggleBan,
+  onChangeRole,
+  onTransfer,
 }: {
   member: OrgMember
   stats: CajeroStatsMap[string] | undefined
   isSelf: boolean
+  viewerRole: TenantRole
   timezone?: string
   onRemove: (member: OrgMember) => void
   onResetPassword: (member: OrgMember) => void
   onEdit: (member: OrgMember) => void
   onToggleBan: (member: OrgMember) => void
+  onChangeRole: (member: OrgMember, role: "admin" | "member") => void
+  onTransfer: (member: OrgMember) => void
 }) {
   const isOwner = member.role === "owner"
+  const isAdmin = member.role === "admin"
   const isBanned = member.user.banned === true
+  const manageable = !isSelf && canManage(viewerRole, member.role)
 
   return (
     <div
@@ -173,14 +200,16 @@ function MemberRow({
             className={
               isOwner
                 ? "border-blue-200 bg-blue-50 text-blue-700"
-                : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : isAdmin
+                  ? "border-violet-200 bg-violet-50 text-violet-700"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-700"
             }
           >
             {roleLabel(member.role)}
           </Badge>
         )}
 
-        {!isSelf && !isOwner && (
+        {manageable && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -200,6 +229,21 @@ function MemberRow({
                 <KeyRound className="h-3.5 w-3.5" />
                 Resetear contraseña
               </DropdownMenuItem>
+              {viewerRole === "owner" && (
+                <DropdownMenuItem
+                  onClick={() => onChangeRole(member, isAdmin ? "member" : "admin")}
+                  className="gap-2 text-xs"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  {isAdmin ? "Pasar a cajero" : "Hacer administrador"}
+                </DropdownMenuItem>
+              )}
+              {viewerRole === "owner" && isAdmin && (
+                <DropdownMenuItem onClick={() => onTransfer(member)} className="gap-2 text-xs">
+                  <Users className="h-3.5 w-3.5" />
+                  Transferir propiedad
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => onToggleBan(member)} className="gap-2 text-xs">
                 {isBanned ? (
                   <>
@@ -256,7 +300,7 @@ function InvitationRow({
 
       <div className="flex items-center gap-2">
         <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
-          Pendiente
+          {invitation.role === "admin" ? "Admin pendiente" : "Cajero pendiente"}
         </Badge>
         <Button
           size="icon"
@@ -311,13 +355,16 @@ function EmptyState({ onInvite }: { onInvite: () => void }) {
       <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
         <Users className="h-6 w-6 text-slate-400" />
       </div>
-      <h3 className="text-sm font-semibold text-slate-700">No tienes cajeros todavía</h3>
+      <h3 className="text-sm font-semibold text-slate-700">
+        Todavía no hay nadie más en el equipo
+      </h3>
       <p className="mt-1 max-w-xs text-sm text-slate-500">
-        Invita a tu primer cajero para que pueda registrar visitas y canjear premios.
+        Invita cajeros para registrar visitas y canjes, o administradores para gestionar el panel
+        contigo.
       </p>
       <Button className="mt-5 gap-2 bg-[#0e70db] text-white hover:bg-[#0c5fb8]" onClick={onInvite}>
         <UserPlus className="h-4 w-4" />
-        Invitar cajero
+        Invitar
       </Button>
     </div>
   )
@@ -344,10 +391,11 @@ export default function CajerosPage() {
   const [editingMember, setEditingMember] = useState<OrgMember | null>(null)
   const [editName, setEditName] = useState("")
   const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [viewerRole, setViewerRole] = useState<TenantRole>("admin")
 
   // Confirm dialog state
   const [confirmAction, setConfirmAction] = useState<{
-    type: "remove" | "cancel" | "reset-password"
+    type: "remove" | "cancel" | "reset-password" | "role"
     label: string
     description: string
     onConfirm: () => Promise<void>
@@ -355,7 +403,7 @@ export default function CajerosPage() {
 
   const form = useForm<InviteFormValues>({
     resolver: zodResolver(inviteFormSchema),
-    defaultValues: { email: "" },
+    defaultValues: { email: "", role: "member" },
   })
 
   const fetchData = useCallback(async () => {
@@ -365,18 +413,24 @@ export default function CajerosPage() {
     setError(null)
 
     try {
-      // Fetch members + invitations from Better Auth
-      const orgResult = await authClient.organization.getFullOrganization()
-
-      if (orgResult.error) {
-        setError(orgResult.error.message || "Error al cargar miembros")
+      // Members + invitations, with the viewer's role in this organization
+      const team = await getTeam(organizationId)
+      if (!team.success) {
+        setError(team.error)
         setIsLoading(false)
         return
       }
-
-      const orgData = orgResult.data
-      setMembers((orgData?.members as OrgMember[]) ?? [])
-      setInvitations((orgData?.invitations as OrgInvitation[]) ?? [])
+      setViewerRole(team.data.viewerRole)
+      setMembers(
+        team.data.members.map((m) => ({
+          id: m.memberId,
+          userId: m.userId,
+          role: m.role,
+          createdAt: m.createdAt,
+          user: { id: m.userId, name: m.name, email: m.email, banned: m.banned },
+        })),
+      )
+      setInvitations(team.data.invitations)
 
       // Fetch visit stats from server action
       const statsResult = await getCajeroStats({ tenantId, organizationId })
@@ -402,13 +456,15 @@ export default function CajerosPage() {
   async function handleInvite(values: InviteFormValues) {
     setIsInviting(true)
     try {
-      const result = await authClient.organization.inviteMember({
+      if (!organizationId) return
+      const result = await inviteTeamMember({
+        organizationId,
         email: values.email,
-        role: "member",
+        role: values.role,
       })
 
-      if (result.error) {
-        toast.error(result.error.message || "Error al enviar invitación")
+      if (!result.success) {
+        toast.error(result.error)
         setIsInviting(false)
         return
       }
@@ -427,20 +483,19 @@ export default function CajerosPage() {
   function handleRemoveMember(member: OrgMember) {
     setConfirmAction({
       type: "remove",
-      label: "Eliminar miembro",
-      description: `${member.user.name} perderá acceso al sistema. Esta acción no se puede deshacer.`,
+      label: "Quitar del equipo",
+      description: `${member.user.name} perderá acceso a este comercio. Esta acción no se puede deshacer.`,
       onConfirm: async () => {
         try {
-          const result = await authClient.organization.removeMember({
-            memberIdOrEmail: member.userId,
-          })
+          if (!organizationId) return
+          const result = await removeTeamMember({ organizationId, userId: member.userId })
 
-          if (result.error) {
-            toast.error(result.error.message || "Error al eliminar miembro")
+          if (!result.success) {
+            toast.error(result.error)
             return
           }
 
-          toast.success("Miembro eliminado")
+          toast.success("Miembro quitado del equipo")
           await fetchData()
         } catch {
           toast.error("Error al eliminar miembro")
@@ -456,12 +511,11 @@ export default function CajerosPage() {
       description: `Se cancelará la invitación enviada a ${invitation.email}.`,
       onConfirm: async () => {
         try {
-          const result = await authClient.organization.cancelInvitation({
-            invitationId: invitation.id,
-          })
+          if (!organizationId) return
+          const result = await cancelTeamInvitation({ organizationId, invitationId: invitation.id })
 
-          if (result.error) {
-            toast.error(result.error.message || "Error al cancelar invitación")
+          if (!result.success) {
+            toast.error(result.error)
             return
           }
 
@@ -477,14 +531,16 @@ export default function CajerosPage() {
   async function handleResendInvitation(invitation: OrgInvitation) {
     setResendingId(invitation.id)
     try {
-      const result = await authClient.organization.inviteMember({
+      if (!organizationId) return
+      const result = await inviteTeamMember({
+        organizationId,
         email: invitation.email,
-        role: "member",
+        role: invitation.role === "admin" ? "admin" : "member",
         resend: true,
       })
 
-      if (result.error) {
-        toast.error(result.error.message || "Error al reenviar invitación")
+      if (!result.success) {
+        toast.error(result.error)
         return
       }
 
@@ -495,6 +551,45 @@ export default function CajerosPage() {
     } finally {
       setResendingId(null)
     }
+  }
+
+  function handleChangeRole(member: OrgMember, role: "admin" | "member") {
+    setConfirmAction({
+      type: "role",
+      label: role === "admin" ? "Hacer administrador" : "Pasar a cajero",
+      description:
+        role === "admin"
+          ? `${member.user.name} podrá entrar al panel, ver todo el comercio e invitar cajeros.`
+          : `${member.user.name} dejará de ver el panel y solo podrá usar la app de cajero.`,
+      onConfirm: async () => {
+        if (!organizationId) return
+        const result = await changeTeamRole({ organizationId, userId: member.userId, role })
+        if (!result.success) {
+          toast.error(result.error)
+          return
+        }
+        toast.success(role === "admin" ? "Ahora es administrador" : "Ahora es cajero")
+        await fetchData()
+      },
+    })
+  }
+
+  function handleTransfer(member: OrgMember) {
+    setConfirmAction({
+      type: "role",
+      label: "Transferir propiedad",
+      description: `${member.user.name} pasará a ser el dueño del comercio y tú quedarás como administrador. Solo el nuevo dueño podrá revertirlo.`,
+      onConfirm: async () => {
+        if (!organizationId) return
+        const result = await transferOwnership({ organizationId, userId: member.userId })
+        if (!result.success) {
+          toast.error(result.error)
+          return
+        }
+        toast.success(`${member.user.name} es ahora el dueño`)
+        await fetchData()
+      },
+    })
   }
 
   function handleEditMember(member: OrgMember) {
@@ -532,10 +627,10 @@ export default function CajerosPage() {
 
     setConfirmAction({
       type: isBanned ? "reset-password" : "remove",
-      label: isBanned ? "Activar cajero" : "Desactivar cajero",
+      label: isBanned ? "Activar acceso" : "Desactivar acceso",
       description: isBanned
-        ? `${member.user.name} podrá volver a iniciar sesión y registrar visitas.`
-        : `${member.user.name} no podrá iniciar sesión ni registrar visitas hasta que lo reactives.`,
+        ? `${member.user.name} podrá volver a iniciar sesión.`
+        : `${member.user.name} no podrá iniciar sesión hasta que lo reactives.`,
       onConfirm: async () => {
         const result = await toggleCajeroBan({
           userId: member.userId,
@@ -546,7 +641,7 @@ export default function CajerosPage() {
           toast.error(result.error)
           return
         }
-        toast.success(`Cajero ${isBanned ? "activado" : "desactivado"}`)
+        toast.success(isBanned ? "Acceso activado" : "Acceso desactivado")
         await fetchData()
       },
     })
@@ -580,9 +675,21 @@ export default function CajerosPage() {
 
   const currentUserId = sessionData?.user?.id
   const nonOwnerMembers = members.filter((m) => m.role !== "owner")
+  const adminMembers = members.filter((m) => m.role === "admin")
+  const cashierMembers = members.filter((m) => m.role !== "owner" && m.role !== "admin")
   const pendingInvitations = invitations.filter((inv) => inv.status === "pending")
   const isEmpty = nonOwnerMembers.length === 0 && pendingInvitations.length === 0
   const ownerMember = members.find((m) => m.role === "owner")
+  const rowProps = {
+    viewerRole,
+    timezone,
+    onRemove: handleRemoveMember,
+    onResetPassword: handleResetPassword,
+    onEdit: handleEditMember,
+    onToggleBan: handleToggleBan,
+    onChangeRole: handleChangeRole,
+    onTransfer: handleTransfer,
+  }
   const loading = tenantLoading || isLoading
 
   // ── Render ──────────────────────────────────────────────────────
@@ -592,9 +699,9 @@ export default function CajerosPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900">Cajeros</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900">Equipo</h1>
           <p className="mt-0.5 text-sm text-slate-500">
-            Gestioná el acceso de tu equipo al sistema.
+            Administradores y cajeros con acceso a tu comercio.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -614,7 +721,7 @@ export default function CajerosPage() {
             disabled={loading}
           >
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Invitar cajero</span>
+            <span className="hidden sm:inline">Invitar</span>
           </Button>
         </div>
       </div>
@@ -642,12 +749,25 @@ export default function CajerosPage() {
         >
           <div className="flex items-center gap-2">
             <UserPlus className="h-4 w-4 text-blue-600" />
-            <h2 className="text-sm font-semibold text-slate-700">Invitar cajero</h2>
+            <h2 className="text-sm font-semibold text-slate-700">Invitar al equipo</h2>
           </div>
           <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="sm:w-44">
+              <Label htmlFor="invite-role" className="text-xs text-slate-600">
+                Rol
+              </Label>
+              <select
+                id="invite-role"
+                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                {...form.register("role")}
+              >
+                <option value="member">Cajero</option>
+                {viewerRole === "owner" && <option value="admin">Administrador</option>}
+              </select>
+            </div>
             <div className="flex-1">
               <Label htmlFor="invite-email" className="text-xs text-slate-600">
-                Email del cajero
+                Email
               </Label>
               <Input
                 id="invite-email"
@@ -693,32 +813,48 @@ export default function CajerosPage() {
       {/* Member list */}
       {!loading && !error && !isEmpty && (
         <div className="space-y-2">
-          {/* Owner always first */}
+          {/* Administradores: owner first, then admins */}
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-3.5 w-3.5 text-slate-400" />
+            <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
+              Administradores
+            </span>
+          </div>
           {ownerMember && (
             <MemberRow
               member={ownerMember}
               stats={stats[ownerMember.userId]}
               isSelf={currentUserId === ownerMember.userId}
-              timezone={timezone}
-              onRemove={handleRemoveMember}
-              onResetPassword={handleResetPassword}
-              onEdit={handleEditMember}
-              onToggleBan={handleToggleBan}
+              {...rowProps}
             />
           )}
-
-          {/* Other members */}
-          {nonOwnerMembers.map((m) => (
+          {adminMembers.map((m) => (
             <MemberRow
               key={m.id}
               member={m}
               stats={stats[m.userId]}
               isSelf={currentUserId === m.userId}
-              timezone={timezone}
-              onRemove={handleRemoveMember}
-              onResetPassword={handleResetPassword}
-              onEdit={handleEditMember}
-              onToggleBan={handleToggleBan}
+              {...rowProps}
+            />
+          ))}
+
+          {/* Cajeros */}
+          <div className="flex items-center gap-2 pt-3">
+            <Users className="h-3.5 w-3.5 text-slate-400" />
+            <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
+              Cajeros
+            </span>
+          </div>
+          {cashierMembers.length === 0 && (
+            <p className="text-xs text-slate-400">Todavía no hay cajeros.</p>
+          )}
+          {cashierMembers.map((m) => (
+            <MemberRow
+              key={m.id}
+              member={m}
+              stats={stats[m.userId]}
+              isSelf={currentUserId === m.userId}
+              {...rowProps}
             />
           ))}
 
@@ -762,7 +898,7 @@ export default function CajerosPage() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className={
-                confirmAction?.type === "reset-password"
+                confirmAction?.type === "reset-password" || confirmAction?.type === "role"
                   ? "bg-[#0e70db] text-white hover:bg-[#0c5fb8]"
                   : "bg-red-600 text-white hover:bg-red-700"
               }
@@ -786,7 +922,7 @@ export default function CajerosPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Editar cajero</AlertDialogTitle>
+            <AlertDialogTitle>Editar nombre</AlertDialogTitle>
             <AlertDialogDescription>
               Modificá el nombre de {editingMember?.user.name}.
             </AlertDialogDescription>
@@ -799,7 +935,7 @@ export default function CajerosPage() {
               id="edit-name"
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
-              placeholder="Nombre del cajero"
+              placeholder="Nombre"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault()

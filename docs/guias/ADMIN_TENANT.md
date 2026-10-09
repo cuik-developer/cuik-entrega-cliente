@@ -199,7 +199,7 @@ Si tienes mas de 20 clientes, la tabla se pagina. Usa los botones **Anterior** /
 
 ---
 
-## 5. Cajeros (`/panel/cajeros`)
+## 5. Equipo (`/panel/cajeros`, antes "Cajeros")
 
 Gestiona los accesos del personal que registra visitas en tu local.
 
@@ -512,7 +512,7 @@ El panel de administracion tiene un sidebar (barra lateral) oscuro con:
 
 - **Logo** de Cuik
 - **Nombre y logo** de tu comercio
-- **7 items de navegacion**: Dashboard, Mi Pase, Clientes, Cajeros, Analitica, Campanas, Configuracion
+- **8 items de navegacion**: Dashboard, Mi Pase, Clientes, Equipo (antes Cajeros), Analitica, Exportar datos, Campanas, Configuracion
 - **Boton "Salir"**: cierra tu sesion
 
 En dispositivos moviles, el sidebar se abre/cierra con el boton hamburguesa (tres lineas) en la esquina superior izquierda.

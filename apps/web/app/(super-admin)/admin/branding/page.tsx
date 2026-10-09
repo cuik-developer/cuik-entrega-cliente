@@ -321,7 +321,7 @@ const previewNavItems = [
   { label: "Dashboard", icon: LayoutDashboard, active: true },
   { label: "Mi Pase", icon: CreditCard, active: false },
   { label: "Clientes", icon: Users, active: false },
-  { label: "Cajeros", icon: UserCheck, active: false },
+  { label: "Equipo", icon: UserCheck, active: false },
   { label: "Analitica", icon: BarChart3, active: false },
   { label: "Campanas", icon: Megaphone, active: false },
   { label: "Configuracion", icon: Settings, active: false },
