@@ -20,6 +20,7 @@ import {
   Loader2,
   type LucideIcon,
   Mail,
+  Megaphone,
   Paintbrush,
   Pause,
   Play,
@@ -56,6 +57,7 @@ import { togglePromotionActive } from "./promotion-actions"
 import { PromotionFormDialog } from "./promotion-form-dialog"
 import { RegistrationConfigSection } from "./registration-config-section"
 import { TenantBillingSection } from "./tenant-billing-section"
+import { TenantCampaignsSection } from "./tenant-campaigns-section"
 import { TenantNotesSection } from "./tenant-notes-section"
 import { type CatalogSummaryItem, TenantProgramSummary } from "./tenant-program-summary"
 import {
@@ -73,6 +75,7 @@ const SECTIONS: { value: string; label: string; icon: LucideIcon }[] = [
   { value: "promocion", label: "Programa", icon: Gift },
   { value: "registro", label: "Registro", icon: ClipboardList },
   { value: "segmentacion", label: "Segmentación", icon: Users },
+  { value: "campanas", label: "Campañas", icon: Megaphone },
   { value: "apple", label: "Apple", icon: Shield },
   { value: "facturacion", label: "Facturación", icon: Receipt },
   { value: "notas", label: "Notas", icon: StickyNote },
@@ -1620,6 +1623,13 @@ export function TenantDetail({
             <TenantBillingSection tenantId={tenant.id} tenantName={tenant.name} />
           </TabsContent>
           {/* ── Tab: Notas internas ────────────────────────── */}
+          <TabsContent
+            value="campanas"
+            className="bg-ent-panel rounded-[4px] border border-ent-line"
+          >
+            <TenantCampaignsSection tenantId={tenant.id} />
+          </TabsContent>
+
           <TabsContent
             value="notas"
             forceMount

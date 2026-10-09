@@ -7,6 +7,7 @@ import {
   Download,
   LogOut,
   type LucideIcon,
+  Megaphone,
   Menu,
   Paintbrush,
   Palette,
@@ -31,6 +32,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { href: "/admin/solicitudes", label: "Solicitudes", icon: ClipboardList },
       { href: "/admin/tenants", label: "Tenants", icon: Building2 },
+      { href: "/admin/campanas", label: "Campañas", icon: Megaphone },
       { href: "/admin/metricas", label: "Métricas", icon: TrendingUp },
       { href: "/admin/exportar", label: "Exportar datos", icon: Download },
     ],

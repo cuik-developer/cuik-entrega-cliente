@@ -288,6 +288,7 @@ export async function collectAdminAlerts(now = new Date()): Promise<AdminAlert[]
         eq(campaigns.status, "draft"),
         gte(campaigns.updatedAt, since),
         // The error timestamp, not updated_at: editing an old failed draft must not re-surface it.
+        sql`${campaigns.content} ->> 'lastErrorAt' ~ '^\\d{4}-\\d{2}-\\d{2}T'`,
         sql`(${campaigns.content} ->> 'lastErrorAt')::timestamptz >= ${since.toISOString()}::timestamptz`,
       ),
     )
@@ -304,7 +305,7 @@ export async function collectAdminAlerts(now = new Date()): Promise<AdminAlert[]
       severity: "warning",
       who: nameOf.get(c.tenantId) ?? "Comercio",
       text: `La campaña "${c.name}" no se envió y volvió a borrador${err ? `: ${err}` : "."}`,
-      href: tenantHref(c.tenantId),
+      href: tenantHref(c.tenantId, "campanas"),
     })
   }
 
