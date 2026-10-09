@@ -83,14 +83,19 @@ export function TenantSearch({ className }: { className?: string }) {
     router.push(`/admin/tenants/${s.id}`)
   }
 
+  /** Filter the tenant list by the typed text. */
+  function goList() {
+    const q = query.trim()
+    setOpen(false)
+    router.push(q ? `/admin/tenants?q=${encodeURIComponent(q)}` : "/admin/tenants")
+  }
+
   function submit() {
     if (open && active >= 0 && items[active]) {
       go(items[active])
       return
     }
-    const q = query.trim()
-    setOpen(false)
-    router.push(q ? `/admin/tenants?q=${encodeURIComponent(q)}` : "/admin/tenants")
+    goList()
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -184,10 +189,7 @@ export function TenantSearch({ className }: { className?: string }) {
             <button
               type="button"
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                setActive(-1)
-                submit()
-              }}
+              onClick={goList}
               className="w-full text-left px-3 py-1.5 text-[12px] text-ent-accent hover:bg-ent-panel-2"
             >
               Ver todos los resultados de “{query.trim()}”
