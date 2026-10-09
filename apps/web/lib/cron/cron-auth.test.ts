@@ -48,6 +48,14 @@ vi.mock("@/lib/analytics", () => ({
   calculateRetentionCohorts: vi.fn().mockResolvedValue(undefined),
 }))
 
+// The recurring runner has its own tests (lib/campaigns/recurring*.test.ts);
+// here it is a collaborator of the cron route, so stub it out.
+vi.mock("@/lib/campaigns/recurring", () => ({
+  runDueRecurringCampaigns: vi
+    .fn()
+    .mockResolvedValue({ processed: 0, sent: 0, skipped: 0, failed: 0, errors: [] }),
+}))
+
 vi.mock("@/lib/campaigns", () => ({
   executeCampaign: vi.fn().mockResolvedValue({
     campaignId: "c1",
