@@ -41,6 +41,7 @@ type ClientDetail = {
   stamps: { current: number | null; max: number | null }
   pendingRewards: number
   promotion: { id: string; type: string; rewardValue: string | null } | null
+  nextMilestone?: { at: number; label: string } | null
   points?: {
     balance: number
     availableCatalogItems?: number
@@ -165,6 +166,8 @@ export default function BuscarPage() {
   const [searching, setSearching] = useState(false)
   const [selected, setSelected] = useState<ClientDetail | null>(null)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
+  // Intermediate gift reached by the visit just registered (cleared on the next action).
+  const [giftDue, setGiftDue] = useState<{ at: number; label: string } | null>(null)
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
   const [confirmItemId, setConfirmItemId] = useState<string | null>(null)
   const [redeemingItemId, setRedeemingItemId] = useState<string | null>(null)
@@ -294,6 +297,12 @@ export default function BuscarPage() {
       setActionMsg(message)
 
       if (code === "OK") {
+        const ms = json.data?.milestone as { kind?: string; at?: number; label?: string } | null
+        setGiftDue(
+          ms?.kind === "reached" && typeof ms.at === "number" && ms.label
+            ? { at: ms.at, label: ms.label }
+            : null,
+        )
         setPurchaseAmount("")
         await selectClient(selected.client.id)
       }
@@ -414,6 +423,7 @@ export default function BuscarPage() {
           isPoints={isPoints}
           catalogItems={catalogItems}
           actionMsg={actionMsg}
+          giftDue={giftDue}
           requiresAmount={requiresAmount}
           stampsMinAmount={stampsMinAmount}
           purchaseAmount={purchaseAmount}
@@ -429,6 +439,7 @@ export default function BuscarPage() {
           onReset={() => {
             setSelected(null)
             setActionMsg(null)
+            setGiftDue(null)
             setSubmitting(false)
             setConfirmItemId(null)
             setCatalogItems([])
@@ -584,6 +595,7 @@ function ClientDetailView({
   isPoints,
   catalogItems,
   actionMsg,
+  giftDue,
   requiresAmount,
   stampsMinAmount,
   purchaseAmount,
@@ -602,6 +614,7 @@ function ClientDetailView({
   isPoints: boolean
   catalogItems: CatalogItem[]
   actionMsg: string | null
+  giftDue: { at: number; label: string } | null
   requiresAmount: boolean
   stampsMinAmount: number | null
   purchaseAmount: string
@@ -679,6 +692,25 @@ function ClientDetailView({
           </div>
         )}
       </div>
+
+      {/* Stamps: intermediate gift reached by the visit just registered */}
+      {!isPoints && giftDue && (
+        <div className="flex items-center gap-2.5 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+          <Gift className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+          <div>
+            <div className="font-semibold text-emerald-800 text-sm">
+              Entregar premio de la visita {giftDue.at}
+            </div>
+            <div className="text-emerald-700 text-sm">{giftDue.label}</div>
+          </div>
+        </div>
+      )}
+      {/* Stamps: gift waiting one visit ahead */}
+      {!isPoints && !giftDue && selected.nextMilestone && (
+        <div className="text-xs text-gray-500 text-center">
+          En su proxima visita recibe: {selected.nextMilestone.label}
+        </div>
+      )}
 
       {/* Stamps: pending rewards */}
       {!isPoints && selected.pendingRewards > 0 && (

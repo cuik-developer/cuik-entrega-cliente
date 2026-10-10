@@ -10,12 +10,31 @@ import {
   sql,
   visits,
 } from "@cuik/db"
-import { pointsPromotionConfigSchema, stampsPromotionConfigSchema } from "@cuik/shared/validators"
+import {
+  type PointsPromotionConfig,
+  pointsPromotionConfigSchema,
+  type StampsPromotionConfig,
+  stampsPromotionConfigSchema,
+} from "@cuik/shared/validators"
 import type { SegmentationThresholds } from "./client-segments"
 import { computeClientSegment } from "./client-segments"
+import { activeMilestones } from "./milestones"
 import { nextExpiration } from "./points-lots"
 import { computeTier, getNextTier } from "./rules-engine"
 import type { ClientStatus } from "./types"
+
+/** Intermediate gift ("escalera") waiting exactly one visit ahead, for the cashier screens. */
+function nextGiftFor(
+  isPoints: boolean,
+  config: StampsPromotionConfig | PointsPromotionConfig | null,
+  maxVisits: number | null,
+  stampsInCycle: number | null,
+): { at: number; label: string } | null {
+  if (isPoints || !config || !("stamps" in config) || !maxVisits || stampsInCycle === null)
+    return null
+  const hit = activeMilestones(config.stamps, maxVisits).find((m) => m.at === stampsInCycle + 1)
+  return hit ? { at: hit.at, label: hit.label } : null
+}
 
 export async function getClientStatus(params: {
   clientId: string
@@ -101,6 +120,7 @@ export async function getClientStatus(params: {
   const stampsInCycle =
     !isPoints && promotion?.maxVisits ? client.totalVisits % promotion.maxVisits : null
   const stampsMax = !isPoints ? (promotion?.maxVisits ?? null) : null
+  const nextMilestone = nextGiftFor(isPoints, config, promotion?.maxVisits ?? null, stampsInCycle)
 
   // 9. For points promotions, count available catalog items
   let pointsData: ClientStatus["points"]
@@ -187,6 +207,7 @@ export async function getClientStatus(params: {
           rewardValue: promotion.rewardValue,
         }
       : null,
+    nextMilestone,
     tierInfo: currentTier
       ? {
           current: currentTier.name,

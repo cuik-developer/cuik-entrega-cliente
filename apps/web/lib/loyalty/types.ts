@@ -137,6 +137,8 @@ export type ClientStatus = {
     maxVisits: number
     rewardValue: string | null
   } | null
+  /** Intermediate gift ("escalera") the client gets on their next visit, if any. */
+  nextMilestone?: { at: number; label: string } | null
   tierInfo?: {
     current: string
     nextTier: string | null
