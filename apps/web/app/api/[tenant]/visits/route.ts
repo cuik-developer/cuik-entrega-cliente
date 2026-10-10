@@ -55,6 +55,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
         totalVisits: result.client.totalVisits,
         pendingRewards: isStamps ? result.pendingRewards : 0,
         pointsBalance: "pointsBalance" in result.client ? result.client.pointsBalance : 0,
+        // Stamps: milestone notice for this visit (null clears a stale one).
+        // Points: undefined, so a campaign message on the pass is left untouched.
+        milestoneMessage:
+          isStamps && result.code === "OK" ? (result.milestone?.message ?? null) : undefined,
       }).catch((err) => {
         console.error("[POST /api/[tenant]/visits] Wallet update failed:", err)
       })

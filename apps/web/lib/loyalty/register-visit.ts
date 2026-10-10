@@ -2,6 +2,7 @@ import { and, clients, count, db, eq, promotions, rewards, sql, tenants, visits 
 import { pointsPromotionConfigSchema, stampsPromotionConfigSchema } from "@cuik/shared/validators"
 
 import { updateRewardsRedeemed, updateVisitsDaily } from "../analytics/update-visits-daily"
+import { milestoneNoticeFor } from "./milestones"
 import { registerPointsVisit } from "./register-points-visit"
 import { computeTier, evaluateStampRules } from "./rules-engine"
 import type {
@@ -247,12 +248,20 @@ export async function registerVisit(params: {
     const newTotalVisits = client.totalVisits + stampsToEarn
 
     // Handle stamp accumulation — stampsToEarn may complete a cycle or even span multiple
-    const _stampsInCycleBefore = client.totalVisits % promotion.maxVisits
+    const stampsInCycleBefore = client.totalVisits % promotion.maxVisits
     const stampsInCycleAfter = newTotalVisits % promotion.maxVisits
     const cyclesBefore = Math.floor(client.totalVisits / promotion.maxVisits)
     const cyclesAfter = Math.floor(newTotalVisits / promotion.maxVisits)
     const cyclesCompleted = cyclesAfter - cyclesBefore
     const cycleComplete = cyclesCompleted > 0
+
+    // Intermediate gift ("escalera") reached or announced by this visit. Pure
+    // calculation: nothing is written for it (the business hands the gift over).
+    const milestone = milestoneNoticeFor(config.stamps, promotion.maxVisits, {
+      before: stampsInCycleBefore,
+      after: stampsInCycleAfter,
+      wrapped: cycleComplete,
+    })
 
     // visitNum = position within current cycle (1-based)
     const visitNum = stampsInCycleAfter === 0 ? promotion.maxVisits : stampsInCycleAfter
@@ -355,6 +364,7 @@ export async function registerVisit(params: {
       rewardValue: promotion.rewardValue,
       bonusApplied:
         rulesResult.bonusReasons.length > 0 ? rulesResult.bonusReasons.join(", ") : null,
+      milestone,
     }
   })
 

@@ -1,3 +1,5 @@
+import type { MilestoneNotice } from "./milestones"
+
 // Loyalty business logic types
 // Canonical types come from @cuik/shared (Zod inferred)
 // Re-export here for convenience within the loyalty module
@@ -89,6 +91,8 @@ export type VisitResult = {
   pendingRewards: number
   rewardValue?: string | null
   bonusApplied?: string | null
+  /** Intermediate gift ("escalera") this visit reaches or announces; null otherwise. */
+  milestone?: MilestoneNotice | null
 }
 
 export type RedeemResult = {

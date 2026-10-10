@@ -1,6 +1,10 @@
 "use client"
 
-import { describePointsRate, expirationPolicySchema } from "@cuik/shared/validators"
+import {
+  describePointsRate,
+  expirationPolicySchema,
+  stampsPromotionConfigSchema,
+} from "@cuik/shared/validators"
 import { CheckCircle2, Loader2 } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -8,6 +12,7 @@ import { FieldList } from "@/components/admin/enterprise"
 import { Button } from "@/components/ui/button"
 import { activeTimeLabel, formatYmd, todayYmd } from "@/lib/admin/billing"
 import { describeExpirationPolicy } from "@/lib/loyalty/expiration"
+import { describeMilestones } from "@/lib/loyalty/milestones"
 import { type ApiTenant, patchTenant, type TenantPromotion } from "./tenant-shared"
 
 export type CatalogSummaryItem = { name: string; pointsCost: number }
@@ -51,11 +56,17 @@ export function describeProgram(
         : "Sin premios en el catálogo",
     }
   }
+  const stampsCfg = stampsPromotionConfigSchema.safeParse(promo.config ?? {})
+  const ladder =
+    stampsCfg.success && promo.maxVisits
+      ? describeMilestones(stampsCfg.data.stamps, promo.maxVisits)
+      : null
+  const finalReward = promo.rewardValue?.trim() || "—"
   return {
     type: "Sellos",
     target: promo.maxVisits ? `${promo.maxVisits} visitas` : "—",
     expiration: policyText(cfg.stamps?.stampsExpiration),
-    rewards: promo.rewardValue?.trim() || "—",
+    rewards: ladder ? `${ladder} · ${promo.maxVisits}: ${finalReward}` : finalReward,
   }
 }
 

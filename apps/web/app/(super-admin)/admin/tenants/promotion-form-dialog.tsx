@@ -6,13 +6,15 @@ import type {
   PointsCalcMode,
 } from "@cuik/shared/validators"
 import {
+  DEFAULT_MILESTONE_MESSAGES,
   describePointsRate,
   expirationPolicySchema,
   pointsForAmount,
 } from "@cuik/shared/validators"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { Plus, Trash2 } from "lucide-react"
 import { useTransition } from "react"
-import { Controller, useForm } from "react-hook-form"
+import { Controller, useFieldArray, useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { z } from "zod"
 import { Button } from "@/components/ui/button"
@@ -38,6 +40,45 @@ import { Switch } from "@/components/ui/switch"
 import { createPromotion, updatePromotion } from "./promotion-actions"
 
 // ── Form schema ─────────────────────────────────────────────────────
+
+type MilestoneFormData = {
+  maxVisits: number | null
+  milestones: { at: number; label: string }[]
+  milestoneNext: string
+  milestoneReached: string
+}
+
+/** Hitos are optional; once there is one, the row and both messages must be complete. */
+function validateMilestones(data: MilestoneFormData, ctx: z.RefinementCtx) {
+  if (data.milestones.length === 0) return
+  const issue = (path: (string | number)[], message: string) =>
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message, path })
+  const next = data.milestoneNext.trim()
+  const reached = data.milestoneReached.trim()
+  if (!next) issue(["milestoneNext"], "Indica el mensaje")
+  else if (next.length > 200) issue(["milestoneNext"], "Maximo 200 caracteres")
+  if (!reached) issue(["milestoneReached"], "Indica el mensaje")
+  else if (reached.length > 200) issue(["milestoneReached"], "Maximo 200 caracteres")
+  else if (next && next.toLowerCase() === reached.toLowerCase())
+    issue(["milestoneReached"], "Debe ser distinto al aviso previo (si no, el telefono no avisa)")
+  const seen = new Set<number>()
+  data.milestones.forEach((m, i) => {
+    const atError = milestoneAtError(m.at, data.maxVisits, seen)
+    if (atError) issue(["milestones", i, "at"], atError)
+    seen.add(m.at)
+    const label = m.label.trim()
+    if (!label) issue(["milestones", i, "label"], "Indica el premio")
+    else if (label.length > 80) issue(["milestones", i, "label"], "Maximo 80 caracteres")
+  })
+}
+
+function milestoneAtError(at: number, maxVisits: number | null, seen: Set<number>): string | null {
+  if (Number.isNaN(at)) return "Ingresa la visita"
+  if (!Number.isInteger(at) || at < 1) return "Minimo 1"
+  if (maxVisits && at >= maxVisits) return `Menor que ${maxVisits}`
+  if (seen.has(at)) return "Visita repetida"
+  return null
+}
 
 const formSchema = z
   .object({
@@ -67,6 +108,14 @@ const formSchema = z
       .number({ invalid_type_error: "Ingresa un numero valido" })
       .positive("Debe ser mayor a 0")
       .nullable(),
+    // Intermediate gifts ("escalera"), stamps only
+    // Lenient here (inputs may be unmounted while the values linger); the real
+    // checks run in superRefine only for stamps promotions with hitos.
+    milestones: z
+      .array(z.object({ at: z.number().or(z.nan()), label: z.string() }))
+      .max(10, "Maximo 10 hitos"),
+    milestoneNext: z.string(),
+    milestoneReached: z.string(),
     // Points fields
     calcMode: z.enum(["per_currency", "currency_per_point"]).default("per_currency"),
     pointsPerCurrency: z
@@ -130,6 +179,7 @@ const formSchema = z
           path: ["rewardValue"],
         })
       }
+      validateMilestones(data, ctx)
     }
     if (data.type === "points") {
       if (data.calcMode === "currency_per_point") {
@@ -176,11 +226,17 @@ function extractStampsConfigValues(config: unknown): {
   maxVisitsPerDay: number
   rewardExpirationDays: number | null
   minimumPurchaseAmount: number | null
+  milestones: { at: number; label: string }[]
+  milestoneNext: string
+  milestoneReached: string
 } {
   const defaults = {
     maxVisitsPerDay: 1,
     rewardExpirationDays: null as number | null,
     minimumPurchaseAmount: null as number | null,
+    milestones: [] as { at: number; label: string }[],
+    milestoneNext: DEFAULT_MILESTONE_MESSAGES.next as string,
+    milestoneReached: DEFAULT_MILESTONE_MESSAGES.reached as string,
   }
 
   if (!config || typeof config !== "object") return defaults
@@ -195,6 +251,24 @@ function extractStampsConfigValues(config: unknown): {
     }
     if (typeof stamps.rewardExpirationDays === "number") {
       defaults.rewardExpirationDays = stamps.rewardExpirationDays
+    }
+    if (Array.isArray(stamps.milestones)) {
+      defaults.milestones = (stamps.milestones as unknown[])
+        .filter(
+          (m): m is { at: number; label: string } =>
+            !!m &&
+            typeof m === "object" &&
+            typeof (m as { at?: unknown }).at === "number" &&
+            typeof (m as { label?: unknown }).label === "string",
+        )
+        .map((m) => ({ at: m.at, label: m.label }))
+        .sort((a, b) => a.at - b.at)
+    }
+    const msgs = stamps.milestoneMessages as Record<string, unknown> | undefined
+    if (msgs) {
+      if (typeof msgs.next === "string" && msgs.next.trim()) defaults.milestoneNext = msgs.next
+      if (typeof msgs.reached === "string" && msgs.reached.trim())
+        defaults.milestoneReached = msgs.reached
     }
   }
 
@@ -383,6 +457,9 @@ export function PromotionFormDialog({
             rewardExpirationDays: null,
             hasMinimumPurchase: false,
             minimumPurchaseAmount: null,
+            milestones: [],
+            milestoneNext: DEFAULT_MILESTONE_MESSAGES.next,
+            milestoneReached: DEFAULT_MILESTONE_MESSAGES.reached,
             calcMode: pointsConfig?.calcMode ?? "per_currency",
             pointsPerCurrency: pointsConfig?.pointsPerCurrency ?? 1,
             solesPerPoint: pointsConfig?.solesPerPoint ?? null,
@@ -402,6 +479,9 @@ export function PromotionFormDialog({
             rewardExpirationDays: stampsConfig?.rewardExpirationDays ?? null,
             hasMinimumPurchase: stampsConfig?.minimumPurchaseAmount !== null,
             minimumPurchaseAmount: stampsConfig?.minimumPurchaseAmount ?? null,
+            milestones: stampsConfig?.milestones ?? [],
+            milestoneNext: stampsConfig?.milestoneNext ?? DEFAULT_MILESTONE_MESSAGES.next,
+            milestoneReached: stampsConfig?.milestoneReached ?? DEFAULT_MILESTONE_MESSAGES.reached,
             calcMode: "per_currency",
             pointsPerCurrency: 1,
             solesPerPoint: null,
@@ -421,6 +501,9 @@ export function PromotionFormDialog({
           rewardExpirationDays: null,
           hasMinimumPurchase: false,
           minimumPurchaseAmount: null,
+          milestones: [],
+          milestoneNext: DEFAULT_MILESTONE_MESSAGES.next,
+          milestoneReached: DEFAULT_MILESTONE_MESSAGES.reached,
           calcMode: "per_currency",
           pointsPerCurrency: 1,
           solesPerPoint: null,
@@ -432,6 +515,8 @@ export function PromotionFormDialog({
         },
   })
 
+  const milestoneRows = useFieldArray({ control, name: "milestones" })
+  const maxVisitsValue = watch("maxVisits")
   const selectedType = watch("type")
   const hasExpiration = watch("hasExpiration")
   const hasMinimumPurchase = watch("hasMinimumPurchase")
@@ -459,6 +544,14 @@ export function PromotionFormDialog({
             maxVisitsPerDay: values.maxVisitsPerDay,
             rewardExpirationDays: values.hasExpiration ? values.rewardExpirationDays : null,
             stampsExpiration: buildExpirationPolicy(values),
+            milestones: values.milestones
+              .filter((m) => Number.isFinite(m.at))
+              .map((m) => ({ at: m.at, label: m.label.trim() }))
+              .sort((a, b) => a.at - b.at),
+            milestoneMessages: {
+              next: values.milestoneNext.trim() || DEFAULT_MILESTONE_MESSAGES.next,
+              reached: values.milestoneReached.trim() || DEFAULT_MILESTONE_MESSAGES.reached,
+            },
           },
           accumulation: {
             bonusOnRegistration: 0,
@@ -635,6 +728,111 @@ export function PromotionFormDialog({
                 </p>
                 {errors.rewardValue && (
                   <p className="text-sm text-red-600">{errors.rewardValue.message}</p>
+                )}
+              </div>
+
+              {/* Intermediate gifts ("escalera") */}
+              <div className="space-y-3 rounded-[4px] border border-ent-line p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <Label>Premios intermedios (escalera)</Label>
+                    <p className="text-xs text-ent-fg-3 mt-1">
+                      Obsequios antes de completar la tarjeta, por ejemplo un cafe en la visita 4 y
+                      un postre en la 8. El comercio los entrega en caja: el pase avisa al cliente
+                      una visita antes y en la visita del premio, y el cajero lo ve al escanear.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[12px] gap-1 shrink-0"
+                    disabled={milestoneRows.fields.length >= 10}
+                    onClick={() => milestoneRows.append({ at: NaN, label: "" })}
+                  >
+                    <Plus className="w-3 h-3" /> Agregar hito
+                  </Button>
+                </div>
+                {milestoneRows.fields.length === 0 ? (
+                  <p className="text-xs text-ent-fg-3">
+                    Sin hitos: solo el premio al completar las {maxVisitsValue || "N"} visitas.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {milestoneRows.fields.map((row, i) => (
+                      <div key={row.id} className="flex items-start gap-2">
+                        <div className="w-24 shrink-0">
+                          <Input
+                            type="number"
+                            min={1}
+                            max={49}
+                            placeholder="Visita"
+                            aria-label="Visita del hito"
+                            {...register(`milestones.${i}.at`, { valueAsNumber: true })}
+                          />
+                          {errors.milestones?.[i]?.at && (
+                            <p className="text-xs text-red-600 mt-1">
+                              {errors.milestones[i]?.at?.message}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <Input
+                            placeholder="Premio, ej: Cafe americano"
+                            aria-label="Premio del hito"
+                            maxLength={80}
+                            {...register(`milestones.${i}.label`)}
+                          />
+                          {errors.milestones?.[i]?.label && (
+                            <p className="text-xs text-red-600 mt-1">
+                              {errors.milestones[i]?.label?.message}
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-9 w-9 shrink-0 text-ent-fg-3 hover:text-red-600"
+                          aria-label="Quitar hito"
+                          onClick={() => milestoneRows.remove(i)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    {typeof errors.milestones?.message === "string" && (
+                      <p className="text-xs text-red-600">{errors.milestones.message}</p>
+                    )}
+                    <div className="grid gap-2 pt-1">
+                      <div className="space-y-1">
+                        <Label htmlFor="milestoneNext" className="text-xs">
+                          Aviso una visita antes
+                        </Label>
+                        <Input id="milestoneNext" maxLength={200} {...register("milestoneNext")} />
+                        {errors.milestoneNext && (
+                          <p className="text-xs text-red-600">{errors.milestoneNext.message}</p>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="milestoneReached" className="text-xs">
+                          Aviso en la visita del premio
+                        </Label>
+                        <Input
+                          id="milestoneReached"
+                          maxLength={200}
+                          {...register("milestoneReached")}
+                        />
+                        {errors.milestoneReached && (
+                          <p className="text-xs text-red-600">{errors.milestoneReached.message}</p>
+                        )}
+                      </div>
+                      <p className="text-xs text-ent-fg-3">
+                        Variables: <code>{"{premio}"}</code> y <code>{"{visita}"}</code>. El aviso
+                        llega al telefono del cliente como notificacion del pase (Apple y Google).
+                      </p>
+                    </div>
+                  </div>
                 )}
               </div>
             </>

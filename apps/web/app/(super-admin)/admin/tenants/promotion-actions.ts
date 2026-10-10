@@ -1,6 +1,19 @@
 "use server"
 
-import { and, db, desc, eq, ne, passAssets, passDesigns, promotions, tenants } from "@cuik/db"
+import {
+  and,
+  clients,
+  db,
+  desc,
+  eq,
+  ne,
+  passAssets,
+  passDesigns,
+  passInstances,
+  promotions,
+  sql,
+  tenants,
+} from "@cuik/db"
 import {
   type CreatePromotionInput,
   createPromotionSchema,
@@ -15,6 +28,7 @@ import {
 import { headers } from "next/headers"
 
 import { auth } from "@/lib/auth"
+import { allMilestoneMessages } from "@/lib/loyalty/milestones"
 import { restampOpenLots } from "@/lib/loyalty/points-lots"
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -299,12 +313,20 @@ export async function updatePromotion(
       } else {
         const currentConfig = stampsPromotionConfigSchema.parse(existing.config ?? {})
         const inputConfig = parsed.data.config as Record<string, unknown>
+        // `.partial()` is shallow: a partial `stamps` block comes back from zod
+        // with defaults filled in (milestones: [], default messages). Only let
+        // those keys through when the caller actually sent them.
+        const rawStamps = ((input.config as Record<string, unknown> | undefined)?.stamps ??
+          {}) as Record<string, unknown>
+        const inputStamps = { ...((inputConfig.stamps as Record<string, unknown>) ?? {}) }
+        if (!("milestones" in rawStamps)) delete inputStamps.milestones
+        if (!("milestoneMessages" in rawStamps)) delete inputStamps.milestoneMessages
         mergedConfig = {
           ...currentConfig,
           ...inputConfig,
           stamps: {
             ...currentConfig.stamps,
-            ...((inputConfig.stamps as Record<string, unknown>) ?? {}),
+            ...inputStamps,
           },
           accumulation: {
             ...currentConfig.accumulation,
@@ -340,8 +362,39 @@ export async function updatePromotion(
         : null
     const policyChanged = after !== null && JSON.stringify(before) !== JSON.stringify(after)
 
+    // Stamps: milestone notices sitting on passes were rendered with the old
+    // config. A later visit only clears a text it can recognise with the
+    // current config, so wipe the ones that stop matching here.
+    const staleMilestoneTexts: string[] = []
+    if (!isPoints && (parsed.data.config || parsed.data.maxVisits !== undefined)) {
+      const oldCfg = stampsPromotionConfigSchema.safeParse(existing.config ?? {})
+      const newCfg = stampsPromotionConfigSchema.safeParse(mergedConfig ?? {})
+      const oldMax = existing.maxVisits ?? 0
+      const newMax = parsed.data.maxVisits ?? oldMax
+      if (oldCfg.success && oldMax > 0) {
+        const keep = newCfg.success ? allMilestoneMessages(newCfg.data.stamps, newMax) : new Set()
+        for (const text of allMilestoneMessages(oldCfg.data.stamps, oldMax)) {
+          if (!keep.has(text)) staleMilestoneTexts.push(text)
+        }
+      }
+    }
+
     await db.transaction(async (tx) => {
       await tx.update(promotions).set(updateData).where(eq(promotions.id, promotionId))
+      if (staleMilestoneTexts.length > 0) {
+        await tx
+          .update(passInstances)
+          .set({ campaignMessage: null })
+          .where(
+            and(
+              sql`${passInstances.campaignMessage} IN (${sql.join(
+                staleMilestoneTexts.map((t) => sql`${t}`),
+                sql`, `,
+              )})`,
+              sql`${passInstances.clientId} IN (SELECT ${clients.id} FROM ${clients} WHERE ${clients.tenantId} = ${existing.tenantId})`,
+            ),
+          )
+      }
       if (policyChanged && after) {
         const [tenant] = await tx
           .select({ timezone: tenants.timezone })

@@ -9,7 +9,12 @@ import {
   promotions,
   tenants,
 } from "@cuik/db"
-import { buildGoogleClassId, getGoogleAccessToken } from "@cuik/wallet/google"
+import { stampsPromotionConfigSchema } from "@cuik/shared/validators"
+import {
+  addLoyaltyObjectMessage,
+  buildGoogleClassId,
+  getGoogleAccessToken,
+} from "@cuik/wallet/google"
 import {
   generateETag,
   resolvePassFields,
@@ -20,6 +25,7 @@ import {
 } from "@cuik/wallet/shared"
 
 import { formatExpiry } from "@/lib/loyalty/expiration"
+import { allMilestoneMessages } from "@/lib/loyalty/milestones"
 import { nextExpiration } from "@/lib/loyalty/points-lots"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 
@@ -45,6 +51,15 @@ export async function triggerWalletUpdate(ctx: {
    * clients are never pushed (their pass simply stops updating).
    */
   expired?: boolean
+  /**
+   * Intermediate-gift notice ("escalera") for this visit. It travels like a
+   * campaign message: stored on the pass instance so the regenerated Apple pass
+   * carries it as a changeMessage (lock-screen notification), and sent to
+   * Google through addMessage (the only thing that notifies on Android).
+   * `null` = no notice this visit: a stale milestone notice is cleared, a real
+   * campaign message is left alone.
+   */
+  milestoneMessage?: string | null
 }): Promise<void> {
   const serialNumber = ctx.qrCode
 
@@ -65,27 +80,42 @@ export async function triggerWalletUpdate(ctx: {
     .select({
       id: passInstances.id,
       serialNumber: passInstances.serialNumber,
+      campaignMessage: passInstances.campaignMessage,
+      googleObjectId: passInstances.googleObjectId,
+      googleSavedAt: passInstances.googleSavedAt,
+      googleDeletedAt: passInstances.googleDeletedAt,
     })
     .from(passInstances)
     .where(eq(passInstances.serialNumber, serialNumber))
     .limit(1)
 
-  if (instanceRows.length === 0) return // No pass instance — nothing to update
+  const instance = instanceRows[0]
+  if (!instance) return // No pass instance — nothing to update
+
+  // Get active promotion (type for the loyalty label, config for milestone notices)
+  const [activePromotion] = await db
+    .select({ type: promotions.type, maxVisits: promotions.maxVisits, config: promotions.config })
+    .from(promotions)
+    .where(and(eq(promotions.tenantId, ctx.tenantId), eq(promotions.active, true)))
+    .limit(1)
+
+  const campaignMessage = nextPassMessage(
+    instance.campaignMessage,
+    ctx.milestoneMessage,
+    activePromotion,
+  )
 
   // Update ETag and lastUpdatedAt
   const now = new Date()
   const etag = generateETag(serialNumber, ctx.totalVisits, now)
   await db
     .update(passInstances)
-    .set({ etag, lastUpdatedAt: now })
+    .set({
+      etag,
+      lastUpdatedAt: now,
+      ...(campaignMessage !== instance.campaignMessage ? { campaignMessage } : {}),
+    })
     .where(eq(passInstances.serialNumber, serialNumber))
-
-  // Get active promotion type for loyalty label
-  const [activePromotion] = await db
-    .select({ type: promotions.type })
-    .from(promotions)
-    .where(and(eq(promotions.tenantId, ctx.tenantId), eq(promotions.active, true)))
-    .limit(1)
 
   // Load active design + resolve fields for wallet update
   let resolvedDesignFields: ReturnType<typeof resolvePassFields> | undefined
@@ -176,17 +206,17 @@ export async function triggerWalletUpdate(ctx: {
     keyId: string
   } | null = null
 
+  // Registered Apple devices for this serial (also the "is this pass on an
+  // iPhone" test for the Google milestone notice, independent of the APNs env).
+  const deviceRows = await db
+    .select({ pushToken: appleDevices.pushToken })
+    .from(appleDevices)
+    .where(eq(appleDevices.serialNumber, serialNumber))
+  const tokens = deviceRows.map((r) => r.pushToken).filter((t): t is string => !!t)
+
   const apnsConfig = validateAppleApnsEnv()
   const tenantAppleConfig = await getTenantAppleConfig(ctx.tenantId)
   if (apnsConfig) {
-    // Query registered Apple devices for this serial
-    const deviceRows = await db
-      .select({ pushToken: appleDevices.pushToken })
-      .from(appleDevices)
-      .where(eq(appleDevices.serialNumber, serialNumber))
-
-    const tokens = deviceRows.map((r) => r.pushToken).filter((t): t is string => !!t)
-
     if (tokens.length > 0) {
       // Tolerate either base64 (preferred) or raw PEM in APPLE_APNS_P8_BASE64.
       const rawP8 = apnsConfig.p8Base64
@@ -252,5 +282,78 @@ export async function triggerWalletUpdate(ctx: {
     `[Wallet:Update] serial=${serialNumber}`,
     `apple=${"skipped" in walletResult.apple ? "skipped" : `${walletResult.apple.sent}/${walletResult.apple.total}`}`,
     `google=${"skipped" in walletResult.google ? "skipped" : walletResult.google.ok ? "ok" : "failed"}`,
+  )
+
+  if (ctx.milestoneMessage && googleParams && tokens.length === 0) {
+    await notifyGoogleMilestone({
+      serialNumber,
+      instance,
+      message: ctx.milestoneMessage,
+      header: ctx.tenantName,
+      accessToken: googleParams.accessToken,
+      expired: ctx.expired,
+      at: now,
+      // The upsert's PUT drops previous messages; if it failed, clear them here.
+      upsertCleared: !("skipped" in walletResult.google) && walletResult.google.ok,
+    })
+  }
+}
+
+/**
+ * Message the regenerated Apple pass should carry. A milestone notice is written
+ * where campaigns write theirs (`campaign_message`). Without a notice this visit,
+ * a previous milestone text is dropped (so "tu próxima visita tiene premio" does
+ * not outlive the gift) but a campaign message is left alone. `undefined`
+ * notice = the caller is not a visit: keep whatever is there.
+ */
+function nextPassMessage(
+  current: string | null,
+  notice: string | null | undefined,
+  promotion: { type: string; maxVisits: number | null; config: unknown } | undefined,
+): string | null {
+  if (notice === undefined) return current
+  if (notice) return notice
+  if (!current || promotion?.type !== "stamps" || !promotion.maxVisits) return current
+  const parsed = stampsPromotionConfigSchema.safeParse(promotion.config ?? {})
+  if (!parsed.success) return current
+  return allMilestoneMessages(parsed.data.stamps, promotion.maxVisits).has(current) ? null : current
+}
+
+/**
+ * Android notification for a milestone notice. Same audience rule as campaigns:
+ * a live Google object and no iPhone holding the pass (checked by the caller).
+ * The upsert that precedes it already wiped previous messages (PUT without
+ * `messages`), so this is the only one on the pass. Google allows 3 notifying
+ * messages per pass per 24 h; past that the text stays on the pass silently.
+ */
+async function notifyGoogleMilestone(p: {
+  serialNumber: string
+  instance: {
+    googleObjectId: string | null
+    googleSavedAt: Date | null
+    googleDeletedAt: Date | null
+  }
+  message: string
+  header: string
+  accessToken: string
+  expired?: boolean
+  at: Date
+  upsertCleared: boolean
+}): Promise<void> {
+  const removed =
+    p.instance.googleDeletedAt !== null &&
+    (!p.instance.googleSavedAt || p.instance.googleDeletedAt > p.instance.googleSavedAt)
+  if (!p.instance.googleObjectId || removed || p.expired) return
+  const msg = await addLoyaltyObjectMessage({
+    objectId: p.instance.googleObjectId,
+    header: p.header,
+    body: p.message,
+    messageId: `milestone-${p.at.getTime()}`,
+    accessToken: p.accessToken,
+    replacePrevious: !p.upsertCleared,
+  })
+  console.info(
+    `[Wallet:Update] serial=${p.serialNumber} milestone google=${msg.ok ? (msg.notified ? "notified" : "text-only") : "failed"}`,
+    msg.ok ? "" : msg.error,
   )
 }

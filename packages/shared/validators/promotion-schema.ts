@@ -81,11 +81,48 @@ const accumulationSchema = z.object({
   minimumPurchaseAmount: z.number().positive().nullable().default(null),
 })
 
+// --- Intermediate rewards ("escalera": a gift at visit 4, another at 8...) ---
+
+/**
+ * A milestone inside the stamps cycle. The business hands the gift over itself
+ * (nothing is recorded as a reward); the system tells the client through the
+ * pass one visit before and on the visit itself, and tells the cashier on the
+ * scan screen. `at` is the position within the cycle (1-based) and must be
+ * below the cycle length, which is the promotion's `maxVisits`.
+ */
+const stampMilestoneSchema = z.object({
+  at: z.number().int().min(1).max(49),
+  label: z.string().trim().min(1).max(80),
+})
+
+export const DEFAULT_MILESTONE_MESSAGES = {
+  /** Sent one visit before the milestone. */
+  next: "Tu próxima visita tiene premio: {premio}",
+  /** Sent on the visit that reaches the milestone. */
+  reached: "¡Hoy tienes un premio: {premio}! Pídelo en caja",
+} as const
+
+const milestoneMessagesSchema = z.object({
+  next: z.string().trim().min(1).max(200).default(DEFAULT_MILESTONE_MESSAGES.next),
+  reached: z.string().trim().min(1).max(200).default(DEFAULT_MILESTONE_MESSAGES.reached),
+})
+
 const stampsBlockSchema = z.object({
   maxVisitsPerDay: z.number().int().min(1).max(10).default(1),
   rewardExpirationDays: z.number().int().min(1).nullable().default(null),
   stampsExpiration: expirationPolicySchema.default({ mode: "never" }),
+  milestones: z
+    .array(stampMilestoneSchema)
+    .max(10)
+    .default([])
+    .refine((list) => new Set(list.map((m) => m.at)).size === list.length, {
+      message: "Cada visita puede tener un solo hito",
+    }),
+  milestoneMessages: milestoneMessagesSchema.default({}),
 })
+
+export type StampMilestone = z.infer<typeof stampMilestoneSchema>
+export type MilestoneMessages = z.infer<typeof milestoneMessagesSchema>
 
 // --- Main config schema ---
 
