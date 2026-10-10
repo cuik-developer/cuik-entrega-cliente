@@ -2,7 +2,7 @@
 
 import type { HeatmapData } from "@cuik/shared/types/analytics"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Panel, PanelHeader, PanelMessage } from "@/components/admin/enterprise"
 import { hourLabel } from "@/lib/analytics/hour-label"
 
 // ISO weekday: 1 = Monday … 7 = Sunday (what EXTRACT(ISODOW) returns).
@@ -18,17 +18,17 @@ const GRID_COLS = `2.5rem repeat(${HOURS.length}, minmax(0, 1fr))`
 
 type Props = {
   data: HeatmapData
-  /** Shown under the title, e.g. "Sede Principal" when a branch filter is active. */
+  /** Shown in the header, e.g. "Sede Principal" when a branch filter is active. */
   scopeLabel?: string
 }
 
-/** Opacity steps against the brand colour; 0 visits renders as the muted grid. */
+/** Opacity steps against the accent; 0 visits renders as the muted grid. */
 function cellStyle(visits: number, max: number): React.CSSProperties | undefined {
   if (visits === 0 || max === 0) return undefined
   const ratio = visits / max
-  const opacity = 0.18 + ratio * 0.82
+  const opacity = 0.15 + ratio * 0.85
   return {
-    backgroundColor: `color-mix(in srgb, var(--color-primary) ${Math.round(opacity * 100)}%, transparent)`,
+    backgroundColor: `color-mix(in srgb, var(--color-ent-accent) ${Math.round(opacity * 100)}%, transparent)`,
   }
 }
 
@@ -58,98 +58,96 @@ export function VisitsHeatmap({ data, scopeLabel }: Props) {
   )
 
   return (
-    <Card className="border border-border">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-bold text-foreground">Visitas por día y hora</CardTitle>
-        <p className="text-xs text-muted-foreground">
-          {scopeLabel ? `${scopeLabel} · ` : ""}En qué momentos de la semana llegan tus clientes.
-        </p>
-      </CardHeader>
-      <CardContent>
-        {data.totalVisits === 0 ? (
-          <p className="text-sm text-muted-foreground py-8 text-center">
-            Sin visitas en el período seleccionado.
-          </p>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <div className="min-w-[520px]">
-                {/* Hour header */}
-                <div className="grid gap-px" style={{ gridTemplateColumns: GRID_COLS }}>
-                  <div />
-                  {HOURS.map((h) => (
-                    <div
-                      key={h}
-                      className="text-[10px] text-muted-foreground text-center tabular-nums leading-4"
-                    >
-                      {LABELED_HOURS.has(h) ? hourLabel(h) : ""}
-                    </div>
-                  ))}
-                </div>
-                {/* Rows */}
-                {DAYS.map((day, d) => (
+    <Panel>
+      <PanelHeader
+        title="Visitas por día y hora"
+        actions={
+          <span className="text-[11.5px] text-ent-fg-3">
+            {scopeLabel ? `${scopeLabel} · ` : ""}En el período
+          </span>
+        }
+      />
+      {data.totalVisits === 0 ? (
+        <PanelMessage>Sin visitas en el período seleccionado.</PanelMessage>
+      ) : (
+        <div className="p-3">
+          <div className="overflow-x-auto">
+            <div className="min-w-[520px]">
+              {/* Hour header */}
+              <div className="grid gap-px" style={{ gridTemplateColumns: GRID_COLS }}>
+                <div />
+                {HOURS.map((h) => (
                   <div
-                    key={day}
-                    className="grid gap-px mt-px"
-                    style={{ gridTemplateColumns: GRID_COLS }}
+                    key={h}
+                    className="text-[10px] text-ent-fg-3 text-center tabular-nums leading-4"
                   >
-                    <div className="text-xs text-muted-foreground pr-2 flex items-center justify-end">
-                      {day}
-                    </div>
-                    {HOURS.map((h) => {
-                      const v = grid[d][h]
-                      return (
-                        <div
-                          key={h}
-                          title={`${day} ${hourLabel(h)} · ${v} visita${v === 1 ? "" : "s"}`}
-                          className={`h-6 rounded-sm ${v === 0 ? "bg-muted" : ""}`}
-                          style={cellStyle(v, max)}
-                        />
-                      )
-                    })}
+                    {LABELED_HOURS.has(h) ? hourLabel(h) : ""}
                   </div>
                 ))}
               </div>
+              {/* Rows */}
+              {DAYS.map((day, d) => (
+                <div
+                  key={day}
+                  className="grid gap-px mt-px"
+                  style={{ gridTemplateColumns: GRID_COLS }}
+                >
+                  <div className="text-[11.5px] text-ent-fg-3 pr-2 flex items-center justify-end">
+                    {day}
+                  </div>
+                  {HOURS.map((h) => {
+                    const v = grid[d][h]
+                    return (
+                      <div
+                        key={h}
+                        title={`${day} ${hourLabel(h)} · ${v} visita${v === 1 ? "" : "s"}`}
+                        className={`h-5 rounded-[2px] ${v === 0 ? "bg-ent-panel-2" : ""}`}
+                        style={cellStyle(v, max)}
+                      />
+                    )
+                  })}
+                </div>
+              ))}
             </div>
+          </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 mt-4 text-xs text-muted-foreground">
-              <span>
-                {peak && (
-                  <>
-                    Pico:{" "}
-                    <span className="font-semibold text-foreground">
-                      {DAYS[peak.dow]} {hourLabel(peak.hour)}
-                    </span>{" "}
-                    ({peak.visits} visita{peak.visits === 1 ? "" : "s"}) · Día más fuerte:{" "}
-                    <span className="font-semibold text-foreground">{DAYS[busiestDay]}</span> (
-                    {perDay[busiestDay]})
-                  </>
-                )}
-                {outsideHours > 0 && (
-                  <>
-                    {" "}
-                    · {outsideHours} visita{outsideHours === 1 ? "" : "s"} fuera de{" "}
-                    {hourLabel(FIRST_HOUR)}–{hourLabel(LAST_HOUR)}
-                  </>
-                )}
+          <div className="flex flex-wrap items-center justify-between gap-3 mt-3 text-[11.5px] text-ent-fg-3">
+            <span>
+              {peak && (
+                <>
+                  Pico:{" "}
+                  <span className="font-medium text-ent-fg">
+                    {DAYS[peak.dow]} {hourLabel(peak.hour)}
+                  </span>{" "}
+                  ({peak.visits} visita{peak.visits === 1 ? "" : "s"}) · Día más fuerte:{" "}
+                  <span className="font-medium text-ent-fg">{DAYS[busiestDay]}</span> (
+                  {perDay[busiestDay]})
+                </>
+              )}
+              {outsideHours > 0 && (
+                <>
+                  {" "}
+                  · {outsideHours} visita{outsideHours === 1 ? "" : "s"} fuera de{" "}
+                  {hourLabel(FIRST_HOUR)}–{hourLabel(LAST_HOUR)}
+                </>
+              )}
+            </span>
+            <span className="flex items-center gap-1.5">
+              Menos
+              <span className="flex gap-0.5">
+                {[0, 0.25, 0.5, 0.75, 1].map((r) => (
+                  <span
+                    key={r}
+                    className={`w-4 h-3 rounded-[2px] ${r === 0 ? "bg-ent-panel-2" : ""}`}
+                    style={r === 0 ? undefined : cellStyle(r, 1)}
+                  />
+                ))}
               </span>
-              <span className="flex items-center gap-1.5">
-                Menos
-                <span className="flex gap-0.5">
-                  {[0, 0.25, 0.5, 0.75, 1].map((r) => (
-                    <span
-                      key={r}
-                      className={`w-4 h-3 rounded-sm ${r === 0 ? "bg-muted" : ""}`}
-                      style={r === 0 ? undefined : cellStyle(r, 1)}
-                    />
-                  ))}
-                </span>
-                Más
-              </span>
-            </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
+              Más
+            </span>
+          </div>
+        </div>
+      )}
+    </Panel>
   )
 }

@@ -1,19 +1,10 @@
-import {
-  AlertTriangle,
-  BellOff,
-  CalendarClock,
-  CheckCircle2,
-  Gift,
-  Hourglass,
-  Sparkles,
-  UserX,
-} from "lucide-react"
 import Link from "next/link"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { type ChipTone, Panel, PanelHeader, PanelMessage } from "@/components/admin/enterprise"
 import type { TodayItems } from "@/lib/dashboard/compute-dashboard"
 import type { PointsDashboardState } from "@/lib/dashboard/compute-points-dashboard"
 import { formatDateTime } from "@/lib/format-date"
+import { cn } from "@/lib/utils"
 
 type Props = {
   items: TodayItems
@@ -24,11 +15,18 @@ type Props = {
 
 type Row = {
   key: string
-  icon: typeof AlertTriangle
-  tone: string
+  tone: ChipTone
   text: React.ReactNode
   href: string
   cta: string
+}
+
+const DOT: Record<ChipTone, string> = {
+  ok: "bg-ent-ok",
+  info: "bg-ent-info",
+  warn: "bg-ent-warn",
+  bad: "bg-ent-bad",
+  mute: "bg-ent-fg-3",
 }
 
 function plural(n: number, one: string, many: string) {
@@ -43,11 +41,10 @@ function plural(n: number, one: string, many: string) {
 export function TodayBlock({ items, timezone, points }: Props) {
   const rows: Row[] = []
 
-  if (points && points.policy && points.expiringSoon.clients > 0) {
+  if (points?.policy && points.expiringSoon.clients > 0) {
     rows.push({
       key: "points-expiring",
-      icon: Hourglass,
-      tone: "bg-amber-50 text-amber-600",
+      tone: "warn",
       text: (
         <>
           <strong>{points.expiringSoon.points}</strong> puntos de{" "}
@@ -56,23 +53,22 @@ export function TodayBlock({ items, timezone, points }: Props) {
           7 días
         </>
       ),
-      href: "/panel/campanas",
+      href: "/panel/campanas/automatizadas",
       cta: points.warningEnabled ? "Ver aviso" : "Activar aviso",
     })
   }
 
-  if (points && points.policy && !points.warningEnabled) {
+  if (points?.policy && !points.warningEnabled) {
     rows.push({
       key: "points-warning-off",
-      icon: BellOff,
-      tone: "bg-slate-100 text-slate-500",
+      tone: "mute",
       text: (
         <>
           Tus puntos vencen ({points.policy.toLowerCase()}) pero el aviso automático está{" "}
           <strong>apagado</strong>
         </>
       ),
-      href: "/panel/campanas",
+      href: "/panel/campanas/automatizadas",
       cta: "Activar",
     })
   }
@@ -80,8 +76,7 @@ export function TodayBlock({ items, timezone, points }: Props) {
   if (points && points.canRedeem > 0 && points.cheapestCost !== null) {
     rows.push({
       key: "points-can-redeem",
-      icon: Gift,
-      tone: "bg-emerald-50 text-emerald-600",
+      tone: "ok",
       text: (
         <>
           <strong>{points.canRedeem}</strong>{" "}
@@ -97,8 +92,7 @@ export function TodayBlock({ items, timezone, points }: Props) {
   if (items.atRiskClients > 0) {
     rows.push({
       key: "risk",
-      icon: AlertTriangle,
-      tone: "bg-orange-50 text-orange-600",
+      tone: "bad",
       text: (
         <>
           <strong>{items.atRiskClients}</strong>{" "}
@@ -114,15 +108,14 @@ export function TodayBlock({ items, timezone, points }: Props) {
   if (items.rewardsExpiringSoon > 0) {
     rows.push({
       key: "expiring",
-      icon: Gift,
-      tone: "bg-amber-50 text-amber-600",
+      tone: "warn",
       text: (
         <>
           <strong>{items.rewardsExpiringSoon}</strong>{" "}
           {plural(items.rewardsExpiringSoon, "premio vence", "premios vencen")} en los próximos 7
           días
           {items.rewardsPending > items.rewardsExpiringSoon && (
-            <span className="text-slate-400"> · {items.rewardsPending} pendientes en total</span>
+            <span className="text-ent-fg-3"> · {items.rewardsPending} pendientes en total</span>
           )}
         </>
       ),
@@ -132,8 +125,7 @@ export function TodayBlock({ items, timezone, points }: Props) {
   } else if (items.rewardsPending > 0) {
     rows.push({
       key: "pending",
-      icon: Gift,
-      tone: "bg-slate-100 text-slate-500",
+      tone: "mute",
       text: (
         <>
           <strong>{items.rewardsPending}</strong>{" "}
@@ -148,8 +140,7 @@ export function TodayBlock({ items, timezone, points }: Props) {
   for (const c of items.scheduledCampaigns) {
     rows.push({
       key: `camp-${c.id}`,
-      icon: CalendarClock,
-      tone: "bg-blue-50 text-primary",
+      tone: "info",
       text: (
         <>
           Campaña <strong>{c.name}</strong> programada para{" "}
@@ -164,8 +155,7 @@ export function TodayBlock({ items, timezone, points }: Props) {
   if (items.newClientsWithoutVisit > 0) {
     rows.push({
       key: "new",
-      icon: Sparkles,
-      tone: "bg-sky-50 text-sky-600",
+      tone: "info",
       text: (
         <>
           <strong>{items.newClientsWithoutVisit}</strong>{" "}
@@ -182,8 +172,7 @@ export function TodayBlock({ items, timezone, points }: Props) {
     const names = items.idleCashiers.map((c) => c.name).join(", ")
     rows.push({
       key: "cashiers",
-      icon: UserX,
-      tone: "bg-slate-100 text-slate-500",
+      tone: "mute",
       text: (
         <>
           Sin visitas registradas en 7 días: <strong>{names}</strong>
@@ -195,37 +184,48 @@ export function TodayBlock({ items, timezone, points }: Props) {
   }
 
   return (
-    <Card className="border border-slate-200 h-full">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-bold text-slate-700">Para hoy</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {rows.length === 0 ? (
-          <div className="flex items-center gap-3 py-6 text-sm text-slate-500">
-            <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+    <Panel className="h-full flex flex-col">
+      <PanelHeader
+        title="Para hoy"
+        actions={
+          rows.length > 0 ? (
+            <span className="text-[11.5px] text-ent-fg-3 tabular-nums">
+              {rows.length} {plural(rows.length, "pendiente", "pendientes")}
+            </span>
+          ) : undefined
+        }
+      />
+      {rows.length === 0 ? (
+        <PanelMessage className="flex-1 py-8">
+          <span className="inline-flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-ent-ok shrink-0" aria-hidden="true" />
             Todo en orden. Nada pendiente para hoy.
-          </div>
-        ) : (
-          <ul className="divide-y divide-slate-100">
-            {rows.map((row) => (
-              <li key={row.key} className="flex items-center gap-3 py-2.5">
-                <div
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${row.tone}`}
-                >
-                  <row.icon className="w-4 h-4" />
-                </div>
-                <p className="flex-1 min-w-0 text-sm text-slate-700 leading-snug">{row.text}</p>
-                <Link
-                  href={row.href}
-                  className="shrink-0 text-xs font-semibold text-primary hover:underline whitespace-nowrap"
-                >
-                  {row.cta} →
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
+          </span>
+        </PanelMessage>
+      ) : (
+        <ul>
+          {rows.map((row) => (
+            <li
+              key={row.key}
+              className="flex items-center gap-2.5 px-3 py-2 border-b border-ent-line last:border-b-0 text-[12.5px] leading-snug"
+            >
+              <span
+                className={cn("w-2 h-2 rounded-full shrink-0", DOT[row.tone])}
+                aria-hidden="true"
+              />
+              <p className="flex-1 min-w-0 text-ent-fg-2 [&_strong]:text-ent-fg [&_strong]:font-semibold">
+                {row.text}
+              </p>
+              <Link
+                href={row.href}
+                className="shrink-0 text-[12px] font-medium text-ent-accent hover:underline whitespace-nowrap"
+              >
+                {row.cta} →
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
   )
 }

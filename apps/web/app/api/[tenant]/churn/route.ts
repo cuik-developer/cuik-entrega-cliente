@@ -98,6 +98,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
         message: parsed.data.message,
         status: "draft",
         createdBy: session.user.id,
+        content: { automation: "churn" },
       })
       .returning()
 

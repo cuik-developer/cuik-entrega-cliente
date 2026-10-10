@@ -6,7 +6,7 @@ import {
   createRecurringCampaignSchema,
 } from "@cuik/shared/validators"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { CalendarClock, Loader2, Plus, Repeat, Trash2 } from "lucide-react"
+import { CalendarClock, Loader2, Plus, Trash2 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
@@ -39,10 +39,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useTenant } from "@/hooks/use-tenant"
 import { formatDateTime } from "@/lib/format-date"
-
+import { SegmentPicker } from "../../campanas/_components/segment-picker"
+import { VariableInsertButton } from "../../campanas/_components/variable-insert-button"
 import { capitalize, type RecurringCampaign } from "./recurring-campaigns-card"
-import { SegmentPicker } from "./segment-picker"
-import { VariableInsertButton } from "./variable-insert-button"
 
 interface Props {
   open: boolean
@@ -192,7 +191,7 @@ function MessageField({
 }
 
 export function RecurringCampaignForm({ open, onOpenChange, tenantSlug, editing, onSaved }: Props) {
-  const { timezone } = useTenant()
+  const { timezone, readOnly } = useTenant()
   const [submitting, setSubmitting] = useState(false)
   const [endMode, setEndMode] = useState<EndMode>("never")
   const [preview, setPreview] = useState<{ description: string; next: string[] } | null>(null)
@@ -291,13 +290,12 @@ export function RecurringCampaignForm({ open, onOpenChange, tenantSlug, editing,
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="ent sm:max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Repeat className="w-5 h-5 text-primary" />
+          <DialogTitle className="text-[15px]">
             {editing ? "Editar campaña recurrente" : "Nueva campaña recurrente"}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-[12px]">
             Se envía sola según el calendario que definas. La audiencia se recalcula en cada envío.
           </DialogDescription>
         </DialogHeader>
@@ -670,12 +668,24 @@ export function RecurringCampaignForm({ open, onOpenChange, tenantSlug, editing,
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <div className="flex justify-end gap-1.5 pt-3 border-t border-ent-line">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-[12px]"
+                onClick={() => onOpenChange(false)}
+              >
                 Cancelar
               </Button>
-              <Button type="submit" className="bg-primary text-white gap-2" disabled={submitting}>
-                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+              <Button
+                type="submit"
+                size="sm"
+                className="h-7 text-[12px] gap-1.5"
+                disabled={submitting || readOnly}
+                title={readOnly ? "Solo lectura" : undefined}
+              >
+                {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 {editing ? "Guardar cambios" : "Activar campaña"}
               </Button>
             </div>

@@ -25,8 +25,8 @@ export function LocationSelect({ locations, value, onChange }: Props) {
   if (locations.length < 2) return null
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger size="sm" className="h-8 text-xs w-44 gap-1.5">
-        <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+      <SelectTrigger size="sm" className="h-7 text-[12px] w-44 gap-1.5" aria-label="Sucursal">
+        <MapPin className="w-3.5 h-3.5 text-ent-fg-3 shrink-0" />
         <SelectValue placeholder="Sucursal" />
       </SelectTrigger>
       <SelectContent>

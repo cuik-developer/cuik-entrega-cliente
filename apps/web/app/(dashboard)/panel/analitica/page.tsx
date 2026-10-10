@@ -7,59 +7,37 @@ import type {
   PointsAnalytics,
   SegmentsData,
 } from "@cuik/shared/types/analytics"
-import { CalendarDays, Download, Loader2 } from "lucide-react"
-import { useCallback, useEffect, useState } from "react"
-import type { DateRange } from "react-day-picker"
+import { Download, Loader2 } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
+import { Notice, PageHeader, Panel, PanelMessage } from "@/components/admin/enterprise"
 import { Button } from "@/components/ui/button"
-import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { useTenant } from "@/hooks/use-tenant"
+import type { TenantTrend } from "@/lib/analytics/tenant-trend"
+import { defaultGranularity, rangeDays, type TrendGranularity } from "@/lib/analytics/trend-buckets"
 
+import { AnalyticsToolbar, type PeriodState } from "./_components/analytics-toolbar"
 import { CumulativeExportButton } from "./_components/cumulative-export-button"
 import { FunnelChart } from "./_components/funnel-chart"
-import { KpiCards } from "./_components/kpi-cards"
-import type { LocationOption } from "./_components/location-select"
-import { ALL_LOCATIONS, LocationSelect } from "./_components/location-select"
+import { KpiStrip } from "./_components/kpi-strip"
+import { ALL_LOCATIONS, type LocationOption } from "./_components/location-select"
+import { presetRange } from "./_components/period"
 import { PointsBalanceCard } from "./_components/points-balance-card"
 import { PointsFlowChart } from "./_components/points-flow-chart"
-import { ReportsAutomationCard } from "./_components/reports-automation-card"
-import type { RetentionRow } from "./_components/retention-heatmap"
-import { RetentionHeatmap } from "./_components/retention-heatmap"
+import { RetentionHeatmap, type RetentionRow } from "./_components/retention-heatmap"
 import { SegmentsChart } from "./_components/segments-chart"
-import type { TopClientRow } from "./_components/top-clients-table"
-import { TopClientsTable } from "./_components/top-clients-table"
+import { type TopClientRow, TopClientsTable } from "./_components/top-clients-table"
 import { TopRewardsTable } from "./_components/top-rewards-table"
-import type { VisitsChartRow } from "./_components/visits-chart"
-import { VisitsChart } from "./_components/visits-chart"
+import { TrendChart } from "./_components/trend-chart"
 import { VisitsHeatmap } from "./_components/visits-heatmap"
-import type { WalletDistribution } from "./_components/wallet-distribution-chart"
-import { WalletDistributionChart } from "./_components/wallet-distribution-chart"
-
-type Period = "day" | "week" | "month"
-
-const RANGE_OPTIONS = [
-  { label: "7 días", days: 7 },
-  { label: "30 días", days: 30 },
-  { label: "90 días", days: 90 },
-] as const
-
-// "YYYY-MM-DD" of a Date as seen in the tenant's timezone — the API buckets by
-// tenant-local day, so the range must be expressed the same way.
-function toYMD(d: Date, tz: string): string {
-  return d.toLocaleDateString("en-CA", { timeZone: tz })
-}
-
-function getDateRange(days: number, tz: string) {
-  const to = new Date()
-  const from = new Date()
-  from.setDate(from.getDate() - days)
-  return { from: toYMD(from, tz), to: toYMD(to, tz) }
-}
+import {
+  type WalletDistribution,
+  WalletDistributionChart,
+} from "./_components/wallet-distribution-chart"
 
 const EMPTY_HEATMAP: HeatmapData = { cells: [], totalVisits: 0 }
 const EMPTY_FUNNEL: FunnelData = { steps: [] }
 const EMPTY_SEGMENTS: SegmentsData = { segments: [], total: 0 }
-
 const EMPTY_SUMMARY: AnalyticsSummary = {
   totalVisits: 0,
   uniqueClients: 0,
@@ -68,6 +46,13 @@ const EMPTY_SUMMARY: AnalyticsSummary = {
   redemptionRate: 0,
   avgVisitsPerClient: 0,
   topClients: [],
+}
+
+type Json = { success: boolean; data?: unknown }
+
+/** Applies a successful response; a failed (or skipped) call leaves the previous value in place. */
+function applyIfOk<T>(j: Json | undefined, fallback: T, set: (v: T) => void) {
+  if (j?.success) set((j.data as T) ?? fallback)
 }
 
 export default function AnaliticaPage() {
@@ -80,160 +65,138 @@ export default function AnaliticaPage() {
   } = useTenant()
   const isPoints = promotionType === "points"
 
-  const [rangeDays, setRangeDays] = useState<number | "custom">(30)
-  const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined)
+  // Period: presets resolve against the tenant tz, so wait for it before the first fetch.
+  const [period, setPeriod] = useState<PeriodState | null>(null)
+  useEffect(() => {
+    if (!tenantLoading && !period) setPeriod({ preset: "30d", ...presetRange("30d", tenantTz) })
+  }, [tenantLoading, tenantTz, period])
+
   const [minDate, setMinDate] = useState<Date | undefined>(undefined)
-  const [period, setPeriod] = useState<Period>("day")
   const [locations, setLocations] = useState<LocationOption[]>([])
   const [locationId, setLocationId] = useState<string>(ALL_LOCATIONS)
 
-  const [visits, setVisits] = useState<VisitsChartRow[]>([])
-  const [retention, setRetention] = useState<RetentionRow[]>([])
+  // Trend granularity: follows the span until the user picks one explicitly.
+  const [granPick, setGranPick] = useState<TrendGranularity | null>(null)
+  const granularity: TrendGranularity =
+    granPick ?? (period ? defaultGranularity(rangeDays(period.from, period.to)) : "day")
+
   const [summary, setSummary] = useState<AnalyticsSummary>(EMPTY_SUMMARY)
   const [topClients, setTopClients] = useState<TopClientRow[]>([])
-
-  const [walletDist, setWalletDist] = useState<WalletDistribution>({
-    apple: 0,
-    google: 0,
-    none: 0,
-  })
+  const [retention, setRetention] = useState<RetentionRow[]>([])
+  const [walletDist, setWalletDist] = useState<WalletDistribution>({ apple: 0, google: 0, none: 0 })
   const [heatmap, setHeatmap] = useState<HeatmapData>(EMPTY_HEATMAP)
   const [funnel, setFunnel] = useState<FunnelData>(EMPTY_FUNNEL)
   const [segments, setSegments] = useState<SegmentsData>(EMPTY_SEGMENTS)
   const [points, setPoints] = useState<PointsAnalytics | null>(null)
+  const [trend, setTrend] = useState<TenantTrend | null>(null)
 
   const [loading, setLoading] = useState(true)
+  const [trendLoading, setTrendLoading] = useState(true)
+  const [loadedOnce, setLoadedOnce] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+  const reqId = useRef(0)
+  const trendReqId = useRef(0)
 
-  const currentRange =
-    rangeDays === "custom" && customRange?.from && customRange.to
-      ? { from: toYMD(customRange.from, tenantTz), to: toYMD(customRange.to, tenantTz) }
-      : typeof rangeDays === "number"
-        ? getDateRange(rangeDays, tenantTz)
-        : getDateRange(30, tenantTz)
-
-  // Branch filter applies to visit-based widgets (KPIs, visits chart, heatmap,
-  // export). Client-base widgets (funnel, segments, wallet, retention, top
-  // clients) are tenant-wide — a client is not tied to one branch.
+  // Branch filter applies to visit-based widgets (KPIs, trend, heatmap, points
+  // earned, export). Client-base widgets (funnel, segments, wallet, retention,
+  // top clients) are tenant-wide — a client is not tied to one branch.
   const locationQuery = locationId !== ALL_LOCATIONS ? `&locationId=${locationId}` : ""
   const scopeLabel =
     locationId !== ALL_LOCATIONS ? locations.find((l) => l.id === locationId)?.name : undefined
 
-  async function handleExportVisits() {
-    if (!tenantSlug) return
-    setExporting(true)
-    try {
-      const { from, to } = currentRange
-      const res = await fetch(
-        `/api/${tenantSlug}/analytics/export-visits?from=${from}&to=${to}${locationQuery}`,
-      )
-      if (!res.ok) {
-        setError("Error al exportar visitas")
-        return
-      }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement("a")
-      link.href = url
-      link.download = `visitas-${from}-a-${to}.xlsx`
-      link.click()
-      URL.revokeObjectURL(url)
-    } catch {
-      setError("Error de conexion al exportar")
-    } finally {
-      setExporting(false)
-    }
-  }
-
-  // Stable strings so the callback only changes when the query actually does.
-  const rangeFrom = currentRange.from
-  const rangeTo = currentRange.to
+  const rangeFrom = period?.from
+  const rangeTo = period?.to
 
   const fetchAnalytics = useCallback(async () => {
-    if (!tenantSlug) return
-
+    if (!tenantSlug || !rangeFrom || !rangeTo) return
+    const id = ++reqId.current
     setLoading(true)
     setError(null)
 
     const base = `/api/${tenantSlug}/analytics`
     const range = `from=${rangeFrom}&to=${rangeTo}`
-
     try {
-      const responses = await Promise.all(
+      const responses = (await Promise.all(
         [
-          `${base}/visits?${range}&granularity=${period}${locationQuery}`,
-          `${base}/retention?months=6`,
           `${base}/summary?${range}${locationQuery}`,
+          `${base}/retention?months=6`,
           `${base}/wallet-distribution`,
           `${base}/heatmap?${range}${locationQuery}`,
           `${base}/funnel`,
           `${base}/segments`,
           // Points widgets only exist for points programs; skip the call otherwise.
-          ...(isPoints ? [`${base}/points?${range}&granularity=${period}${locationQuery}`] : []),
+          ...(isPoints
+            ? [`${base}/points?${range}&granularity=${granularity}${locationQuery}`]
+            : []),
         ].map((u) => fetch(u).then((r) => r.json())),
-      )
+      )) as Json[]
+      if (id !== reqId.current) return // superseded by a newer request
+
       const [
-        visitsJson,
-        retentionJson,
         summaryJson,
+        retentionJson,
         walletJson,
         heatmapJson,
         funnelJson,
         segmentsJson,
         pointsJson,
-      ] = responses as Array<{ success: boolean; data?: unknown }>
+      ] = responses
 
-      // `undefined` when that call failed — leave the previous value in place.
-      const pick = <T,>(j: { success: boolean; data?: unknown }, fallback: T): T | undefined =>
-        j.success ? ((j.data as T) ?? fallback) : undefined
-
-      const v = pick<VisitsChartRow[]>(visitsJson, [])
-      if (v) setVisits(v)
-      const r = pick<RetentionRow[]>(retentionJson, [])
-      if (r) setRetention(r)
-      const s = pick<AnalyticsSummary>(summaryJson, EMPTY_SUMMARY)
-      if (s) {
+      applyIfOk<AnalyticsSummary>(summaryJson, EMPTY_SUMMARY, (s) => {
         setSummary(s)
         setTopClients(
-          (s.topClients ?? []).map((c) => ({
-            id: c.id,
-            name: c.name,
-            visitCount: c.visitCount,
-          })),
+          (s.topClients ?? []).map((c) => ({ id: c.id, name: c.name, visitCount: c.visitCount })),
         )
-      }
-      const w = pick<WalletDistribution>(walletJson, { apple: 0, google: 0, none: 0 })
-      if (w) setWalletDist(w)
-      const h = pick<HeatmapData>(heatmapJson, EMPTY_HEATMAP)
-      if (h) setHeatmap(h)
-      const f = pick<FunnelData>(funnelJson, EMPTY_FUNNEL)
-      if (f) setFunnel(f)
-      const g = pick<SegmentsData>(segmentsJson, EMPTY_SEGMENTS)
-      if (g) setSegments(g)
-      if (pointsJson) {
-        const pj = pick<PointsAnalytics | null>(pointsJson, null)
-        if (pj !== undefined) setPoints(pj)
-      }
+      })
+      applyIfOk<RetentionRow[]>(retentionJson, [], setRetention)
+      applyIfOk<WalletDistribution>(walletJson, { apple: 0, google: 0, none: 0 }, setWalletDist)
+      applyIfOk<HeatmapData>(heatmapJson, EMPTY_HEATMAP, setHeatmap)
+      applyIfOk<FunnelData>(funnelJson, EMPTY_FUNNEL, setFunnel)
+      applyIfOk<SegmentsData>(segmentsJson, EMPTY_SEGMENTS, setSegments)
+      applyIfOk<PointsAnalytics | null>(pointsJson, null, setPoints)
 
-      // Check if all failed
-      if (!visitsJson.success && !retentionJson.success && !summaryJson.success) {
+      if (!summaryJson.success && !heatmapJson.success && !funnelJson.success) {
         setError("No se pudieron cargar los datos de analítica.")
       }
     } catch {
-      setError("Error de conexión al cargar analítica.")
+      if (id === reqId.current) setError("Error de conexión al cargar analítica.")
     } finally {
-      setLoading(false)
+      if (id === reqId.current) {
+        setLoading(false)
+        setLoadedOnce(true)
+      }
     }
-  }, [tenantSlug, rangeFrom, rangeTo, period, locationQuery, isPoints])
+  }, [tenantSlug, rangeFrom, rangeTo, locationQuery, isPoints, granularity])
+
+  // The trend has its own request so changing the bucket size does not reload the page.
+  const fetchTrend = useCallback(async () => {
+    if (!tenantSlug || !rangeFrom || !rangeTo) return
+    const id = ++trendReqId.current
+    setTrendLoading(true)
+    try {
+      const res = await fetch(
+        `/api/${tenantSlug}/analytics/trend?from=${rangeFrom}&to=${rangeTo}&granularity=${granularity}${locationQuery}`,
+      )
+      const json = (await res.json()) as Json
+      if (id !== trendReqId.current) return
+      if (json.success) setTrend(json.data as TenantTrend)
+    } catch {
+      // keep the previous series; the page-level error covers connection loss
+    } finally {
+      if (id === trendReqId.current) setTrendLoading(false)
+    }
+  }, [tenantSlug, rangeFrom, rangeTo, granularity, locationQuery])
 
   useEffect(() => {
-    if (tenantSlug) {
-      fetchAnalytics()
-    }
-  }, [tenantSlug, fetchAnalytics])
+    fetchAnalytics()
+  }, [fetchAnalytics])
 
-  // Branches (only shown when there are 2+)
+  useEffect(() => {
+    fetchTrend()
+  }, [fetchTrend])
+
+  // Branches (selector only shows when there are 2+)
   useEffect(() => {
     if (!tenantSlug) return
     fetch(`/api/${tenantSlug}/locations`)
@@ -250,7 +213,7 @@ export default function AnaliticaPage() {
       })
   }, [tenantSlug])
 
-  // Fetch tenant's first visit date to constrain the custom date picker minDate
+  // Tenant's first visit date constrains the custom date picker.
   useEffect(() => {
     if (!tenantSlug) return
     fetch(`/api/${tenantSlug}/analytics/first-visit`)
@@ -266,128 +229,132 @@ export default function AnaliticaPage() {
       })
   }, [tenantSlug])
 
-  if (tenantLoading) {
+  async function handleExportVisits() {
+    if (!tenantSlug || !period) return
+    setExporting(true)
+    try {
+      const res = await fetch(
+        `/api/${tenantSlug}/analytics/export-visits?from=${period.from}&to=${period.to}${locationQuery}`,
+      )
+      if (!res.ok) {
+        setError("Error al exportar visitas")
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `visitas-${period.from}-a-${period.to}.xlsx`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setError("Error de conexión al exportar")
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  if (tenantLoading || !period) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
+      <PanelMessage className="py-20">
+        <Loader2 className="w-5 h-5 animate-spin" />
+      </PanelMessage>
     )
   }
 
   if (tenantError) {
-    return (
-      <div className="text-center py-20">
-        <p className="text-muted-foreground">{tenantError}</p>
-      </div>
-    )
+    return <Notice tone="bad">{tenantError}</Notice>
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header + filters */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold text-foreground">Analítica</h1>
-          <p className="text-sm text-muted-foreground">Comportamiento de tus clientes.</p>
-        </div>
-
-        {/* Date range selector + export */}
-        <div className="flex flex-wrap items-center gap-2">
-          <LocationSelect locations={locations} value={locationId} onChange={setLocationId} />
-          <CalendarDays className="w-4 h-4 text-muted-foreground" />
-          {RANGE_OPTIONS.map((opt) => (
+    <div className="space-y-3">
+      <PageHeader
+        crumbs={[{ label: "Panel", href: "/panel" }, { label: "Analítica" }]}
+        title="Analítica"
+        subtitle="Comportamiento de tus clientes en el período elegido."
+        actions={
+          <>
             <Button
-              key={opt.days}
-              variant={rangeDays === opt.days ? "default" : "outline"}
+              variant="outline"
               size="sm"
-              className="text-xs h-8"
-              onClick={() => setRangeDays(opt.days)}
+              className="h-7 text-[12px] gap-1.5 rounded-[4px]"
+              onClick={handleExportVisits}
+              disabled={exporting || loading}
+              type="button"
+              title="Excel con una fila por visita del período"
             >
-              {opt.label}
+              {exporting ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5" />
+              )}
+              <span className="hidden sm:inline">Exportar visitas</span>
             </Button>
-          ))}
-          <DateRangePicker
-            value={customRange}
-            onChange={(r) => {
-              setCustomRange(r)
-              if (r?.from && r.to) setRangeDays("custom")
-            }}
-            minDate={minDate}
-            active={rangeDays === "custom"}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-xs h-8 gap-1.5 ml-1"
-            onClick={handleExportVisits}
-            disabled={exporting || loading}
-            type="button"
-          >
-            {exporting ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Download className="w-3.5 h-3.5" />
-            )}
-            <span className="hidden sm:inline">Exportar visitas</span>
-          </Button>
-          <CumulativeExportButton tenantSlug={tenantSlug} timezone={tenantTz} />
-        </div>
-      </div>
+            <CumulativeExportButton tenantSlug={tenantSlug} timezone={tenantTz} />
+          </>
+        }
+      />
 
-      {/* Error state */}
-      {error && (
-        <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-        </div>
-      )}
+      <Panel>
+        <AnalyticsToolbar
+          period={period}
+          onChange={(p) => {
+            setPeriod(p)
+            setGranPick(null) // back to the span's natural bucket size
+          }}
+          timezone={tenantTz}
+          minDate={minDate}
+          locations={locations}
+          locationId={locationId}
+          onLocationChange={setLocationId}
+          loading={loading}
+        />
+      </Panel>
 
-      {/* Loading overlay */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          <span className="ml-2 text-sm text-muted-foreground">Cargando datos...</span>
-        </div>
+      {error && <Notice tone="bad">{error}</Notice>}
+
+      {!loadedOnce ? (
+        <PanelMessage className="py-20">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          Cargando datos…
+        </PanelMessage>
       ) : (
-        <>
-          {/* KPI Cards */}
-          <KpiCards summary={summary} points={isPoints ? points?.kpis : null} />
+        <div className={`space-y-3 transition-opacity ${loading ? "opacity-60" : ""}`}>
+          <KpiStrip summary={summary} points={isPoints ? points?.kpis : null} />
 
-          {/* Visits Chart */}
-          <VisitsChart data={visits} period={period} onPeriodChange={setPeriod} />
+          <TrendChart
+            data={trend}
+            loading={trendLoading}
+            granularity={granularity}
+            onGranularityChange={setGranPick}
+            isPoints={isPoints}
+          />
 
-          {/* Points program: movement, top rewards, who can redeem */}
           {isPoints && points && (
             <>
-              <PointsFlowChart data={points.series} period={period} />
-              <div className="grid lg:grid-cols-2 gap-6">
+              <PointsFlowChart data={points.series} period={granularity} />
+              <div className="grid lg:grid-cols-2 gap-3">
                 <TopRewardsTable rewards={points.topRewards} timezone={tenantTz} />
                 <PointsBalanceCard balances={points.balances} incentives={points.incentives} />
               </div>
             </>
           )}
 
-          {/* When do clients come */}
           <VisitsHeatmap data={heatmap} scopeLabel={scopeLabel} />
 
-          {/* Client base: funnel + segments */}
-          <div className="grid lg:grid-cols-2 gap-6">
+          <div className="grid lg:grid-cols-2 gap-3">
             <FunnelChart data={funnel} programType={promotionType} />
             <SegmentsChart data={segments} />
           </div>
 
-          {/* Top clients + wallet platform */}
-          <div className="grid lg:grid-cols-2 gap-6">
+          <div className="grid lg:grid-cols-2 gap-3">
             <TopClientsTable clients={topClients} />
             <WalletDistributionChart data={walletDist} />
           </div>
 
-          {/* Retention cohorts (needs the width) */}
           <RetentionHeatmap data={retention} />
-        </>
+        </div>
       )}
-
-      {/* Email reports (weekly / monthly) — lives here since sep-2026 */}
-      <ReportsAutomationCard tenantSlug={tenantSlug} />
     </div>
   )
 }

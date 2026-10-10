@@ -1,8 +1,8 @@
 "use client"
 
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Panel, PanelHeader } from "@/components/admin/enterprise"
 
 type WeeklyData = {
   day: string
@@ -22,7 +22,7 @@ function CustomTooltip({
 }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-slate-900 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg">
+    <div className="bg-ent-panel border border-ent-line rounded-[4px] text-[12px] text-ent-fg px-2.5 py-1.5">
       <span className="font-medium">{label}</span>: {payload[0].value} {unit}
     </div>
   )
@@ -38,35 +38,57 @@ export function WeeklyChart({
   title?: string
   unit?: string
 }) {
+  const total = data.reduce((a, d) => a + d.value, 0)
   return (
-    <Card className="border border-slate-200">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-bold text-slate-700">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={data}>
+    <Panel className="h-full flex flex-col">
+      <PanelHeader
+        title={title}
+        actions={
+          <span className="text-[11.5px] text-ent-fg-3 tabular-nums">
+            {total.toLocaleString("es-PE")} {unit} en 7 días
+          </span>
+        }
+      />
+      <div className="px-2 pt-3 pb-1 flex-1">
+        <ResponsiveContainer width="100%" height={170}>
+          <BarChart data={data} margin={{ top: 14, right: 8, left: -18, bottom: 0 }}>
             <XAxis
               dataKey="day"
-              tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
+              tick={{ fontSize: 11, fill: "var(--color-ent-fg-3)" }}
               axisLine={false}
               tickLine={false}
               interval={0}
             />
             <YAxis
-              tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
+              tick={{ fontSize: 11, fill: "var(--color-ent-fg-3)" }}
               axisLine={false}
               tickLine={false}
               allowDecimals={false}
+              width={36}
             />
             <Tooltip
               content={<CustomTooltip unit={unit} />}
-              cursor={{ fill: "var(--color-muted)", opacity: 0.5 }}
+              cursor={{ fill: "var(--color-ent-panel-2)" }}
             />
-            <Bar dataKey="value" fill="var(--color-primary)" radius={[6, 6, 0, 0]} />
+            <Bar
+              dataKey="value"
+              fill="var(--color-ent-accent)"
+              radius={[2, 2, 0, 0]}
+              maxBarSize={40}
+              isAnimationActive={false}
+            >
+              <LabelList
+                dataKey="value"
+                position="top"
+                offset={4}
+                fontSize={11}
+                fill="var(--color-ent-fg-2)"
+                formatter={(v: number) => (v > 0 ? v.toLocaleString("es-PE") : "")}
+              />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
-      </CardContent>
-    </Card>
+      </div>
+    </Panel>
   )
 }

@@ -7,11 +7,14 @@ import {
   type SegmentationThresholds,
 } from "@/lib/loyalty/client-segments"
 import {
+  ALL_TIME,
   type ClientStatusFilter,
   columnsFor,
   type DatasetDef,
   datasetByKey,
   type ProgramType,
+  resolveAllTimeRange,
+  type TenantStartFacts,
 } from "./dataset-columns"
 
 /**
@@ -28,6 +31,8 @@ export type DatasetRequest = {
   /** YYYY-MM-DD, inclusive, tenant-local (visits and points only). */
   from?: string
   to?: string
+  /** The range came from the "Acumulado" preset (labels the file; the dates are already resolved). */
+  allTime?: boolean
   clientStatus?: ClientStatusFilter
   timezone: string
   thresholds: SegmentationThresholds
@@ -45,7 +50,47 @@ export async function activeProgramType(tenantId: string): Promise<ProgramType |
   return t === "stamps" || t === "points" ? t : null
 }
 
-export type DatasetResult = { buffer: Buffer; filename: string; rows: number }
+/**
+ * Facts that bound "since the business started" for one tenant, then the
+ * resolved inclusive range in the tenant timezone (see `resolveAllTimeRange`).
+ */
+export async function resolveTenantAllTimeRange(
+  tenantId: string,
+  timezone: string,
+  now: Date = new Date(),
+): Promise<{ from: string; to: string }> {
+  const res = await db.execute<{
+    service_start_on: string | null
+    first_visit_at: Date | string | null
+    first_client_at: Date | string | null
+    tenant_created_at: Date | string | null
+  }>(sql`
+    SELECT tb.service_start_on::text AS service_start_on,
+           (SELECT min(created_at) FROM loyalty.visits WHERE tenant_id = t.id) AS first_visit_at,
+           (SELECT min(created_at) FROM loyalty.clients WHERE tenant_id = t.id) AS first_client_at,
+           t.created_at AS tenant_created_at
+    FROM tenants t
+    LEFT JOIN tenant_billing tb ON tb.tenant_id = t.id
+    WHERE t.id = ${tenantId}::uuid
+    LIMIT 1`)
+  const row = res.rows[0]
+  const facts: TenantStartFacts = {
+    serviceStartOn: row?.service_start_on ?? null,
+    firstVisitAt: asDate(row?.first_visit_at),
+    firstClientAt: asDate(row?.first_client_at),
+    tenantCreatedAt: asDate(row?.tenant_created_at),
+  }
+  return resolveAllTimeRange(facts, timezone, now)
+}
+
+export type DatasetResult = {
+  buffer: Buffer
+  filename: string
+  rows: number
+  /** Resolved inclusive range actually used (dated datasets only). */
+  from?: string
+  to?: string
+}
 
 type Row = Record<string, unknown>
 type Cell = string | number | null
@@ -311,16 +356,48 @@ export function isRealYmd(s: string): boolean {
   return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === s
 }
 
-export async function buildDatasetXlsx(r: DatasetRequest): Promise<DatasetResult> {
-  const def = datasetByKey(r.dataset)
-  if (!def) throw new DatasetError("Conjunto de datos inválido")
+function validateRequest(def: DatasetDef, r: DatasetRequest): void {
   if (r.columns.length > 0 && !columnsFor(def, r.program).some((c) => r.columns.includes(c.key))) {
     throw new DatasetError("Ninguna de las columnas pedidas existe para este conjunto")
   }
   if (def.program && r.program && def.program !== r.program) {
     throw new DatasetError("Este comercio no tiene programa de puntos")
   }
-  if (def.dated && !(r.from && r.to)) throw new DatasetError("Rango de fechas requerido")
+  if (!def.dated) return
+  if (!(r.from && r.to)) throw new DatasetError("Rango de fechas requerido")
+  // The routes validate the query string, but a resolved "Acumulado" range
+  // goes straight into SQL: check the real dates here too.
+  if (!isRealYmd(r.from) || !isRealYmd(r.to) || r.from > r.to) {
+    throw new DatasetError("Rango de fechas inválido")
+  }
+}
+
+/**
+ * Human label of the range for the file properties (Excel > Info) and the
+ * stamp for the file name, so an "Acumulado" download says which dates it covers.
+ */
+function describeRange(def: DatasetDef, r: DatasetRequest): { label: string; stamp: string } {
+  if (!def.dated) {
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: r.timezone })
+    return { label: `Al ${ymd(today)}`, stamp: today }
+  }
+  const kind = r.allTime ? "Acumulado" : "Periodo"
+  return {
+    label: `${kind}: del ${ymd(r.from)} al ${ymd(r.to)}`,
+    stamp: `${r.allTime ? "acumulado-" : ""}${r.from}-a-${r.to}`,
+  }
+}
+
+const FILE_BASENAME: Record<string, string> = {
+  clients: "clientes",
+  visits: "visitas",
+  points: "puntos",
+}
+
+export async function buildDatasetXlsx(r: DatasetRequest): Promise<DatasetResult> {
+  const def = datasetByKey(r.dataset)
+  if (!def) throw new DatasetError("Conjunto de datos inválido")
+  validateRequest(def, r)
   const columns = pickColumns(def, r.columns, r.program)
   const now = new Date()
 
@@ -338,8 +415,11 @@ export async function buildDatasetXlsx(r: DatasetRequest): Promise<DatasetResult
     )
   }
 
+  const range = describeRange(def, r)
   const workbook = new ExcelJS.Workbook()
   workbook.creator = "Cuik"
+  workbook.title = `${def.label} · ${range.label}`
+  workbook.subject = range.label
   const sheet = workbook.addWorksheet(def.label)
   sheet.columns = columns.map((c) => ({ header: c.label, key: c.key, width: c.width ?? 16 }))
   const header = sheet.getRow(1)
@@ -352,46 +432,61 @@ export async function buildDatasetXlsx(r: DatasetRequest): Promise<DatasetResult
   sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } }
   sheet.views = [{ state: "frozen", ySplit: 1 }]
 
-  const stamp = def.dated ? `${r.from}-a-${r.to}` : new Date().toISOString().slice(0, 10)
   return {
     buffer: Buffer.from(await workbook.xlsx.writeBuffer()),
-    filename: `${def.key === "clients" ? "clientes" : def.key === "visits" ? "visitas" : "puntos"}-${stamp}.xlsx`,
+    filename: `${FILE_BASENAME[def.key] ?? def.key}-${range.stamp}.xlsx`,
     rows: cells.length,
+    from: def.dated ? r.from : undefined,
+    to: def.dated ? r.to : undefined,
   }
 }
 
-/** Query-string parsing shared by both routes. */
+/**
+ * Query-string parsing shared by both routes. `from=all` (the "Acumulado"
+ * preset) returns `allTime: true` with no dates: the route resolves them per
+ * tenant with `resolveTenantAllTimeRange` before building.
+ */
 export function parseDatasetQuery(url: URL): {
   dataset: string
   columns: string[]
   from?: string
   to?: string
+  allTime: boolean
   clientStatus: ClientStatusFilter
   error?: string
 } {
   const p = url.searchParams
   const dataset = p.get("dataset") ?? ""
   const def = datasetByKey(dataset)
-  if (!def)
-    return { dataset, columns: [], clientStatus: "all", error: "Conjunto de datos inválido" }
+  const bad = (error: string) => ({
+    dataset,
+    columns: [],
+    allTime: false,
+    clientStatus: "all" as const,
+    error,
+  })
+  if (!def) return bad("Conjunto de datos inválido")
   const columns = (p.get("columns") ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean)
-  const from = p.get("from") ?? undefined
-  const to = p.get("to") ?? undefined
-  if (def.dated) {
-    if (!from || !to || !isRealYmd(from) || !isRealYmd(to))
-      return { dataset, columns, clientStatus: "all", error: "Rango de fechas inválido" }
-    if (from > to)
-      return { dataset, columns, clientStatus: "all", error: "El rango está invertido" }
-    const days = (Date.parse(to) - Date.parse(from)) / 86_400_000
-    if (days > 366)
-      return { dataset, columns, clientStatus: "all", error: "Máximo un año por archivo" }
-  }
   const statusRaw = p.get("status") ?? "all"
   const clientStatus = (
     ["all", "active", "inactive", "blocked", "archived"].includes(statusRaw) ? statusRaw : "all"
   ) as ClientStatusFilter
-  return { dataset, columns, from, to, clientStatus }
+  const fromRaw = p.get("from") ?? undefined
+  const to = p.get("to") ?? undefined
+  if (def.dated && fromRaw === ALL_TIME) {
+    // Only the preset flag: a `to` here would be ambiguous.
+    if (to) return bad("Rango de fechas inválido")
+    return { dataset, columns, allTime: true, clientStatus }
+  }
+  const from = fromRaw
+  if (def.dated) {
+    if (!from || !to || !isRealYmd(from) || !isRealYmd(to)) return bad("Rango de fechas inválido")
+    if (from > to) return bad("El rango está invertido")
+    const days = (Date.parse(to) - Date.parse(from)) / 86_400_000
+    if (days > 366) return bad("Máximo un año por archivo")
+  }
+  return { dataset, columns, from, to, allTime: false, clientStatus }
 }

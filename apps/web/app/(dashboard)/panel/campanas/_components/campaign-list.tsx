@@ -1,33 +1,33 @@
 "use client"
 
-import { ChevronLeft, ChevronRight, Eye, Loader2, Pencil, Send, Trash2 } from "lucide-react"
-import { useCallback, useEffect, useState } from "react"
+import { Eye, Loader2, Pencil, Send, Trash2 } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import { Badge } from "@/components/ui/badge"
+import {
+  DataTable,
+  Panel,
+  PanelFooter,
+  PanelMessage,
+  type Stat,
+  StatStrip,
+  StatusChip,
+  Td,
+  Th,
+  Toolbar,
+  Tr,
+} from "@/components/admin/enterprise"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useTenant } from "@/hooks/use-tenant"
+import {
+  CAMPAIGN_STATUS_LABEL,
+  CAMPAIGN_STATUS_TONE,
+  CAMPAIGN_TYPE_LABEL,
+  type CampaignStatus,
+  type CampaignType,
+} from "@/lib/admin/campaign-labels"
 import { formatDateTime } from "@/lib/format-date"
 
 import { CampaignDetailDialog } from "./campaign-detail-dialog"
-
-type CampaignStatus = "draft" | "scheduled" | "sending" | "sent" | "cancelled"
 
 interface CampaignEffectiveness {
   campaignId: string
@@ -64,180 +64,81 @@ interface PaginationData {
 interface CampaignListProps {
   tenantSlug: string
   refreshKey?: number
-  /** Opens the campaign form in edit mode (drafts and scheduled only). */
+  /** Opens the campaign form in edit mode (drafts and scheduled only). Undefined = read-only. */
   onEdit?: (campaignId: string) => void
 }
 
-const STATUS_CONFIG: Record<CampaignStatus, { label: string; className: string }> = {
-  draft: {
-    label: "Borrador",
-    className: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  },
-  scheduled: {
-    label: "Programada",
-    className: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
-  },
-  sending: {
-    label: "Enviando",
-    className: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
-  },
-  sent: {
-    label: "Enviada",
-    className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300",
-  },
-  cancelled: {
-    label: "Cancelada",
-    className: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
-  },
+const STATUS_OPTIONS: [string, string][] = [
+  ["all", "Estado: todas"],
+  ["draft", "Borradores"],
+  ["scheduled", "Programadas"],
+  ["sending", "Enviando"],
+  ["sent", "Enviadas"],
+  ["cancelled", "Canceladas"],
+]
+
+/** Origin filter; an option is offered only when the tenant has campaigns of that kind. */
+const KIND_OPTIONS: [string, string][] = [
+  ["manual", "Regulares"],
+  ["scheduled", "Programadas"],
+  ["birthday", "Cumpleaños"],
+  ["recurring", "Recurrentes"],
+  ["points_expiring", "Puntos por vencer"],
+  ["churn", "Recuperación (en riesgo)"],
+  ["silent", "Actualización silenciosa"],
+]
+
+/** Totals for the strip: one `limit=1` request per status, the pagination meta carries the count. */
+type Totals = { all: number; sent: number; scheduled: number; draft: number }
+
+function typeLabel(t: string): string {
+  return CAMPAIGN_TYPE_LABEL[t as CampaignType] ?? t
 }
 
-function getEffectivenessColor(rate: number): string {
-  if (rate >= 10) return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
-  if (rate >= 5) return "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
-  return "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
-}
-
-function EffectivenessBadge({ effectiveness }: { effectiveness: CampaignEffectiveness }) {
-  const color = getEffectivenessColor(effectiveness.conversionRate)
+function Effectiveness({ e }: { e: CampaignEffectiveness | null }) {
+  if (!e) return <span className="text-ent-fg-3">—</span>
+  const tone = e.conversionRate >= 10 ? "ok" : e.conversionRate >= 5 ? "warn" : "bad"
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Badge className={`${color} text-[10px] cursor-default`}>
-            {effectiveness.conversions}/{effectiveness.totalSent} ({effectiveness.conversionRate}%)
-          </Badge>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>
-            {effectiveness.conversions} de {effectiveness.totalSent} clientes visitaron dentro de{" "}
-            {effectiveness.windowHours}h
-          </p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  )
-}
-
-function getStatusDotColor(status: CampaignStatus): string {
-  switch (status) {
-    case "sent":
-      return "bg-emerald-500"
-    case "sending":
-      return "bg-amber-500"
-    case "scheduled":
-      return "bg-blue-500"
-    case "cancelled":
-      return "bg-red-500"
-    default:
-      return "bg-slate-400"
-  }
-}
-
-function MobileCampaignCard({
-  campaign,
-  sendingId,
-  onSend,
-  onEdit,
-  onDelete,
-  formatDate,
-}: {
-  campaign: CampaignRow
-  sendingId: string | null
-  onSend: (id: string) => void
-  onEdit?: (id: string) => void
-  onDelete: (id: string) => void
-  formatDate: (d: string | null) => string
-}) {
-  const statusConf = STATUS_CONFIG[campaign.status]
-  const canSend = campaign.status === "draft" || campaign.status === "scheduled"
-
-  return (
-    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
-      <div className="flex items-center gap-3 min-w-0">
-        <div
-          className={`w-2 h-2 rounded-full flex-shrink-0 ${getStatusDotColor(campaign.status)}`}
-        />
-        <div className="min-w-0">
-          <div className="font-medium text-sm truncate">{campaign.name}</div>
-          <div className="text-xs text-muted-foreground">
-            {campaign.type === "push" ? "Push" : "Wallet"} · {formatDate(campaign.createdAt)}
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <div className="text-right">
-          <div className="text-sm font-bold">
-            {campaign.sentCount ?? 0}/{campaign.targetCount ?? 0}
-          </div>
-          <Badge className={`${statusConf.className} text-[10px]`}>{statusConf.label}</Badge>
-          {campaign.effectiveness && (
-            <div className="mt-1">
-              <EffectivenessBadge effectiveness={campaign.effectiveness} />
-            </div>
-          )}
-        </div>
-        {canSend && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 p-0 text-primary"
-            onClick={() => onSend(campaign.id)}
-            disabled={sendingId === campaign.id}
-          >
-            {sendingId === campaign.id ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Send className="w-3.5 h-3.5" />
-            )}
-          </Button>
-        )}
-        {canSend && onEdit && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 p-0"
-            onClick={() => onEdit(campaign.id)}
-            aria-label="Editar campaña"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-          </Button>
-        )}
-        {canSend && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 p-0 text-red-600 hover:text-red-700"
-            onClick={() => onDelete(campaign.id)}
-            aria-label="Eliminar campaña"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </Button>
-        )}
-      </div>
-    </div>
+    <StatusChip
+      tone={tone}
+      title={`${e.conversions} de ${e.totalSent} clientes visitaron dentro de ${e.windowHours} h`}
+    >
+      {e.conversions} · {e.conversionRate}%
+    </StatusChip>
   )
 }
 
 export function CampaignList({ tenantSlug, refreshKey, onEdit }: CampaignListProps) {
-  const { timezone } = useTenant()
+  const { timezone, readOnly } = useTenant()
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([])
   const [pagination, setPagination] = useState<PaginationData | null>(null)
+  const [totals, setTotals] = useState<Totals | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [kindFilter, setKindFilter] = useState<string>("all")
+  const [kinds, setKinds] = useState<Record<string, number>>({})
   const [page, setPage] = useState(1)
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [detailCampaign, setDetailCampaign] = useState<CampaignRow | null>(null)
 
+  // Only the newest request may update the list (filters can change mid-flight).
+  const reqSeq = useRef(0)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey re-reads the list after a write
   const fetchCampaigns = useCallback(async () => {
+    const seq = ++reqSeq.current
     setIsLoading(true)
     try {
       const params = new URLSearchParams({ page: String(page), limit: "10" })
       if (statusFilter !== "all") {
         params.set("status", statusFilter)
       }
+      if (kindFilter !== "all") {
+        params.set("kind", kindFilter)
+      }
 
       const res = await fetch(`/api/${tenantSlug}/campaigns?${params.toString()}`)
       const json = await res.json()
+      if (seq !== reqSeq.current) return
 
       if (!res.ok) {
         toast.error(json.error ?? "Error al cargar campañas")
@@ -252,16 +153,49 @@ export function CampaignList({ tenantSlug, refreshKey, onEdit }: CampaignListPro
       }
       setCampaigns(json.data.data)
       setPagination(json.data.pagination)
+      if (json.data.kinds) setKinds(json.data.kinds)
     } catch {
-      toast.error("Error de conexion")
+      if (seq === reqSeq.current) toast.error("Error de conexion")
     } finally {
-      setIsLoading(false)
+      if (seq === reqSeq.current) setIsLoading(false)
     }
-  }, [tenantSlug, page, statusFilter, refreshKey])
+  }, [tenantSlug, page, statusFilter, kindFilter, refreshKey])
 
   useEffect(() => {
     fetchCampaigns()
   }, [fetchCampaigns])
+
+  // Strip figures: independent of the filter, refreshed with the list.
+  const fetchTotals = useCallback(async () => {
+    const count = async (status?: string) => {
+      const params = new URLSearchParams({ page: "1", limit: "1" })
+      if (status) params.set("status", status)
+      const res = await fetch(`/api/${tenantSlug}/campaigns?${params.toString()}`)
+      const json = await res.json().catch(() => null)
+      return res.ok ? Number(json?.data?.pagination?.total ?? 0) : 0
+    }
+    try {
+      const [all, sent, scheduled, draft] = await Promise.all([
+        count(),
+        count("sent"),
+        count("scheduled"),
+        count("draft"),
+      ])
+      setTotals({ all, sent, scheduled, draft })
+    } catch {
+      setTotals(null)
+    }
+  }, [tenantSlug])
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey re-reads the totals after a write
+  useEffect(() => {
+    fetchTotals()
+  }, [fetchTotals, refreshKey])
+
+  function refreshAll() {
+    fetchCampaigns()
+    fetchTotals()
+  }
 
   async function handleSend(campaignId: string) {
     setSendingId(campaignId)
@@ -277,7 +211,7 @@ export function CampaignList({ tenantSlug, refreshKey, onEdit }: CampaignListPro
       }
 
       toast.success("Campaña enviada exitosamente")
-      fetchCampaigns()
+      refreshAll()
     } catch {
       toast.error("Error de conexion")
     } finally {
@@ -302,7 +236,7 @@ export function CampaignList({ tenantSlug, refreshKey, onEdit }: CampaignListPro
         return
       }
       toast.success("Campaña eliminada")
-      fetchCampaigns()
+      refreshAll()
     } catch {
       toast.error("Error de conexion")
     }
@@ -310,198 +244,258 @@ export function CampaignList({ tenantSlug, refreshKey, onEdit }: CampaignListPro
 
   const formatDate = (dateStr: string | null) => formatDateTime(dateStr, timezone)
 
+  /** "Enviada", "Programada" or created date, whichever applies. */
+  function whenOf(c: CampaignRow): string {
+    if (c.sentAt) return formatDate(c.sentAt)
+    if (c.status === "scheduled" && c.scheduledAt) return `Prog. ${formatDate(c.scheduledAt)}`
+    return formatDate(c.createdAt)
+  }
+
+  const sentOnPage = campaigns.filter((c) => c.effectiveness)
+  const avgRate =
+    sentOnPage.length > 0
+      ? Math.round(
+          sentOnPage.reduce((acc, c) => acc + (c.effectiveness?.conversionRate ?? 0), 0) /
+            sentOnPage.length,
+        )
+      : null
+
+  const stats: Stat[] = [
+    { label: "Campañas", value: totals ? totals.all : "…" },
+    { label: "Enviadas", value: totals ? totals.sent : "…" },
+    {
+      label: "Programadas",
+      value: totals ? totals.scheduled : "…",
+      hint: totals && totals.draft > 0 ? `${totals.draft} borr.` : undefined,
+      tone: "mute",
+    },
+    {
+      label: "Respuesta promedio",
+      value: avgRate === null ? "—" : `${avgRate}%`,
+      hint: avgRate === null ? undefined : "en esta página",
+      tone: "mute",
+    },
+  ]
+
+  const select =
+    "h-[26px] px-2 pr-6 rounded-[4px] border border-ent-line-strong bg-ent-panel text-[12.5px] text-ent-fg focus:outline-none focus:border-ent-accent cursor-pointer"
+
+  const canWrite = !readOnly
+
   return (
-    <Card className="border border-border">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-bold text-foreground">Historial de campañas</CardTitle>
-          <Select
+    <>
+      <StatStrip stats={stats} />
+
+      <Panel>
+        <Toolbar>
+          <select
             value={statusFilter}
-            onValueChange={(v) => {
-              setStatusFilter(v)
+            aria-label="Filtrar por estado"
+            onChange={(e) => {
+              setStatusFilter(e.target.value)
               setPage(1)
             }}
+            className={select}
           >
-            <SelectTrigger className="w-[140px]" size="sm">
-              <SelectValue placeholder="Estado" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="draft">Borrador</SelectItem>
-              <SelectItem value="scheduled">Programada</SelectItem>
-              <SelectItem value="sending">Enviando</SelectItem>
-              <SelectItem value="sent">Enviada</SelectItem>
-              <SelectItem value="cancelled">Cancelada</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          </div>
+            {STATUS_OPTIONS.map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+          <select
+            value={kindFilter}
+            aria-label="Filtrar por tipo"
+            onChange={(e) => {
+              setKindFilter(e.target.value)
+              setPage(1)
+            }}
+            className={select}
+          >
+            <option value="all">Tipo: todos</option>
+            {KIND_OPTIONS.filter(([v]) => v === kindFilter || (kinds[v] ?? 0) > 0).map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+          <span className="ml-auto text-[11.5px] text-ent-fg-3 tabular-nums">
+            {isLoading ? "…" : pagination ? `${pagination.total} campañas` : ""}
+          </span>
+        </Toolbar>
+
+        {isLoading && campaigns.length === 0 ? (
+          <PanelMessage>
+            <Loader2 className="w-5 h-5 animate-spin" />
+            Cargando campañas…
+          </PanelMessage>
         ) : campaigns.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-sm text-muted-foreground">No hay campañas todavía.</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Crea tu primera campaña para empezar.
-            </p>
-          </div>
+          <PanelMessage>
+            <span>
+              {statusFilter === "all"
+                ? "No hay campañas todavía."
+                : "No hay campañas con ese estado."}
+            </span>
+            {statusFilter === "all" && <span>Crea tu primera campaña para empezar.</span>}
+          </PanelMessage>
         ) : (
           <>
-            {/* Desktop table */}
-            <div className="hidden md:block">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Enviados / Total</TableHead>
-                    <TableHead>Efectividad</TableHead>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {campaigns.map((c) => {
-                    const statusConf = STATUS_CONFIG[c.status]
-                    const canSend = c.status === "draft" || c.status === "scheduled"
-
-                    return (
-                      <TableRow key={c.id}>
-                        <TableCell className="font-medium">{c.name}</TableCell>
-                        <TableCell>
-                          <Badge className={statusConf.className}>{statusConf.label}</Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-xs">
-                          {c.type === "push" ? "Push" : "Wallet Update"}
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm font-semibold">{c.sentCount ?? 0}</span>
-                          <span className="text-muted-foreground text-xs">
-                            {" / "}
-                            {c.targetCount ?? 0}
+            <DataTable>
+              <thead>
+                <tr>
+                  <Th>Campaña</Th>
+                  <Th>Estado</Th>
+                  <Th>Tipo</Th>
+                  <Th>Fecha</Th>
+                  <Th align="right">Destinatarios</Th>
+                  <Th align="right">Enviados</Th>
+                  <Th>Respondieron</Th>
+                  <Th align="right">Acciones</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {campaigns.map((c) => {
+                  const canSend = c.status === "draft" || c.status === "scheduled"
+                  const sending = sendingId === c.id
+                  return (
+                    <Tr key={c.id} className="cursor-pointer" onClick={() => setDetailCampaign(c)}>
+                      <Td className="whitespace-normal">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDetailCampaign(c)
+                          }}
+                          className="font-medium text-ent-fg hover:text-ent-accent hover:underline text-left"
+                        >
+                          {c.name}
+                        </button>
+                        {c.message && (
+                          <div className="text-[11px] text-ent-fg-3 leading-tight truncate max-w-[320px]">
+                            {c.message}
+                          </div>
+                        )}
+                      </Td>
+                      <Td>
+                        <StatusChip tone={CAMPAIGN_STATUS_TONE[c.status] ?? "mute"}>
+                          {CAMPAIGN_STATUS_LABEL[c.status] ?? c.status}
+                        </StatusChip>
+                      </Td>
+                      <Td>{typeLabel(c.type)}</Td>
+                      <Td className="text-ent-fg-2">{whenOf(c)}</Td>
+                      <Td align="right">{c.targetCount ?? 0}</Td>
+                      <Td align="right">
+                        {c.sentCount ?? 0}
+                        {(c.skippedNoPass ?? 0) > 0 && (
+                          <span className="text-ent-fg-3 text-[11px]">
+                            {" "}
+                            · {c.skippedNoPass} sin pase
                           </span>
-                        </TableCell>
-                        <TableCell>
-                          {c.effectiveness ? (
-                            <EffectivenessBadge effectiveness={c.effectiveness} />
-                          ) : c.status === "sent" ? (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          ) : null}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {formatDate(c.sentAt ?? c.scheduledAt ?? c.createdAt)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
+                        )}
+                      </Td>
+                      <Td>
+                        <Effectiveness e={c.effectiveness} />
+                      </Td>
+                      <Td align="right">
+                        {/* biome-ignore lint/a11y/noStaticElementInteractions: swallows the row click so the buttons act alone */}
+                        <div
+                          className="flex items-center justify-end gap-0.5"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0 text-ent-fg-2"
+                            onClick={() => setDetailCampaign(c)}
+                            type="button"
+                            aria-label="Ver detalle"
+                            title="Ver detalle"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </Button>
+                          {canSend && canWrite && (
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-7 px-2"
-                              onClick={() => setDetailCampaign(c)}
+                              className="h-6 w-6 p-0 text-ent-accent hover:text-ent-accent"
+                              onClick={() => handleSend(c.id)}
+                              disabled={sending}
                               type="button"
+                              aria-label="Enviar ahora"
+                              title="Enviar ahora"
                             >
-                              <Eye className="w-3.5 h-3.5" />
+                              {sending ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Send className="w-3.5 h-3.5" />
+                              )}
                             </Button>
-                            {canSend && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 px-2 text-primary hover:text-primary"
-                                onClick={() => handleSend(c.id)}
-                                disabled={sendingId === c.id}
-                              >
-                                {sendingId === c.id ? (
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                ) : (
-                                  <Send className="w-3.5 h-3.5" />
-                                )}
-                              </Button>
-                            )}
-                            {canSend && onEdit && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 px-2"
-                                onClick={() => onEdit(c.id)}
-                                type="button"
-                                aria-label="Editar campaña"
-                                title="Editar"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </Button>
-                            )}
-                            {canSend && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 px-2 text-red-600 hover:text-red-700"
-                                onClick={() => handleDelete(c.id)}
-                                type="button"
-                                aria-label="Eliminar campaña"
-                                title="Eliminar"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+                          )}
+                          {canSend && canWrite && onEdit && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0 text-ent-fg-2"
+                              onClick={() => onEdit(c.id)}
+                              type="button"
+                              aria-label="Editar campaña"
+                              title="Editar"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                          {canSend && canWrite && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0 text-ent-bad hover:text-ent-bad"
+                              onClick={() => handleDelete(c.id)}
+                              type="button"
+                              aria-label="Eliminar campaña"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </Td>
+                    </Tr>
+                  )
+                })}
+              </tbody>
+            </DataTable>
 
-            {/* Mobile cards */}
-            <div className="md:hidden space-y-3">
-              {campaigns.map((c) => (
-                <MobileCampaignCard
-                  key={c.id}
-                  campaign={c}
-                  sendingId={sendingId}
-                  onSend={handleSend}
-                  onEdit={onEdit}
-                  onDelete={handleDelete}
-                  formatDate={formatDate}
-                />
-              ))}
-            </div>
-
-            {/* Pagination */}
             {pagination && pagination.totalPages > 1 && (
-              <div className="flex items-center justify-between pt-4">
-                <p className="text-xs text-muted-foreground">
-                  Página {pagination.page} de {pagination.totalPages} ({pagination.total} campañas)
-                </p>
-                <div className="flex items-center gap-1">
+              <PanelFooter>
+                <span>
+                  Página {pagination.page} de {pagination.totalPages} · {pagination.total} campañas
+                </span>
+                <div className="flex gap-1">
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-7 w-7 p-0"
+                    className="h-6 text-[12px]"
                     disabled={page <= 1}
                     onClick={() => setPage((p) => p - 1)}
                   >
-                    <ChevronLeft className="w-3.5 h-3.5" />
+                    Anterior
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-7 w-7 p-0"
+                    className="h-6 text-[12px]"
                     disabled={page >= pagination.totalPages}
                     onClick={() => setPage((p) => p + 1)}
                   >
-                    <ChevronRight className="w-3.5 h-3.5" />
+                    Siguiente
                   </Button>
                 </div>
-              </div>
+              </PanelFooter>
             )}
           </>
         )}
-      </CardContent>
+      </Panel>
 
       <CampaignDetailDialog
         open={detailCampaign !== null}
@@ -511,6 +505,6 @@ export function CampaignList({ tenantSlug, refreshKey, onEdit }: CampaignListPro
         campaign={detailCampaign}
         tenantSlug={tenantSlug}
       />
-    </Card>
+    </>
   )
 }

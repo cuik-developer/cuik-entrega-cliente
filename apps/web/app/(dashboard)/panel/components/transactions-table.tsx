@@ -1,6 +1,15 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  DataTable,
+  Panel,
+  PanelFooter,
+  PanelHeader,
+  PanelMessage,
+  Td,
+  Th,
+  Tr,
+} from "@/components/admin/enterprise"
 import { formatDateTime } from "@/lib/format-date"
 
 type Transaction = {
@@ -14,8 +23,14 @@ type Transaction = {
   points?: number | null
   /** Purchase amount, when the till recorded one. */
   amount?: string | null
+  /** Name of the location (sucursal) where the visit was registered. */
+  locationName?: string | null
 }
 
+/**
+ * Last visits, one per row: when, and `Cliente · detalle | Sucursal`. The
+ * location is only printed when the visit recorded one.
+ */
 export function TransactionsTable({
   data,
   timezone = "America/Lima",
@@ -25,49 +40,65 @@ export function TransactionsTable({
   timezone?: string
   mode?: "stamps" | "points"
 }) {
+  const hasLocations = data.some((tx) => !!tx.locationName)
+
   return (
-    <Card className="border border-slate-200">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-bold text-slate-700">Transacciones recientes</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {data.length === 0 ? (
-          <p className="text-sm text-slate-400 py-4 text-center">Sin transacciones recientes</p>
-        ) : (
-          <div className="space-y-0">
-            {data.map((tx) => (
-              <div
-                key={tx.id}
-                className="flex items-start gap-3 py-2.5 border-b border-slate-100 last:border-0"
-              >
-                <span className="w-32 flex-shrink-0 text-[11px] font-medium text-slate-500 leading-tight tabular-nums pt-0.5">
-                  {formatDateTime(tx.createdAt, timezone)}
-                </span>
-                <div className="w-2 h-2 mt-1.5 rounded-full flex-shrink-0 bg-emerald-500" />
-                <div className="flex-1 min-w-0">
-                  <span className="font-medium text-slate-800 text-sm">
-                    {tx.clientName} {tx.clientLastName || ""}
-                  </span>
-                  <span className="text-slate-500 text-sm">
-                    {" "}
-                    {mode === "points" ? (
-                      <>
-                        ·{" "}
-                        <span className="font-medium text-emerald-700">+{tx.points ?? 0} pts</span>
-                        {tx.amount ? ` · S/ ${Number(tx.amount).toFixed(2)}` : ""}
-                      </>
-                    ) : (
-                      <>
-                        · Sello {tx.visitNum} (ciclo {tx.cycleNumber})
-                      </>
-                    )}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <Panel>
+      <PanelHeader title="Transacciones recientes" />
+      {data.length === 0 ? (
+        <PanelMessage>Sin transacciones recientes</PanelMessage>
+      ) : (
+        <>
+          <DataTable>
+            <thead>
+              <tr>
+                <Th className="w-[170px]">Fecha</Th>
+                <Th>Detalle</Th>
+                {hasLocations && <Th className="w-[180px]">Sucursal</Th>}
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((tx) => (
+                <Tr key={tx.id}>
+                  <Td className="text-ent-fg-3 tabular-nums">
+                    {formatDateTime(tx.createdAt, timezone)}
+                  </Td>
+                  <Td className="whitespace-normal">
+                    <span className="font-medium text-ent-fg">
+                      {tx.clientName}
+                      {tx.clientLastName ? ` ${tx.clientLastName}` : ""}
+                    </span>
+                    <span className="text-ent-fg-2">
+                      {" · "}
+                      {mode === "points" ? (
+                        <>
+                          <span className="font-medium text-ent-ok tabular-nums">
+                            +{tx.points ?? 0} pts
+                          </span>
+                          {tx.amount ? ` · S/ ${Number(tx.amount).toFixed(2)}` : ""}
+                        </>
+                      ) : (
+                        <>
+                          Sello {tx.visitNum} (ciclo {tx.cycleNumber})
+                        </>
+                      )}
+                    </span>
+                  </Td>
+                  {hasLocations && (
+                    <Td className="text-ent-fg-2 whitespace-normal">{tx.locationName ?? "—"}</Td>
+                  )}
+                </Tr>
+              ))}
+            </tbody>
+          </DataTable>
+          <PanelFooter>
+            <span>
+              {data.length === 1 ? "1 transacción" : `${data.length} transacciones`} · las últimas
+              registradas
+            </span>
+          </PanelFooter>
+        </>
+      )}
+    </Panel>
   )
 }

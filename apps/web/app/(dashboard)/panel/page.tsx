@@ -1,7 +1,7 @@
-import { and, clients, count, db, desc, eq, sql, visits } from "@cuik/db"
-import { Award, Coins, Gift, TrendingUp, UserPlus, Users } from "lucide-react"
+import { and, clients, count, db, desc, eq, locations, sql, visits } from "@cuik/db"
 import { headers } from "next/headers"
 
+import { PageHeader } from "@/components/admin/enterprise"
 import { auth } from "@/lib/auth"
 import { getDashboardKpis, getTodayItems } from "@/lib/dashboard/compute-dashboard"
 import {
@@ -22,12 +22,12 @@ export default async function DashboardPage() {
   const session = await auth.api.getSession({ headers: headersList })
 
   if (!session) {
-    return <p className="text-slate-500">No autenticado</p>
+    return <p className="text-[12.5px] text-ent-fg-3">No autenticado</p>
   }
 
   const tenant = await getTenantForUser(session.user.id)
   if (!tenant) {
-    return <p className="text-slate-500">Sin comercio asignado</p>
+    return <p className="text-[12.5px] text-ent-fg-3">Sin comercio asignado</p>
   }
 
   const tenantId = tenant.tenantId
@@ -47,7 +47,7 @@ export default async function DashboardPage() {
       isPoints ? getPointsPerDay(tenantId, tenant.timezone) : null,
       getTodayItems({ tenantId, organizationId: tenant.organizationId }),
 
-      // Last 10 visits with client join
+      // Last 10 visits with the client and, when recorded, the location
       db
         .select({
           id: visits.id,
@@ -58,9 +58,11 @@ export default async function DashboardPage() {
           amount: visits.amount,
           clientName: clients.name,
           clientLastName: clients.lastName,
+          locationName: locations.name,
         })
         .from(visits)
         .innerJoin(clients, eq(visits.clientId, clients.id))
+        .leftJoin(locations, eq(visits.locationId, locations.id))
         .where(eq(visits.tenantId, tenantId))
         .orderBy(desc(visits.createdAt))
         .limit(10),
@@ -104,65 +106,17 @@ export default async function DashboardPage() {
   // Points: points granted, points redeemed, clients who earned, redemptions.
   const kpiCards: KpiCard[] = pointsKpis
     ? [
-        {
-          key: "pointsEarned",
-          label: "Puntos otorgados hoy",
-          icon: Coins,
-          bg: "bg-blue-50 text-primary",
-          kpi: pointsKpis.pointsEarned,
-        },
-        {
-          key: "pointsRedeemed",
-          label: "Puntos canjeados hoy",
-          icon: Gift,
-          bg: "bg-orange-50 text-accent",
-          kpi: pointsKpis.pointsRedeemed,
-        },
-        {
-          key: "clientsEarned",
-          label: "Clientes que sumaron hoy",
-          icon: Users,
-          bg: "bg-emerald-50 text-emerald-600",
-          kpi: pointsKpis.clientsEarned,
-        },
-        {
-          key: "redemptions",
-          label: "Canjes hoy",
-          icon: Award,
-          bg: "bg-amber-50 text-amber-600",
-          kpi: pointsKpis.redemptions,
-        },
+        { key: "pointsEarned", label: "Puntos otorgados hoy", kpi: pointsKpis.pointsEarned },
+        { key: "pointsRedeemed", label: "Puntos canjeados hoy", kpi: pointsKpis.pointsRedeemed },
+        { key: "clientsEarned", label: "Clientes que sumaron hoy", kpi: pointsKpis.clientsEarned },
+        { key: "redemptions", label: "Canjes hoy", kpi: pointsKpis.redemptions },
       ]
     : kpis
       ? [
-          {
-            key: "visits",
-            label: "Visitas hoy",
-            icon: TrendingUp,
-            bg: "bg-blue-50 text-primary",
-            kpi: kpis.visits,
-          },
-          {
-            key: "uniqueClients",
-            label: "Clientes que vinieron hoy",
-            icon: Users,
-            bg: "bg-emerald-50 text-emerald-600",
-            kpi: kpis.uniqueClients,
-          },
-          {
-            key: "newClients",
-            label: "Clientes nuevos hoy",
-            icon: UserPlus,
-            bg: "bg-amber-50 text-amber-600",
-            kpi: kpis.newClients,
-          },
-          {
-            key: "rewardsRedeemed",
-            label: "Premios canjeados hoy",
-            icon: Award,
-            bg: "bg-orange-50 text-accent",
-            kpi: kpis.rewardsRedeemed,
-          },
+          { key: "visits", label: "Visitas hoy", kpi: kpis.visits },
+          { key: "uniqueClients", label: "Clientes que vinieron hoy", kpi: kpis.uniqueClients },
+          { key: "newClients", label: "Clientes nuevos hoy", kpi: kpis.newClients },
+          { key: "rewardsRedeemed", label: "Premios canjeados hoy", kpi: kpis.rewardsRedeemed },
         ]
       : []
 
@@ -175,6 +129,7 @@ export default async function DashboardPage() {
     amount: v.amount,
     clientName: v.clientName,
     clientLastName: v.clientLastName,
+    locationName: v.locationName,
   }))
 
   const now = new Date()
@@ -187,19 +142,21 @@ export default async function DashboardPage() {
   })
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold text-slate-900">Dashboard</h1>
-        <p className="text-sm text-slate-500">
-          {tenant.tenantName} · {dateStr}
-        </p>
-      </div>
+    <div className="space-y-4">
+      <PageHeader
+        title="Resumen"
+        subtitle={
+          <>
+            {tenant.tenantName} · {dateStr}
+          </>
+        }
+      />
 
       <KpiCompareCards cards={kpiCards} />
 
       {pointsState && <PointsStateCards state={pointsState} />}
 
-      <div className="grid lg:grid-cols-5 gap-6">
+      <div className="grid lg:grid-cols-5 gap-4">
         <div className="lg:col-span-2">
           <TodayBlock items={today} timezone={tenant.timezone} points={pointsState ?? undefined} />
         </div>

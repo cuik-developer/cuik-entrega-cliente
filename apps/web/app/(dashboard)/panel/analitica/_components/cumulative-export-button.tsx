@@ -84,7 +84,7 @@ export function CumulativeExportButton({
   return (
     <div className="flex items-center gap-1.5">
       <Select value={until} onValueChange={setUntil}>
-        <SelectTrigger size="sm" className="h-8 text-xs w-[175px]" aria-label="Acumulado hasta">
+        <SelectTrigger size="sm" className="h-7 text-[12px] w-[170px]" aria-label="Acumulado hasta">
           <SelectValue placeholder="Hasta…" />
         </SelectTrigger>
         <SelectContent>
@@ -98,7 +98,7 @@ export function CumulativeExportButton({
       <Button
         variant="outline"
         size="sm"
-        className="text-xs h-8 gap-1.5"
+        className="h-7 text-[12px] gap-1.5 rounded-[4px]"
         onClick={download}
         disabled={busy || !until}
         type="button"

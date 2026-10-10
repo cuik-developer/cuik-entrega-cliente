@@ -74,7 +74,7 @@ export function CreateCampaignForm({
   // and only that instant travels to the server. Feeding the UTC ISO back into
   // the input is what used to show 09:17 for a 04:17 choice (and compounded
   // +5h on every edit).
-  const { timezone } = useTenant()
+  const { timezone, readOnly } = useTenant()
   const [scheduledLocal, setScheduledLocal] = useState("")
   // Bumped when an edit finished loading: remounts the audience picker so its
   // tab is computed from the loaded value, not from the previous campaign.
@@ -195,13 +195,12 @@ export function CreateCampaignForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="ent sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Bell className="w-5 h-5 text-primary" />
+          <DialogTitle className="text-[15px]">
             {isEdit ? "Editar campaña" : "Nueva campaña"}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-[12px]">
             {isEdit
               ? "Puedes cambiar todo mientras la campaña no se haya enviado."
               : "Envia mensajes segmentados a tus clientes via Wallet."}
@@ -209,7 +208,7 @@ export function CreateCampaignForm({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 text-[12.5px]">
             {/* Name */}
             <FormField
               control={form.control}
@@ -368,26 +367,30 @@ export function CreateCampaignForm({
             </div>
 
             {/* Submit */}
-            <div className="flex gap-2 pt-2">
-              <Button
-                type="submit"
-                disabled={isSubmitting || loadingEdit}
-                className="bg-primary text-white gap-2 flex-1"
-              >
-                {isSubmitting || loadingEdit ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Send className="w-4 h-4" />
-                )}
-                {isEdit ? "Guardar cambios" : isScheduled ? "Programar" : "Crear campaña"}
-              </Button>
+            <div className="flex justify-end gap-1.5 pt-3 border-t border-ent-line">
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
+                className="h-7 text-[12px]"
                 onClick={() => onOpenChange(false)}
                 disabled={isSubmitting}
               >
                 Cancelar
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isSubmitting || loadingEdit || readOnly}
+                title={readOnly ? "Solo lectura" : undefined}
+                className="h-7 text-[12px] gap-1.5"
+              >
+                {isSubmitting || loadingEdit ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Send className="w-3.5 h-3.5" />
+                )}
+                {isEdit ? "Guardar cambios" : isScheduled ? "Programar" : "Crear campaña"}
               </Button>
             </div>
           </form>

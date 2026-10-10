@@ -1,11 +1,11 @@
 "use client"
 
-import { Cake, Loader2, Save } from "lucide-react"
+import { Loader2, Save } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
+import { FieldList, Notice, Panel, PanelHeader, PanelMessage } from "@/components/admin/enterprise"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Select,
   SelectContent,
@@ -15,8 +15,9 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import { useTenant } from "@/hooks/use-tenant"
 
-import { VariableInsertButton } from "./variable-insert-button"
+import { VariableInsertButton } from "../../campanas/_components/variable-insert-button"
 
 type Person = { id: string; name: string; lastName: string | null }
 type Upcoming = Person & { date: string; daysUntil: number }
@@ -42,11 +43,12 @@ function hourLabel(h: number) {
 }
 
 /**
- * Birthday greeting automation. The card is the whole configuration: on/off,
+ * Birthday greeting automation. The panel is the whole configuration: on/off,
  * message and hour. Sending happens in the campaigns-birthday cron; each day's
  * send shows up in the campaign history like any other push.
  */
 export function BirthdayAutomationCard({ tenantSlug }: { tenantSlug: string }) {
+  const { readOnly } = useTenant()
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -107,95 +109,94 @@ export function BirthdayAutomationCard({ tenantSlug }: { tenantSlug: string }) {
 
   if (loading) {
     return (
-      <Card className="border-pink-200 bg-pink-50/50 dark:border-pink-900 dark:bg-pink-950/20">
-        <CardContent className="flex items-center justify-center py-6">
-          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-        </CardContent>
-      </Card>
+      <Panel>
+        <PanelHeader title="Saludo de cumpleaños" />
+        <PanelMessage className="py-6">
+          <Loader2 className="w-4 h-4 animate-spin" />
+        </PanelMessage>
+      </Panel>
     )
   }
   if (!data) {
     return (
-      <Card className="border-pink-200 bg-pink-50/50 dark:border-pink-900 dark:bg-pink-950/20">
-        <CardContent className="flex items-center justify-between gap-3 py-4 text-sm">
-          <span className="text-muted-foreground">
-            No se pudo cargar el saludo de cumpleaños. El resto de Campañas funciona igual.
-          </span>
-          <Button size="sm" variant="outline" onClick={load}>
+      <Panel>
+        <PanelHeader title="Saludo de cumpleaños" />
+        <PanelMessage className="py-6">
+          <span>No se pudo cargar el saludo de cumpleaños.</span>
+          <Button size="sm" variant="outline" className="h-7 text-[12px]" onClick={load}>
             Reintentar
           </Button>
-        </CardContent>
-      </Card>
+        </PanelMessage>
+      </Panel>
     )
   }
 
   const noBirthdays = data.coverage.withBirthday === 0
   // A tenant that neither asks for birthdays nor has any loaded (e.g. a
-  // historical client base) never sees this card: it only confuses the admin.
+  // historical client base) never sees this panel: it only confuses the admin.
   if (noBirthdays && !data.asked && !data.config.enabled) return null
   const pct =
     data.coverage.total > 0
       ? Math.round((data.coverage.withBirthday / data.coverage.total) * 100)
       : 0
 
+  const upcomingText =
+    data.upcoming.length === 0
+      ? "nadie"
+      : data.upcoming
+          .slice(0, 6)
+          .map((u) => `${fullName(u)} (${u.daysUntil === 1 ? "mañana" : `en ${u.daysUntil} días`})`)
+          .join(", ") + (data.upcoming.length > 6 ? ` y ${data.upcoming.length - 6} más` : "")
+
   return (
-    <Card className="border-pink-200 bg-pink-50/50 dark:border-pink-900 dark:bg-pink-950/20">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-pink-100 dark:bg-pink-900/40 flex items-center justify-center">
-              <Cake className="w-5 h-5 text-pink-600 dark:text-pink-400" />
-            </div>
-            <div>
-              <CardTitle className="text-base">Saludo de cumpleaños</CardTitle>
-              <CardDescription>
-                Push automático a cada cliente el día de su cumpleaños, a la hora que elijas.
-              </CardDescription>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs font-medium text-muted-foreground">
-              {enabled ? "Activado" : "Desactivado"}
-            </span>
+    <Panel>
+      <PanelHeader
+        title="Saludo de cumpleaños"
+        actions={
+          <span className="flex items-center gap-2 text-[12px] text-ent-fg-2">
+            {enabled ? "Activado" : "Desactivado"}
             <Switch
               checked={enabled}
               onCheckedChange={setEnabled}
+              disabled={readOnly}
               aria-label="Activar saludo de cumpleaños"
             />
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
+          </span>
+        }
+      />
+      <div className="p-3 space-y-3 text-[12.5px]">
+        <p className="text-ent-fg-3 text-[12px]">
+          Push automático a cada cliente el día de su cumpleaños, a la hora que elijas.
+        </p>
+
         {noBirthdays && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-3 text-xs text-amber-800 dark:text-amber-300">
+          <Notice tone="warn">
             {data.asked
               ? "Todavía ningún cliente tiene cumpleaños cargado. Los nuevos lo dejan al registrarse; para los actuales podés cargarlo desde su ficha. Mientras tanto el saludo no tiene a quién enviarse."
               : "Este comercio no pregunta el cumpleaños en el registro, así que el saludo automático no tiene a quién enviarse. Podés desactivarlo, o pedirle al equipo de Cuik que habilite la pregunta."}
-          </div>
+          </Notice>
         )}
-        <div className="space-y-1.5">
+
+        <div className="space-y-1">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Mensaje</span>
-            <VariableInsertButton textareaRef={textareaRef} onInsert={setMessage} />
+            <span className="text-[11px] uppercase tracking-[0.05em] text-ent-fg-3">Mensaje</span>
+            {!readOnly && <VariableInsertButton textareaRef={textareaRef} onInsert={setMessage} />}
           </div>
           <Textarea
             ref={textareaRef}
             value={message}
             onChange={(e) => setMessage(e.target.value.slice(0, MAX))}
             rows={2}
-            className="bg-white dark:bg-background"
+            disabled={readOnly}
+            className="text-[12.5px]"
           />
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">
+          <div className="flex items-center justify-between text-[11px] text-ent-fg-3">
+            <span>
               Usá <code className="font-mono">{"{{client.name}}"}</code> para el nombre del cliente.
             </span>
             <span
               className={
-                message.length >= MAX
-                  ? "text-red-500"
-                  : message.length > 130
-                    ? "text-orange-500"
-                    : "text-muted-foreground"
+                message.length >= MAX ? "text-ent-bad" : message.length > 130 ? "text-ent-warn" : ""
               }
             >
               {message.length}/{MAX}
@@ -203,10 +204,16 @@ export function BirthdayAutomationCard({ tenantSlug }: { tenantSlug: string }) {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs font-medium text-muted-foreground">Hora de envío</span>
-          <Select value={String(sendHour)} onValueChange={(v) => setSendHour(Number(v))}>
-            <SelectTrigger size="sm" className="w-28 bg-white dark:bg-background">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] uppercase tracking-[0.05em] text-ent-fg-3">
+            Hora de envío
+          </span>
+          <Select
+            value={String(sendHour)}
+            onValueChange={(v) => setSendHour(Number(v))}
+            disabled={readOnly}
+          >
+            <SelectTrigger size="sm" className="w-24 h-7 text-[12.5px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -217,8 +224,14 @@ export function BirthdayAutomationCard({ tenantSlug }: { tenantSlug: string }) {
               ))}
             </SelectContent>
           </Select>
-          <span className="text-xs text-muted-foreground">hora local del comercio</span>
-          <Button size="sm" className="ml-auto gap-1.5" onClick={save} disabled={saving || !dirty}>
+          <span className="text-[11.5px] text-ent-fg-3">hora local del comercio</span>
+          <Button
+            size="sm"
+            className="ml-auto h-7 text-[12px] gap-1.5"
+            onClick={save}
+            disabled={saving || !dirty || readOnly}
+            title={readOnly ? "Solo lectura" : undefined}
+          >
             {saving ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : (
@@ -228,38 +241,40 @@ export function BirthdayAutomationCard({ tenantSlug }: { tenantSlug: string }) {
           </Button>
         </div>
 
-        <div className="rounded-lg border border-pink-200/70 dark:border-pink-900/60 bg-white/70 dark:bg-background/40 p-3 text-xs space-y-1.5">
-          <p>
-            <span className="font-medium text-foreground">Hoy cumplen años:</span>{" "}
-            {data.today.length === 0 ? (
-              <span className="text-muted-foreground">nadie</span>
-            ) : (
-              data.today.map(fullName).join(", ")
-            )}
-          </p>
-          <p>
-            <span className="font-medium text-foreground">Próximos 7 días:</span>{" "}
-            {data.upcoming.length === 0 ? (
-              <span className="text-muted-foreground">nadie</span>
-            ) : (
-              data.upcoming
-                .slice(0, 6)
-                .map(
-                  (u) =>
-                    `${fullName(u)} (${u.daysUntil === 1 ? "mañana" : `en ${u.daysUntil} días`})`,
-                )
-                .join(", ") + (data.upcoming.length > 6 ? ` y ${data.upcoming.length - 6} más` : "")
-            )}
-          </p>
-          <p
-            className={pct < 50 ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground"}
-          >
-            {data.coverage.withBirthday} de {data.coverage.total} clientes tienen cumpleaños cargado
-            ({pct}%).
-            {pct < 50 && " Podés cargarlo desde la ficha de cada cliente."}
-          </p>
+        <div className="border border-ent-line rounded-[4px] px-3">
+          <FieldList
+            rows={[
+              {
+                label: "Hoy cumplen años",
+                value:
+                  data.today.length === 0 ? (
+                    <span className="text-ent-fg-3">nadie</span>
+                  ) : (
+                    data.today.map(fullName).join(", ")
+                  ),
+              },
+              {
+                label: "Próximos 7 días",
+                value:
+                  data.upcoming.length === 0 ? (
+                    <span className="text-ent-fg-3">nadie</span>
+                  ) : (
+                    upcomingText
+                  ),
+              },
+              {
+                label: "Con cumpleaños",
+                value: (
+                  <span className={pct < 50 ? "text-ent-warn" : ""}>
+                    {data.coverage.withBirthday} de {data.coverage.total} clientes ({pct}%)
+                    {pct < 50 && ". Podés cargarlo desde la ficha de cada cliente."}
+                  </span>
+                ),
+              },
+            ]}
+          />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </Panel>
   )
 }

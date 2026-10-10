@@ -1,29 +1,22 @@
-import type { LucideIcon } from "lucide-react"
-
-import { Card, CardContent } from "@/components/ui/card"
+import { Panel } from "@/components/admin/enterprise"
 import type { DayKpi } from "@/lib/dashboard/kpi-utils"
 import { pctDelta } from "@/lib/dashboard/kpi-utils"
+import { cn } from "@/lib/utils"
 
 export type KpiCard = {
   key: string
   label: string
-  icon: LucideIcon
-  bg: string
   kpi: DayKpi
 }
 
-function DeltaPill({ kpi }: { kpi: DayKpi }) {
+function Delta({ kpi }: { kpi: DayKpi }) {
   const delta = pctDelta(kpi.today, kpi.previous)
   const up = delta > 0
   const flat = delta === 0
-  const cls = flat
-    ? "bg-slate-100 text-slate-600"
-    : up
-      ? "bg-emerald-100 text-emerald-700"
-      : "bg-red-100 text-red-700"
+  const cls = flat ? "text-ent-fg-3" : up ? "text-ent-ok" : "text-ent-bad"
   return (
     <span
-      className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${cls}`}
+      className={cn("text-[11px] font-medium tabular-nums ml-1.5", cls)}
       title="Variación contra el mismo día de la semana pasada, hasta esta misma hora"
     >
       {flat ? "" : up ? "▲ " : "▼ "}
@@ -34,35 +27,37 @@ function DeltaPill({ kpi }: { kpi: DayKpi }) {
 
 /**
  * Today so far vs. the same weekday last week up to the same time of day.
- * One number per card on purpose — an accumulated week next to "today" read
- * as two different things and confused the operator. The list of cards is
+ * One number per cell on purpose — an accumulated week next to "today" read
+ * as two different things and confused the operator. The list of cells is
  * chosen by the page: stamps and points programs measure different things.
+ *
+ * Same anatomy as the enterprise `StatStrip`, plus the comparison line.
  */
 export function KpiCompareCards({ cards }: { cards: KpiCard[] }) {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <Panel className="grid grid-cols-2 md:grid-cols-4 overflow-hidden">
       {cards.map((card) => (
-        <Card key={card.key} className="border border-slate-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-slate-500 font-medium">{card.label}</span>
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${card.bg}`}>
-                <card.icon className="w-4 h-4" />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-extrabold text-slate-900 tabular-nums">
-                {card.kpi.today}
-              </span>
-              <DeltaPill kpi={card.kpi} />
-            </div>
-            <div className="mt-1 text-xs text-slate-500 tabular-nums">
-              Sem. pasada a esta hora:{" "}
-              <span className="font-medium text-slate-700">{card.kpi.previous}</span>
-            </div>
-          </CardContent>
-        </Card>
+        <div
+          key={card.key}
+          className={cn(
+            "px-3 py-2 min-w-0 border-ent-line",
+            "[&:nth-child(n+3)]:border-t md:[&:nth-child(n+3)]:border-t-0",
+            "odd:border-r md:border-r md:last:border-r-0",
+          )}
+        >
+          <div className="text-[11px] uppercase tracking-[0.05em] text-ent-fg-3 truncate">
+            {card.label}
+          </div>
+          <div className="text-[18px] leading-6 font-semibold text-ent-fg tabular-nums truncate">
+            {card.kpi.today}
+            <Delta kpi={card.kpi} />
+          </div>
+          <div className="text-[11px] text-ent-fg-3 tabular-nums truncate">
+            Sem. pasada a esta hora:{" "}
+            <span className="font-medium text-ent-fg-2">{card.kpi.previous}</span>
+          </div>
+        </div>
       ))}
-    </div>
+    </Panel>
   )
 }

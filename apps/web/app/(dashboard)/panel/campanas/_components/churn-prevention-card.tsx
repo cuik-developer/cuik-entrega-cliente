@@ -1,9 +1,18 @@
 "use client"
 
-import { AlertTriangle, ChevronDown, ChevronUp, Loader2, Send, UserX } from "lucide-react"
+import { ChevronDown, ChevronUp, Loader2, Send } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
+import {
+  DataTable,
+  Panel,
+  PanelHeader,
+  StatusChip,
+  Td,
+  Th,
+  Tr,
+} from "@/components/admin/enterprise"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,8 +24,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
+import { useTenant } from "@/hooks/use-tenant"
 
 type AtRiskClient = {
   id: string
@@ -32,7 +41,13 @@ interface ChurnPreventionCardProps {
   onCampaignSent?: () => void
 }
 
+/**
+ * "Prevención de abandono": a one-shot push to the clients that stopped
+ * coming. It stays in Campañas because it is a send, not a setting; the
+ * resulting campaign shows up in the list below.
+ */
 export function ChurnPreventionCard({ tenantSlug, onCampaignSent }: ChurnPreventionCardProps) {
+  const { readOnly } = useTenant()
   const [atRiskClients, setAtRiskClients] = useState<AtRiskClient[]>([])
   const [count, setCount] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
@@ -95,169 +110,144 @@ export function ChurnPreventionCard({ tenantSlug, onCampaignSent }: ChurnPrevent
     }
   }
 
-  if (isLoading) {
-    return (
-      <Card className="border-orange-200 bg-orange-50/50 dark:border-orange-900 dark:bg-orange-950/20">
-        <CardContent className="flex items-center justify-center py-6">
-          <Loader2 className="w-5 h-5 animate-spin text-orange-500" />
-        </CardContent>
-      </Card>
-    )
-  }
+  // Nothing to recover: the block disappears instead of taking space.
+  if (!isLoading && count === 0) return null
 
   const charCount = message.length
+  const who = `${count} ${count === 1 ? "cliente" : "clientes"}`
 
   return (
     <>
-      <Card className="border-orange-200 bg-orange-50/50 dark:border-orange-900 dark:bg-orange-950/20">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">Prevencion de abandono</CardTitle>
-                <CardDescription>
-                  {count === 0 ? (
-                    <span className="text-muted-foreground">
-                      No hay clientes en riesgo de abandono
-                    </span>
-                  ) : (
-                    <>
-                      <span className="font-semibold text-orange-600 dark:text-orange-400">
-                        {count} {count === 1 ? "cliente" : "clientes"}
-                      </span>{" "}
-                      en riesgo de abandono
-                    </>
-                  )}
-                </CardDescription>
-              </div>
-            </div>
-            {count > 0 && (
+      <Panel>
+        <PanelHeader
+          title={
+            <span className="flex items-center gap-2">
+              Prevención de abandono
+              {!isLoading && <StatusChip tone="bad">{who} en riesgo</StatusChip>}
+            </span>
+          }
+          actions={
+            !isLoading && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowList(!showList)}
-                className="text-muted-foreground"
+                className="h-6 text-[12px] text-ent-fg-2 gap-1"
                 type="button"
               >
-                {showList ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                <span className="ml-1 text-xs">{showList ? "Ocultar" : "Ver lista"}</span>
+                {showList ? (
+                  <ChevronUp className="w-3.5 h-3.5" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5" />
+                )}
+                {showList ? "Ocultar lista" : "Ver lista"}
               </Button>
-            )}
-          </div>
-        </CardHeader>
+            )
+          }
+        />
 
-        {count > 0 && (
-          <CardContent className="space-y-4">
-            {/* Expandable client list */}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-4">
+            <Loader2 className="w-4 h-4 animate-spin text-ent-fg-3" />
+          </div>
+        ) : (
+          <>
             {showList && (
-              <div className="rounded-lg border border-orange-200 dark:border-orange-800 overflow-hidden">
-                <div className="max-h-48 overflow-y-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-orange-100/50 dark:bg-orange-900/30 sticky top-0">
-                      <tr>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">
-                          Cliente
-                        </th>
-                        <th className="text-right px-3 py-2 font-medium text-muted-foreground">
-                          Frecuencia promedio
-                        </th>
-                        <th className="text-right px-3 py-2 font-medium text-muted-foreground">
-                          Dias sin visitar
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-orange-100 dark:divide-orange-900/30">
-                      {atRiskClients.map((client) => (
-                        <tr key={client.id}>
-                          <td className="px-3 py-2">
-                            {client.name}
-                            {client.lastName ? ` ${client.lastName}` : ""}
-                          </td>
-                          <td className="px-3 py-2 text-right text-muted-foreground">
-                            cada {client.avgDays} dias
-                          </td>
-                          <td className="px-3 py-2 text-right font-medium text-orange-600 dark:text-orange-400">
-                            {client.daysSinceLastVisit} dias
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+              <div className="max-h-48 overflow-y-auto border-b border-ent-line">
+                <DataTable>
+                  <thead>
+                    <tr>
+                      <Th>Cliente</Th>
+                      <Th align="right">Frecuencia promedio</Th>
+                      <Th align="right">Días sin visitar</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {atRiskClients.map((client) => (
+                      <Tr key={client.id}>
+                        <Td>
+                          {client.name}
+                          {client.lastName ? ` ${client.lastName}` : ""}
+                        </Td>
+                        <Td align="right" className="text-ent-fg-2">
+                          cada {client.avgDays} días
+                        </Td>
+                        <Td align="right" className="text-ent-bad font-medium">
+                          {client.daysSinceLastVisit} días
+                        </Td>
+                      </Tr>
+                    ))}
+                  </tbody>
+                </DataTable>
               </div>
             )}
 
-            {/* Message input + send button */}
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="p-3 flex flex-col sm:flex-row gap-2 text-[12.5px]">
               <div className="flex-1 space-y-1">
                 <Textarea
-                  placeholder="Te extranamos! Ven y reclama un 15% en toda la cafeteria"
+                  placeholder="Te extrañamos. Ven y reclama un 15% en toda la cafetería"
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   rows={2}
                   maxLength={150}
-                  className="resize-none bg-white dark:bg-background"
+                  className="resize-none text-[12.5px]"
+                  disabled={readOnly}
+                  aria-label="Mensaje de recuperación"
                 />
-                <span
-                  className={`text-xs ${
-                    charCount >= 150
-                      ? "text-red-500 font-semibold"
-                      : charCount > 130
-                        ? "text-orange-500"
-                        : "text-muted-foreground"
-                  }`}
-                >
-                  {charCount}/150
-                </span>
+                <div className="flex items-center justify-between text-[11px] text-ent-fg-3">
+                  <span>Push a los {who} que dejaron de venir.</span>
+                  <span
+                    className={
+                      charCount >= 150
+                        ? "text-ent-bad font-semibold"
+                        : charCount > 130
+                          ? "text-ent-warn"
+                          : ""
+                    }
+                  >
+                    {charCount}/150
+                  </span>
+                </div>
               </div>
               <Button
                 type="button"
-                disabled={isSending || message.trim().length === 0}
+                size="sm"
+                disabled={isSending || message.trim().length === 0 || readOnly}
+                title={readOnly ? "Solo lectura" : undefined}
                 onClick={() => setShowConfirm(true)}
-                className="bg-orange-600 hover:bg-orange-700 text-white gap-2 shrink-0 self-start"
+                className="h-7 text-[12px] gap-1.5 shrink-0 self-start"
               >
                 {isSending ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
-                  <Send className="w-4 h-4" />
+                  <Send className="w-3.5 h-3.5" />
                 )}
-                Enviar a {count} {count === 1 ? "cliente" : "clientes"}
+                Enviar a {who}
               </Button>
             </div>
-          </CardContent>
+          </>
         )}
-      </Card>
+      </Panel>
 
-      {/* Confirmation dialog */}
       <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
-        <AlertDialogContent>
+        <AlertDialogContent className="ent">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <UserX className="w-5 h-5 text-orange-600" />
-              Confirmar envio de recuperacion
+            <AlertDialogTitle className="text-[15px]">
+              Confirmar envío de recuperación
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
+            <AlertDialogDescription className="space-y-2 text-[12.5px]">
               <span className="block">
-                Se enviara una notificacion push a{" "}
-                <span className="font-semibold text-foreground">
-                  {count} {count === 1 ? "cliente" : "clientes"}
-                </span>{" "}
-                en riesgo de abandono.
+                Se enviará una notificación push a{" "}
+                <span className="font-semibold text-ent-fg">{who}</span> en riesgo de abandono.
               </span>
-              <span className="block rounded-md bg-muted p-3 text-sm italic">
+              <span className="block border border-ent-line rounded-[4px] bg-ent-panel-2 p-3 italic">
                 &ldquo;{message}&rdquo;
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleSend}
-              className="bg-orange-600 hover:bg-orange-700 text-white"
-            >
+            <AlertDialogCancel className="h-7 text-[12px]">Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSend} className="h-7 text-[12px]">
               Enviar campaña
             </AlertDialogAction>
           </AlertDialogFooter>

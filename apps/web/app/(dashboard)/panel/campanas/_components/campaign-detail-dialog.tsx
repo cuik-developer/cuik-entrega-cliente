@@ -1,9 +1,17 @@
 "use client"
 
-import { Download, Eye, Loader2 } from "lucide-react"
+import { Download, Loader2 } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
-import { Badge } from "@/components/ui/badge"
+import {
+  DataTable,
+  FieldList,
+  PanelMessage,
+  StatusChip,
+  Td,
+  Th,
+  Tr,
+} from "@/components/admin/enterprise"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -12,15 +20,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { useTenant } from "@/hooks/use-tenant"
+import {
+  CAMPAIGN_STATUS_LABEL,
+  CAMPAIGN_STATUS_TONE,
+  CAMPAIGN_TYPE_LABEL,
+  type CampaignStatus,
+  type CampaignType,
+} from "@/lib/admin/campaign-labels"
 import { formatDateTime } from "@/lib/format-date"
 
 interface Recipient {
@@ -56,7 +63,7 @@ interface CampaignDetailDialogProps {
 }
 
 function generateCsv(_campaign: CampaignInfo, recipients: Recipient[], timezone: string): string {
-  const BOM = "\uFEFF"
+  const BOM = "﻿"
   const headers = ["Nombre", "Telefono", "Email", "Estado notificacion", "Visito?", "Fecha visita"]
   const rows = recipients.map((r) => [
     r.name,
@@ -125,123 +132,108 @@ export function CampaignDetailDialog({
   if (!campaign) return null
 
   const visitedCount = recipients.filter((r) => r.visited).length
+  const visitedPct =
+    recipients.length > 0 ? Math.round((visitedCount / recipients.length) * 100) : 0
+  const statusKey = campaign.status as CampaignStatus
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+      <DialogContent className="ent max-w-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Eye className="w-4 h-4" />
-            {campaign.name}
-          </DialogTitle>
-          <DialogDescription>Detalle de campaña y destinatarios</DialogDescription>
+          <DialogTitle className="text-[15px]">{campaign.name}</DialogTitle>
+          <DialogDescription className="text-[12px]">
+            {CAMPAIGN_TYPE_LABEL[campaign.type as CampaignType] ?? campaign.type} · detalle y
+            destinatarios
+          </DialogDescription>
         </DialogHeader>
 
-        {/* Campaign info */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-          <div className="bg-muted/50 rounded-lg p-2.5">
-            <div className="text-xs text-muted-foreground">Tipo</div>
-            <div className="font-medium">{campaign.type === "push" ? "Push" : "Wallet Update"}</div>
-          </div>
-          <div className="bg-muted/50 rounded-lg p-2.5">
-            <div className="text-xs text-muted-foreground">Estado</div>
-            <div className="font-medium capitalize">{campaign.status}</div>
-          </div>
-          <div className="bg-muted/50 rounded-lg p-2.5">
-            <div className="text-xs text-muted-foreground">Fecha</div>
-            <div className="font-medium">
-              {formatDate(campaign.sentAt ?? campaign.scheduledAt ?? campaign.createdAt)}
-            </div>
-          </div>
-          <div className="bg-muted/50 rounded-lg p-2.5">
-            <div className="text-xs text-muted-foreground">Enviados</div>
-            <div className="font-medium">
-              {campaign.sentCount ?? 0} / {campaign.targetCount ?? 0}
-            </div>
-            {(campaign.skippedNoPass ?? 0) > 0 && (
-              <div className="text-[11px] text-muted-foreground mt-0.5">
-                {campaign.skippedNoPass} sin pase instalado
-              </div>
-            )}
-          </div>
-        </div>
+        <div className="space-y-3 text-[12.5px] flex-1 min-h-0 flex flex-col">
+          <StatusChip tone={CAMPAIGN_STATUS_TONE[statusKey] ?? "mute"}>
+            {CAMPAIGN_STATUS_LABEL[statusKey] ?? campaign.status}
+          </StatusChip>
 
-        {campaign.message && (
-          <div className="bg-muted/30 rounded-lg p-3 text-sm italic text-muted-foreground">
-            &ldquo;{campaign.message}&rdquo;
+          <div className="border border-ent-line rounded-[4px] px-3">
+            <FieldList
+              rows={[
+                { label: "Mensaje", value: campaign.message ? `“${campaign.message}”` : "—" },
+                { label: "Creada", value: formatDate(campaign.createdAt) },
+                { label: "Programada", value: formatDate(campaign.scheduledAt) },
+                { label: "Enviada", value: formatDate(campaign.sentAt) },
+                {
+                  label: "Destinatarios",
+                  value: `${campaign.targetCount ?? 0} · enviados ${campaign.sentCount ?? 0}${
+                    (campaign.skippedNoPass ?? 0) > 0
+                      ? ` · ${campaign.skippedNoPass} sin pase instalado`
+                      : ""
+                  }`,
+                },
+                {
+                  label: "Respondieron",
+                  value:
+                    recipients.length > 0
+                      ? `${visitedCount} de ${recipients.length} visitaron (${visitedPct}%)`
+                      : "—",
+                },
+              ]}
+            />
           </div>
-        )}
 
-        {/* Recipients table */}
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">
-            {recipients.length} destinatarios
-            {recipients.length > 0 && (
-              <span className="ml-2">
-                · <span className="text-emerald-600 font-medium">{visitedCount}</span> visitaron (
-                {recipients.length > 0 ? Math.round((visitedCount / recipients.length) * 100) : 0}%)
+          <div className="border border-ent-line rounded-[4px] flex-1 min-h-0 flex flex-col">
+            <div className="px-3 h-8 flex items-center justify-between gap-2 text-[12px] font-semibold border-b border-ent-line shrink-0">
+              <span>
+                Destinatarios{" "}
+                <span className="font-normal text-ent-fg-3 tabular-nums">{recipients.length}</span>
               </span>
-            )}
+              {recipients.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 text-[12px] gap-1"
+                  onClick={() => downloadCsv(campaign, recipients, timezone)}
+                  type="button"
+                >
+                  <Download className="w-3 h-3" />
+                  Exportar CSV
+                </Button>
+              )}
+            </div>
+            <div className="overflow-y-auto min-h-0 max-h-72">
+              {isLoading ? (
+                <PanelMessage>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                </PanelMessage>
+              ) : recipients.length === 0 ? (
+                <PanelMessage>No hay destinatarios registrados para esta campaña.</PanelMessage>
+              ) : (
+                <DataTable>
+                  <thead>
+                    <tr>
+                      <Th>Cliente</Th>
+                      <Th>Contacto</Th>
+                      <Th>Visitó</Th>
+                      <Th>Fecha visita</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recipients.map((r) => (
+                      <Tr key={r.clientId}>
+                        <Td className="font-medium">{r.name}</Td>
+                        <Td className="text-ent-fg-2">{r.phone || r.email || "—"}</Td>
+                        <Td>
+                          <StatusChip tone={r.visited ? "ok" : "mute"}>
+                            {r.visited ? "Sí" : "No"}
+                          </StatusChip>
+                        </Td>
+                        <Td className="text-ent-fg-2">
+                          {r.visitedAt ? formatDate(r.visitedAt) : "—"}
+                        </Td>
+                      </Tr>
+                    ))}
+                  </tbody>
+                </DataTable>
+              )}
+            </div>
           </div>
-          {recipients.length > 0 && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5 text-xs"
-              onClick={() => downloadCsv(campaign, recipients, timezone)}
-              type="button"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Exportar
-            </Button>
-          )}
-        </div>
-
-        <div className="flex-1 overflow-y-auto min-h-0 border rounded-lg">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : recipients.length === 0 ? (
-            <div className="text-center py-12 text-sm text-muted-foreground">
-              No hay destinatarios registrados para esta campaña.
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Telefono / Email</TableHead>
-                  <TableHead className="text-center">Visito?</TableHead>
-                  <TableHead>Fecha visita</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recipients.map((r) => (
-                  <TableRow key={r.clientId}>
-                    <TableCell className="font-medium">{r.name}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {r.phone || r.email || "—"}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {r.visited ? (
-                        <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 text-[10px]">
-                          Si
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 text-[10px]">
-                          No
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {r.visitedAt ? formatDate(r.visitedAt) : "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
         </div>
       </DialogContent>
     </Dialog>

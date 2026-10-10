@@ -1,9 +1,8 @@
 "use client"
 
 import type { PointsAnalytics } from "@cuik/shared/types/analytics"
-import { Cake, Gift } from "lucide-react"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Panel, PanelHeader, PanelMessage } from "@/components/admin/enterprise"
 
 type Props = {
   balances: PointsAnalytics["balances"]
@@ -27,13 +26,13 @@ export function PointsBalanceCard({ balances, incentives }: Props) {
       key: "cheapest",
       label: hasCatalog ? `Ya pueden canjear algo (≥ ${balances.cheapestCost} pts)` : "—",
       count: balances.canRedeemCheapest,
-      tone: "color-mix(in srgb, var(--color-primary) 70%, transparent)",
+      tone: "color-mix(in srgb, var(--color-ent-accent) 70%, transparent)",
     },
     {
       key: "top",
       label: hasCatalog ? `Alcanzan el premio más caro (≥ ${balances.mostExpensiveCost} pts)` : "—",
       count: balances.canRedeemMostExpensive,
-      tone: "var(--color-primary)",
+      tone: "var(--color-ent-accent)",
     },
     {
       key: "below",
@@ -41,80 +40,70 @@ export function PointsBalanceCard({ balances, incentives }: Props) {
         ? `Aún no llegan al premio más barato (${balances.cheapestCost} pts)`
         : "Sin premios activos en el catálogo",
       count: balances.belowCheapest,
-      tone: "color-mix(in srgb, var(--color-primary) 35%, transparent)",
+      tone: "color-mix(in srgb, var(--color-ent-accent) 35%, transparent)",
     },
   ]
 
   return (
-    <Card className="border border-border">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-bold text-foreground">
-          ¿Quiénes ya pueden canjear?
-        </CardTitle>
-        <p className="text-xs text-muted-foreground">
-          Saldos actuales de {total.toLocaleString("es-PE")} clientes activos frente a tu catálogo.
-          Las dos primeras filas se solapan: quien alcanza el más caro también alcanza el más
-          barato.
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {total === 0 ? (
-          <p className="text-sm text-muted-foreground py-8 text-center">Aún no tenés clientes.</p>
-        ) : (
-          <ol className="space-y-3">
-            {rows.map((row) => (
-              <li key={row.key}>
-                <div className="flex items-baseline justify-between text-xs mb-1 gap-3">
-                  <span className="font-medium text-foreground">{row.label}</span>
-                  <span className="tabular-nums text-muted-foreground shrink-0">
-                    <span className="font-bold text-foreground">{row.count}</span>
-                    {" · "}
-                    {pct(row.count, total)}%
-                  </span>
-                </div>
-                <div className="h-5 w-full rounded-md bg-muted overflow-hidden">
-                  <div
-                    className="h-full rounded-md transition-[width]"
-                    style={{
-                      width: `${Math.max(pct(row.count, total), row.count > 0 ? 3 : 0)}%`,
-                      backgroundColor: row.tone,
-                    }}
-                  />
-                </div>
-              </li>
-            ))}
-          </ol>
-        )}
-
-        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 flex items-center justify-center shrink-0">
-              <Gift className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-base font-extrabold text-foreground tabular-nums">
-                {incentives.bonusPoints.toLocaleString("es-PE")}
+    <Panel>
+      <PanelHeader
+        title="¿Quiénes ya pueden canjear?"
+        actions={
+          <span className="text-[11.5px] text-ent-fg-3">
+            {total.toLocaleString("es-PE")} clientes activos
+          </span>
+        }
+      />
+      {total === 0 ? (
+        <PanelMessage>Aún no tenés clientes.</PanelMessage>
+      ) : (
+        <ol className="p-3 space-y-2.5">
+          {rows.map((row) => (
+            <li key={row.key}>
+              <div className="flex items-baseline justify-between gap-3 text-[12px] mb-1">
+                <span className="text-ent-fg-2 truncate">{row.label}</span>
+                <span className="tabular-nums text-ent-fg-3 shrink-0">
+                  <span className="font-semibold text-ent-fg">{row.count}</span>
+                  {" · "}
+                  {pct(row.count, total)}%
+                </span>
               </div>
-              <div className="text-[11px] text-muted-foreground leading-tight">
-                pts regalados por bono de registro
+              <div className="h-3.5 w-full rounded-[2px] bg-ent-panel-2 overflow-hidden">
+                <div
+                  className="h-full rounded-[2px] transition-[width]"
+                  style={{
+                    width: `${Math.max(pct(row.count, total), row.count > 0 ? 2 : 0)}%`,
+                    backgroundColor: row.tone,
+                  }}
+                />
               </div>
-            </div>
+            </li>
+          ))}
+        </ol>
+      )}
+      <div className="grid grid-cols-2 border-t border-ent-line">
+        <div className="px-3 py-2 border-r border-ent-line min-w-0">
+          <div className="text-[11px] uppercase tracking-[0.05em] text-ent-fg-3 truncate">
+            Bono de registro
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-pink-50 text-pink-600 dark:bg-pink-950/50 dark:text-pink-400 flex items-center justify-center shrink-0">
-              <Cake className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-base font-extrabold text-foreground tabular-nums">
-                {incentives.birthdayExtraPoints.toLocaleString("es-PE")}
-              </div>
-              <div className="text-[11px] text-muted-foreground leading-tight">
-                pts extra por cumpleaños
-              </div>
-            </div>
+          <div className="text-[15px] leading-6 font-semibold text-ent-fg tabular-nums">
+            {incentives.bonusPoints.toLocaleString("es-PE")}
+            <span className="text-[11px] font-normal text-ent-fg-3 ml-1">pts en el período</span>
           </div>
         </div>
-      </CardContent>
-    </Card>
+        <div className="px-3 py-2 min-w-0">
+          <div className="text-[11px] uppercase tracking-[0.05em] text-ent-fg-3 truncate">
+            Extra por cumpleaños
+          </div>
+          <div className="text-[15px] leading-6 font-semibold text-ent-fg tabular-nums">
+            {incentives.birthdayExtraPoints.toLocaleString("es-PE")}
+            <span className="text-[11px] font-normal text-ent-fg-3 ml-1">pts en el período</span>
+          </div>
+        </div>
+      </div>
+      <p className="px-3 pb-2 text-[11px] text-ent-fg-3">
+        Las dos primeras filas se solapan: quien alcanza el más caro también alcanza el más barato.
+      </p>
+    </Panel>
   )
 }

@@ -1,20 +1,25 @@
 "use client"
 
-import { Megaphone, Plus } from "lucide-react"
+import { Loader2, Plus } from "lucide-react"
+import Link from "next/link"
 import { useCallback, useState } from "react"
 
+import { Notice, PageHeader, PanelMessage } from "@/components/admin/enterprise"
 import { Button } from "@/components/ui/button"
 import { useTenant } from "@/hooks/use-tenant"
 
-import { BirthdayAutomationCard } from "./_components/birthday-automation-card"
 import { CampaignList } from "./_components/campaign-list"
 import { ChurnPreventionCard } from "./_components/churn-prevention-card"
 import { CreateCampaignForm } from "./_components/create-campaign-form"
-import { PointsExpiryAutomationCard } from "./_components/points-expiry-automation-card"
-import { RecurringCampaignsCard } from "./_components/recurring-campaigns-card"
 
+/**
+ * Merchant "Campañas": the list of sends, creation and detail. Everything
+ * that is configured once and runs by itself (cumpleaños, puntos por vencer,
+ * recurrentes, reportes por correo) lives in Configuración → Campañas
+ * automáticas; the notice below points there.
+ */
 export default function CampanasPage() {
-  const { tenantSlug, isLoading, error } = useTenant()
+  const { tenantSlug, isLoading, error, readOnly } = useTenant()
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -25,61 +30,61 @@ export default function CampanasPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
-      </div>
+      <PanelMessage className="py-20">
+        <Loader2 className="w-5 h-5 animate-spin" />
+      </PanelMessage>
     )
   }
 
   if (error || !tenantSlug) {
-    return (
-      <div className="text-center py-20">
-        <p className="text-sm text-muted-foreground">{error ?? "Sin comercio asignado"}</p>
-      </div>
-    )
+    return <PanelMessage className="py-20">{error ?? "Sin comercio asignado"}</PanelMessage>
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-            <Megaphone className="w-5 h-5 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-extrabold text-foreground">Campañas</h1>
-            <p className="text-sm text-muted-foreground">
-              Envia mensajes segmentados a tus clientes via Wallet.
-            </p>
-          </div>
-        </div>
-        <Button
-          className="bg-primary text-white text-sm gap-2"
-          onClick={() => setShowCreateDialog(true)}
-        >
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Nueva campaña</span>
-          <span className="sm:hidden">Nueva</span>
-        </Button>
-      </div>
+    <div className="space-y-3">
+      <PageHeader
+        crumbs={[{ label: "Inicio", href: "/panel" }, { label: "Campañas" }]}
+        title="Campañas"
+        subtitle="Mensajes a tus clientes a través del pase. Haz clic en una fila para ver el detalle."
+        actions={
+          <Button
+            size="sm"
+            className="h-7 text-[12px] gap-1.5"
+            onClick={() => setShowCreateDialog(true)}
+            disabled={readOnly}
+            title={readOnly ? "Solo lectura" : undefined}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Nueva campaña
+          </Button>
+        }
+      />
 
-      {/* Churn prevention */}
+      <Notice
+        tone="info"
+        action={
+          <Link
+            href="/panel/campanas/automatizadas"
+            className="text-[12px] font-semibold text-ent-accent hover:underline whitespace-nowrap"
+          >
+            Ir a Automatizadas
+          </Link>
+        }
+      >
+        Saludo de cumpleaños, puntos por vencer y campañas recurrentes se configuran en{" "}
+        <span className="font-medium">Campañas → Automatizadas</span>; los mensajes por ubicación en{" "}
+        <span className="font-medium">Geolocalizadas</span>. Cada envío automático aparece en esta
+        lista.
+      </Notice>
+
       <ChurnPreventionCard tenantSlug={tenantSlug} onCampaignSent={handleCampaignCreated} />
 
-      {/* Birthday automation */}
-      <BirthdayAutomationCard tenantSlug={tenantSlug} />
+      <CampaignList
+        tenantSlug={tenantSlug}
+        refreshKey={refreshKey}
+        onEdit={readOnly ? undefined : setEditId}
+      />
 
-      {/* Points about to expire (only when the points program has an expiration policy) */}
-      <PointsExpiryAutomationCard tenantSlug={tenantSlug} />
-
-      {/* Recurring campaigns (templates that send themselves on a calendar) */}
-      <RecurringCampaignsCard tenantSlug={tenantSlug} onSent={handleCampaignCreated} />
-
-      {/* Campaign list */}
-      <CampaignList tenantSlug={tenantSlug} refreshKey={refreshKey} onEdit={setEditId} />
-
-      {/* Create / edit dialog */}
       <CreateCampaignForm
         open={showCreateDialog || editId !== null}
         onOpenChange={(open) => {

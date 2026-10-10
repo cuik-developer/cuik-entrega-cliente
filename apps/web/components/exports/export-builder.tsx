@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
+  ALL_TIME,
   CLIENT_STATUS_OPTIONS,
   type ClientStatusFilter,
   columnsFor,
@@ -30,9 +31,26 @@ function daysAgo(days: number): string {
 export type ExportParams = {
   dataset: DatasetKey
   columns: string[]
+  /** YYYY-MM-DD, or `"all"` ("Acumulado": the server resolves the start per tenant; no `to`). */
   from?: string
   to?: string
   status: ClientStatusFilter
+}
+
+/** YYYY-MM-DD → DD/MM/YYYY for the toast. */
+function dmy(s: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s)
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : s
+}
+
+/** Success toast; for "Acumulado" the server says which dates the file covers. */
+function readyMessage(headers: Headers, allTime: boolean): string {
+  const rows = headers.get("X-Row-Count")
+  const rowsText = rows ? `: ${rows} ${rows === "1" ? "fila" : "filas"}` : ""
+  const from = headers.get("X-Range-From")
+  const to = headers.get("X-Range-To")
+  const rangeText = allTime && from && to ? ` · del ${dmy(from)} al ${dmy(to)}` : ""
+  return `Archivo listo${rowsText}${rangeText}`
 }
 
 /**
@@ -84,6 +102,8 @@ export function ExportBuilder({
   // Default range is set after mount: the server clock may be on another day.
   const [from, setFrom] = useState("")
   const [to, setTo] = useState("")
+  // "Acumulado": since the business started; the server resolves the real range.
+  const [allTime, setAllTime] = useState(false)
   useEffect(() => {
     setFrom(daysAgo(29))
     setTo(ymd(new Date()))
@@ -117,12 +137,13 @@ export function ExportBuilder({
     }))
   }
 
+  const datedRange = def.dated && !allTime
   const rangeError =
-    def.dated && (!from || !to)
+    datedRange && (!from || !to)
       ? "Elige las fechas"
-      : def.dated && from > to
+      : datedRange && from > to
         ? "La fecha inicial es posterior a la final"
-        : def.dated && (Date.parse(to) - Date.parse(from)) / 86_400_000 > 366
+        : datedRange && (Date.parse(to) - Date.parse(from)) / 86_400_000 > 366
           ? "Máximo un año por archivo"
           : null
   const canDownload = !disabled && !busy && picked.size > 0 && !rangeError
@@ -135,8 +156,8 @@ export function ExportBuilder({
         dataset,
         // Keep the dataset's column order, not the click order.
         columns: columns.map((c) => c.key).filter((k) => picked.has(k)),
-        from: def.dated ? from : undefined,
-        to: def.dated ? to : undefined,
+        from: def.dated ? (allTime ? ALL_TIME : from) : undefined,
+        to: def.dated && !allTime ? to : undefined,
         status,
       })
       const res = await fetch(url)
@@ -149,7 +170,6 @@ export function ExportBuilder({
       const name =
         /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ??
         `${dataset}.xlsx`
-      const rows = res.headers.get("X-Row-Count")
       const href = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = href
@@ -158,9 +178,7 @@ export function ExportBuilder({
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(href)
-      toast.success(
-        rows ? `Archivo listo: ${rows} ${rows === "1" ? "fila" : "filas"}` : "Archivo listo",
-      )
+      toast.success(readyMessage(res.headers, allTime))
     } catch {
       toast.error("Error de conexión al generar el archivo")
     } finally {
@@ -228,8 +246,12 @@ export function ExportBuilder({
                   type="date"
                   value={from}
                   max={to}
-                  onChange={(e) => setFrom(e.target.value)}
-                  className={input}
+                  disabled={allTime}
+                  onChange={(e) => {
+                    setAllTime(false)
+                    setFrom(e.target.value)
+                  }}
+                  className={cn(input, allTime && "opacity-50")}
                 />
               </label>
               <label className="grid gap-1 text-[12px]">
@@ -238,11 +260,15 @@ export function ExportBuilder({
                   type="date"
                   value={to}
                   min={from}
-                  onChange={(e) => setTo(e.target.value)}
-                  className={input}
+                  disabled={allTime}
+                  onChange={(e) => {
+                    setAllTime(false)
+                    setTo(e.target.value)
+                  }}
+                  className={cn(input, allTime && "opacity-50")}
                 />
               </label>
-              <div className="flex gap-1">
+              <div className="flex gap-1 flex-wrap">
                 {[
                   ["7 días", 6],
                   ["30 días", 29],
@@ -257,6 +283,7 @@ export function ExportBuilder({
                     className={ent ? "h-7 text-[12px]" : "h-9 text-xs"}
                     onClick={() => {
                       const now = new Date()
+                      setAllTime(false)
                       setTo(ymd(now))
                       setFrom(days === -1 ? `${now.getFullYear()}-01-01` : daysAgo(Number(days)))
                     }}
@@ -264,7 +291,29 @@ export function ExportBuilder({
                     {label}
                   </Button>
                 ))}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  aria-pressed={allTime}
+                  title="Desde que el negocio empezó hasta hoy"
+                  className={cn(
+                    ent ? "h-7 text-[12px]" : "h-9 text-xs",
+                    allTime &&
+                      (ent
+                        ? "border-ent-accent bg-ent-accent-soft text-ent-fg"
+                        : "border-primary bg-primary/5"),
+                  )}
+                  onClick={() => setAllTime(true)}
+                >
+                  Acumulado
+                </Button>
               </div>
+              {allTime && (
+                <p className={cn("text-[12px]", ent ? "text-ent-fg-3" : "text-muted-foreground")}>
+                  Desde el inicio del negocio hasta hoy; el archivo indica las fechas exactas.
+                </p>
+              )}
             </>
           ) : (
             <label className="grid gap-1 text-[12px]">
@@ -360,7 +409,13 @@ export function ExportBuilder({
             ? disabledHint
             : picked.size === 0
               ? "Elige al menos una columna."
-              : `${def.label} · ${picked.size} columnas${def.dated ? ` · del ${from} al ${to}` : ""}`}
+              : `${def.label} · ${picked.size} columnas${
+                  def.dated
+                    ? allTime
+                      ? " · acumulado desde el inicio"
+                      : ` · del ${from} al ${to}`
+                    : ""
+                }`}
         </span>
       </div>
     </div>

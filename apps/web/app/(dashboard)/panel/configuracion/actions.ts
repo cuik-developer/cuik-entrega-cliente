@@ -169,7 +169,7 @@ export async function saveWalletConfig(
       return { success: false, error: "Tenant no encontrado" }
     }
 
-    revalidatePath("/panel/configuracion")
+    revalidatePath("/panel/campanas/geolocalizadas")
 
     return { success: true, data: undefined }
   } catch (err) {

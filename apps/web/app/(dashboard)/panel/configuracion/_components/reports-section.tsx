@@ -1,11 +1,11 @@
 "use client"
 
-import { Loader2, Mail, Plus, Save, Send, X } from "lucide-react"
+import { Loader2, Plus, Save, Send, X } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
+import { Panel, PanelHeader, PanelMessage } from "@/components/admin/enterprise"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { useTenant } from "@/hooks/use-tenant"
 
 type Weekly = { enabled: boolean; dayOfWeek: number; sendHour: number; lastSentPeriod?: string }
 type Monthly = { enabled: boolean; dayOfMonth: number; sendHour: number; lastSentPeriod?: string }
@@ -50,14 +51,18 @@ function sameList(a: string[], b: string[]) {
   return a.length === b.length && a.every((x, i) => x === b[i])
 }
 
+const LABEL = "text-[11px] uppercase tracking-[0.05em] text-ent-fg-3"
+
 /**
- * Weekly and monthly reports by email. Each row has its switch, day, hour and
- * a "send me a test" button; below, who receives them: pick from the
- * suggested addresses (contact email, owner, admins) or type any email.
- * Sending happens in the reports cron; the test goes only to the signed-in
- * admin and never counts as the scheduled send.
+ * Weekly and monthly reports by email (Configuración → Reportes por correo).
+ * Each report has its switch, day, hour and a "send me a test" button; below,
+ * who receives them: pick from the suggested addresses (contact email, owner,
+ * admins) or type any email. Sending happens in the reports cron; the test
+ * goes only to the signed-in admin and never counts as the scheduled send.
+ * Same logic as the card in Analítica; this is the settings-page rendering.
  */
-export function ReportsAutomationCard({ tenantSlug }: { tenantSlug: string }) {
+export function ReportsSection({ tenantSlug }: { tenantSlug: string }) {
+  const { readOnly } = useTenant()
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -170,11 +175,12 @@ export function ReportsAutomationCard({ tenantSlug }: { tenantSlug: string }) {
 
   if (loading) {
     return (
-      <Card className="border-sky-200 bg-sky-50/50 dark:border-sky-900 dark:bg-sky-950/20">
-        <CardContent className="flex items-center justify-center py-6">
-          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-        </CardContent>
-      </Card>
+      <Panel>
+        <PanelHeader title="Reportes por correo" />
+        <PanelMessage className="py-6">
+          <Loader2 className="w-4 h-4 animate-spin" />
+        </PanelMessage>
+      </Panel>
     )
   }
   if (!data) return null
@@ -182,50 +188,79 @@ export function ReportsAutomationCard({ tenantSlug }: { tenantSlug: string }) {
   const suggestedLeft = data.suggested.filter((e) => !recipients.includes(e))
   const usingDefault = recipients.length === 0
 
+  const testButton = (kind: "weekly" | "monthly") => (
+    <Button
+      variant="outline"
+      size="sm"
+      className="ml-auto h-7 text-[12px] gap-1.5"
+      onClick={() => sendTest(kind)}
+      disabled={testing !== null || readOnly}
+      title={readOnly ? "Solo lectura" : undefined}
+    >
+      {testing === kind ? (
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+      ) : (
+        <Send className="w-3.5 h-3.5" />
+      )}
+      Enviarme una prueba
+    </Button>
+  )
+
   return (
-    <Card className="border-sky-200 bg-sky-50/50 dark:border-sky-900 dark:bg-sky-950/20">
-      <CardHeader className="pb-3">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-sky-100 dark:bg-sky-900/40 flex items-center justify-center shrink-0">
-            <Mail className="w-5 h-5 text-sky-600 dark:text-sky-400" />
-          </div>
-          <div>
-            <CardTitle className="text-base">Reportes por correo</CardTitle>
-            <CardDescription>
-              Un resumen de tu negocio con Excel adjunto: visitas, clientes nuevos, premios,
-              clientes en riesgo y cumpleaños. Sin datos de contacto.
-            </CardDescription>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <div className="space-y-3">
+      <Panel>
+        <PanelHeader
+          title="Reportes por correo"
+          actions={
+            <Button
+              size="sm"
+              className="h-6 text-[12px] gap-1"
+              onClick={save}
+              disabled={saving || !dirty || readOnly}
+              title={readOnly ? "Solo lectura" : undefined}
+            >
+              {saving ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Save className="w-3.5 h-3.5" />
+              )}
+              Guardar
+            </Button>
+          }
+        />
+        <p className="px-3 py-2 text-[12px] text-ent-fg-3 border-b border-ent-line">
+          Un resumen de tu negocio con Excel adjunto: visitas, clientes nuevos, premios, clientes en
+          riesgo y cumpleaños. Sin datos de contacto. Hora local del comercio; la prueba va solo a{" "}
+          {data.myEmail ?? "tu correo"}.
+        </p>
+
         {/* Weekly */}
-        <div className="rounded-xl border border-sky-200/70 dark:border-sky-900 bg-white dark:bg-background p-4 space-y-3">
-          <div className="flex items-start justify-between gap-4">
+        <div className="px-3 py-3 border-b border-ent-line space-y-2 text-[12.5px]">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="font-semibold text-sm">Reporte semanal</div>
-              <div className="text-xs text-muted-foreground">
+              <div className="font-semibold text-ent-fg">Reporte semanal</div>
+              <div className="text-[12px] text-ent-fg-3">
                 La semana cerrada (lunes a domingo) comparada con la anterior.
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs font-medium text-muted-foreground">
-                {weekly.enabled ? "Activado" : "Desactivado"}
-              </span>
+            <span className="flex items-center gap-2 text-[12px] text-ent-fg-2 shrink-0">
+              {weekly.enabled ? "Activado" : "Desactivado"}
               <Switch
                 checked={weekly.enabled}
                 onCheckedChange={(v) => setWeekly({ ...weekly, enabled: v })}
+                disabled={readOnly}
                 aria-label="Activar reporte semanal"
               />
-            </div>
+            </span>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-xs font-medium text-muted-foreground">Enviar los</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={LABEL}>Enviar los</span>
             <Select
               value={String(weekly.dayOfWeek)}
               onValueChange={(v) => setWeekly({ ...weekly, dayOfWeek: Number(v) })}
+              disabled={readOnly}
             >
-              <SelectTrigger size="sm" className="w-32">
+              <SelectTrigger size="sm" className="w-28 h-7 text-[12.5px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -236,12 +271,13 @@ export function ReportsAutomationCard({ tenantSlug }: { tenantSlug: string }) {
                 ))}
               </SelectContent>
             </Select>
-            <span className="text-xs font-medium text-muted-foreground">a las</span>
+            <span className={LABEL}>a las</span>
             <Select
               value={String(weekly.sendHour)}
               onValueChange={(v) => setWeekly({ ...weekly, sendHour: Number(v) })}
+              disabled={readOnly}
             >
-              <SelectTrigger size="sm" className="w-24">
+              <SelectTrigger size="sm" className="w-24 h-7 text-[12.5px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -252,50 +288,37 @@ export function ReportsAutomationCard({ tenantSlug }: { tenantSlug: string }) {
                 ))}
               </SelectContent>
             </Select>
-            <Button
-              variant="outline"
-              size="sm"
-              className="ml-auto gap-1.5"
-              onClick={() => sendTest("weekly")}
-              disabled={testing !== null}
-            >
-              {testing === "weekly" ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Send className="w-3.5 h-3.5" />
-              )}
-              Enviarme una prueba
-            </Button>
+            {testButton("weekly")}
           </div>
         </div>
 
         {/* Monthly */}
-        <div className="rounded-xl border border-sky-200/70 dark:border-sky-900 bg-white dark:bg-background p-4 space-y-3">
-          <div className="flex items-start justify-between gap-4">
+        <div className="px-3 py-3 border-b border-ent-line space-y-2 text-[12.5px]">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="font-semibold text-sm">Reporte mensual</div>
-              <div className="text-xs text-muted-foreground">
+              <div className="font-semibold text-ent-fg">Reporte mensual</div>
+              <div className="text-[12px] text-ent-fg-3">
                 El mes cerrado comparado con el anterior, más tu historia desde que empezaste.
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs font-medium text-muted-foreground">
-                {monthly.enabled ? "Activado" : "Desactivado"}
-              </span>
+            <span className="flex items-center gap-2 text-[12px] text-ent-fg-2 shrink-0">
+              {monthly.enabled ? "Activado" : "Desactivado"}
               <Switch
                 checked={monthly.enabled}
                 onCheckedChange={(v) => setMonthly({ ...monthly, enabled: v })}
+                disabled={readOnly}
                 aria-label="Activar reporte mensual"
               />
-            </div>
+            </span>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-xs font-medium text-muted-foreground">Enviar el día</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={LABEL}>Enviar el día</span>
             <Select
               value={String(monthly.dayOfMonth)}
               onValueChange={(v) => setMonthly({ ...monthly, dayOfMonth: Number(v) })}
+              disabled={readOnly}
             >
-              <SelectTrigger size="sm" className="w-20">
+              <SelectTrigger size="sm" className="w-20 h-7 text-[12.5px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -306,12 +329,13 @@ export function ReportsAutomationCard({ tenantSlug }: { tenantSlug: string }) {
                 ))}
               </SelectContent>
             </Select>
-            <span className="text-xs font-medium text-muted-foreground">de cada mes a las</span>
+            <span className={LABEL}>de cada mes a las</span>
             <Select
               value={String(monthly.sendHour)}
               onValueChange={(v) => setMonthly({ ...monthly, sendHour: Number(v) })}
+              disabled={readOnly}
             >
-              <SelectTrigger size="sm" className="w-24">
+              <SelectTrigger size="sm" className="w-24 h-7 text-[12.5px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -322,28 +346,15 @@ export function ReportsAutomationCard({ tenantSlug }: { tenantSlug: string }) {
                 ))}
               </SelectContent>
             </Select>
-            <Button
-              variant="outline"
-              size="sm"
-              className="ml-auto gap-1.5"
-              onClick={() => sendTest("monthly")}
-              disabled={testing !== null}
-            >
-              {testing === "monthly" ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Send className="w-3.5 h-3.5" />
-              )}
-              Enviarme una prueba
-            </Button>
+            {testButton("monthly")}
           </div>
         </div>
 
         {/* Recipients */}
-        <div className="rounded-xl border border-sky-200/70 dark:border-sky-900 bg-white dark:bg-background p-4 space-y-3">
+        <div className="px-3 py-3 space-y-2 text-[12.5px]">
           <div>
-            <div className="font-semibold text-sm">A quién le llegan</div>
-            <div className="text-xs text-muted-foreground">
+            <div className="font-semibold text-ent-fg">A quién le llegan</div>
+            <div className="text-[12px] text-ent-fg-3">
               {usingDefault
                 ? "Sin lista propia: van al correo de contacto del comercio y a los administradores. Agregá correos para elegir vos."
                 : "Solo a esta lista. Si la vaciás, vuelven al correo de contacto y los administradores."}
@@ -351,35 +362,37 @@ export function ReportsAutomationCard({ tenantSlug }: { tenantSlug: string }) {
           </div>
 
           {recipients.length > 0 && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {recipients.map((e) => (
                 <span
                   key={e}
-                  className="inline-flex items-center gap-1 pl-3 pr-1.5 py-1 rounded-full bg-sky-100 dark:bg-sky-900/40 text-xs font-medium"
+                  className="inline-flex items-center gap-1 pl-2 pr-1 h-6 rounded-[4px] border border-ent-line bg-ent-panel-2 text-[12px]"
                 >
                   {e}
-                  <button
-                    type="button"
-                    onClick={() => setRecipients(recipients.filter((x) => x !== e))}
-                    aria-label={`Quitar ${e}`}
-                    className="w-5 h-5 rounded-full hover:bg-sky-200 dark:hover:bg-sky-800 flex items-center justify-center"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={() => setRecipients(recipients.filter((x) => x !== e))}
+                      aria-label={`Quitar ${e}`}
+                      className="w-4 h-4 rounded-[3px] hover:bg-ent-line flex items-center justify-center text-ent-fg-2"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
                 </span>
               ))}
             </div>
           )}
 
-          {suggestedLeft.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-muted-foreground">Sugeridos:</span>
+          {suggestedLeft.length > 0 && !readOnly && (
+            <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
+              <span className="text-ent-fg-3">Sugeridos:</span>
               {suggestedLeft.map((e) => (
                 <button
                   key={e}
                   type="button"
                   onClick={() => addRecipient(e)}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-dashed border-sky-300 dark:border-sky-800 text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-900/30"
+                  className="inline-flex items-center gap-1 px-2 h-6 rounded-[4px] border border-dashed border-ent-line-strong text-ent-accent hover:bg-ent-accent-soft"
                 >
                   <Plus className="w-3 h-3" />
                   {e}
@@ -388,43 +401,33 @@ export function ReportsAutomationCard({ tenantSlug }: { tenantSlug: string }) {
             </div>
           )}
 
-          <form
-            className="flex items-center gap-2"
-            onSubmit={(ev) => {
-              ev.preventDefault()
-              addRecipient(draft)
-            }}
-          >
-            <Input
-              type="email"
-              value={draft}
-              onChange={(ev) => setDraft(ev.target.value)}
-              placeholder="otro@correo.com"
-              className="h-8 text-sm max-w-xs"
-              aria-label="Agregar correo"
-            />
-            <Button type="submit" variant="outline" size="sm" className="gap-1.5">
-              <Plus className="w-3.5 h-3.5" />
-              Agregar
-            </Button>
-            <span className="text-xs text-muted-foreground ml-auto">
-              {recipients.length}/{MAX_RECIPIENTS}
-            </span>
-          </form>
+          {!readOnly && (
+            <form
+              className="flex items-center gap-2"
+              onSubmit={(ev) => {
+                ev.preventDefault()
+                addRecipient(draft)
+              }}
+            >
+              <Input
+                type="email"
+                value={draft}
+                onChange={(ev) => setDraft(ev.target.value)}
+                placeholder="otro@correo.com"
+                className="h-7 text-[12.5px] max-w-xs"
+                aria-label="Agregar correo"
+              />
+              <Button type="submit" variant="outline" size="sm" className="h-7 text-[12px] gap-1">
+                <Plus className="w-3.5 h-3.5" />
+                Agregar
+              </Button>
+              <span className="text-[11.5px] text-ent-fg-3 ml-auto tabular-nums">
+                {recipients.length}/{MAX_RECIPIENTS}
+              </span>
+            </form>
+          )}
         </div>
-
-        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-          <span>Hora local del comercio. La prueba va solo a {data.myEmail ?? "tu correo"}.</span>
-          <Button size="sm" className="ml-auto gap-1.5" onClick={save} disabled={saving || !dirty}>
-            {saving ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Save className="w-3.5 h-3.5" />
-            )}
-            Guardar
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+      </Panel>
+    </div>
   )
 }

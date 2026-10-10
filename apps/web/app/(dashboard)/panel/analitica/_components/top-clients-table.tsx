@@ -1,18 +1,18 @@
 "use client"
 
 import { ArrowUpDown } from "lucide-react"
+import Link from "next/link"
 import { useState } from "react"
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+  DataTable,
+  Panel,
+  PanelHeader,
+  PanelMessage,
+  Td,
+  Th,
+  Tr,
+} from "@/components/admin/enterprise"
 
 export type TopClientRow = {
   id: string
@@ -24,6 +24,7 @@ type Props = {
   clients: TopClientRow[]
 }
 
+/** Lifetime top 10 by visits (not scoped to the period — see computeAnalyticsSummary). */
 export function TopClientsTable({ clients }: Props) {
   const [sortAsc, setSortAsc] = useState(false)
 
@@ -32,48 +33,51 @@ export function TopClientsTable({ clients }: Props) {
     .slice(0, 10)
 
   return (
-    <Card className="border border-border">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-bold text-foreground">Top 10 clientes</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {sorted.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-8 text-center">
-            Sin datos de clientes disponibles.
-          </p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">#</TableHead>
-                <TableHead>Nombre</TableHead>
-                <TableHead>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-auto p-0 font-medium hover:bg-transparent"
-                    onClick={() => setSortAsc(!sortAsc)}
+    <Panel>
+      <PanelHeader
+        title="Top 10 clientes"
+        actions={<span className="text-[11.5px] text-ent-fg-3">Histórico</span>}
+      />
+      {sorted.length === 0 ? (
+        <PanelMessage>Sin datos de clientes disponibles.</PanelMessage>
+      ) : (
+        <DataTable>
+          <thead>
+            <tr>
+              <Th className="w-10">#</Th>
+              <Th>Nombre</Th>
+              <Th align="right">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 hover:text-ent-fg"
+                  onClick={() => setSortAsc(!sortAsc)}
+                >
+                  Visitas
+                  <ArrowUpDown className="h-3 w-3" aria-hidden="true" />
+                </button>
+              </Th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((client, index) => (
+              <Tr key={client.id}>
+                <Td className="text-ent-fg-3 tabular-nums">{index + 1}</Td>
+                <Td className="text-ent-fg">
+                  <Link
+                    href={`/panel/clientes/${client.id}`}
+                    className="hover:text-ent-accent hover:underline"
                   >
-                    Visitas
-                    <ArrowUpDown className="ml-1 h-3 w-3" />
-                  </Button>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sorted.map((client, index) => (
-                <TableRow key={client.id}>
-                  <TableCell className="text-muted-foreground font-medium">{index + 1}</TableCell>
-                  <TableCell className="font-medium text-foreground">{client.name}</TableCell>
-                  <TableCell className="font-semibold text-foreground">
-                    {client.visitCount}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
+                    {client.name}
+                  </Link>
+                </Td>
+                <Td align="right" className="font-semibold text-ent-fg">
+                  {client.visitCount}
+                </Td>
+              </Tr>
+            ))}
+          </tbody>
+        </DataTable>
+      )}
+    </Panel>
   )
 }

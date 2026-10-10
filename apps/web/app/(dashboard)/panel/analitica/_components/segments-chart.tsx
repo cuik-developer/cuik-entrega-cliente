@@ -4,7 +4,7 @@ import type { SegmentsData } from "@cuik/shared/types/analytics"
 import Link from "next/link"
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Panel, PanelHeader, PanelMessage } from "@/components/admin/enterprise"
 import { SEGMENT_HINTS, SEGMENT_LABELS } from "@/lib/loyalty/client-segments"
 
 // Hex twins of SEGMENT_COLORS (Tailwind *-500) — recharts needs literal colours.
@@ -30,7 +30,7 @@ function ChartTooltip({
   if (!active || !payload?.length) return null
   const item = payload[0]
   return (
-    <div className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs text-white shadow-lg">
+    <div className="rounded-[4px] bg-ent-topbar px-2.5 py-1 text-[12px] text-white shadow">
       <span className="font-medium">{item.payload.name}</span>: {item.value} cliente
       {item.value !== 1 ? "s" : ""}
     </div>
@@ -51,34 +51,29 @@ export function SegmentsChart({ data }: Props) {
   const chartData = entries.filter((e) => e.value > 0)
 
   return (
-    <Card className="border border-border">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-bold text-foreground">
-          Distribución por segmento
-        </CardTitle>
-        <p className="text-xs text-muted-foreground">
-          Hoy · todo el comercio. Mismo criterio que los filtros de Clientes.
-        </p>
-      </CardHeader>
-      <CardContent>
-        {data.total === 0 ? (
-          <p className="text-sm text-muted-foreground py-8 text-center">
-            Aún no tenés clientes registrados.
-          </p>
-        ) : (
-          <div className="flex items-center gap-6">
-            <ResponsiveContainer width={160} height={160}>
+    <Panel>
+      <PanelHeader
+        title="Distribución por segmento"
+        actions={<span className="text-[11.5px] text-ent-fg-3">Hoy · todo el comercio</span>}
+      />
+      {data.total === 0 ? (
+        <PanelMessage>Aún no tenés clientes registrados.</PanelMessage>
+      ) : (
+        <div className="flex items-center gap-4 p-3">
+          <div className="shrink-0">
+            <ResponsiveContainer width={140} height={140}>
               <PieChart>
                 <Pie
                   data={chartData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={45}
-                  outerRadius={72}
+                  innerRadius={42}
+                  outerRadius={64}
                   dataKey="value"
                   nameKey="name"
                   strokeWidth={2}
-                  stroke="white"
+                  stroke="#ffffff"
+                  isAnimationActive={false}
                 >
                   {chartData.map((entry) => (
                     <Cell key={entry.key} fill={entry.color} />
@@ -87,35 +82,36 @@ export function SegmentsChart({ data }: Props) {
                 <Tooltip content={<ChartTooltip />} />
               </PieChart>
             </ResponsiveContainer>
+          </div>
 
-            <div className="flex-1 space-y-1.5 min-w-0">
-              {entries.map((item) => {
-                const p = data.total > 0 ? Math.round((item.value / data.total) * 100) : 0
-                return (
+          <ul className="flex-1 min-w-0 text-[12.5px]">
+            {entries.map((item) => {
+              const p = data.total > 0 ? Math.round((item.value / data.total) * 100) : 0
+              return (
+                <li key={item.key}>
                   <Link
-                    key={item.key}
                     href={`/panel/clientes?segment=${item.key}`}
                     title={SEGMENT_HINTS[item.key as keyof typeof SEGMENT_HINTS]}
-                    className="flex items-center gap-2.5 text-sm rounded px-1 -mx-1 hover:bg-muted transition-colors"
+                    className="flex items-center gap-2 h-7 px-1 -mx-1 rounded-[3px] hover:bg-ent-panel-2 transition-colors"
                   >
                     <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      className="h-2 w-2 shrink-0 rounded-full"
                       style={{ backgroundColor: item.color }}
                     />
-                    <span className="text-muted-foreground truncate">{item.name}</span>
-                    <span className="ml-auto tabular-nums font-bold text-foreground">
+                    <span className="text-ent-fg-2 truncate">{item.name}</span>
+                    <span className="ml-auto tabular-nums font-semibold text-ent-fg">
                       {item.value}
                     </span>
-                    <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">
+                    <span className="w-9 text-right text-[11.5px] tabular-nums text-ent-fg-3">
                       {p}%
                     </span>
                   </Link>
-                )
-              })}
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+    </Panel>
   )
 }

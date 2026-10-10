@@ -93,10 +93,27 @@ export const updateCampaignSchema = z
 
 export type UpdateCampaignInput = z.infer<typeof updateCampaignSchema>
 
+export const CAMPAIGN_KINDS = [
+  "manual",
+  "scheduled",
+  "birthday",
+  "recurring",
+  "points_expiring",
+  "churn",
+  "silent",
+] as const
+export type CampaignKind = (typeof CAMPAIGN_KINDS)[number]
+
 export const campaignListSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   status: z.enum(["draft", "scheduled", "sending", "sent", "cancelled"]).optional(),
+  /**
+   * Origin of the campaign. Automations stamp `content.automation`
+   * (birthday | recurring | points_expiring | churn); manual = no stamp and a
+   * push; scheduled = status scheduled (any origin); silent = wallet_update.
+   */
+  kind: z.enum(CAMPAIGN_KINDS).optional(),
 })
 
 export type CampaignListInput = z.infer<typeof campaignListSchema>

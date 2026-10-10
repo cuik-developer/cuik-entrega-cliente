@@ -1,11 +1,11 @@
 "use client"
 
-import { Hourglass, Loader2, Save } from "lucide-react"
+import { Loader2, Save } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
+import { Notice, Panel, PanelHeader } from "@/components/admin/enterprise"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Select,
   SelectContent,
@@ -15,8 +15,9 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import { useTenant } from "@/hooks/use-tenant"
 
-import { VariableInsertButton } from "./variable-insert-button"
+import { VariableInsertButton } from "../../campanas/_components/variable-insert-button"
 
 type Data = {
   config: { enabled: boolean; message: string; daysBefore: number; sendHour: number }
@@ -40,6 +41,7 @@ function hourLabel(h: number) {
  * loyalty-expiration cron; each send shows up in the campaign history.
  */
 export function PointsExpiryAutomationCard({ tenantSlug }: { tenantSlug: string }) {
+  const { readOnly } = useTenant()
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -62,7 +64,7 @@ export function PointsExpiryAutomationCard({ tenantSlug }: { tenantSlug: string 
       setDaysBefore(d.config.daysBefore)
       setSendHour(d.config.sendHour)
     } catch {
-      // Silent: the card is optional and the rest of Campañas works without it.
+      // Silent: the panel is optional and the rest of the page works without it.
       setData(null)
     } finally {
       setLoading(false)
@@ -107,63 +109,63 @@ export function PointsExpiryAutomationCard({ tenantSlug }: { tenantSlug: string 
     }
   }
 
+  const when = daysBefore === 1 ? "mañana" : `en los próximos ${daysBefore} días`
+  const expiringText =
+    data.expiringSoon === 0
+      ? `Ningún cliente tiene puntos que venzan ${when}.`
+      : `${
+          data.expiringSoon === 1
+            ? "1 cliente tiene puntos que vencen"
+            : `${data.expiringSoon} clientes tienen puntos que vencen`
+        } ${when}.`
+
   return (
-    <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
-              <Hourglass className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-            </div>
-            <div>
-              <CardTitle className="text-base">Puntos por vencer</CardTitle>
-              <CardDescription>
-                Push automático a cada cliente unos días antes de que sus puntos venzan.
-              </CardDescription>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs font-medium text-muted-foreground">
-              {enabled ? "Activado" : "Desactivado"}
-            </span>
+    <Panel>
+      <PanelHeader
+        title="Puntos por vencer"
+        actions={
+          <span className="flex items-center gap-2 text-[12px] text-ent-fg-2">
+            {enabled ? "Activado" : "Desactivado"}
             <Switch
               checked={enabled}
               onCheckedChange={setEnabled}
+              disabled={readOnly}
               aria-label="Activar aviso de puntos por vencer"
             />
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="rounded-lg border border-amber-200/70 dark:border-amber-900/60 bg-white/70 dark:bg-background/40 p-3 text-xs">
-          <span className="font-medium text-foreground">Regla de tu programa:</span> {data.policy}.
-          Para cambiarla, escríbenos.
-        </div>
+          </span>
+        }
+      />
+      <div className="p-3 space-y-3 text-[12.5px]">
+        <p className="text-ent-fg-3 text-[12px]">
+          Push automático a cada cliente unos días antes de que sus puntos venzan.
+        </p>
 
-        <div className="space-y-1.5">
+        <Notice tone="info">
+          <span className="font-medium">Regla de tu programa:</span> {data.policy}. Para cambiarla,
+          escríbenos.
+        </Notice>
+
+        <div className="space-y-1">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Mensaje</span>
-            <VariableInsertButton textareaRef={textareaRef} onInsert={setMessage} />
+            <span className="text-[11px] uppercase tracking-[0.05em] text-ent-fg-3">Mensaje</span>
+            {!readOnly && <VariableInsertButton textareaRef={textareaRef} onInsert={setMessage} />}
           </div>
           <Textarea
             ref={textareaRef}
             value={message}
             onChange={(e) => setMessage(e.target.value.slice(0, MAX))}
             rows={2}
-            className="bg-white dark:bg-background"
+            disabled={readOnly}
+            className="text-[12.5px]"
           />
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">
+          <div className="flex items-center justify-between text-[11px] text-ent-fg-3">
+            <span>
               Usa <code className="font-mono">{"{{points.expiresAt}}"}</code> para la fecha de
               vencimiento.
             </span>
             <span
               className={
-                message.length >= MAX
-                  ? "text-red-500"
-                  : message.length > 130
-                    ? "text-orange-500"
-                    : "text-muted-foreground"
+                message.length >= MAX ? "text-ent-bad" : message.length > 130 ? "text-ent-warn" : ""
               }
             >
               {message.length}/{MAX}
@@ -171,10 +173,14 @@ export function PointsExpiryAutomationCard({ tenantSlug }: { tenantSlug: string 
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs font-medium text-muted-foreground">Enviar</span>
-          <Select value={String(daysBefore)} onValueChange={(v) => setDaysBefore(Number(v))}>
-            <SelectTrigger size="sm" className="w-36 bg-white dark:bg-background">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] uppercase tracking-[0.05em] text-ent-fg-3">Enviar</span>
+          <Select
+            value={String(daysBefore)}
+            onValueChange={(v) => setDaysBefore(Number(v))}
+            disabled={readOnly}
+          >
+            <SelectTrigger size="sm" className="w-32 h-7 text-[12.5px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -185,9 +191,13 @@ export function PointsExpiryAutomationCard({ tenantSlug }: { tenantSlug: string 
               ))}
             </SelectContent>
           </Select>
-          <span className="text-xs font-medium text-muted-foreground">a las</span>
-          <Select value={String(sendHour)} onValueChange={(v) => setSendHour(Number(v))}>
-            <SelectTrigger size="sm" className="w-28 bg-white dark:bg-background">
+          <span className="text-[11px] uppercase tracking-[0.05em] text-ent-fg-3">a las</span>
+          <Select
+            value={String(sendHour)}
+            onValueChange={(v) => setSendHour(Number(v))}
+            disabled={readOnly}
+          >
+            <SelectTrigger size="sm" className="w-24 h-7 text-[12.5px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -198,7 +208,13 @@ export function PointsExpiryAutomationCard({ tenantSlug }: { tenantSlug: string 
               ))}
             </SelectContent>
           </Select>
-          <Button size="sm" className="ml-auto gap-1.5" onClick={save} disabled={saving || !dirty}>
+          <Button
+            size="sm"
+            className="ml-auto h-7 text-[12px] gap-1.5"
+            onClick={save}
+            disabled={saving || !dirty || readOnly}
+            title={readOnly ? "Solo lectura" : undefined}
+          >
             {saving ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : (
@@ -208,18 +224,8 @@ export function PointsExpiryAutomationCard({ tenantSlug }: { tenantSlug: string 
           </Button>
         </div>
 
-        <p className="text-xs text-muted-foreground">
-          {(() => {
-            const when = daysBefore === 1 ? "mañana" : `en los próximos ${daysBefore} días`
-            if (data.expiringSoon === 0) return `Ningún cliente tiene puntos que venzan ${when}.`
-            const who =
-              data.expiringSoon === 1
-                ? "1 cliente tiene puntos que vencen"
-                : `${data.expiringSoon} clientes tienen puntos que vencen`
-            return `${who} ${when}.`
-          })()}
-        </p>
-      </CardContent>
-    </Card>
+        <p className="text-[11.5px] text-ent-fg-3">{expiringText}</p>
+      </div>
+    </Panel>
   )
 }

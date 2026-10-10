@@ -1,38 +1,50 @@
 import { headers } from "next/headers"
 
+import { PanelMessage } from "@/components/admin/enterprise"
 import { auth } from "@/lib/auth"
 
 import { getLocations, getTenantConfig } from "./actions"
-import { ConfiguracionForm } from "./configuracion-form"
+import { type ConfigTab, ConfiguracionTabs } from "./configuracion-tabs"
 
-export default async function ConfiguracionPage() {
+// Mirrors CONFIG_TABS in the client module: a client module cannot hand a
+// server component a plain array (only functions cross that boundary).
+const TABS: readonly string[] = ["negocio", "sucursales", "reportes"]
+
+export default async function ConfiguracionPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string | string[] }>
+}) {
   const headersList = await headers()
   const session = await auth.api.getSession({ headers: headersList })
 
   if (!session) {
-    return <p className="text-muted-foreground">No autenticado</p>
+    return <PanelMessage className="py-20">No autenticado</PanelMessage>
   }
 
-  const [result, locationsResult] = await Promise.all([getTenantConfig(), getLocations()])
+  const [result, locationsResult, params] = await Promise.all([
+    getTenantConfig(),
+    getLocations(),
+    searchParams,
+  ])
 
   if (!result.success) {
-    return <p className="text-muted-foreground">{result.error}</p>
+    return <PanelMessage className="py-20">{result.error}</PanelMessage>
   }
 
   if (!result.data) {
-    return <p className="text-muted-foreground">Sin comercio asignado</p>
+    return <PanelMessage className="py-20">Sin comercio asignado</PanelMessage>
   }
 
   const initialLocations = locationsResult.success ? locationsResult.data : []
+  const rawTab = Array.isArray(params.tab) ? params.tab[0] : params.tab
+  const initialTab = rawTab && TABS.includes(rawTab) ? (rawTab as ConfigTab) : null
 
   return (
-    <div className="max-w-2xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-foreground">Configuración</h1>
-        <p className="text-sm text-muted-foreground">Datos generales del comercio.</p>
-      </div>
-
-      <ConfiguracionForm initialData={result.data} initialLocations={initialLocations} />
-    </div>
+    <ConfiguracionTabs
+      initialData={result.data}
+      initialLocations={initialLocations}
+      initialTab={initialTab}
+    />
   )
 }

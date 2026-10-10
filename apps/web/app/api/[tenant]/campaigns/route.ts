@@ -80,12 +80,43 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     }
 
     const { page, limit, offset } = parsePagination(url.searchParams)
-    const { status } = queryParsed.data
+    const { status, kind } = queryParsed.data
 
     const conditions = [eq(campaigns.tenantId, tenant.id)]
     if (status) {
       conditions.push(eq(campaigns.status, status))
     }
+    const automationOf = sql`${campaigns.content}->>'automation'`
+    if (kind === "manual") {
+      conditions.push(sql`${automationOf} IS NULL AND ${campaigns.type} <> 'wallet_update'`)
+    } else if (kind === "scheduled") {
+      conditions.push(eq(campaigns.status, "scheduled"))
+    } else if (kind === "silent") {
+      conditions.push(eq(campaigns.type, "wallet_update"))
+    } else if (kind) {
+      conditions.push(sql`${automationOf} = ${kind}`)
+    }
+
+    // Which kinds exist for this tenant, so the filter only offers real options.
+    const facetRows = await db
+      .select({
+        k: sql<string>`CASE
+          WHEN ${campaigns.type} = 'wallet_update' THEN 'silent'
+          WHEN ${automationOf} IN ('birthday','recurring','points_expiring','churn') THEN ${automationOf}
+          ELSE 'manual' END`,
+        scheduled: sql<number>`count(*) FILTER (WHERE ${campaigns.status} = 'scheduled')::int`,
+        cnt: sql<number>`count(*)::int`,
+      })
+      .from(campaigns)
+      .where(eq(campaigns.tenantId, tenant.id))
+      .groupBy(sql`1`)
+    const kinds: Record<string, number> = {}
+    let scheduledTotal = 0
+    for (const r of facetRows) {
+      kinds[r.k] = (kinds[r.k] ?? 0) + Number(r.cnt)
+      scheduledTotal += Number(r.scheduled)
+    }
+    if (scheduledTotal > 0) kinds.scheduled = scheduledTotal
 
     // Count total
     const [{ cnt: total }] = await db
@@ -136,6 +167,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     return successResponse({
       data: dataWithEffectiveness,
       pagination: paginationMeta(total, page, limit),
+      kinds,
     })
   } catch (error) {
     console.error("[GET /api/[tenant]/campaigns]", error)

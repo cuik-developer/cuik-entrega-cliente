@@ -163,6 +163,56 @@ export function columnsFor(def: DatasetDef, program: ProgramType | null | undefi
   return def.columns.filter((c) => !c.program || !program || c.program === program)
 }
 
+/**
+ * "Acumulado" preset: the builder sends `from=all` (no `to`) and the server
+ * resolves the real range per tenant with `resolveAllTimeRange`.
+ */
+export const ALL_TIME = "all"
+
+export type TenantStartFacts = {
+  /** tenant_billing.service_start_on (YYYY-MM-DD) when the super-admin filled it. */
+  serviceStartOn: string | null
+  /** Oldest loyalty.visits.created_at and loyalty.clients.created_at of the tenant. */
+  firstVisitAt: Date | null
+  firstClientAt: Date | null
+  /** Tenant creation, used when nothing above exists (a tenant with no data yet). */
+  tenantCreatedAt: Date | null
+}
+
+/** YYYY-MM-DD of an instant in a timezone. */
+function localYmd(d: Date, timezone: string): string {
+  return d.toLocaleDateString("en-CA", { timeZone: timezone })
+}
+
+/**
+ * "Since the business started" as an inclusive YYYY-MM-DD range in the tenant
+ * timezone: the earliest of the service start, the first visit and the first
+ * client, up to today. Never later than today, so an inverted range cannot occur.
+ */
+export function resolveAllTimeRange(
+  facts: TenantStartFacts,
+  timezone: string,
+  now: Date = new Date(),
+): { from: string; to: string } {
+  const to = localYmd(now, timezone)
+  const candidates: string[] = []
+  if (facts.serviceStartOn && /^\d{4}-\d{2}-\d{2}/.test(facts.serviceStartOn)) {
+    candidates.push(facts.serviceStartOn.slice(0, 10))
+  }
+  for (const d of [facts.firstVisitAt, facts.firstClientAt]) {
+    if (d && !Number.isNaN(d.getTime())) candidates.push(localYmd(d, timezone))
+  }
+  if (
+    candidates.length === 0 &&
+    facts.tenantCreatedAt &&
+    !Number.isNaN(facts.tenantCreatedAt.getTime())
+  ) {
+    candidates.push(localYmd(facts.tenantCreatedAt, timezone))
+  }
+  const from = candidates.length ? candidates.reduce((a, b) => (a < b ? a : b)) : to
+  return { from: from > to ? to : from, to }
+}
+
 export const CLIENT_STATUS_OPTIONS = [
   ["all", "Todos (menos eliminados)"],
   ["active", "Activos"],
