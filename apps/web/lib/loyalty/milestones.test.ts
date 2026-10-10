@@ -95,6 +95,20 @@ describe("milestoneNoticeFor", () => {
   })
 })
 
+describe("disabled notices", () => {
+  const onlyNext = { ...settings, milestoneMessages: { next: "Mañana: {premio}", reached: "" } }
+  it("keeps the milestone but sends no text when the template is empty", () => {
+    const n = milestoneNoticeFor(onlyNext, MAX, { before: 3, after: 4, wrapped: false })
+    expect(n).toMatchObject({ kind: "reached", at: 4, message: null })
+    expect(
+      milestoneNoticeFor(onlyNext, MAX, { before: 2, after: 3, wrapped: false })?.message,
+    ).toBe("Mañana: Café")
+  })
+  it("does not list empty texts", () => {
+    expect(allMilestoneMessages(onlyNext, MAX).size).toBe(2)
+  })
+})
+
 describe("allMilestoneMessages / describeMilestones", () => {
   it("lists every text a notice can put on the pass", () => {
     const all = allMilestoneMessages(settings, MAX)

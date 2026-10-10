@@ -18,8 +18,8 @@ export type MilestoneNotice = {
   /** Position in the cycle the notice is about (1-based). */
   at: number
   label: string
-  /** Text shown on the pass and pushed to the phone. */
-  message: string
+  /** Text shown on the pass and pushed to the phone; null when that notice is disabled. */
+  message: string | null
 }
 
 export type MilestoneSettings = {
@@ -35,11 +35,12 @@ export function activeMilestones(settings: MilestoneSettings, maxVisits: number)
 }
 
 /** `{premio}` and `{visita}` are the only placeholders; unknown ones are left as-is. */
-export function renderMilestoneMessage(template: string, milestone: StampMilestone): string {
-  return template
+export function renderMilestoneMessage(template: string, milestone: StampMilestone): string | null {
+  const text = template
     .replaceAll("{premio}", milestone.label)
     .replaceAll("{visita}", String(milestone.at))
     .trim()
+  return text || null
 }
 
 /**
@@ -99,8 +100,10 @@ export function milestoneNoticeFor(
 export function allMilestoneMessages(settings: MilestoneSettings, maxVisits: number): Set<string> {
   const out = new Set<string>()
   for (const m of activeMilestones(settings, maxVisits)) {
-    out.add(renderMilestoneMessage(settings.milestoneMessages.next, m))
-    out.add(renderMilestoneMessage(settings.milestoneMessages.reached, m))
+    const next = renderMilestoneMessage(settings.milestoneMessages.next, m)
+    const reached = renderMilestoneMessage(settings.milestoneMessages.reached, m)
+    if (next) out.add(next)
+    if (reached) out.add(reached)
   }
   return out
 }

@@ -53,14 +53,14 @@ function validateMilestones(data: MilestoneFormData, ctx: z.RefinementCtx) {
   if (data.milestones.length === 0) return
   const issue = (path: (string | number)[], message: string) =>
     ctx.addIssue({ code: z.ZodIssueCode.custom, message, path })
+  // Either notice can be switched off by leaving it empty, not both.
   const next = data.milestoneNext.trim()
   const reached = data.milestoneReached.trim()
-  if (!next) issue(["milestoneNext"], "Indica el mensaje")
-  else if (next.length > 200) issue(["milestoneNext"], "Maximo 200 caracteres")
-  if (!reached) issue(["milestoneReached"], "Indica el mensaje")
-  else if (reached.length > 200) issue(["milestoneReached"], "Maximo 200 caracteres")
-  else if (next && next.toLowerCase() === reached.toLowerCase())
+  if (next.length > 200) issue(["milestoneNext"], "Maximo 200 caracteres")
+  if (reached.length > 200) issue(["milestoneReached"], "Maximo 200 caracteres")
+  else if (next && reached && next.toLowerCase() === reached.toLowerCase())
     issue(["milestoneReached"], "Debe ser distinto al aviso previo (si no, el telefono no avisa)")
+  if (!next && !reached) issue(["milestoneReached"], "Deja al menos un aviso, o quita los hitos")
   const seen = new Set<number>()
   data.milestones.forEach((m, i) => {
     const atError = milestoneAtError(m.at, data.maxVisits, seen)
@@ -549,8 +549,8 @@ export function PromotionFormDialog({
               .map((m) => ({ at: m.at, label: m.label.trim() }))
               .sort((a, b) => a.at - b.at),
             milestoneMessages: {
-              next: values.milestoneNext.trim() || DEFAULT_MILESTONE_MESSAGES.next,
-              reached: values.milestoneReached.trim() || DEFAULT_MILESTONE_MESSAGES.reached,
+              next: values.milestoneNext.trim(),
+              reached: values.milestoneReached.trim(),
             },
           },
           accumulation: {
@@ -830,6 +830,8 @@ export function PromotionFormDialog({
                       <p className="text-xs text-ent-fg-3">
                         Variables: <code>{"{premio}"}</code> y <code>{"{visita}"}</code>. El aviso
                         llega al telefono del cliente como notificacion del pase (Apple y Google).
+                        Deja un aviso vacio para no enviarlo; el cajero igual ve el premio al
+                        escanear.
                       </p>
                     </div>
                   </div>

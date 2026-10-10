@@ -102,9 +102,10 @@ export const DEFAULT_MILESTONE_MESSAGES = {
   reached: "¡Hoy tienes un premio: {premio}! Pídelo en caja",
 } as const
 
+/** An empty template disables that notice (the cashier banner still shows). */
 const milestoneMessagesSchema = z.object({
-  next: z.string().trim().min(1).max(200).default(DEFAULT_MILESTONE_MESSAGES.next),
-  reached: z.string().trim().min(1).max(200).default(DEFAULT_MILESTONE_MESSAGES.reached),
+  next: z.string().trim().max(200).default(DEFAULT_MILESTONE_MESSAGES.next),
+  reached: z.string().trim().max(200).default(DEFAULT_MILESTONE_MESSAGES.reached),
 })
 
 const stampsBlockSchema = z.object({
