@@ -4,6 +4,7 @@ import {
   describePointsRate,
   expirationPolicySchema,
   type PointsRate,
+  stampsPromotionConfigSchema,
 } from "@cuik/shared/validators"
 import { Award, Clock, Coins, CreditCard, Gift, Info, Smartphone, Star, Zap } from "lucide-react"
 import { headers } from "next/headers"
@@ -12,6 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { auth } from "@/lib/auth"
 import { formatDateTime } from "@/lib/format-date"
 import { describeExpirationPolicy } from "@/lib/loyalty/expiration"
+import { activeMilestones } from "@/lib/loyalty/milestones"
 import { getTenantForUser } from "@/lib/tenant-context"
 
 import { CompartirPase } from "./components/compartir-pase"
@@ -63,12 +65,18 @@ function PassDetails({
   design: { isActive: boolean; updatedAt: Date; type: string }
   timezone: string
   config: PassDesignConfigV2
-  promotion: { type: string; rewardValue: string | null; maxVisits: number | null } | null
+  promotion: {
+    type: string
+    rewardValue: string | null
+    maxVisits: number | null
+    config?: Record<string, unknown> | null
+  } | null
   tenantSlug: string
 }) {
   const isPoints = promotion?.type === "points"
   const backFields = config.fields.backFields ?? []
   const maxVisits = promotion?.maxVisits ?? config.stampsConfig.maxVisits
+  const ladder = stampMilestonesOf(promotion?.config, promotion?.maxVisits ?? null)
 
   const details = isPoints
     ? [
@@ -81,7 +89,14 @@ function PassDetails({
           label: "Sellos para premio",
           value: String(promotion?.maxVisits ?? config.stampsConfig.maxVisits),
         },
-        { label: "Premio", value: promotion?.rewardValue ?? "—" },
+        ...ladder.map((m) => ({
+          label: `Premio en la visita ${m.at}`,
+          value: m.label,
+        })),
+        {
+          label: ladder.length ? `Premio al completar (${maxVisits})` : "Premio",
+          value: promotion?.rewardValue ?? "—",
+        },
       ]
 
   return (
@@ -208,12 +223,32 @@ function buildPointsRules(
   return rules
 }
 
+/** Intermediate gifts ("escalera") of a stamps promotion, sorted; [] when none or not stamps. */
+function stampMilestonesOf(
+  config: Record<string, unknown> | null | undefined,
+  maxVisits: number | null,
+): { at: number; label: string }[] {
+  if (!config || !maxVisits) return []
+  const parsed = stampsPromotionConfigSchema.safeParse(config)
+  return parsed.success ? activeMilestones(parsed.data.stamps, maxVisits) : []
+}
+
 function buildStampsRules(
   config: Record<string, unknown>,
+  maxVisits: number | null,
 ): Array<{ icon: React.ReactNode; label: string; value: string }> {
   const rules: Array<{ icon: React.ReactNode; label: string; value: string }> = []
   const stamps = config.stamps as Record<string, unknown> | undefined
   const accumulation = config.accumulation as Record<string, unknown> | undefined
+
+  const ladder = stampMilestonesOf(config, maxVisits)
+  if (ladder.length > 0) {
+    rules.push({
+      icon: <Gift className="h-4 w-4 text-emerald-600" />,
+      label: "Premios intermedios",
+      value: ladder.map((m) => `visita ${m.at}: ${m.label}`).join(" · "),
+    })
+  }
 
   if (stamps) {
     const maxPerDay = stamps.maxVisitsPerDay as number | undefined
@@ -259,7 +294,11 @@ function PromotionRules({
   const isPoints = promotion.type === "points"
   const config = promotion.config
 
-  const rules = config ? (isPoints ? buildPointsRules(config) : buildStampsRules(config)) : []
+  const rules = config
+    ? isPoints
+      ? buildPointsRules(config)
+      : buildStampsRules(config, promotion.maxVisits)
+    : []
 
   if (rules.length === 0) return null
 
