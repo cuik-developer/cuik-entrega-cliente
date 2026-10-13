@@ -123,8 +123,16 @@ describe("assignTagsSchema", () => {
 // ── clientExportSchema ────────────────────────────────────────────────
 
 describe("clientExportSchema", () => {
-  it("accepts empty object (all fields optional, format defaults to csv)", () => {
+  it("accepts empty object (all fields optional, format defaults to xlsx)", () => {
     const result = clientExportSchema.safeParse({})
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.format).toBe("xlsx")
+    }
+  })
+
+  it("still accepts csv when asked explicitly", () => {
+    const result = clientExportSchema.safeParse({ format: "csv" })
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.format).toBe("csv")
@@ -178,7 +186,7 @@ describe("clientExportSchema", () => {
   })
 
   it("rejects unsupported format", () => {
-    const result = clientExportSchema.safeParse({ format: "xlsx" })
+    const result = clientExportSchema.safeParse({ format: "pdf" })
     expect(result.success).toBe(false)
   })
 })

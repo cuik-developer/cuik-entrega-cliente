@@ -13,6 +13,7 @@ function row(name: string, outlook: Partial<BillingDueRow["outlook"]>): BillingD
       currentDue: "2026-09-16",
       currentPeriod: "2026-09",
       nextDue: "2026-10-16",
+      nextPeriod: "2026-10",
       daysUntilNext: 8,
       daysOverdue: null,
       monthsOfService: 1,

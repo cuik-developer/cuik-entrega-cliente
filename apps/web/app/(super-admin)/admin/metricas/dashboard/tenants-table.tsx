@@ -31,10 +31,32 @@ const HEALTH_LABEL: Record<TenantMetricsRow["health"], string> = {
   none: "Sin clientes",
 }
 
-function daysAgo(iso: string | null): string {
+/** Calendar date (YYYY-MM-DD) of an instant in the business's timezone. */
+function localDate(ms: number, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(ms)
+  } catch {
+    return new Date(ms).toISOString().slice(0, 10)
+  }
+}
+
+/**
+ * "hoy" / "ayer" / "hace N d" by calendar days in the business's timezone, so a
+ * visit at 9 pm yesterday reads "ayer" all day today (not "hoy" until 9 pm).
+ */
+function daysAgo(iso: string | null, timeZone: string): string {
   if (!iso) return "nunca"
-  const d = Math.floor((Date.now() - Date.parse(iso)) / 86_400_000)
-  return d === 0 ? "hoy" : d === 1 ? "ayer" : `hace ${d} d`
+  const d = Math.round(
+    (Date.parse(localDate(Date.now(), timeZone)) -
+      Date.parse(localDate(Date.parse(iso), timeZone))) /
+      86_400_000,
+  )
+  return d <= 0 ? "hoy" : d === 1 ? "ayer" : `hace ${d} d`
 }
 
 /** The decision table: one row per tenant, sortable, searchable, with deltas. */
@@ -222,7 +244,7 @@ export function TenantsTable({
                       )}
                     </td>
                     <td className="py-2 text-right text-xs text-ent-fg-3 whitespace-nowrap hidden md:table-cell">
-                      {daysAgo(t.lastVisitAt)}
+                      {daysAgo(t.lastVisitAt, t.timezone)}
                     </td>
                     <td className="py-2 text-right text-xs whitespace-nowrap hidden md:table-cell">
                       {t.trialDaysLeft === null ? (

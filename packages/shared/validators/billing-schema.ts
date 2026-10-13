@@ -28,6 +28,8 @@ export const tenantBillingSchema = z.object({
     z.string().regex(YMD, "Fecha inválida").nullable().optional(),
   ),
   billingDay: z.number().int().min(1).max(28).nullable().optional(),
+  /** "advance": the month is invoiced at its start; "arrears": once it ended (DB default). Omitted = unchanged. */
+  billingMode: z.enum(["advance", "arrears"]).optional(),
   notes: z.preprocess(emptyToNull, z.string().trim().max(2000).nullable().optional()),
 })
 

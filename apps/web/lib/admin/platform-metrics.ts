@@ -44,6 +44,8 @@ export type TenantMetricsRow = {
   redemptions: number
   avgTicket: number | null
   lastVisitAt: string | null
+  /** IANA timezone of the business, so "hoy"/"ayer" follow its calendar, not the server's. */
+  timezone: string
   trialEndsAt: string | null
   trialDaysLeft: number | null
   designPublished: boolean
@@ -263,7 +265,7 @@ export async function computePlatformMetrics(f: MetricsFilters): Promise<Platfor
           WHERE ad.serial_number IS NOT NULL OR (pi.google_save_url IS NOT NULL AND pi.google_save_url <> '' AND NOT (pi.google_deleted_at IS NOT NULL AND (pi.google_saved_at IS NULL OR pi.google_deleted_at > pi.google_saved_at)))
         )
         SELECT t.id, t.name, t.slug, t.status, p.name AS plan, (coalesce(p.price, 0) / 100.0)::numeric(12,2) AS plan_price,
-          t.trial_ends_at,
+          t.trial_ends_at, t.timezone,
           (SELECT pr.type FROM loyalty.promotions pr WHERE pr.tenant_id = t.id AND pr.active = true ORDER BY pr.created_at DESC LIMIT 1) AS program,
           (SELECT count(*)::int FROM loyalty.promotions pr WHERE pr.tenant_id = t.id AND pr.active = true) AS active_promotions,
           EXISTS (SELECT 1 FROM passes.pass_designs d WHERE d.tenant_id = t.id AND d.is_active = true) AS design_published,
@@ -433,6 +435,7 @@ export async function computePlatformMetrics(f: MetricsFilters): Promise<Platfor
       avgTicket:
         r.avg_ticket === null || r.avg_ticket === undefined ? null : n(r.avg_ticket as Num),
       lastVisitAt: lastVisit ? lastVisit.toISOString() : null,
+      timezone: typeof r.timezone === "string" && r.timezone ? r.timezone : "America/Lima",
       trialEndsAt: trialEnds ? trialEnds.toISOString() : null,
       trialDaysLeft:
         r.status === "trial" && trialEnds

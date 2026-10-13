@@ -26,7 +26,11 @@ export async function loadBilling(tenantId: string) {
     .limit(120)
   const invoicedPeriods = invoices.filter((i) => i.status !== "void").map((i) => i.period)
   const outlook = billingOutlook(
-    { serviceStartOn: config?.serviceStartOn ?? null, billingDay: config?.billingDay ?? null },
+    {
+      serviceStartOn: config?.serviceStartOn ?? null,
+      billingDay: config?.billingDay ?? null,
+      billingMode: config?.billingMode ?? "arrears",
+    },
     invoicedPeriods,
     todayYmd(),
   )
@@ -42,6 +46,7 @@ export async function loadBilling(tenantId: string) {
           currency: config.currency,
           serviceStartOn: config.serviceStartOn,
           billingDay: config.billingDay,
+          billingMode: config.billingMode,
           notes: config.notes,
           updatedAt: config.updatedAt.toISOString(),
         }

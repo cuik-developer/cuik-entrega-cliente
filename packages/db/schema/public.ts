@@ -134,6 +134,8 @@ export const tenantBilling = pgTable("tenant_billing", {
   serviceStartOn: date("service_start_on"),
   /** Optional override 1..28; null = day of serviceStartOn (capped at 28). */
   billingDay: integer("billing_day"),
+  /** "advance": the month is invoiced at its start; "arrears": once it ended. */
+  billingMode: text("billing_mode").$type<"advance" | "arrears">().default("arrears").notNull(),
   notes: text("notes"),
   updatedBy: text("updated_by").references(() => user.id),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

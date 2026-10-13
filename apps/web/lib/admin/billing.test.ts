@@ -7,6 +7,7 @@ import {
   firstDue,
   formatYmd,
   monthsOfService,
+  periodOf,
 } from "./billing"
 
 // Service started 16 Aug 2026 → invoices on the 16th of every month.
@@ -68,6 +69,55 @@ describe("billingOutlook", () => {
     expect(late.status).toBe("vencida")
     expect(late.daysOverdue).toBe(8)
     expect(late.currentPeriod).toBe("2026-10")
+  })
+
+  describe("arrears (a mes vencido): a period is invoiced on the next month's billing day", () => {
+    // Mascota Veloz: service since 1 Feb 2026, invoiced the 1st of the following month.
+    const MV = { serviceStartOn: "2026-02-01", billingDay: null, billingMode: "arrears" as const }
+
+    it("first invoice (February) is due 1 March; nothing pending during the first month", () => {
+      expect(firstDue(MV)).toBe("2026-03-01")
+      const o = billingOutlook(MV, [], "2026-02-13")
+      expect(o.status).toBe("al_dia")
+      expect(o.currentDue).toBeNull()
+      expect(o.nextDue).toBe("2026-03-01")
+      expect(o.monthsOfService).toBe(0)
+    })
+
+    it("mid-October with September invoiced: al día, October is due 1 November", () => {
+      const o = billingOutlook(MV, ["2026-09"], "2026-10-13")
+      expect(o.status).toBe("al_dia")
+      expect(o.currentDue).toBe("2026-10-01")
+      expect(o.currentPeriod).toBe("2026-09")
+      expect(o.nextDue).toBe("2026-11-01")
+      expect(o.daysUntilNext).toBe(19)
+      expect(o.monthsOfService).toBe(8)
+    })
+
+    it("1 November without the October invoice: pendiente for October, vencida after 7 days", () => {
+      const due = billingOutlook(MV, ["2026-09"], "2026-11-01")
+      expect(due.status).toBe("pendiente")
+      expect(due.currentPeriod).toBe("2026-10")
+      expect(due.nextDue).toBe("2026-11-01")
+      expect(billingOutlook(MV, ["2026-09"], "2026-11-09").status).toBe("vencida")
+      expect(billingOutlook(MV, ["2026-09", "2026-10"], "2026-11-09").status).toBe("al_dia")
+    })
+
+    it("January is invoiced in February of the next year; billing day override applies", () => {
+      expect(periodOf("2027-01-05", "arrears")).toBe("2026-12")
+      const o = billingOutlook(
+        { serviceStartOn: "2026-11-20", billingDay: 5, billingMode: "arrears" },
+        [],
+        "2027-01-10",
+      )
+      expect(o.currentDue).toBe("2027-01-05")
+      expect(o.currentPeriod).toBe("2026-12")
+      expect(o.status).toBe("pendiente")
+    })
+
+    it("before the service starts it is sin_iniciar in both modes", () => {
+      expect(billingOutlook(MV, [], "2026-01-20").status).toBe("sin_iniciar")
+    })
   })
 
   it("the start day itself is the first due date", () => {

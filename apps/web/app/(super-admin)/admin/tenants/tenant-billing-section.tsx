@@ -38,6 +38,7 @@ type Config = {
   currency: "PEN" | "USD"
   serviceStartOn: string | null
   billingDay: number | null
+  billingMode: "advance" | "arrears"
   notes: string | null
   updatedAt: string
 }
@@ -94,6 +95,7 @@ type FormState = {
   currency: "PEN" | "USD"
   serviceStartOn: string
   billingDay: string
+  billingMode: "advance" | "arrears"
   notes: string
 }
 
@@ -109,6 +111,7 @@ function formFrom(c: Config | null): FormState {
     currency: c?.currency ?? "PEN",
     serviceStartOn: c?.serviceStartOn ?? "",
     billingDay: c?.billingDay ? String(c.billingDay) : "",
+    billingMode: c?.billingMode ?? "arrears",
     notes: c?.notes ?? "",
   }
 }
@@ -305,8 +308,8 @@ export function TenantBillingSection({
     const todayLima = new Date().toLocaleDateString("en-CA", { timeZone: "America/Lima" })
     // Current period when it still lacks an invoice; otherwise the next one.
     const period =
-      (o?.status === "al_dia" ? o.nextDue?.slice(0, 7) : o?.currentPeriod) ??
-      o?.nextDue?.slice(0, 7) ??
+      (o?.status === "al_dia" ? o.nextPeriod : o?.currentPeriod) ??
+      o?.nextPeriod ??
       todayLima.slice(0, 7)
     const amount = data?.config?.monthlyAmount
     setInv({
@@ -591,11 +594,24 @@ export function TenantBillingSection({
                 ))}
               </select>
             </div>
+            <div className="space-y-1 col-span-2">
+              <Label className="text-xs">Modalidad</Label>
+              <select
+                className="h-9 w-full rounded-md border border-ent-line bg-white px-2 text-sm"
+                value={form.billingMode}
+                onChange={(e) => set("billingMode", e.target.value as FormState["billingMode"])}
+              >
+                <option value="arrears">A mes vencido: el mes se factura al terminar</option>
+                <option value="advance">Por adelantado: el mes se factura al empezar</option>
+              </select>
+            </div>
           </div>
           <p className="text-[11px] text-ent-fg-3">
-            La primera factura corresponde al día de inicio y las siguientes cada mes el mismo día
-            (tope 28). Una factura cuenta como pendiente desde ese día y como vencida a los 7 días
-            sin registrar.
+            {form.billingMode === "arrears"
+              ? "Cada mes de servicio se factura el día de facturación del mes siguiente (tope 28); la primera factura, al cumplirse el primer mes. "
+              : "La primera factura corresponde al día de inicio y las siguientes cada mes el mismo día (tope 28). "}
+            Una factura cuenta como pendiente desde ese día y como vencida a los 7 días sin
+            registrar.
           </p>
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1 col-span-2">

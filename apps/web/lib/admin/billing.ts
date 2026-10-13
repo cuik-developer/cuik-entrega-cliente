@@ -8,11 +8,20 @@ export const BILLING_TIMEZONE = "America/Lima"
 /** How long after the due date an unissued invoice counts as overdue. */
 export const OVERDUE_AFTER_DAYS = 7
 
+/**
+ * "advance": the invoice of a period is due on that period's billing day (the
+ * month is paid at its start). "arrears": a period is invoiced on the billing
+ * day of the following month (the month is paid once it ended).
+ */
+export type BillingMode = "advance" | "arrears"
+
 export type BillingRule = {
   /** "YYYY-MM-DD" | null: day the service started. Periods run monthly from it. */
   serviceStartOn: string | null
   /** Optional override 1..28; null = day of serviceStartOn (capped at 28). */
   billingDay: number | null
+  /** Defaults to "advance" (the original behaviour) when absent. */
+  billingMode?: BillingMode | null
 }
 
 export type BillingStatus =
@@ -30,6 +39,8 @@ export type BillingOutlook = {
   currentPeriod: string | null
   /** Next due date strictly after today (or today itself when due today and not yet invoiced). */
   nextDue: string | null
+  /** Service month that `nextDue` invoices, "YYYY-MM" (the previous month in arrears). */
+  nextPeriod: string | null
   /** Days from today to `nextDue` (0 = today). */
   daysUntilNext: number | null
   /** Days since `currentDue` when it has no invoice. */
@@ -57,8 +68,12 @@ export function daysBetween(fromYmd: string, toYmd: string): number {
   return Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / 86_400_000)
 }
 
-export function periodOf(dueYmd: string): string {
-  return dueYmd.slice(0, 7)
+/** Service month ("YYYY-MM") an invoice due on `dueYmd` pays for. */
+export function periodOf(dueYmd: string, mode: BillingMode = "advance"): string {
+  if (mode === "advance") return dueYmd.slice(0, 7)
+  const [y, m] = split(dueYmd)
+  const total = y * 12 + (m - 1) - 1
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`
 }
 
 /** Due date (billing day) of the month that contains `ymd`. */
@@ -83,9 +98,17 @@ export function effectiveBillingDay(rule: BillingRule): number | null {
   return Math.min(split(rule.serviceStartOn)[2], 28)
 }
 
-/** First due date: the service start itself (first month is billed at start). */
+/**
+ * First due date. In advance: the service start itself (the first month is
+ * billed at start). In arrears: the billing day of the month after the start
+ * (the first month is billed once it ended).
+ */
 export function firstDue(rule: BillingRule): string | null {
-  return rule.serviceStartOn ?? null
+  if (!rule.serviceStartOn) return null
+  if ((rule.billingMode ?? "advance") === "advance") return rule.serviceStartOn
+  const day = effectiveBillingDay(rule)
+  if (!day) return null
+  return addMonths(dueInMonthOf(rule.serviceStartOn, day), 1, day)
 }
 
 /** Full months elapsed between `serviceStartOn` and `today` (0 within the first month). */
@@ -138,30 +161,35 @@ export function billingOutlook(
     currentDue: null,
     currentPeriod: null,
     nextDue: null,
+    nextPeriod: null,
     daysUntilNext: null,
     daysOverdue: null,
     monthsOfService: null,
   }
+  const mode: BillingMode = rule.billingMode ?? "advance"
   const first = firstDue(rule)
   const day = effectiveBillingDay(rule)
-  if (!first || !day) return empty
+  if (!first || !day || !rule.serviceStartOn) return empty
   const invoiced = new Set(invoicedPeriods)
 
   if (first > today) {
+    // In arrears the service may already be running with nothing to invoice yet.
+    const started = rule.serviceStartOn <= today
     return {
       ...empty,
-      status: "sin_iniciar",
+      status: started ? "al_dia" : "sin_iniciar",
       nextDue: first,
+      nextPeriod: periodOf(first, mode),
       daysUntilNext: daysBetween(today, first),
-      monthsOfService: 0,
+      monthsOfService: started ? monthsOfService(rule.serviceStartOn, today) : 0,
     }
   }
 
-  // Most recent due date ≤ today: the start itself, or the billing day of this/previous month.
+  // Most recent due date ≤ today: the first one, or the billing day of this/previous month.
   let currentDue = dueInMonthOf(today, day)
   if (currentDue > today) currentDue = addMonths(currentDue, -1, day)
   if (currentDue < first) currentDue = first
-  const currentPeriod = periodOf(currentDue)
+  const currentPeriod = periodOf(currentDue, mode)
   const invoicedNow = invoiced.has(currentPeriod)
 
   const nextDue = invoicedNow || currentDue !== today ? addMonths(currentDue, 1, day) : currentDue
@@ -175,9 +203,10 @@ export function billingOutlook(
     currentDue,
     currentPeriod,
     nextDue,
+    nextPeriod: periodOf(nextDue, mode),
     daysUntilNext: daysBetween(today, nextDue),
     daysOverdue,
-    monthsOfService: monthsOfService(first, today),
+    monthsOfService: monthsOfService(rule.serviceStartOn, today),
   }
 }
 

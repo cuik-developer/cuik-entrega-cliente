@@ -28,6 +28,7 @@ export async function billingOutlookFor(
         tenantId: tenantBilling.tenantId,
         serviceStartOn: tenantBilling.serviceStartOn,
         billingDay: tenantBilling.billingDay,
+        billingMode: tenantBilling.billingMode,
         monthlyAmount: tenantBilling.monthlyAmount,
         currency: tenantBilling.currency,
       })
@@ -43,7 +44,7 @@ export async function billingOutlookFor(
   for (const c of configs) {
     out.set(c.tenantId, {
       ...billingOutlook(
-        { serviceStartOn: c.serviceStartOn, billingDay: c.billingDay },
+        { serviceStartOn: c.serviceStartOn, billingDay: c.billingDay, billingMode: c.billingMode },
         periods.get(c.tenantId) ?? [],
         today,
       ),
