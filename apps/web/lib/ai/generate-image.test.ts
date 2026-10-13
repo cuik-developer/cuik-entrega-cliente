@@ -82,7 +82,7 @@ describe("generateImage", () => {
 
     const result = await generateImage("a beautiful sunset", {
       width: 750,
-      height: 246,
+      height: 288,
     })
 
     // Verify execFile was called
@@ -103,7 +103,7 @@ describe("generateImage", () => {
   it("passes -s 1K for large dimensions (max > 512)", async () => {
     setupSuccessfulExec()
 
-    await generateImage("test prompt", { width: 750, height: 246 })
+    await generateImage("test prompt", { width: 750, height: 288 })
 
     const [, args] = mockExecFile.mock.calls[0]
     const sizeIdx = args.indexOf("-s")
@@ -123,11 +123,11 @@ describe("generateImage", () => {
   it("passes -a aspect ratio flag with closest valid ratio", async () => {
     setupSuccessfulExec()
 
-    await generateImage("test prompt", { width: 750, height: 246 })
+    await generateImage("test prompt", { width: 750, height: 288 })
 
     const [, args] = mockExecFile.mock.calls[0]
     expect(args).toContain("-a")
-    // 750/246 ≈ 3.05, closest valid nano-banana ratio is "21:9" (2.33)
+    // 750/288 ≈ 2.6, closest valid nano-banana ratio is "21:9" (2.33)
     expect(args).toContain("21:9")
   })
 

@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react"
 import type { PassDesignConfigV2 } from "../../types"
 
-// Strip image is 750x246 at @2x
+// Strip image is 750x288 at @2x (store card strip: 375×144 pt)
 const STRIP_2X_WIDTH = 750
-const STRIP_2X_HEIGHT = 246
+const STRIP_2X_HEIGHT = 288
 
 interface StampGridPreviewProps {
   stampsConfig: PassDesignConfigV2["stampsConfig"]
@@ -47,10 +47,8 @@ export function StampGridPreview({
   return (
     <div ref={containerRef} className="absolute inset-0">
       {Array.from({ length: totalStamps }, (_, i) => {
-        const row =
-          fillOrder === "interleaved" ? i % gridRows : Math.floor(i / gridCols)
-        const col =
-          fillOrder === "interleaved" ? Math.floor(i / gridRows) : i % gridCols
+        const row = fillOrder === "interleaved" ? i % gridRows : Math.floor(i / gridCols)
+        const col = fillOrder === "interleaved" ? Math.floor(i / gridRows) : i % gridCols
         const rowOff = rowOffsets[row] ?? { x: 0, y: 0 }
         const x2 = oX + col * gX + rowOff.x
         const y2 = oY + row * gY + rowOff.y

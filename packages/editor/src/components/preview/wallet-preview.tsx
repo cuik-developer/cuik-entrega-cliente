@@ -4,7 +4,11 @@ import type { PassDesignConfigV2, PromotionType } from "../../types"
 import { StampGridPreview } from "./stamp-grid-preview"
 
 /** Resolve template variables like {{client.name}} to preview values */
-function resolvePreviewValue(value: string, promotionType: PromotionType, maxVisits: number): string {
+function resolvePreviewValue(
+  value: string,
+  promotionType: PromotionType,
+  maxVisits: number,
+): string {
   const previewValues: Record<string, string> = {
     "{{client.name}}": "Juan Perez",
     "{{client.lastName}}": "Perez",
@@ -90,7 +94,7 @@ export function WalletPreview({
       </div>
 
       {/* Strip image with stamp grid overlay */}
-      <div className="relative" style={{ height: 110 }}>
+      <div className="relative" style={{ aspectRatio: "750 / 288" }}>
         {config.assets.stripBg ? (
           // biome-ignore lint/performance/noImgElement: standalone package without Next.js
           <img

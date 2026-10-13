@@ -34,7 +34,7 @@ Cubre los despliegues `e3b3561` y `442a3ba` (programa de puntos, panel Premios, 
 
 | # | Que hacer | Que debe pasar | Estado |
 |---|---|---|---|
-| 11 | Subir el strip como **PNG de 750x246** en el diseno y hacer **Publicar** (no solo guardar); reinstalar el pase en un iPhone | La franja muestra la imagen de fondo (antes salia vacia) | |
+| 11 | Subir el strip como **PNG de 750x288** en el diseno y hacer **Publicar** (no solo guardar); reinstalar el pase en un iPhone | La franja muestra la imagen de fondo (antes salia vacia) | |
 
 ## 4. Reportes por correo
 

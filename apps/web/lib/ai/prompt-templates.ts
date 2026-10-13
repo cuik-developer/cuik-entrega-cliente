@@ -1,7 +1,7 @@
 // ─── Asset Dimensions ───────────────────────────────────────────────
 
 export const ASSET_DIMENSIONS = {
-  strip: { width: 750, height: 246 },
+  strip: { width: 750, height: 288 },
   logo: { width: 256, height: 256 },
   stamp: { width: 128, height: 128 },
   icon: { width: 87, height: 87 },
@@ -28,7 +28,7 @@ const STAMPS_TEMPLATES: Record<AssetType, (ctx: PromptContext) => string> = {
       : "Use warm, professional tones matching the business industry."
     return [
       `Create a decorative horizontal background image for a ${typeHint} digital loyalty card.`,
-      `Dimensions: 750x246 pixels (wide horizontal banner).`,
+      `Dimensions: 750x288 pixels (wide horizontal banner).`,
       `${colorHint}`,
       `Style: elegant gradient, subtle texture, or abstract decorative pattern related to the ${typeHint} industry.`,
       `Examples of good designs: smooth color gradients with subtle motifs, bokeh effects, abstract curves, or industry-themed patterns (coffee beans pattern for cafe, geometric patterns for barber, etc).`,
@@ -83,7 +83,7 @@ const POINTS_TEMPLATES: Record<AssetType, (ctx: PromptContext) => string> = {
       : "Use rich, premium tones (gold accents, deep colors)."
     return [
       `Create a premium horizontal banner image for a ${typeHint} VIP rewards membership card.`,
-      `Dimensions: 750x246 pixels (wide horizontal banner).`,
+      `Dimensions: 750x288 pixels (wide horizontal banner).`,
       `${colorHint}`,
       `Style: luxury, premium feel. Think high-end membership card, hotel loyalty program, or airline frequent flyer card.`,
       `Examples of good designs: elegant gradients with gold or metallic accents, abstract luxury patterns, silk-like textures, premium bokeh with warm tones.`,

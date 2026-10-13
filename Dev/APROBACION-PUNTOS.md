@@ -167,9 +167,9 @@ Riesgo: bajo. Cambia qué promoción se elige solo cuando hay más de una activa
 
 ## D. Strip en pases de puntos (hallazgo de la prueba) — 3 rutas Apple
 
-Por qué "el celular no aparece": en las tres rutas que generan el `.pkpass` la condición es `if (stripBgAsset && stampAsset)`. Un diseño de **puntos no tiene sello**, así que el strip que subiste se descarta y se reemplaza por un PNG **transparente** de 750×246. Además el fondo se etiqueta siempre como `data:image/png` aunque sea JPG, y librsvg puede renderizar vacío.
+Por qué "el celular no aparece": en las tres rutas que generan el `.pkpass` la condición es `if (stripBgAsset && stampAsset)`. Un diseño de **puntos no tiene sello**, así que el strip que subiste se descarta y se reemplaza por un PNG **transparente** de 750×288. Además el fondo se etiqueta siempre como `data:image/png` aunque sea JPG, y librsvg puede renderizar vacío.
 
-El helper `apps/web/lib/wallet/points-strip.ts` (no protegido, con tests) ya resuelve: puntos → fondo solo, ajustado a 750×246; sellos → como hoy; detecta PNG/JPG por los bytes; transparente solo si no hay fondo. En cada ruta el hunk es reemplazar el bloque `if/else` por una llamada:
+El helper `apps/web/lib/wallet/points-strip.ts` (no protegido, con tests) ya resuelve: puntos → fondo solo, ajustado a 750×288; sellos → como hoy; detecta PNG/JPG por los bytes; transparente solo si no hay fondo. En cada ruta el hunk es reemplazar el bloque `if/else` por una llamada:
 
 **Archivos**: `app/api/[tenant]/wallet/apple/[clientId]/route.ts` (líneas 175-225), `app/api/[tenant]/wallet/apple/[clientId]/[token]/route.ts` (191-241), `app/api/apple-wallet/v1/[...path]/route.ts` (737-787).
 
@@ -203,7 +203,7 @@ El helper `apps/web/lib/wallet/points-strip.ts` (no protegido, con tests) ya res
 
 Riesgo: para sellos el resultado es idéntico (misma función, mismos parámetros); cambia solo la etiqueta MIME del data URI, que pasa a ser la real. Para puntos, el strip deja de ser transparente.
 
-**Mientras tanto**: subí el strip como **PNG de 750×246 exactos** y **publicá** el diseño (no solo "Guardar": la vista Mi Pase y el `.pkpass` leen `pass_assets`, que solo se actualiza al publicar). Con eso la vista previa del editor y Google lo muestran; el `.pkpass` de Apple seguirá sin strip hasta aplicar este hunk.
+**Mientras tanto**: subí el strip como **PNG de 750×288 exactos** y **publicá** el diseño (no solo "Guardar": la vista Mi Pase y el `.pkpass` leen `pass_assets`, que solo se actualiza al publicar). Con eso la vista previa del editor y Google lo muestran; el `.pkpass` de Apple seguirá sin strip hasta aplicar este hunk.
 
 ---
 

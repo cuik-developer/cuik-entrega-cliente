@@ -774,7 +774,7 @@ En `/api/[tenant]/visits/route.ts`, funcion `triggerWalletUpdate()`:
 - Colores en `rgb(r,g,b)` (Apple rechaza hex).
 - Fields desde `passDesigns.fields` con fallback hard-coded.
 - Barcode QR: `PKBarcodeFormatQR`, encoding `iso-8859-1`, message = `serialNumber`.
-- Imagenes: strip@2x.png (750×246), strip@1x (375×123), icon.png, logo.png.
+- Imagenes: strip@2x.png (750×288), strip@1x (375×144), icon.png, logo.png.
 - Firma PKCS#7 con `signerCert` + `signerKey` + `wwdr` (todos PEM).
 
 **Autenticacion** (`packages/wallet/src/apple/auth-token.ts`):

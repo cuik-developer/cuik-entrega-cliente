@@ -18,7 +18,7 @@ describe("sniffImageMime", () => {
 })
 
 describe("buildStripImages", () => {
-  it("points: uses the background alone, JPG included, cover-fit to 750×246 / 375×123", async () => {
+  it("points: uses the background alone, JPG included, cover-fit to 750×288 / 375×144", async () => {
     const bg = await solid(751, 247, "jpeg") // the user's odd-sized JPG
     const { strip2x, strip1x } = await buildStripImages({
       programType: "points",
@@ -29,8 +29,8 @@ describe("buildStripImages", () => {
     })
     const m2 = await sharp(strip2x).metadata()
     const m1 = await sharp(strip1x).metadata()
-    expect([m2.width, m2.height, m2.format]).toEqual([750, 246, "png"])
-    expect([m1.width, m1.height, m1.format]).toEqual([375, 123, "png"])
+    expect([m2.width, m2.height, m2.format]).toEqual([750, 288, "png"])
+    expect([m1.width, m1.height, m1.format]).toEqual([375, 144, "png"])
   })
 
   it("no background at all: transparent strip of the right size", async () => {
@@ -42,13 +42,13 @@ describe("buildStripImages", () => {
       maxVisits: 8,
     })
     const m = await sharp(strip2x).metadata()
-    expect([m.width, m.height, m.hasAlpha]).toEqual([750, 246, true])
+    expect([m.width, m.height, m.hasAlpha]).toEqual([750, 288, true])
   })
 
   it("stamps without a stamp asset: keeps the background instead of blanking it", async () => {
     const { strip2x } = await buildStripImages({
       programType: "stamps",
-      background: await solid(750, 246, "png"),
+      background: await solid(750, 288, "png"),
       stamp: null,
       stampsInCycle: 2,
       maxVisits: 8,

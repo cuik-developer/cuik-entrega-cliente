@@ -3,14 +3,14 @@
 /** Apple Wallet strip image width at @2x resolution */
 export const STRIP_WIDTH_2X = 750
 
-/** Apple Wallet strip image height at @2x resolution */
-export const STRIP_HEIGHT_2X = 246
+/** Apple Wallet strip image height at @2x resolution (store card strip: 375×144 pt) */
+export const STRIP_HEIGHT_2X = 288
 
 /** Apple Wallet strip image width at @1x resolution */
 export const STRIP_WIDTH_1X = 375
 
 /** Apple Wallet strip image height at @1x resolution */
-export const STRIP_HEIGHT_1X = 123
+export const STRIP_HEIGHT_1X = 144
 
 /** Default stamp icon size (pixels at @2x) */
 export const STAMP_SIZE = 63

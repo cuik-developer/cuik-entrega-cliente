@@ -3,7 +3,7 @@ import { ASSET_DIMENSIONS, buildPrompt } from "./prompt-templates"
 
 describe("ASSET_DIMENSIONS", () => {
   it("has correct strip dimensions", () => {
-    expect(ASSET_DIMENSIONS.strip).toEqual({ width: 750, height: 246 })
+    expect(ASSET_DIMENSIONS.strip).toEqual({ width: 750, height: 288 })
   })
 
   it("has correct logo dimensions", () => {
@@ -31,7 +31,7 @@ describe("buildPrompt", () => {
     it("references dimensions", () => {
       const prompt = buildPrompt("strip", baseContext)
 
-      expect(prompt).toContain("750x246")
+      expect(prompt).toContain("750x288")
     })
 
     it("includes custom primaryColor when provided", () => {

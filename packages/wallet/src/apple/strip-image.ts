@@ -59,7 +59,10 @@ ${stampElements}
 }
 
 /**
- * Generate Apple Wallet strip images at @2x (750x246) and @1x (375x123).
+ * Generate Apple Wallet strip images at @2x (750x288) and @1x (375x144).
+ *
+ * Store cards render the strip at 375×144 pt. Until Oct 2026 we shipped 750×246
+ * (an older guide): iOS scaled it up 17 % and cropped 64 px per side.
  *
  * Builds an SVG with the stamp grid overlaid on the background image,
  * then converts to PNG via sharp. Pure buffer operations — no filesystem access.

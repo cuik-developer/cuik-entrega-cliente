@@ -18,7 +18,7 @@ export function StripSection({ onUploadAsset, onGenerateAsset }: StripSectionPro
         <span className="text-xs font-medium text-gray-600">Fondo</span>
 
         {/* Custom wider preview to hint at strip ~3:1 aspect ratio */}
-        <div className="relative w-full aspect-[3/1] rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden">
+        <div className="relative w-full aspect-[750/288] rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden">
           {stripBgUrl ? (
             // biome-ignore lint/performance/noImgElement: standalone package without Next.js
             <img

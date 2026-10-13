@@ -8,14 +8,14 @@ import sharp from "sharp"
  * transparent`, and to label every background as `data:image/png` — so a
  * POINTS design (which has no stamp asset) lost its background entirely, and a
  * JPG background could make librsvg render nothing. This helper:
- *   - points: background alone, resized to cover 750×246 (no stamps drawn)
+ *   - points: background alone, resized to cover 750×288 (no stamps drawn)
  *   - stamps: background + stamp grid via generateStripImage (unchanged)
  *   - sniffs the real image type for the data URI
  *   - falls back to a transparent strip only when there is no background at all
  */
 
 export const STRIP_W_2X = 750
-export const STRIP_H_2X = 246
+export const STRIP_H_2X = 288
 
 export type StripGridLayout = {
   cols: number

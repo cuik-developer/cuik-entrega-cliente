@@ -1012,8 +1012,8 @@ El estado del canvas se guarda como JSON en `pass_designs.canvas_data`:
 Canvas (Konva JSON)
     │
     ├── Server-side render via Konva + node-canvas
-    │   → Genera strip@2x.png (750×246)
-    │   → Genera strip@1x.png (375×123) via sharp resize
+    │   → Genera strip@2x.png (750×288)
+    │   → Genera strip@1x.png (375×144) via sharp resize
     │
     ├── Inyecta en template Apple Wallet (.pkpass)
     │   → pass.json con colores, campos, barcode
@@ -1026,7 +1026,7 @@ Canvas (Konva JSON)
 ```
 
 **Requirements:**
-- R-EDITOR-01: El editor DEBE renderizar en un canvas Konva con las dimensiones exactas del strip de Apple Wallet (750×246 @2x)
+- R-EDITOR-01: El editor DEBE renderizar en un canvas Konva con las dimensiones exactas del strip de Apple Wallet (750×288 @2x)
 - R-EDITOR-02: Los sellos DEBEN poder posicionarse con drag-and-drop libre O usando un grid automático configurable
 - R-EDITOR-03: El editor DEBE soportar subida de imágenes custom para sellos, logos, y backgrounds via MinIO
 - R-EDITOR-04: El editor DEBE mostrar un preview en tiempo real del pase como se vería en un iPhone (mockup)
@@ -1826,12 +1826,12 @@ Cada fase de migración se implementa como un "change" de SDD:
 
 | Asset | @1x | @2x | @3x | Notes |
 |-------|-----|-----|-----|-------|
-| Strip | 375×123 | **750×246** | 1125×369 | Canvas del editor |
+| Strip | 375×144 | **750×288** | 1125×369 | Canvas del editor |
 | Logo | 160×50 max | 320×100 max | 480×150 max | Aspect ratio libre |
 | Icon | 29×29 | 58×58 | 87×87 | Cuadrado |
 | Thumbnail | 90×90 | 180×180 | 270×270 | No usado en storeCard |
 
-### Stamp Grid (default layout en strip @2x: 750×246)
+### Stamp Grid (default layout en strip @2x: 750×288)
 
 | Param | Default | Editable |
 |-------|---------|----------|
@@ -1847,7 +1847,7 @@ Cada fase de migración se implementa como un "change" de SDD:
 
 | Field | Type | Editable |
 |-------|------|----------|
-| Hero image | URL (750×246 recommended) | SI (mismo strip que Apple) |
+| Hero image | URL (750×288 recommended) | SI (mismo strip que Apple) |
 | Logo | URL (660×660 max) | SI |
 | Program name | Text | SI |
 | Account name | Text (per client) | Auto |
