@@ -90,23 +90,37 @@ function getInitials(name: string): string {
 function TopBarTenant() {
   const { tenantName, branding, isLoading } = useTenant()
   const primaryColor = branding?.primaryColor ?? CUIK_PRIMARY
+  // A broken image URL falls through to the next option (logo, then initials).
+  const [failed, setFailed] = useState<{ icon?: boolean; logo?: boolean }>({})
+  const iconUrl = failed.icon ? null : (branding?.iconUrl ?? null)
+  const logoUrl = failed.logo ? null : (branding?.logoUrl ?? null)
   if (isLoading) {
     return (
       <div className="flex items-center gap-2">
-        <div className="w-6 h-6 rounded-[3px] bg-white/10 animate-pulse" />
+        <div className="w-7 h-7 rounded-[3px] bg-white/10 animate-pulse" />
         <div className="h-3 w-24 bg-white/10 rounded animate-pulse" />
       </div>
     )
   }
   return (
     <div className="flex items-center gap-2 min-w-0">
-      {branding?.logoUrl ? (
+      {iconUrl ? (
         <Image
-          src={branding.logoUrl}
+          src={iconUrl}
           alt=""
-          width={24}
-          height={24}
-          className="w-6 h-6 rounded-[3px] object-cover bg-white"
+          width={28}
+          height={28}
+          className="w-7 h-7 rounded-[4px] object-contain"
+          onError={() => setFailed((f) => ({ ...f, icon: true }))}
+        />
+      ) : logoUrl ? (
+        <Image
+          src={logoUrl}
+          alt=""
+          width={150}
+          height={28}
+          className="h-7 w-auto max-w-[150px] rounded-[3px] object-contain bg-white px-1"
+          onError={() => setFailed((f) => ({ ...f, logo: true }))}
         />
       ) : (
         <span

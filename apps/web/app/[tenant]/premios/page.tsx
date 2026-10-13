@@ -124,9 +124,9 @@ export default async function PremiosPage({ params }: { params: Promise<{ tenant
               <Image
                 src={logoUrl}
                 alt={data.name}
-                width={48}
+                width={180}
                 height={48}
-                className="w-12 h-12 rounded-xl object-cover bg-white/20"
+                className="h-12 w-auto max-w-[180px] rounded-xl object-contain bg-white/95 px-2 py-1"
               />
             ) : (
               <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold text-lg">

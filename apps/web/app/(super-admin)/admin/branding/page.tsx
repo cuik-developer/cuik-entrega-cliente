@@ -62,6 +62,7 @@ interface FormState {
   primaryColor: string
   accentColor: string
   logoUrl: string | null
+  iconUrl: string | null
 }
 
 interface Suggestions {
@@ -171,12 +172,17 @@ function LogoUploader({
   tenantId,
   onUpload,
   onRemove,
+  kind = "logo",
 }: {
   logoUrl: string | null
   tenantId: string
   onUpload: (url: string) => void
   onRemove: () => void
+  /** "icon" = square mark for small spots (panel top bar). */
+  kind?: "logo" | "icon"
 }) {
+  const label = kind === "icon" ? "Ícono (cuadrado)" : "Logo"
+  const noun = kind === "icon" ? "ícono" : "logo"
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
@@ -196,7 +202,7 @@ function LogoUploader({
       const formData = new FormData()
       formData.append("file", file)
       formData.append("tenantId", tenantId)
-      formData.append("assetType", "logo")
+      formData.append("assetType", kind)
 
       const res = await fetch("/api/admin/assets/upload", {
         method: "POST",
@@ -210,9 +216,9 @@ function LogoUploader({
 
       const data = await res.json()
       onUpload(data.data.url)
-      toast.success("Logo subido correctamente")
+      toast.success(`${noun === "logo" ? "Logo" : "Ícono"} subido correctamente`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al subir el logo")
+      toast.error(err instanceof Error ? err.message : `Error al subir el ${noun}`)
     } finally {
       setUploading(false)
     }
@@ -234,12 +240,16 @@ function LogoUploader({
   if (logoUrl) {
     return (
       <div className="space-y-2">
-        <Label className="text-ent-fg-2 text-xs font-semibold uppercase tracking-wide">Logo</Label>
+        <Label className="text-ent-fg-2 text-xs font-semibold uppercase tracking-wide">
+          {label}
+        </Label>
         <div className="flex items-center gap-4">
-          <div className="relative w-16 h-16 rounded-[4px] overflow-hidden ring-1 ring-slate-200/80 bg-ent-panel-2">
+          <div
+            className={`relative h-16 rounded-[4px] overflow-hidden ring-1 ring-slate-200/80 bg-ent-panel-2 ${kind === "icon" ? "w-16" : "w-40"}`}
+          >
             <Image
               src={logoUrl}
-              alt="Logo del comercio"
+              alt={kind === "icon" ? "Ícono del comercio" : "Logo del comercio"}
               fill
               className="object-contain p-1"
               unoptimized
@@ -261,7 +271,7 @@ function LogoUploader({
 
   return (
     <div className="space-y-2">
-      <Label className="text-ent-fg-2 text-xs font-semibold uppercase tracking-wide">Logo</Label>
+      <Label className="text-ent-fg-2 text-xs font-semibold uppercase tracking-wide">{label}</Label>
       {/* biome-ignore lint/a11y/useSemanticElements: drop zone requires div for drag events; hidden file input provides accessible interaction */}
       <div
         role="button"
@@ -300,7 +310,11 @@ function LogoUploader({
               <ImagePlus className="w-5 h-5 text-ent-fg-3" />
             </div>
             <p className="text-sm text-ent-fg-2 font-medium">Arrastra o haz clic para subir</p>
-            <p className="text-xs text-ent-fg-3">PNG, JPG, SVG &middot; Max 2MB</p>
+            <p className="text-xs text-ent-fg-3">
+              {kind === "icon"
+                ? "Cuadrado, fondo transparente · PNG o SVG · Max 2MB"
+                : "PNG, JPG, SVG · Max 2MB"}
+            </p>
           </div>
         )}
         <input
@@ -331,14 +345,18 @@ function SidebarPreview({
   primaryColor,
   accentColor,
   logoUrl,
+  iconUrl,
   tenantName,
 }: {
   primaryColor: string
   accentColor: string
   logoUrl: string | null
+  iconUrl: string | null
   tenantName: string
 }) {
   const initial = getInitial(tenantName)
+  // Same rule as the real panel bar: icon when present, otherwise the logo on a white chip.
+  const mark = iconUrl ?? logoUrl
 
   return (
     <div className="space-y-2">
@@ -350,10 +368,12 @@ function SidebarPreview({
         <div className="w-full bg-[#0f172a] p-3" style={{ minHeight: 320 }}>
           {/* Logo area */}
           <div className="flex items-center gap-2 px-2 pb-3 mb-2 border-b border-white/10">
-            {logoUrl ? (
-              <div className="w-7 h-7 rounded-md overflow-hidden bg-white/10 flex-shrink-0">
+            {mark ? (
+              <div
+                className={`h-7 rounded-md overflow-hidden flex-shrink-0 ${iconUrl ? "w-7" : "max-w-[120px] bg-white px-1"}`}
+              >
                 {/* biome-ignore lint/performance/noImgElement: preview mockup with external/data URIs, next/image incompatible */}
-                <img src={logoUrl} alt="" className="w-full h-full object-contain" />
+                <img src={mark} alt="" className="h-full w-auto object-contain" />
               </div>
             ) : (
               <div
@@ -468,9 +488,9 @@ function RegistrationPreview({
           }}
         >
           {logoUrl ? (
-            <div className="mx-auto mb-2 w-10 h-10 rounded-full overflow-hidden bg-white/20">
+            <div className="mx-auto mb-2 h-10 w-fit max-w-[160px] rounded-lg overflow-hidden bg-white/95 px-2 py-1">
               {/* biome-ignore lint/performance/noImgElement: preview mockup with external/data URIs, next/image incompatible */}
-              <img src={logoUrl} alt="" className="w-full h-full object-contain p-0.5" />
+              <img src={logoUrl} alt="" className="h-full w-auto object-contain" />
             </div>
           ) : (
             <div
@@ -534,6 +554,7 @@ export default function BrandingPage() {
     primaryColor: DEFAULT_PRIMARY,
     accentColor: DEFAULT_ACCENT,
     logoUrl: null,
+    iconUrl: null,
   })
 
   // Suggestions from published pass
@@ -579,6 +600,7 @@ export default function BrandingPage() {
         primaryColor: result.data.primaryColor,
         accentColor: result.data.accentColor,
         logoUrl: result.data.logoUrl,
+        iconUrl: result.data.iconUrl ?? null,
       }
       setForm(newForm)
       setOriginalForm(newForm)
@@ -590,6 +612,7 @@ export default function BrandingPage() {
         primaryColor: DEFAULT_PRIMARY,
         accentColor: DEFAULT_ACCENT,
         logoUrl: null,
+        iconUrl: null,
       }
 
       if (passResult.success && passResult.data) {
@@ -626,6 +649,14 @@ export default function BrandingPage() {
     setForm((prev) => ({ ...prev, logoUrl: null }))
   }
 
+  function handleIconUpload(url: string) {
+    setForm((prev) => ({ ...prev, iconUrl: url }))
+  }
+
+  function handleIconRemove() {
+    setForm((prev) => ({ ...prev, iconUrl: null }))
+  }
+
   function handleReset() {
     if (originalForm) {
       setForm({ ...originalForm })
@@ -641,6 +672,7 @@ export default function BrandingPage() {
         primaryColor: form.primaryColor,
         accentColor: form.accentColor,
         logoUrl: form.logoUrl,
+        iconUrl: form.iconUrl,
       })
 
       if (result.success) {
@@ -787,6 +819,23 @@ export default function BrandingPage() {
                 onUpload={handleLogoUpload}
                 onRemove={handleLogoRemove}
               />
+              <p className="mt-2 text-xs text-ent-fg-3">
+                Se muestra completo en el registro de clientes, la cabecera del cajero y los
+                premios. Puede ser horizontal.
+              </p>
+              <div className="mt-5">
+                <LogoUploader
+                  kind="icon"
+                  logoUrl={form.iconUrl}
+                  tenantId={selectedTenantId}
+                  onUpload={handleIconUpload}
+                  onRemove={handleIconRemove}
+                />
+                <p className="mt-2 text-xs text-ent-fg-3">
+                  Versión cuadrada (isotipo) para la barra superior del panel. Si no se sube, ahí se
+                  usa el logo.
+                </p>
+              </div>
             </section>
 
             {/* Divider */}
@@ -824,6 +873,7 @@ export default function BrandingPage() {
               primaryColor={form.primaryColor}
               accentColor={form.accentColor}
               logoUrl={form.logoUrl}
+              iconUrl={form.iconUrl}
               tenantName={tenantName}
             />
             <RegistrationPreview

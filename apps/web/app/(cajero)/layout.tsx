@@ -45,7 +45,7 @@ function LogoOrInitials({
       <img
         src={logoUrl}
         alt={name}
-        className="w-8 h-8 rounded-lg object-cover"
+        className="h-8 w-auto max-w-[140px] rounded-lg object-contain bg-white px-1"
         onError={() => setImgFailed(true)}
       />
     )

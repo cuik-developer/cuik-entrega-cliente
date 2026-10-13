@@ -1,11 +1,11 @@
 import { PKPass } from "passkit-generator"
-
 import {
   APPLE_PASS_BARCODE_FORMAT,
   APPLE_PASS_CONTENT_TYPE,
   APPLE_PASS_FORMAT_VERSION,
 } from "../shared/constants"
 import type { CreateApplePassParams, CreateApplePassResult } from "../shared/types"
+import { buildIconSet, buildLogoSet } from "./image-set"
 
 /** Convert hex color (#RRGGBB) to Apple's required rgb(r,g,b) format. Passes through rgb() strings unchanged. */
 function toAppleRgb(color: string): string {
@@ -184,10 +184,18 @@ export async function createApplePass(
     // ─── Images ───────────────────────────────────────────────────────
     pass.addBuffer("strip@2x.png", params.stripImage2x)
     pass.addBuffer("strip.png", params.stripImage1x)
-    pass.addBuffer("icon.png", params.icon)
+    // Apple reads @3x/@2x first; ship the three scales at the sizes of the
+    // Pass Design guide instead of one file of arbitrary size and shape.
+    const icons = await buildIconSet(params.icon)
+    pass.addBuffer("icon.png", icons["1x"])
+    pass.addBuffer("icon@2x.png", icons["2x"])
+    pass.addBuffer("icon@3x.png", icons["3x"])
 
     if (params.logo) {
-      pass.addBuffer("logo.png", params.logo)
+      const logos = await buildLogoSet(params.logo)
+      pass.addBuffer("logo.png", logos["1x"])
+      pass.addBuffer("logo@2x.png", logos["2x"])
+      pass.addBuffer("logo@3x.png", logos["3x"])
     }
 
     // ─── Locations (geo-fence for lock screen) ──────────────────────

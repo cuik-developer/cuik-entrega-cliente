@@ -485,9 +485,9 @@ export default function RegistroClient({
         <Image
           src={logoUrl}
           alt={tenantName}
-          width={64}
+          width={240}
           height={64}
-          className="mx-auto mb-3 h-16 w-16 rounded-full object-cover shadow-lg"
+          className="mx-auto mb-3 h-16 w-auto max-w-[240px] rounded-xl object-contain bg-white/95 px-3 py-1.5 shadow-lg"
         />
       ) : (
         <div

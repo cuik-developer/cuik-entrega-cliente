@@ -12,8 +12,18 @@ describe("tenantBrandingSchema", () => {
     const result = tenantBrandingSchema.safeParse(validConfig)
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data).toEqual(validConfig)
+      expect(result.data).toEqual({ ...validConfig, iconUrl: null })
     }
+  })
+
+  it("keeps an explicit iconUrl and defaults it to null", () => {
+    const withIcon = tenantBrandingSchema.parse({
+      ...validConfig,
+      iconUrl: "/api/assets/x/icon.png",
+    })
+    expect(withIcon.iconUrl).toBe("/api/assets/x/icon.png")
+    expect(tenantBrandingSchema.parse(validConfig).iconUrl).toBeNull()
+    expect(tenantBrandingSchema.safeParse({ ...validConfig, iconUrl: "" }).success).toBe(false)
   })
 
   it("accepts null logoUrl", () => {
@@ -79,12 +89,13 @@ describe("tenantBrandingSchema", () => {
     expect(result.success).toBe(false)
   })
 
-  it("rejects invalid logoUrl (not a URL)", () => {
-    const result = tenantBrandingSchema.safeParse({
-      ...validConfig,
-      logoUrl: "not-a-url",
-    })
-    expect(result.success).toBe(false)
+  // Logos are stored as app-relative paths (/api/assets/...) as well as absolute URLs,
+  // so the schema only rejects an empty string (pre-existing test expected a URL check).
+  it("accepts a relative asset path and rejects an empty logoUrl", () => {
+    expect(
+      tenantBrandingSchema.safeParse({ ...validConfig, logoUrl: "/api/assets/t/x.png" }).success,
+    ).toBe(true)
+    expect(tenantBrandingSchema.safeParse({ ...validConfig, logoUrl: "" }).success).toBe(false)
   })
 
   it("accepts uppercase hex color", () => {

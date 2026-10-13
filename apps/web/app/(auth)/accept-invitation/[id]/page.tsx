@@ -153,13 +153,13 @@ export default function AcceptInvitationPage() {
           <Card className="border-gray-200/80 shadow-sm">
             <CardHeader className="text-center">
               {invitation.branding?.logoUrl ? (
-                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full overflow-hidden">
+                <div className="mx-auto mb-3 flex h-14 max-w-[220px] items-center justify-center rounded-lg overflow-hidden">
                   <Image
                     src={invitation.branding.logoUrl}
                     alt={invitation.organizationName}
                     width={56}
                     height={56}
-                    className="h-14 w-14 object-contain"
+                    className="h-14 w-auto max-w-[220px] object-contain"
                   />
                 </div>
               ) : (
@@ -235,13 +235,13 @@ export default function AcceptInvitationPage() {
           <Card className="border-gray-200/80 shadow-sm">
             <CardHeader className="text-center">
               {invitation.branding?.logoUrl ? (
-                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full overflow-hidden">
+                <div className="mx-auto mb-3 flex h-14 max-w-[220px] items-center justify-center rounded-lg overflow-hidden">
                   <Image
                     src={invitation.branding.logoUrl}
                     alt={invitation.organizationName}
                     width={56}
                     height={56}
-                    className="h-14 w-14 object-contain"
+                    className="h-14 w-auto max-w-[220px] object-contain"
                   />
                 </div>
               ) : (

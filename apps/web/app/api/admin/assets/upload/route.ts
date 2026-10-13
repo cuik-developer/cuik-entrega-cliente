@@ -8,7 +8,7 @@ const MAX_SIZE = 5 * 1024 * 1024 // 5MB
 
 const uploadSchema = z.object({
   tenantId: z.string().uuid("tenantId must be a valid UUID"),
-  assetType: z.enum(["logo", "strip", "stamp", "background"]).optional(),
+  assetType: z.enum(["logo", "icon", "strip", "stamp", "background"]).optional(),
 })
 
 export async function POST(request: Request) {

@@ -108,7 +108,8 @@ Sidebar izquierdo con navegacion. Rol requerido: `super_admin`.
 **Proposito**: configurar branding (colores, logo) global o por tenant.
 
 - Color picker para primary/accent con validacion hex.
-- Upload de logo (URL en MinIO).
+- Upload de logo (URL en MinIO). **Puede ser horizontal** (oct-2026): se muestra completo, con alto fijo y ancho libre, en la pagina de registro del cliente, la cabecera del cajero, la pagina de premios y aceptar invitacion (`object-contain`, sin recorte).
+- Upload de **icono** (`branding.iconUrl`, opcional, cuadrado; `assetType=icon`): se usa solo en la barra superior del panel del comercio, donde un logo horizontal no entra. Sin icono, la barra muestra el logo completo sobre un chip blanco; sin logo, las iniciales. Es JSON dentro de `tenants.branding`, sin migracion.
 - Preview en contextos (pase, pagina de registro, emails).
 - Sugerencia de paleta con IA a partir del logo.
 
@@ -561,6 +562,12 @@ Configurado en `/panel/configuracion` → "Wallet locations":
 - Hasta 10 ubicaciones con `{ lat, lng, name, relevantText }`
 - Apple Wallet hace aparecer el pase en la lock screen cuando el cliente esta cerca (default ~100m, no es configurable el radio desde el app actualmente).
 - Google Wallet no soporta geofencing de la misma forma — esta feature es solo Apple.
+
+### 8.3b Imagenes del pase Apple (oct-2026)
+
+El paquete `.pkpass` lleva cada imagen en las tres escalas que lee Wallet, generadas en el servidor con sharp al construir el pase (`packages/wallet/src/apple/image-set.ts`): `icon.png` / `icon@2x.png` / `icon@3x.png` (29, 58 y 87 px, cuadrado, el archivo subido se encaja sin deformar sobre fondo transparente) y `logo.png` / `@2x` / `@3x` (cajas de 160×50 pt). Antes se enviaba un unico `icon.png` con el archivo tal cual (hasta 140 KB y a veces horizontal).
+
+**Icono de la notificacion push**: iOS usa el `icon.png` del paquete y **guarda la miniatura en cache del sistema**. Cambiar el icono y publicar actualiza el paquete (el servidor lo empaqueta bien, se ve en el log `icon=...b` de CreatePass), pero el telefono sigue mostrando la miniatura vieja hasta que se **reinicia**; eliminar y reinstalar el pase no basta. Verificado en prod el 12-oct-2026. Por eso el icono debe ser el isotipo permanente de la marca (cuadrado, pequeno); las variaciones de temporada van en el strip, el logo y los colores, que si se renuevan con cada push.
 
 ### 8.4 Apple vs Google
 
