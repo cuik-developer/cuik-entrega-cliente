@@ -22,6 +22,7 @@ import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
 import { CuikLogo } from "@/components/cuik-logo"
 import { LogoutButton } from "@/components/logout-button"
+import { CommandSearch } from "@/components/panel/command-search"
 import { TenantProvider, useTenant } from "@/hooks/use-tenant"
 import { useSession } from "@/lib/auth-client"
 
@@ -281,6 +282,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         </span>
 
         <div className="flex items-center gap-2 shrink-0 ml-auto">
+          <CommandSearch />
           <span className="hidden sm:inline text-[12px] text-[#b6c0cc] max-w-[160px] truncate">
             {userName}
           </span>

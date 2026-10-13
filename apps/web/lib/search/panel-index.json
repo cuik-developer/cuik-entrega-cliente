@@ -1,0 +1,415 @@
+[
+  {
+    "id": "campana-nueva",
+    "title": "Nueva campaña push",
+    "description": "Escribe un mensaje y envíalo al celular de tus clientes, ahora o programado.",
+    "href": "/panel/campanas?nueva=1",
+    "group": "Campañas",
+    "keywords": [
+      "push",
+      "notificación",
+      "notificacion",
+      "mensaje",
+      "aviso",
+      "enviar",
+      "promo",
+      "promoción",
+      "oferta",
+      "comunicado",
+      "difusión",
+      "nueva campaña",
+      "crear campaña",
+      "programar",
+      "agendar",
+      "fecha y hora"
+    ]
+  },
+  {
+    "id": "campanas",
+    "title": "Envíos",
+    "description": "Tus campañas: enviadas, programadas, borradores y cuántos las recibieron.",
+    "href": "/panel/campanas",
+    "group": "Campañas",
+    "keywords": [
+      "campañas",
+      "envíos",
+      "historial",
+      "enviadas",
+      "programadas",
+      "borrador",
+      "entregas",
+      "respondieron",
+      "resultado"
+    ]
+  },
+  {
+    "id": "cumpleanos",
+    "title": "Saludo de cumpleaños",
+    "description": "Push automático el día del cumpleaños de cada cliente, a la hora que elijas.",
+    "href": "/panel/campanas/automatizadas",
+    "group": "Automatizadas",
+    "keywords": ["cumpleaños", "cumple", "feliz cumpleaños", "birthday", "saludo"]
+  },
+  {
+    "id": "recurrentes",
+    "title": "Campañas recurrentes",
+    "description": "Un mensaje que se repite solo: todos los miércoles, cada quincena, el primer viernes.",
+    "href": "/panel/campanas/automatizadas",
+    "group": "Automatizadas",
+    "keywords": [
+      "recurrente",
+      "repetir",
+      "semanal",
+      "mensual",
+      "cada semana",
+      "todos los",
+      "2x1",
+      "automática",
+      "automatica"
+    ]
+  },
+  {
+    "id": "abandono",
+    "title": "Prevención de abandono",
+    "description": "Mensaje de recuperación para quien dejó de venir más tiempo del habitual.",
+    "href": "/panel/campanas",
+    "group": "Automatizadas",
+    "keywords": [
+      "abandono",
+      "riesgo",
+      "dejaron de venir",
+      "recuperar",
+      "recuperación",
+      "inactivos",
+      "te extrañamos",
+      "perdidos"
+    ]
+  },
+  {
+    "id": "puntos-por-vencer",
+    "title": "Aviso de puntos por vencer",
+    "description": "Push automático antes de que venzan los puntos de un cliente.",
+    "href": "/panel/campanas/automatizadas",
+    "group": "Automatizadas",
+    "program": "points",
+    "keywords": ["vencen", "vencimiento", "expiran", "caducan", "puntos por vencer", "por vencer"]
+  },
+  {
+    "id": "geolocalizadas",
+    "title": "Mensajes geolocalizados",
+    "description": "El pase aparece en la pantalla del celular cuando el cliente pasa cerca del local.",
+    "href": "/panel/campanas/geolocalizadas",
+    "group": "Campañas",
+    "keywords": [
+      "geolocalizada",
+      "ubicación",
+      "ubicacion",
+      "geo",
+      "cerca",
+      "pasa por",
+      "radio",
+      "mapa",
+      "coordenadas",
+      "gps"
+    ]
+  },
+  {
+    "id": "clientes",
+    "title": "Clientes",
+    "description": "Toda tu base: visitas, última visita, segmento y estado del pase de cada cliente.",
+    "href": "/panel/clientes",
+    "group": "Clientes",
+    "keywords": [
+      "clientes",
+      "lista",
+      "base",
+      "contactos",
+      "personas",
+      "registrados",
+      "buscar cliente"
+    ]
+  },
+  {
+    "id": "clientes-frecuentes",
+    "title": "Clientes frecuentes",
+    "description": "Los que vuelven seguido.",
+    "href": "/panel/clientes?segment=frecuente",
+    "group": "Clientes",
+    "keywords": ["frecuentes", "fieles", "habituales", "mejores clientes", "vip"]
+  },
+  {
+    "id": "clientes-nuevos",
+    "title": "Clientes nuevos",
+    "description": "Registrados en los últimos días.",
+    "href": "/panel/clientes?segment=nuevo",
+    "group": "Clientes",
+    "keywords": ["nuevos", "recién registrados", "recientes"]
+  },
+  {
+    "id": "clientes-en-riesgo",
+    "title": "Clientes en riesgo",
+    "description": "Eran frecuentes y dejaron de venir.",
+    "href": "/panel/clientes?segment=en_riesgo",
+    "group": "Clientes",
+    "keywords": ["en riesgo", "riesgo", "se fueron", "dejaron de venir"]
+  },
+  {
+    "id": "clientes-inactivos",
+    "title": "Clientes inactivos",
+    "description": "Sin visita en más de 30 días.",
+    "href": "/panel/clientes?segment=inactivo",
+    "group": "Clientes",
+    "keywords": ["inactivos", "sin visitas", "dormidos"]
+  },
+  {
+    "id": "clientes-una-visita",
+    "title": "Clientes de una sola visita",
+    "description": "Vinieron una vez y no volvieron.",
+    "href": "/panel/clientes?segment=one_time",
+    "group": "Clientes",
+    "keywords": ["una visita", "una sola visita", "no volvieron", "esporádicos", "esporadicos"]
+  },
+  {
+    "id": "clientes-premio",
+    "title": "Clientes con premio pendiente",
+    "description": "Tienen un premio listo para canjear en su próxima visita.",
+    "href": "/panel/clientes?pendingReward=1",
+    "group": "Clientes",
+    "keywords": ["premio pendiente", "por canjear", "tienen premio", "canje pendiente"]
+  },
+  {
+    "id": "cliente-archivar",
+    "title": "Archivar o bloquear un cliente",
+    "description": "Desde la ficha del cliente: archivar, bloquear o restaurar.",
+    "href": "/panel/clientes",
+    "group": "Clientes",
+    "keywords": [
+      "archivar",
+      "bloquear",
+      "eliminar cliente",
+      "borrar cliente",
+      "restaurar",
+      "desbloquear"
+    ]
+  },
+  {
+    "id": "importar-lista",
+    "title": "Enviar a una lista de Excel",
+    "description": "En Nueva campaña, pestaña Lista (Excel): sube un archivo con celulares o correos.",
+    "href": "/panel/campanas?nueva=1",
+    "group": "Campañas",
+    "keywords": ["importar", "subir lista", "cargar excel", "csv", "lista de clientes", "archivo"]
+  },
+  {
+    "id": "exportar",
+    "title": "Exportar datos",
+    "description": "Clientes, visitas o movimientos a Excel, con el periodo y las columnas que elijas.",
+    "href": "/panel/exportar",
+    "group": "Análisis",
+    "keywords": [
+      "exportar",
+      "excel",
+      "descargar",
+      "reporte",
+      "bajar datos",
+      "acumulado",
+      "xlsx",
+      "hoja de cálculo"
+    ]
+  },
+  {
+    "id": "resumen",
+    "title": "Resumen de hoy",
+    "description": "Visitas, clientes nuevos y canjes de hoy, y las últimas transacciones.",
+    "href": "/panel",
+    "group": "Operación",
+    "keywords": [
+      "hoy",
+      "resumen",
+      "inicio",
+      "dashboard",
+      "visitas de hoy",
+      "transacciones",
+      "movimientos de hoy"
+    ]
+  },
+  {
+    "id": "analitica",
+    "title": "Analítica",
+    "description": "Tendencia de visitas por día, semana o mes, y el embudo de clientes.",
+    "href": "/panel/analitica",
+    "group": "Análisis",
+    "keywords": [
+      "analítica",
+      "analitica",
+      "estadísticas",
+      "estadisticas",
+      "tendencia",
+      "gráfico",
+      "grafico",
+      "embudo",
+      "métricas",
+      "metricas",
+      "crecimiento",
+      "retención",
+      "retencion",
+      "comparar"
+    ]
+  },
+  {
+    "id": "mi-pase",
+    "title": "Mi pase",
+    "description": "Cómo se ve tu programa en el Wallet, la escalera de premios y el enlace de registro.",
+    "href": "/panel/mi-pase",
+    "group": "Programa",
+    "keywords": [
+      "pase",
+      "wallet",
+      "tarjeta",
+      "sellos",
+      "sello",
+      "premio",
+      "escalera",
+      "diseño",
+      "cómo se ve",
+      "apple wallet",
+      "google wallet",
+      "registro",
+      "link de registro",
+      "qr de registro",
+      "formulario",
+      "cómo se registran"
+    ]
+  },
+  {
+    "id": "premios",
+    "title": "Catálogo de premios",
+    "description": "Los premios que tus clientes canjean con puntos.",
+    "href": "/panel/premios",
+    "group": "Programa",
+    "program": "points",
+    "keywords": [
+      "premios",
+      "catálogo",
+      "catalogo",
+      "canje",
+      "canjear",
+      "regalo",
+      "recompensa",
+      "puntos"
+    ]
+  },
+  {
+    "id": "equipo",
+    "title": "Equipo y cajeros",
+    "description": "Crea usuarios cajero y administradores para tus locales.",
+    "href": "/panel/cajeros",
+    "group": "Operación",
+    "keywords": [
+      "cajero",
+      "cajeros",
+      "usuario",
+      "usuarios",
+      "equipo",
+      "invitar",
+      "acceso",
+      "contraseña",
+      "personal",
+      "administrador"
+    ]
+  },
+  {
+    "id": "sucursales",
+    "title": "Sucursales",
+    "description": "Tus locales: nombre, dirección y coordenadas.",
+    "href": "/panel/configuracion?tab=sucursales",
+    "group": "Configuración",
+    "keywords": [
+      "sucursal",
+      "sucursales",
+      "local",
+      "locales",
+      "sede",
+      "dirección",
+      "direccion",
+      "tienda"
+    ]
+  },
+  {
+    "id": "negocio",
+    "title": "Datos del negocio",
+    "description": "Nombre, rubro, horario y zona horaria del comercio.",
+    "href": "/panel/configuracion",
+    "group": "Configuración",
+    "keywords": [
+      "negocio",
+      "configuración",
+      "configuracion",
+      "ajustes",
+      "nombre del negocio",
+      "horario",
+      "zona horaria",
+      "datos"
+    ]
+  },
+  {
+    "id": "reportes",
+    "title": "Reportes por correo",
+    "description": "Resumen semanal o mensual de tu programa, enviado a tu correo.",
+    "href": "/panel/configuracion?tab=reportes",
+    "group": "Configuración",
+    "keywords": ["reporte", "reportes", "correo", "email", "semanal", "resumen por correo"]
+  },
+  {
+    "id": "cajero",
+    "title": "Modo cajero",
+    "description": "Escanear el QR del cliente o buscarlo para registrar una visita o un canje.",
+    "href": "/cajero/escanear",
+    "group": "Operación",
+    "keywords": [
+      "escanear",
+      "qr",
+      "registrar visita",
+      "caja",
+      "sumar sello",
+      "código",
+      "codigo",
+      "modo cajero",
+      "canjear"
+    ]
+  },
+  {
+    "id": "variables",
+    "title": "Variables del mensaje",
+    "description": "En el formulario de campaña, Insertar variable: nombre del cliente, sellos, premios pendientes.",
+    "href": "/panel/campanas?nueva=1",
+    "group": "Campañas",
+    "keywords": [
+      "variable",
+      "variables",
+      "nombre del cliente",
+      "{{client.name}}",
+      "personalizar",
+      "personalizado"
+    ]
+  },
+  {
+    "id": "ayuda",
+    "title": "Guías en video",
+    "description": "Videos de un minuto: registrar visita, campaña push, automatizadas, exportar.",
+    "href": "https://drive.google.com/drive/folders/1x0soyqvYxFUo4BkukDlX1DFQ3-3q2PcC?usp=sharing",
+    "group": "Ayuda",
+    "keywords": [
+      "ayuda",
+      "tutorial",
+      "video",
+      "videos",
+      "cómo",
+      "como",
+      "instructivo",
+      "guía",
+      "guia",
+      "soporte"
+    ]
+  }
+]

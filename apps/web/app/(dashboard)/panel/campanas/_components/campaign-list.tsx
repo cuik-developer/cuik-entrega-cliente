@@ -16,6 +16,7 @@ import {
   Toolbar,
   Tr,
 } from "@/components/admin/enterprise"
+import { PANEL_DEEP_LINK_EVENT } from "@/components/panel/command-search"
 import { Button } from "@/components/ui/button"
 import { useTenant } from "@/hooks/use-tenant"
 import {
@@ -164,6 +165,31 @@ export function CampaignList({ tenantSlug, refreshKey, onEdit }: CampaignListPro
   useEffect(() => {
     fetchCampaigns()
   }, [fetchCampaigns])
+
+  // Deep link from the panel search: /panel/campanas?abrir=<id> opens that
+  // campaign's detail; the same arrives as a window event when already here.
+  useEffect(() => {
+    const openById = (id: string) => {
+      fetch(`/api/${tenantSlug}/campaigns?id=${encodeURIComponent(id)}&limit=1`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((json) => {
+          const row = json?.data?.data?.[0]
+          if (row) setDetailCampaign(row)
+        })
+        .catch(() => {})
+    }
+    const id = new URLSearchParams(window.location.search).get("abrir")
+    if (id) {
+      window.history.replaceState(null, "", "/panel/campanas")
+      openById(id)
+    }
+    const onDeepLink = (e: Event) => {
+      const abrir = (e as CustomEvent<Record<string, string>>).detail?.abrir
+      if (abrir) openById(abrir)
+    }
+    window.addEventListener(PANEL_DEEP_LINK_EVENT, onDeepLink)
+    return () => window.removeEventListener(PANEL_DEEP_LINK_EVENT, onDeepLink)
+  }, [tenantSlug])
 
   // Strip figures: independent of the filter, refreshed with the list.
   const fetchTotals = useCallback(async () => {

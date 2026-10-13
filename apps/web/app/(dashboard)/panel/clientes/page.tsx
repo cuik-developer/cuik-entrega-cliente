@@ -14,6 +14,7 @@ import {
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { SegmentBadge, StatusBadge } from "@/components/panel/badges"
+import { PANEL_DEEP_LINK_EVENT } from "@/components/panel/command-search"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -64,10 +65,22 @@ export default function ClientesPage() {
   // Deep links: /panel/clientes?segment=en_riesgo (Analítica) and
   // /panel/clientes?pendingReward=1 (Dashboard "Para hoy").
   useEffect(() => {
+    const apply = (p: { segment?: string | null; pendingReward?: string | null }) => {
+      if (p.segment && p.segment in SEGMENT_LABELS) {
+        setFilter(p.segment as typeof filter)
+        setPendingOnly(false)
+      }
+      if (p.pendingReward === "1") {
+        setPendingOnly(true)
+        setFilter("all")
+      }
+    }
     const qs = new URLSearchParams(window.location.search)
-    const s = qs.get("segment")
-    if (s && s in SEGMENT_LABELS) setFilter(s as typeof filter)
-    if (qs.get("pendingReward") === "1") setPendingOnly(true)
+    apply({ segment: qs.get("segment"), pendingReward: qs.get("pendingReward") })
+    // Same links chosen in the panel search while already on this page.
+    const onDeepLink = (e: Event) => apply((e as CustomEvent<Record<string, string>>).detail ?? {})
+    window.addEventListener(PANEL_DEEP_LINK_EVENT, onDeepLink)
+    return () => window.removeEventListener(PANEL_DEEP_LINK_EVENT, onDeepLink)
   }, [])
 
   const fetchClients = useCallback(

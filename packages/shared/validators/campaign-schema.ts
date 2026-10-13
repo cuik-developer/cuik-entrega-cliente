@@ -114,6 +114,10 @@ export const campaignListSchema = z.object({
    * push; scheduled = status scheduled (any origin); silent = wallet_update.
    */
   kind: z.enum(CAMPAIGN_KINDS).optional(),
+  /** Case-insensitive match on the campaign name (panel search). */
+  search: z.string().trim().min(1).max(100).optional(),
+  /** Exact campaign to return (deep link from the panel search). */
+  id: z.string().uuid().optional(),
 })
 
 export type CampaignListInput = z.infer<typeof campaignListSchema>

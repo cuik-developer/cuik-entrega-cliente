@@ -2,9 +2,10 @@
 
 import { Loader2, Plus } from "lucide-react"
 import Link from "next/link"
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 
 import { Notice, PageHeader, PanelMessage } from "@/components/admin/enterprise"
+import { PANEL_DEEP_LINK_EVENT } from "@/components/panel/command-search"
 import { Button } from "@/components/ui/button"
 import { useTenant } from "@/hooks/use-tenant"
 
@@ -26,6 +27,21 @@ export default function CampanasPage() {
 
   const handleCampaignCreated = useCallback(() => {
     setRefreshKey((k) => k + 1)
+  }, [])
+
+  // Deep link from the panel search: /panel/campanas?nueva=1 opens the form,
+  // also when the search is used while already on this page (window event).
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("nueva") === "1") {
+      setShowCreateDialog(true)
+      window.history.replaceState(null, "", "/panel/campanas")
+    }
+    const onDeepLink = (e: Event) => {
+      if ((e as CustomEvent<Record<string, string>>).detail?.nueva === "1")
+        setShowCreateDialog(true)
+    }
+    window.addEventListener(PANEL_DEEP_LINK_EVENT, onDeepLink)
+    return () => window.removeEventListener(PANEL_DEEP_LINK_EVENT, onDeepLink)
   }, [])
 
   if (isLoading) {

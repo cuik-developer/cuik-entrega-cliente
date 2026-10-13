@@ -1,4 +1,4 @@
-import { and, campaignSegments, campaigns, db, desc, eq, sql } from "@cuik/db"
+import { and, campaignSegments, campaigns, db, desc, eq, ilike, sql } from "@cuik/db"
 import { campaignListSchema, createCampaignSchema } from "@cuik/shared/validators"
 
 import {
@@ -80,11 +80,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     }
 
     const { page, limit, offset } = parsePagination(url.searchParams)
-    const { status, kind } = queryParsed.data
+    const { status, kind, search, id } = queryParsed.data
 
     const conditions = [eq(campaigns.tenantId, tenant.id)]
     if (status) {
       conditions.push(eq(campaigns.status, status))
+    }
+    if (search) {
+      // Escape LIKE wildcards so "2x1_promo" matches literally.
+      conditions.push(ilike(campaigns.name, `%${search.replace(/[\\%_]/g, "\\$&")}%`))
+    }
+    if (id) {
+      conditions.push(eq(campaigns.id, id))
     }
     const automationOf = sql`${campaigns.content}->>'automation'`
     if (kind === "manual") {
