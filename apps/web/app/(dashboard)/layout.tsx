@@ -87,14 +87,68 @@ function getInitials(name: string): string {
     .join("")
 }
 
-/** Tenant identity in the top bar: logo (or initials on the brand color) + name. */
+/**
+ * Does this logo need a light plate to be seen on the dark bar? Reads the
+ * image's visible pixels: mostly dark ink on transparency → plate. Fails
+ * closed (plate) when the image cannot be read.
+ */
+function useLogoShape(url: string | null): { needsPlate: boolean; wide: boolean } {
+  const [needsPlate, setNeedsPlate] = useState(true)
+  // Horizontal treatment only for a logo that is actually horizontal.
+  const [wide, setWide] = useState(false)
+  useEffect(() => {
+    if (!url) return
+    let cancelled = false
+    const img = new window.Image()
+    img.crossOrigin = "anonymous"
+    img.onload = () => {
+      if (!cancelled) setWide(img.naturalWidth >= img.naturalHeight * 1.5)
+      try {
+        const size = 48
+        const canvas = document.createElement("canvas")
+        canvas.width = size
+        canvas.height = size
+        const ctx = canvas.getContext("2d")
+        if (!ctx) return
+        ctx.drawImage(img, 0, 0, size, size)
+        const { data } = ctx.getImageData(0, 0, size, size)
+        let visible = 0
+        let light = 0
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i + 3] < 40) continue
+          visible++
+          const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]
+          if (lum > 150) light++
+        }
+        // Opaque logos carry their own background; light ink reads fine on the dark bar.
+        const opaque = visible > size * size * 0.9
+        if (!cancelled) setNeedsPlate(!opaque && light / Math.max(1, visible) < 0.5)
+      } catch {
+        if (!cancelled) setNeedsPlate(true)
+      }
+    }
+    img.src = url
+    return () => {
+      cancelled = true
+    }
+  }, [url])
+  return { needsPlate, wide }
+}
+
+/**
+ * Tenant identity in the top bar: the horizontal logo, sized to the bar
+ * (not every business has a square icon), else the icon, else initials on
+ * the brand color. A logo with dark ink on transparency sits on a light plate
+ * so it reads on the dark bar; opaque or light logos sit directly.
+ */
 function TopBarTenant() {
   const { tenantName, branding, isLoading } = useTenant()
   const primaryColor = branding?.primaryColor ?? CUIK_PRIMARY
-  // A broken image URL falls through to the next option (logo, then initials).
+  // A broken image URL falls through to the next option (icon, then initials).
   const [failed, setFailed] = useState<{ icon?: boolean; logo?: boolean }>({})
-  const iconUrl = failed.icon ? null : (branding?.iconUrl ?? null)
   const logoUrl = failed.logo ? null : (branding?.logoUrl ?? null)
+  const iconUrl = failed.icon ? null : (branding?.iconUrl ?? null)
+  const { needsPlate: logoNeedsPlate, wide: logoWide } = useLogoShape(logoUrl)
   if (isLoading) {
     return (
       <div className="flex items-center gap-2">
@@ -104,8 +158,29 @@ function TopBarTenant() {
     )
   }
   return (
-    <div className="flex items-center gap-2 min-w-0">
-      {iconUrl ? (
+    <div className="flex items-center gap-2.5 min-w-0">
+      {logoUrl ? (
+        <span
+          className={
+            logoNeedsPlate
+              ? `inline-flex items-center rounded-[5px] bg-white shrink-0 ${logoWide ? "h-8 px-2" : "h-7 w-7 justify-center p-0.5"}`
+              : `inline-flex items-center shrink-0 ${logoWide ? "h-8" : "h-7 w-7 justify-center"}`
+          }
+        >
+          <Image
+            src={logoUrl}
+            alt=""
+            width={220}
+            height={32}
+            className={
+              logoWide
+                ? "h-7 w-auto max-w-[220px] object-contain"
+                : "h-full w-full rounded-[4px] object-contain"
+            }
+            onError={() => setFailed((f) => ({ ...f, logo: true }))}
+          />
+        </span>
+      ) : iconUrl ? (
         <Image
           src={iconUrl}
           alt=""
@@ -113,15 +188,6 @@ function TopBarTenant() {
           height={28}
           className="w-7 h-7 rounded-[4px] object-contain"
           onError={() => setFailed((f) => ({ ...f, icon: true }))}
-        />
-      ) : logoUrl ? (
-        <Image
-          src={logoUrl}
-          alt=""
-          width={150}
-          height={28}
-          className="h-7 w-auto max-w-[150px] rounded-[3px] object-contain bg-white px-1"
-          onError={() => setFailed((f) => ({ ...f, logo: true }))}
         />
       ) : (
         <span

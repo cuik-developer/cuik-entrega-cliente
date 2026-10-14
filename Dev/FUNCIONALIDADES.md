@@ -109,7 +109,7 @@ Sidebar izquierdo con navegacion. Rol requerido: `super_admin`.
 
 - Color picker para primary/accent con validacion hex.
 - Upload de logo (URL en MinIO). **Puede ser horizontal** (oct-2026): se muestra completo, con alto fijo y ancho libre, en la pagina de registro del cliente, la cabecera del cajero, la pagina de premios y aceptar invitacion (`object-contain`, sin recorte).
-- Upload de **icono** (`branding.iconUrl`, opcional, cuadrado; `assetType=icon`): se usa solo en la barra superior del panel del comercio, donde un logo horizontal no entra. Sin icono, la barra muestra el logo completo sobre un chip blanco; sin logo, las iniciales. Es JSON dentro de `tenants.branding`, sin migracion.
+- Upload de **icono** (`branding.iconUrl`, opcional, cuadrado; `assetType=icon`): JSON dentro de `tenants.branding`, sin migracion. **Barra del panel del comercio** (oct-2026, cambio de criterio: no todo comercio puede tener icono): muestra primero el **logo** del branding, luego el icono, luego las iniciales sobre el color primario. `useLogoShape` (`app/(dashboard)/layout.tsx`) mide la imagen: si es **horizontal** (ancho ≥ 1,5 × alto) va completa a 28 px de alto y hasta 220 px de ancho; si es cuadrada o vertical va como marca de 28 × 28 px (`object-contain`), igual que el icono. Para que un logo con tinta oscura sobre fondo transparente se lea en la barra oscura, el mismo hook lee los pixeles de la imagen en un canvas: si es mayormente oscura y transparente va sobre una placa blanca; si es opaca (trae su propio fondo) o clara va directa, sin "etiqueta". Si la imagen no se puede leer, placa.
 - Preview en contextos (pase, pagina de registro, emails).
 - Sugerencia de paleta con IA a partir del logo.
 
