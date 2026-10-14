@@ -163,8 +163,8 @@ function TopBarTenant() {
         <span
           className={
             logoNeedsPlate
-              ? `inline-flex items-center rounded-[5px] bg-white shrink-0 ${logoWide ? "h-8 px-2" : "h-7 w-7 justify-center p-0.5"}`
-              : `inline-flex items-center shrink-0 ${logoWide ? "h-8" : "h-7 w-7 justify-center"}`
+              ? `inline-flex items-center rounded-[5px] bg-white shrink-0 ${logoWide ? "h-9 px-2" : "h-7 w-7 justify-center p-0.5"}`
+              : `inline-flex items-center shrink-0 ${logoWide ? "h-9" : "h-7 w-7 justify-center"}`
           }
         >
           <Image
@@ -174,7 +174,7 @@ function TopBarTenant() {
             height={32}
             className={
               logoWide
-                ? "h-7 w-auto max-w-[220px] object-contain"
+                ? "h-8 w-auto max-w-[240px] object-contain"
                 : "h-full w-full rounded-[4px] object-contain"
             }
             onError={() => setFailed((f) => ({ ...f, logo: true }))}
