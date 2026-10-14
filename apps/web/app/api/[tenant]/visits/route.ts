@@ -11,6 +11,7 @@ import {
   successResponse,
 } from "@/lib/api-utils"
 import { registerVisit } from "@/lib/loyalty"
+import { cardCompleteNotice } from "@/lib/loyalty/card-complete"
 import { triggerWalletUpdate } from "@/lib/wallet/trigger-wallet-update"
 
 export async function POST(request: Request, { params }: { params: Promise<{ tenant: string }> }) {
@@ -55,10 +56,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
         totalVisits: result.client.totalVisits,
         pendingRewards: isStamps ? result.pendingRewards : 0,
         pointsBalance: "pointsBalance" in result.client ? result.client.pointsBalance : 0,
-        // Stamps: milestone notice for this visit (null clears a stale one).
-        // Points: undefined, so a campaign message on the pass is left untouched.
+        // Stamps: the "tarjeta completa" notice when this visit filled the last
+        // stamp (merchant automation), else the milestone notice (null clears a
+        // stale one). Points: undefined, so a campaign message is left untouched.
         milestoneMessage:
-          isStamps && result.code === "OK" ? (result.milestone?.message ?? null) : undefined,
+          isStamps && result.code === "OK"
+            ? ((result.cycleComplete
+                ? cardCompleteNotice(tenant.automations, {
+                    clientName: result.client.name,
+                    tenantName: tenant.name,
+                    reward: result.rewardValue,
+                  })
+                : null) ??
+              result.milestone?.message ??
+              null)
+            : undefined,
       }).catch((err) => {
         console.error("[POST /api/[tenant]/visits] Wallet update failed:", err)
       })

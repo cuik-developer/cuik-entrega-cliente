@@ -99,10 +99,35 @@ export const DEFAULT_MONTHLY_REPORT: MonthlyReportConfig = {
   sendHour: 8,
 }
 
+// ── Card completed (stamps) ─────────────────────────────────────────
+
+export const DEFAULT_CARD_COMPLETE_MESSAGE =
+  "¡Completaste tu tarjeta, {{client.name}}! 🎉 Tu premio: {{premio}}. Pídelo en caja."
+
+/**
+ * Notice shown on the pass (lock screen on iPhone, pass notification on
+ * Android) the moment a visit fills the last stamp. Stamps programs only; the
+ * merchant owns the text and the switch. Sent with the visit itself, no cron.
+ */
+export const cardCompleteAutomationSchema = z.object({
+  enabled: z.boolean(),
+  message: z
+    .string()
+    .trim()
+    .min(1, "El mensaje es requerido")
+    .max(150, "Apple Wallet trunca mensajes a 150 caracteres"),
+})
+export type CardCompleteAutomation = z.infer<typeof cardCompleteAutomationSchema>
+export const DEFAULT_CARD_COMPLETE_AUTOMATION: CardCompleteAutomation = {
+  enabled: false,
+  message: DEFAULT_CARD_COMPLETE_MESSAGE,
+}
+
 export const automationsConfigSchema = z.object({
   birthday: birthdayAutomationSchema.optional(),
   pointsExpiry: pointsExpiryAutomationSchema.optional(),
   reports: reportsAutomationSchema.optional(),
+  cardComplete: cardCompleteAutomationSchema.optional(),
 })
 
 export type AutomationsConfig = z.infer<typeof automationsConfigSchema>
@@ -125,9 +150,14 @@ export const updateAutomationsSchema = z
         recipients: reportRecipientsSchema.optional(),
       })
       .optional(),
+    cardComplete: cardCompleteAutomationSchema.optional(),
   })
   .refine(
-    (v) => v.birthday !== undefined || v.pointsExpiry !== undefined || v.reports !== undefined,
+    (v) =>
+      v.birthday !== undefined ||
+      v.pointsExpiry !== undefined ||
+      v.reports !== undefined ||
+      v.cardComplete !== undefined,
     {
       message: "Nada que actualizar",
     },

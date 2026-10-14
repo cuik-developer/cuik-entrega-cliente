@@ -20,6 +20,7 @@ import {
   todayLocal,
   upcomingBirthdays,
 } from "@/lib/campaigns/birthday"
+import { getCardCompleteConfig } from "@/lib/loyalty/card-complete"
 import { describeExpirationPolicy } from "@/lib/loyalty/expiration"
 import { getPointsExpiryConfig } from "@/lib/loyalty/expire-points"
 import { clientsWithPointsExpiringSoon } from "@/lib/loyalty/points-lots"
@@ -30,6 +31,25 @@ import { defaultRecipients, getReportsConfig } from "@/lib/reports/send-report"
  * the Cuik team. Null when the tenant is not on points or points never expire:
  * the "puntos por vencer" card is hidden in that case.
  */
+/** Active stamps promotion (visits to complete, reward) for the "Tarjeta completa" card; null on points. */
+async function stampsProgramInfo(
+  tenantId: string,
+): Promise<{ maxVisits: number; reward: string | null } | null> {
+  const [promo] = await db
+    .select({ maxVisits: promotions.maxVisits, rewardValue: promotions.rewardValue })
+    .from(promotions)
+    .where(
+      and(
+        eq(promotions.tenantId, tenantId),
+        eq(promotions.type, "stamps"),
+        eq(promotions.active, true),
+      ),
+    )
+    .limit(1)
+  if (!promo || !promo.maxVisits) return null
+  return { maxVisits: promo.maxVisits, reward: promo.rewardValue }
+}
+
 async function pointsExpiryPolicy(tenantId: string): Promise<string | null> {
   const [promo] = await db
     .select({ config: promotions.config })
@@ -77,18 +97,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       }
     }
     const pointsExpiryConfig = getPointsExpiryConfig(tenant.automations)
-    const [coverage, today, upcoming, recipients, expiryPolicy, expiringSoon] = await Promise.all([
-      safe("birthdayCoverage", () => birthdayCoverage(tenant.id), { withBirthday: 0, total: 0 }),
-      safe("findBirthdayClients", () => findBirthdayClients(tenant.id, date), []),
-      safe("upcomingBirthdays", () => upcomingBirthdays(tenant.id, date, 7), []),
-      safe("defaultRecipients", () => defaultRecipients(tenant.id), [] as string[]),
-      safe("pointsExpiryPolicy", () => pointsExpiryPolicy(tenant.id), null as string | null),
-      safe(
-        "clientsWithPointsExpiringSoon",
-        () => clientsWithPointsExpiringSoon(db, tenant.id, tz, pointsExpiryConfig.daysBefore),
-        0,
-      ),
-    ])
+    const [coverage, today, upcoming, recipients, expiryPolicy, expiringSoon, stampsProgram] =
+      await Promise.all([
+        safe("birthdayCoverage", () => birthdayCoverage(tenant.id), { withBirthday: 0, total: 0 }),
+        safe("findBirthdayClients", () => findBirthdayClients(tenant.id, date), []),
+        safe("upcomingBirthdays", () => upcomingBirthdays(tenant.id, date, 7), []),
+        safe("defaultRecipients", () => defaultRecipients(tenant.id), [] as string[]),
+        safe("pointsExpiryPolicy", () => pointsExpiryPolicy(tenant.id), null as string | null),
+        safe(
+          "clientsWithPointsExpiringSoon",
+          () => clientsWithPointsExpiringSoon(db, tenant.id, tz, pointsExpiryConfig.daysBefore),
+          0,
+        ),
+        safe("stampsProgramInfo", () => stampsProgramInfo(tenant.id), null),
+      ])
     const regParsed = registrationConfigSchema.safeParse(tenant.registrationConfig ?? {})
     const birthdayAsked = regParsed.success ? regParsed.data.birthday.enabled : false
 
@@ -113,6 +135,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         /** Default list (contact email + owner + admins), used when config.recipients is empty. */
         suggested: recipients,
         myEmail: session.user.email ?? null,
+      },
+      cardComplete: {
+        config: getCardCompleteConfig(tenant.automations),
+        /** Active stamps promotion; null = points program (card hidden). */
+        program: stampsProgram,
       },
     })
   } catch (error) {
@@ -172,6 +199,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ tena
       birthday: getBirthdayConfig(next),
       pointsExpiry: getPointsExpiryConfig(next),
       reports: getReportsConfig(next),
+      cardComplete: getCardCompleteConfig(next),
     })
   } catch (error) {
     console.error("[PUT /api/[tenant]/automations]", error)

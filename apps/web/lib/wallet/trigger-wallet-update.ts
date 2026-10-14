@@ -23,7 +23,7 @@ import {
   validateAppleApnsEnv,
   validateGoogleEnv,
 } from "@cuik/wallet/shared"
-
+import { isCardCompleteMessage } from "@/lib/loyalty/card-complete"
 import { formatExpiry } from "@/lib/loyalty/expiration"
 import { allMilestoneMessages } from "@/lib/loyalty/milestones"
 import { nextExpiration } from "@/lib/loyalty/points-lots"
@@ -93,16 +93,24 @@ export async function triggerWalletUpdate(ctx: {
   if (!instance) return // No pass instance — nothing to update
 
   // Get active promotion (type for the loyalty label, config for milestone notices)
-  const [activePromotion] = await db
-    .select({ type: promotions.type, maxVisits: promotions.maxVisits, config: promotions.config })
-    .from(promotions)
-    .where(and(eq(promotions.tenantId, ctx.tenantId), eq(promotions.active, true)))
-    .limit(1)
+  const [[activePromotion], [tenantRow]] = await Promise.all([
+    db
+      .select({ type: promotions.type, maxVisits: promotions.maxVisits, config: promotions.config })
+      .from(promotions)
+      .where(and(eq(promotions.tenantId, ctx.tenantId), eq(promotions.active, true)))
+      .limit(1),
+    db
+      .select({ automations: tenants.automations })
+      .from(tenants)
+      .where(eq(tenants.id, ctx.tenantId))
+      .limit(1),
+  ])
 
   const campaignMessage = nextPassMessage(
     instance.campaignMessage,
     ctx.milestoneMessage,
     activePromotion,
+    tenantRow?.automations,
   )
 
   // Update ETag and lastUpdatedAt
@@ -310,10 +318,13 @@ function nextPassMessage(
   current: string | null,
   notice: string | null | undefined,
   promotion: { type: string; maxVisits: number | null; config: unknown } | undefined,
+  automations?: unknown,
 ): string | null {
   if (notice === undefined) return current
   if (notice) return notice
   if (!current || promotion?.type !== "stamps" || !promotion.maxVisits) return current
+  // A "tarjeta completa" notice is as transient as a milestone one.
+  if (isCardCompleteMessage(current, automations)) return null
   const parsed = stampsPromotionConfigSchema.safeParse(promotion.config ?? {})
   if (!parsed.success) return current
   return allMilestoneMessages(parsed.data.stamps, promotion.maxVisits).has(current) ? null : current
