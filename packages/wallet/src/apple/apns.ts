@@ -152,6 +152,17 @@ function sendToDevice(
  * @param params - Device tokens, passTypeId, and P8 key credentials
  * @returns Per-token results with status and environment used
  */
+/** " (Reason)" from an APNs error body like {"reason":"TopicDisallowed"}; empty when absent. */
+function apnsReason(body: string | undefined): string {
+  if (!body) return ""
+  try {
+    const reason = (JSON.parse(body) as { reason?: unknown }).reason
+    return typeof reason === "string" && reason ? ` (${reason})` : ""
+  } catch {
+    return ""
+  }
+}
+
 export async function sendApnsPush(params: ApnsPushParams): Promise<ApnsPushResult> {
   const { deviceTokens, passTypeId, p8KeyPem, teamId, keyId } = params
 
@@ -186,13 +197,15 @@ export async function sendApnsPush(params: ApnsPushParams): Promise<ApnsPushResu
         continue
       }
 
-      // Both failed — 410 from both means dead token
+      // Both failed — 410 from both means dead token. Keep Apple's reason
+      // (BadDeviceToken, TopicDisallowed, DeviceTokenNotForTopic…): it is the
+      // only thing that tells a wrong key apart from a wrong token.
       results.push({
         tokenPrefix,
         ok: false,
         status: sandbox.status,
         envUsed: "sandbox",
-        error: `prod=${prod.status} sandbox=${sandbox.status}${sandbox.status === 410 ? " (dead token)" : ""}`,
+        error: `prod=${prod.status}${apnsReason(prod.error)} sandbox=${sandbox.status}${apnsReason(sandbox.error)}${sandbox.status === 410 ? " (dead token)" : ""}`,
       })
       continue
     }
