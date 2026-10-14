@@ -1,6 +1,11 @@
 import { and, db, eq, tenantInvoices } from "@cuik/db"
 import { updateInvoiceSchema } from "@cuik/shared/validators"
-import { isPeriodConflict, loadBilling } from "@/lib/admin/billing-data"
+import {
+  findCoverageClash,
+  isPeriodConflict,
+  loadBilling,
+  lockTenantInvoices,
+} from "@/lib/admin/billing-data"
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
 import { deleteAsset } from "@/lib/storage"
 
@@ -34,24 +39,42 @@ export async function PATCH(request: Request, ctx: Ctx) {
     const u = parsed.data
     const nextStatus = u.status ?? g.row.status
     try {
-      await db
-        .update(tenantInvoices)
-        .set({
-          ...(u.period !== undefined ? { period: u.period } : {}),
-          ...(u.issuedOn !== undefined ? { issuedOn: u.issuedOn } : {}),
-          ...(u.number !== undefined ? { number: u.number } : {}),
-          ...(u.amount !== undefined ? { amount: String(u.amount) } : {}),
-          ...(u.currency !== undefined ? { currency: u.currency } : {}),
-          status: nextStatus,
-          paidOn:
-            nextStatus === "paid"
-              ? (u.paidOn ?? g.row.paidOn ?? g.row.issuedOn)
-              : u.paidOn !== undefined
-                ? u.paidOn
-                : g.row.paidOn,
-          ...(u.note !== undefined ? { note: u.note } : {}),
-        })
-        .where(eq(tenantInvoices.id, g.row.id))
+      const clash = await db.transaction(async (tx) => {
+        await lockTenantInvoices(tx, g.id)
+        // A live invoice (edited or reactivated) must not overlap another one.
+        if (nextStatus !== "void") {
+          const msg = await findCoverageClash(
+            tx,
+            g.id,
+            u.period ?? g.row.period,
+            u.months ?? g.row.months,
+            g.row.id,
+          )
+          if (msg) return msg
+        }
+        await tx
+          .update(tenantInvoices)
+          .set({
+            ...(u.period !== undefined ? { period: u.period } : {}),
+            ...(u.months !== undefined ? { months: u.months } : {}),
+            ...(u.recognition !== undefined ? { recognition: u.recognition } : {}),
+            ...(u.issuedOn !== undefined ? { issuedOn: u.issuedOn } : {}),
+            ...(u.number !== undefined ? { number: u.number } : {}),
+            ...(u.amount !== undefined ? { amount: String(u.amount) } : {}),
+            ...(u.currency !== undefined ? { currency: u.currency } : {}),
+            status: nextStatus,
+            paidOn:
+              nextStatus === "paid"
+                ? (u.paidOn ?? g.row.paidOn ?? g.row.issuedOn)
+                : u.paidOn !== undefined
+                  ? u.paidOn
+                  : g.row.paidOn,
+            ...(u.note !== undefined ? { note: u.note } : {}),
+          })
+          .where(eq(tenantInvoices.id, g.row.id))
+        return null
+      })
+      if (clash) return errorResponse(clash, 409)
     } catch (err) {
       if (isPeriodConflict(err)) {
         return errorResponse("Ya hay otra factura activa para ese periodo", 409)

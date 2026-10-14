@@ -1,5 +1,11 @@
 import { db, sql, tenantBilling, tenantInvoices, tenants } from "@cuik/db"
-import { asInterval, type BillingOutlook, billingOutlook, todayYmd } from "./billing"
+import {
+  asInterval,
+  type BillingOutlook,
+  billingOutlook,
+  type InvoicedPeriod,
+  todayYmd,
+} from "./billing"
 
 /**
  * Billing outlook for many tenants at once (tenant list column, manager
@@ -36,12 +42,21 @@ export async function billingOutlookFor(
       .from(tenantBilling)
       .where(sql`${tenantBilling.tenantId} IN (${idList})`),
     db
-      .select({ tenantId: tenantInvoices.tenantId, period: tenantInvoices.period })
+      .select({
+        tenantId: tenantInvoices.tenantId,
+        period: tenantInvoices.period,
+        months: tenantInvoices.months,
+      })
       .from(tenantInvoices)
       .where(sql`${tenantInvoices.tenantId} IN (${idList}) AND ${tenantInvoices.status} <> 'void'`),
   ])
-  const periods = new Map<string, string[]>()
-  for (const r of invoiced) periods.set(r.tenantId, [...(periods.get(r.tenantId) ?? []), r.period])
+  const periods = new Map<string, InvoicedPeriod[]>()
+  for (const r of invoiced) {
+    periods.set(r.tenantId, [
+      ...(periods.get(r.tenantId) ?? []),
+      { period: r.period, months: r.months },
+    ])
+  }
   for (const c of configs) {
     out.set(c.tenantId, {
       ...billingOutlook(

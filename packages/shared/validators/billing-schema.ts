@@ -45,6 +45,14 @@ export const invoiceStatusSchema = z.enum(["pending", "paid", "void"])
 
 export const createInvoiceSchema = z.object({
   period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Periodo inválido (AAAA-MM)"),
+  /** Months of service covered from `period`. */
+  months: z
+    .number()
+    .int()
+    .refine((n) => [1, 3, 6, 12].includes(n), "Cobertura inválida")
+    .default(1),
+  /** How the amount counts in finance: month by month, or all in the month paid. */
+  recognition: z.enum(["spread", "cash"]).default("spread"),
   issuedOn: z.string().regex(YMD, "Fecha inválida"),
   number: z.preprocess(emptyToNull, z.string().trim().max(60).nullable().optional()),
   amount: z.number().min(0).max(1_000_000),

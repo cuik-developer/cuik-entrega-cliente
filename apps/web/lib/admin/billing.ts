@@ -201,75 +201,110 @@ export function activeTimeLabel(serviceStartOn: string, today: string): string {
   return `${m} y ${d}`
 }
 
+/** A live (non-void) invoice: the first month it covers and how many months. */
+export type InvoicedPeriod = { period: string; months?: number | null }
+
+/** First month ("YYYY-MM") not covered by any invoice, or the service start month. */
+export function coveredThrough(
+  startMonth: string,
+  invoices: Iterable<string | InvoicedPeriod>,
+): string {
+  let end = startMonth
+  for (const i of invoices) {
+    const period = typeof i === "string" ? i : i.period
+    const months = typeof i === "string" ? 1 : asInterval(i.months)
+    const e = shiftMonth(period, months)
+    if (e > end) end = e
+  }
+  return end
+}
+
+/** Due date of the invoice that covers the period starting at `periodStart` ("YYYY-MM"). */
+function dueForPeriod(rule: BillingRule, periodStart: string, months: BillingInterval): string {
+  const day = effectiveBillingDay(rule) ?? 1
+  const start = rule.serviceStartOn ?? `${periodStart}-01`
+  if ((rule.billingMode ?? "advance") === "advance") {
+    // The very first period is due on the start day itself.
+    return periodStart === start.slice(0, 7) ? start : dueInMonthOf(`${periodStart}-01`, day)
+  }
+  return dueInMonthOf(`${shiftMonth(periodStart, months)}-01`, day)
+}
+
 /**
- * Where the tenant stands today given its rule and the periods that already
- * have a (non-void) invoice. Due dates: service start, then every month on
- * the billing day.
+ * Where the tenant stands today, by coverage: the invoices on file (each with
+ * the months it covers) say up to which month the service is paid; the next
+ * invoice covers the first month after that, with the tenant's current
+ * periodicity, and is due on the billing day (at the period's start in
+ * advance, after its end in arrears). Gaps in old history are ignored: only
+ * the furthest coverage counts.
  */
 export function billingOutlook(
   rule: BillingRule,
-  invoicedPeriods: Iterable<string>,
+  invoices: Iterable<string | InvoicedPeriod>,
   today: string = todayYmd(),
 ): BillingOutlook {
+  const every: BillingInterval = rule.intervalMonths ?? 1
   const empty: BillingOutlook = {
     status: "sin_configurar",
     currentDue: null,
     currentPeriod: null,
     nextDue: null,
     nextPeriod: null,
-    intervalMonths: rule.intervalMonths ?? 1,
+    intervalMonths: every,
     daysUntilNext: null,
     daysOverdue: null,
     monthsOfService: null,
   }
-  const mode: BillingMode = rule.billingMode ?? "advance"
-  const every: BillingInterval = rule.intervalMonths ?? 1
-  const first = firstDue(rule)
   const day = effectiveBillingDay(rule)
-  if (!first || !day || !rule.serviceStartOn) return empty
-  const invoiced = new Set(invoicedPeriods)
+  if (!day || !rule.serviceStartOn) return empty
+  const startMonth = rule.serviceStartOn.slice(0, 7)
+  const list = [...invoices]
 
-  if (first > today) {
-    // In arrears the service may already be running with nothing to invoice yet.
-    const started = rule.serviceStartOn <= today
+  // Last invoice on file (the one reaching furthest), for "current" figures.
+  let last: { period: string; months: BillingInterval } | null = null
+  for (const i of list) {
+    const period = typeof i === "string" ? i : i.period
+    const months = typeof i === "string" ? 1 : asInterval(i.months)
+    // Invoices that end at or before the service start are history, not coverage.
+    if (shiftMonth(period, months) <= startMonth) continue
+    if (!last || shiftMonth(period, months) > shiftMonth(last.period, last.months)) {
+      last = { period, months }
+    }
+  }
+  const nextPeriod = coveredThrough(startMonth, list)
+  const due = dueForPeriod(rule, nextPeriod, every)
+  const monthsServed =
+    rule.serviceStartOn <= today ? monthsOfService(rule.serviceStartOn, today) : 0
+
+  if (due > today) {
     return {
       ...empty,
-      status: started ? "al_dia" : "sin_iniciar",
-      nextDue: first,
-      nextPeriod: periodOf(first, mode, every),
-      intervalMonths: every,
-      daysUntilNext: daysBetween(today, first),
-      monthsOfService: started ? monthsOfService(rule.serviceStartOn, today) : 0,
+      status: rule.serviceStartOn > today ? "sin_iniciar" : "al_dia",
+      currentDue: last ? dueForPeriod(rule, last.period, last.months) : null,
+      currentPeriod: last?.period ?? null,
+      nextDue: due,
+      nextPeriod,
+      daysUntilNext: daysBetween(today, due),
+      monthsOfService: monthsServed,
     }
   }
 
-  // Most recent due date ≤ today, stepping one period at a time from the first one.
-  let currentDue = first
-  for (;;) {
-    const next = addMonths(currentDue, every, day)
-    if (next > today) break
-    currentDue = next
-  }
-  const currentPeriod = periodOf(currentDue, mode, every)
-  const invoicedNow = invoiced.has(currentPeriod)
-
-  const nextDue =
-    invoicedNow || currentDue !== today ? addMonths(currentDue, every, day) : currentDue
-  const daysOverdue = invoicedNow ? null : daysBetween(currentDue, today)
-
-  let status: BillingStatus = "al_dia"
-  if (!invoicedNow) status = (daysOverdue ?? 0) > OVERDUE_AFTER_DAYS ? "vencida" : "pendiente"
-
+  const daysOverdue = daysBetween(due, today)
+  // After a due date that is not today, the following one is the first period
+  // boundary after today (a tenant several periods behind still gets a future date).
+  let nextDue = due
+  while (nextDue < today) nextDue = addMonths(nextDue, every, day)
   return {
-    status,
-    currentDue,
-    currentPeriod,
+    status: daysOverdue > OVERDUE_AFTER_DAYS ? "vencida" : "pendiente",
+    currentDue: due,
+    currentPeriod: nextPeriod,
     nextDue,
-    nextPeriod: periodOf(nextDue, mode, every),
+    nextPeriod:
+      due === today ? nextPeriod : periodOf(nextDue, rule.billingMode ?? "advance", every),
     intervalMonths: every,
     daysUntilNext: daysBetween(today, nextDue),
     daysOverdue,
-    monthsOfService: monthsOfService(rule.serviceStartOn, today),
+    monthsOfService: monthsServed,
   }
 }
 

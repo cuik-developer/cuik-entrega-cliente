@@ -50,6 +50,8 @@ type Config = {
 type Invoice = {
   id: string
   period: string
+  months: BillingInterval
+  recognition: "spread" | "cash"
   issuedOn: string
   number: string | null
   amount: number
@@ -268,6 +270,8 @@ export function TenantBillingSection({
   const [showNew, setShowNew] = useState(false)
   const [inv, setInv] = useState({
     period: "",
+    months: 1 as BillingInterval,
+    recognition: "spread" as Invoice["recognition"],
     issuedOn: "",
     number: "",
     amount: "",
@@ -334,6 +338,8 @@ export function TenantBillingSection({
     const amount = data?.config?.monthlyAmount
     setInv({
       period,
+      months: data?.config?.billingIntervalMonths ?? 1,
+      recognition: "spread",
       issuedOn: new Date().toLocaleDateString("en-CA", { timeZone: "America/Lima" }),
       number: "",
       amount: amount === null || amount === undefined ? "" : String(amount),
@@ -471,6 +477,40 @@ export function TenantBillingSection({
                 onChange={(e) => setInv({ ...inv, period: e.target.value })}
                 placeholder="2026-10"
               />
+              {/^\d{4}-(0[1-9]|1[0-2])$/.test(inv.period) && (
+                <p className="text-[11px] text-ent-fg-3">
+                  Cubre {periodLabel(inv.period, inv.months)}
+                </p>
+              )}
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Cubre</Label>
+              <select
+                className="h-9 w-full rounded-md border border-ent-line bg-white px-2 text-sm"
+                value={String(inv.months)}
+                onChange={(e) =>
+                  setInv({ ...inv, months: Number(e.target.value) as BillingInterval })
+                }
+              >
+                {BILLING_INTERVALS.map((n) => (
+                  <option key={n} value={String(n)}>
+                    {n === 1 ? "1 mes" : `${n} meses`} ({BILLING_INTERVAL_LABEL[n].toLowerCase()})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">En finanzas cuenta</Label>
+              <select
+                className="h-9 w-full rounded-md border border-ent-line bg-white px-2 text-sm"
+                value={inv.recognition}
+                onChange={(e) =>
+                  setInv({ ...inv, recognition: e.target.value as Invoice["recognition"] })
+                }
+              >
+                <option value="spread">Repartido mes a mes</option>
+                <option value="cash">Todo en el mes del cobro</option>
+              </select>
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Fecha de emisión</Label>
@@ -731,8 +771,11 @@ export function TenantBillingSection({
                   const busy = busyInvoice === i.id
                   return (
                     <tr key={i.id} className="border-b border-slate-50 align-top">
-                      <td className="py-2 pr-3 font-medium text-ent-fg" title={i.period}>
-                        {periodLabel(i.period, data?.config?.billingIntervalMonths ?? 1)}
+                      <td
+                        className="py-2 pr-3 font-medium text-ent-fg"
+                        title={`${i.period} · ${i.recognition === "cash" ? "todo en el mes del cobro" : "repartido mes a mes"}`}
+                      >
+                        {periodLabel(i.period, i.months)}
                       </td>
                       <td className="py-2 pr-3 text-ent-fg-2">{formatYmd(i.issuedOn)}</td>
                       <td className="py-2 pr-3 text-ent-fg-2">{i.number ?? "—"}</td>

@@ -151,8 +151,12 @@ export const tenantInvoices = pgTable(
     tenantId: uuid("tenant_id")
       .notNull()
       .references(() => tenants.id, { onDelete: "cascade" }),
-    /** "YYYY-MM" of the due date the invoice covers. */
+    /** "YYYY-MM": first month of service the invoice covers. */
     period: text("period").notNull(),
+    /** Months of service covered from `period`: 1, 3, 6 or 12 (migration 0027). */
+    months: integer("months").default(1).notNull(),
+    /** "spread": the amount counts month by month over `months`; "cash": all in the month paid. */
+    recognition: text("recognition").$type<"spread" | "cash">().default("spread").notNull(),
     issuedOn: date("issued_on").notNull(),
     number: text("number"),
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),

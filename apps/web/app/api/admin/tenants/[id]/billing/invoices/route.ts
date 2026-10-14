@@ -1,6 +1,11 @@
 import { db, eq, tenantInvoices, tenants } from "@cuik/db"
 import { createInvoiceSchema } from "@cuik/shared/validators"
-import { isPeriodConflict, loadBilling } from "@/lib/admin/billing-data"
+import {
+  findCoverageClash,
+  isPeriodConflict,
+  loadBilling,
+  lockTenantInvoices,
+} from "@/lib/admin/billing-data"
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -26,18 +31,29 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const i = parsed.data
 
     try {
-      await db.insert(tenantInvoices).values({
-        tenantId: id,
-        period: i.period,
-        issuedOn: i.issuedOn,
-        number: i.number ?? null,
-        amount: String(i.amount),
-        currency: i.currency,
-        status: i.status,
-        paidOn: i.status === "paid" ? (i.paidOn ?? i.issuedOn) : (i.paidOn ?? null),
-        note: i.note ?? null,
-        createdBy: session.user.id,
+      // Coverage must not overlap another live invoice; the lock serialises
+      // concurrent registrations of the same tenant.
+      const clash = await db.transaction(async (tx) => {
+        await lockTenantInvoices(tx, id)
+        const msg = await findCoverageClash(tx, id, i.period, i.months)
+        if (msg) return msg
+        await tx.insert(tenantInvoices).values({
+          tenantId: id,
+          period: i.period,
+          months: i.months,
+          recognition: i.recognition,
+          issuedOn: i.issuedOn,
+          number: i.number ?? null,
+          amount: String(i.amount),
+          currency: i.currency,
+          status: i.status,
+          paidOn: i.status === "paid" ? (i.paidOn ?? i.issuedOn) : (i.paidOn ?? null),
+          note: i.note ?? null,
+          createdBy: session.user.id,
+        })
+        return null
       })
+      if (clash) return errorResponse(clash, 409)
     } catch (err) {
       // Partial unique index: one live invoice per period.
       if (isPeriodConflict(err)) {
