@@ -1,6 +1,7 @@
 export * from "./analytics"
 export * from "./auth"
 export * from "./campaigns"
+export * from "./finance"
 export * from "./loyalty"
 export * from "./office"
 export * from "./passes"

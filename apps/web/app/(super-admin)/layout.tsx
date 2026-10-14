@@ -13,6 +13,7 @@ import {
   Palette,
   Settings,
   TrendingUp,
+  Wallet,
   X,
 } from "lucide-react"
 import Link from "next/link"
@@ -36,6 +37,10 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/admin/metricas", label: "Métricas", icon: TrendingUp },
       { href: "/admin/exportar", label: "Exportar datos", icon: Download },
     ],
+  },
+  {
+    title: "Finanzas",
+    items: [{ href: "/admin/finanzas", label: "Costos e ingresos", icon: Wallet }],
   },
   {
     title: "Producto",

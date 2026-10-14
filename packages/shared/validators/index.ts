@@ -106,6 +106,21 @@ export {
   solicitudEmailTemplatesSchema,
 } from "./email-templates-schema"
 export {
+  FINANCE_COST_CATEGORIES,
+  FINANCE_INCOME_CATEGORIES,
+  type FinanceEntryInput,
+  type FxRateInput,
+  financeEntrySchema,
+  fxRateSchema,
+  type LoanInput,
+  loanSchema,
+  type RecurringItemInput,
+  recurringItemSchema,
+  updateFinanceEntrySchema,
+  updateLoanSchema,
+  updateRecurringItemSchema,
+} from "./finance-schema"
+export {
   canvasNodeSchema,
   getConfigVersion,
   imageNodePropsSchema,
