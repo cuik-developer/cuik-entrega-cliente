@@ -63,6 +63,18 @@ export type InvoiceLike = {
   paidOn: string | null
   issuedOn: string
 }
+/** A merchant's billing terms, used for the months no invoice covers yet. */
+export type ExpectedBillingLike = {
+  /** Amount of each invoice, in its currency. */
+  amount: number
+  currency: Currency
+  intervalMonths: number
+  billingMode: "advance" | "arrears"
+  /** First month of service, "YYYY-MM". */
+  startMonth: string
+  /** First month no live invoice covers, "YYYY-MM" (see `coveredThrough`). */
+  firstUncovered: string
+}
 
 export type MonthRow = {
   month: string
@@ -79,9 +91,12 @@ export type MonthRow = {
   contributions: number
   /** Money paid back to the partner that month. */
   returns: number
-  /** incomeCash − costCash − loanPayments: what the month needed from the partner when negative. */
+  /** Merchant income expected from billing terms for months no invoice covers yet (from `todayMonth` on). */
+  projectedCash: number
+  projectedAccrual: number
+  /** incomeCash + projectedCash − costCash − loanPayments: what the month needs from the partner when negative. */
   netCash: number
-  /** incomeAccrual − costAccrual − loanPayments. */
+  /** incomeAccrual + projectedAccrual − costAccrual − loanPayments. */
   netAccrual: number
   /** True when some USD amount used the default rate (no rate typed yet). */
   fxEstimated: boolean
@@ -190,6 +205,42 @@ function spread(
   }
 }
 
+/**
+ * Expected merchant income from one merchant's billing terms: from the first
+ * uncovered month, one period at a time with its periodicity. Accrual spreads
+ * each period; cash lands at the period's start (advance) or right after its
+ * end (arrears). Months before `todayMonth` are left out: an old gap is not
+ * income to come.
+ */
+function projectExpected(
+  buckets: Map<string, Bucket>,
+  t: ExpectedBillingLike,
+  rates: FxRates,
+  w: { from: string; to: string; todayMonth: string },
+) {
+  if (t.amount <= 0) return
+  const interval = Math.max(1, Math.floor(t.intervalMonths))
+  const bump = (m: string, cash: number, accrual: number, estimated: boolean) => {
+    if (m < w.from || m > w.to) return
+    const b = buckets.get(m) ?? emptyBucket()
+    b.cash += cash
+    b.accrual += accrual
+    b.estimated = b.estimated || estimated
+    buckets.set(m, b)
+  }
+  let p = t.firstUncovered < t.startMonth ? t.startMonth : t.firstUncovered
+  for (let guard = 0; p <= w.to && guard < 600; p = shiftMonth(p, interval), guard++) {
+    const payMonth = t.billingMode === "advance" ? p : shiftMonth(p, interval)
+    // A period whose payment month already passed without an invoice is a
+    // gap, not income to come: skip it whole (cash and slices) so both views agree.
+    if (payMonth < w.todayMonth) continue
+    const { pen, estimated } = toPen(t.amount, t.currency, payMonth, rates)
+    bump(payMonth, pen, 0, estimated)
+    const slice = pen / interval
+    for (let k = 0; k < interval; k++) bump(shiftMonth(p, k), 0, slice, estimated)
+  }
+}
+
 export function buildLedger(input: {
   from: string
   to: string
@@ -198,13 +249,23 @@ export function buildLedger(input: {
   entries: EntryLike[]
   loans: LoanLike[]
   invoices: InvoiceLike[]
+  /** Billing terms of the merchants, to project the months no invoice covers yet. */
+  expected?: ExpectedBillingLike[]
+  /** First month the projection may fill ("YYYY-MM"); earlier uncovered months stay empty. */
+  todayMonth?: string
 }): MonthRow[] {
   const { from, to, rates } = input
   const income = new Map<string, Bucket>()
+  const projected = new Map<string, Bucket>()
   const cost = new Map<string, Bucket>()
   const loan = new Map<string, Bucket>()
   const contrib = new Map<string, number>()
   const ret = new Map<string, number>()
+
+  const todayMonth = input.todayMonth ?? from
+  for (const t of input.expected ?? []) {
+    projectExpected(projected, t, rates, { from, to, todayMonth })
+  }
 
   // Merchant invoices: accrual spreads every live invoice from its first
   // covered month; cash counts paid ones in the month they were paid.
@@ -222,6 +283,16 @@ export function buildLedger(input: {
       income.set(m, b)
     }
     if (inv.status === "paid") bump(payMonth, paid.pen, 0)
+    // Issued and unpaid: expected cash now (or in its issue month if that is ahead).
+    if (inv.status === "pending") {
+      const m = payMonth < todayMonth ? todayMonth : payMonth
+      if (m >= from && m <= to) {
+        const b = projected.get(m) ?? emptyBucket()
+        b.cash += paid.pen
+        b.estimated = b.estimated || paid.estimated
+        projected.set(m, b)
+      }
+    }
     if (inv.recognition === "cash") {
       if (inv.status === "paid") bump(payMonth, 0, paid.pen)
     } else {
@@ -285,6 +356,7 @@ export function buildLedger(input: {
     const i = income.get(month) ?? emptyBucket()
     const c = cost.get(month) ?? emptyBucket()
     const l = loan.get(month) ?? emptyBucket()
+    const p = projected.get(month) ?? emptyBucket()
     const contributions = round2(contrib.get(month) ?? 0)
     const returns = round2(ret.get(month) ?? 0)
     return {
@@ -296,10 +368,25 @@ export function buildLedger(input: {
       loanPayments: round2(l.cash),
       contributions,
       returns,
-      netCash: round2(i.cash - c.cash - l.cash),
-      netAccrual: round2(i.accrual - c.accrual - l.cash),
-      fxEstimated: i.estimated || c.estimated || l.estimated,
+      projectedCash: round2(p.cash),
+      projectedAccrual: round2(p.accrual),
+      netCash: round2(i.cash + p.cash - c.cash - l.cash),
+      netAccrual: round2(i.accrual + p.accrual - c.accrual - l.cash),
+      fxEstimated: i.estimated || c.estimated || l.estimated || p.estimated,
     }
+  })
+}
+
+/** A ledger row plus the running net since the first row. */
+export type LedgerRow = MonthRow & { cumulativeCash: number; cumulativeAccrual: number }
+
+export function withCumulative(rows: MonthRow[]): LedgerRow[] {
+  let cash = 0
+  let accrual = 0
+  return rows.map((r) => {
+    cash = round2(cash + r.netCash)
+    accrual = round2(accrual + r.netAccrual)
+    return { ...r, cumulativeCash: cash, cumulativeAccrual: accrual }
   })
 }
 
@@ -311,6 +398,8 @@ export type LedgerTotals = {
   loanPayments: number
   contributions: number
   returns: number
+  projectedCash: number
+  projectedAccrual: number
   netCash: number
   netAccrual: number
 }
@@ -324,6 +413,8 @@ export function sumLedger(rows: MonthRow[]): LedgerTotals {
     loanPayments: 0,
     contributions: 0,
     returns: 0,
+    projectedCash: 0,
+    projectedAccrual: 0,
     netCash: 0,
     netAccrual: 0,
   }
@@ -335,6 +426,8 @@ export function sumLedger(rows: MonthRow[]): LedgerTotals {
     t.loanPayments += r.loanPayments
     t.contributions += r.contributions
     t.returns += r.returns
+    t.projectedCash += r.projectedCash
+    t.projectedAccrual += r.projectedAccrual
     t.netCash += r.netCash
     t.netAccrual += r.netAccrual
   }
@@ -352,16 +445,26 @@ export function breakEvenMerchants(monthlyOutflowPen: number, avgTicketPen: numb
 }
 
 /**
- * Partner position over time: investment put in (contributions + the months
- * where cash was negative are already contributions when registered), returns
- * received, and the month the cumulative net cash recovers the investment.
+ * Partner position over time: what he put in (contributions), what he got back
+ * (returns), and the month the business could pay him back in full.
+ *
+ * Contributions fund the negative months already in the ledger, so the company
+ * holds `contributions − returns + Σ netCash` in cash; it can return everything
+ * once Σ netCash ≥ 0. `openingInvestment` is money put in before the ledger
+ * starts, covering losses the ledger never saw: that much more has to be
+ * generated before the partner is whole.
  */
 export function investmentRecovery(
   rows: MonthRow[],
   openingInvestment = 0,
-): { invested: number; returned: number; outstanding: number; recoveredIn: string | null } {
-  // Recovered when what the business itself generated (Σ net cash, before any
-  // partner money) reaches everything the partner put in so far.
+): {
+  invested: number
+  returned: number
+  outstanding: number
+  /** Cash the company holds today from the partner's money: outstanding + Σ netCash. */
+  cashOnHand: number
+  recoveredIn: string | null
+} {
   let invested = openingInvestment
   let returned = 0
   let generated = 0
@@ -370,12 +473,16 @@ export function investmentRecovery(
     invested += r.contributions
     returned += r.returns
     generated += r.netCash
-    if (recoveredIn === null && invested > 0 && generated >= invested) recoveredIn = r.month
+    if (recoveredIn === null && invested > 0 && generated >= openingInvestment) {
+      recoveredIn = r.month
+    }
   }
+  const outstanding = round2(Math.max(0, invested - returned))
   return {
     invested: round2(invested),
     returned: round2(returned),
-    outstanding: round2(Math.max(0, invested - returned)),
+    outstanding,
+    cashOnHand: round2(outstanding + generated - openingInvestment),
     recoveredIn,
   }
 }

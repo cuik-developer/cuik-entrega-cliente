@@ -9,6 +9,7 @@ import {
   monthRange,
   recurringChargeMonths,
   sumLedger,
+  withCumulative,
 } from "./finance"
 
 const RATES = { "2026-09": 3.5, "2026-11": 3.8 }
@@ -299,5 +300,176 @@ describe("ledger", () => {
     expect(investmentRecovery(small, 100).outstanding).toBe(100)
     expect(breakEvenMerchants(862, 250)).toBe(4)
     expect(breakEvenMerchants(862, 0)).toBeNull()
+  })
+
+  it("projects merchant income from the first uncovered month: arrears pays the month after", () => {
+    // Mascota Veloz: S/ 250 monthly in arrears, September paid (covered through Sep).
+    const rows = buildLedger({
+      ...base,
+      expected: [
+        {
+          amount: 250,
+          currency: "PEN" as const,
+          intervalMonths: 1,
+          billingMode: "arrears" as const,
+          startMonth: "2026-02",
+          firstUncovered: "2026-10",
+        },
+      ],
+      todayMonth: "2026-10",
+      from: "2026-10",
+      to: "2026-12",
+    })
+    // October: the Sep invoice was paid on 1 Oct (cash) and October itself accrues 250 to come.
+    expect(rows[0]).toMatchObject({
+      incomeCash: 250,
+      projectedCash: 0,
+      projectedAccrual: 250,
+      netCash: -555,
+      netAccrual: -555,
+    })
+    // November: October's invoice is paid in November (cash), November accrues.
+    expect(rows[1]).toMatchObject({ projectedCash: 250, projectedAccrual: 250, netCash: -555 })
+    expect(rows[2]).toMatchObject({ projectedCash: 250, projectedAccrual: 250 })
+  })
+
+  it("projects a quarterly merchant in advance: cash at the period start, a third per month", () => {
+    const rows = buildLedger({
+      rates: {},
+      recurring: [],
+      loans: [],
+      invoices: [],
+      entries: [],
+      expected: [
+        {
+          amount: 237,
+          currency: "PEN" as const,
+          intervalMonths: 3,
+          billingMode: "advance" as const,
+          startMonth: "2026-11",
+          firstUncovered: "2026-11",
+        },
+      ],
+      todayMonth: "2026-10",
+      from: "2026-10",
+      to: "2027-02",
+    })
+    expect(rows.map((r) => r.projectedCash)).toEqual([0, 237, 0, 0, 237])
+    expect(rows.map((r) => r.projectedAccrual)).toEqual([0, 79, 79, 79, 79])
+    expect(rows[0].fxEstimated).toBe(false) // PEN never flags the rate
+  })
+
+  it("never projects months before today, even when old periods were never invoiced", () => {
+    const rows = buildLedger({
+      rates: {},
+      recurring: [],
+      loans: [],
+      invoices: [],
+      entries: [],
+      expected: [
+        {
+          amount: 100,
+          currency: "PEN" as const,
+          intervalMonths: 1,
+          billingMode: "advance" as const,
+          startMonth: "2026-01",
+          firstUncovered: "2026-06",
+        },
+      ],
+      todayMonth: "2026-10",
+      from: "2026-05",
+      to: "2026-11",
+    })
+    expect(rows.slice(0, 5).every((r) => r.projectedCash === 0 && r.projectedAccrual === 0)).toBe(
+      true,
+    )
+    expect(rows[5]).toMatchObject({ month: "2026-10", projectedCash: 100, projectedAccrual: 100 })
+    const cum = withCumulative(rows)
+    expect(cum[6].cumulativeCash).toBe(200)
+    expect(sumLedger(rows).projectedCash).toBe(200)
+  })
+
+  it("an arrears period that ends before today but is paid from today on counts whole", () => {
+    // September not invoiced yet (arrears, invoice due in October): cash in Oct, accrual in Sep.
+    const rows = buildLedger({
+      rates: {},
+      recurring: [],
+      loans: [],
+      invoices: [],
+      entries: [],
+      expected: [
+        {
+          amount: 250,
+          currency: "PEN" as const,
+          intervalMonths: 1,
+          billingMode: "arrears" as const,
+          startMonth: "2026-02",
+          firstUncovered: "2026-09",
+        },
+      ],
+      todayMonth: "2026-10",
+      from: "2026-08",
+      to: "2026-10",
+    })
+    expect(rows.map((r) => r.projectedAccrual)).toEqual([0, 250, 250])
+    expect(rows.map((r) => r.projectedCash)).toEqual([0, 0, 250])
+  })
+
+  it("a pending invoice is expected cash now, and spreads in accrual as usual", () => {
+    const rows = buildLedger({
+      rates: {},
+      recurring: [],
+      loans: [],
+      entries: [],
+      invoices: [
+        {
+          period: "2026-09",
+          months: 1,
+          amount: 250,
+          currency: "PEN" as const,
+          recognition: "spread" as const,
+          status: "pending" as const,
+          paidOn: null,
+          issuedOn: "2026-10-01",
+        },
+      ],
+      todayMonth: "2026-10",
+      from: "2026-09",
+      to: "2026-10",
+    })
+    expect(rows[0]).toMatchObject({ incomeAccrual: 250, incomeCash: 0, projectedCash: 0 })
+    expect(rows[1]).toMatchObject({ incomeCash: 0, projectedCash: 250, netCash: 250 })
+  })
+
+  it("recovery: the business can pay the partner back once its own cumulative cash is ≥ 0", () => {
+    const entry = (type: "contribution" | "income" | "cost", amount: number, month: string) => ({
+      type,
+      category: "x",
+      name: "x",
+      amount,
+      currency: "PEN" as const,
+      month,
+      months: 1,
+      recognition: "cash" as const,
+    })
+    const rows = buildLedger({
+      rates: {},
+      recurring: [],
+      loans: [],
+      invoices: [],
+      entries: [
+        entry("contribution", 600, "2026-10"),
+        entry("cost", 600, "2026-10"),
+        entry("income", 300, "2026-11"),
+        entry("income", 400, "2026-12"),
+      ],
+      from: "2026-10",
+      to: "2026-12",
+    })
+    const rec = investmentRecovery(rows)
+    expect(rec.invested).toBe(600)
+    expect(rec.outstanding).toBe(600)
+    expect(rec.recoveredIn).toBe("2026-12") // Σ net: −600, −300, +100
+    expect(rec.cashOnHand).toBe(700) // 600 contributed + 100 generated
   })
 })

@@ -61,6 +61,34 @@ export const loanSchema = z.object({
 export type LoanInput = z.infer<typeof loanSchema>
 export const updateLoanSchema = loanSchema.partial()
 
+/** GET /api/admin/finance/ledger — window, break-even ticket and output format. */
+const windowMonthSchema = financeMonthSchema.refine((m) => m >= "2000-01" && m <= "2099-12", {
+  message: "Mes fuera de rango",
+})
+const emptyToUndefined = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v)
+const monthSpan = (a: string, b: string) => {
+  const [ya, ma] = a.split("-").map(Number)
+  const [yb, mb] = b.split("-").map(Number)
+  return (yb - ya) * 12 + (mb - ma)
+}
+export const financeLedgerQuerySchema = z
+  .object({
+    from: z.preprocess(emptyToUndefined, windowMonthSchema.optional()),
+    to: z.preprocess(emptyToUndefined, windowMonthSchema.optional()),
+    /** Average monthly ticket per merchant (PEN) for the break-even figure; default = current average. */
+    ticket: z.preprocess(emptyToUndefined, z.coerce.number().positive().max(1_000_000).optional()),
+    format: z.enum(["json", "xlsx"]).default("json"),
+  })
+  .refine((q) => !q.from || !q.to || q.from <= q.to, {
+    message: "El mes final es anterior al inicial",
+    path: ["to"],
+  })
+  .refine((q) => !q.from || !q.to || monthSpan(q.from, q.to) <= 120, {
+    message: "Máximo 10 años",
+    path: ["to"],
+  })
+export type FinanceLedgerQuery = z.infer<typeof financeLedgerQuerySchema>
+
 /** Suggested categories (free text is allowed; these seed the selects). */
 export const FINANCE_COST_CATEGORIES = [
   "Infraestructura",

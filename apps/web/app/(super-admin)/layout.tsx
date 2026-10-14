@@ -5,6 +5,7 @@ import {
   ClipboardList,
   CreditCard,
   Download,
+  LayoutDashboard,
   LogOut,
   type LucideIcon,
   Megaphone,
@@ -40,7 +41,10 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   },
   {
     title: "Finanzas",
-    items: [{ href: "/admin/finanzas", label: "Costos e ingresos", icon: Wallet }],
+    items: [
+      { href: "/admin/finanzas/tablero", label: "Tablero", icon: LayoutDashboard },
+      { href: "/admin/finanzas", label: "Costos e ingresos", icon: Wallet },
+    ],
   },
   {
     title: "Producto",
@@ -86,9 +90,12 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     .toUpperCase()
     .slice(0, 2)
 
-  const isActive = (href: string) => pathname.startsWith(href)
+  // The most specific item wins, so /admin/finanzas/tablero lights "Tablero" only.
+  const current = NAV_ITEMS.filter((i) => pathname.startsWith(i.href)).sort(
+    (a, b) => b.href.length - a.href.length,
+  )[0]
+  const isActive = (href: string) => current?.href === href
   const isEditor = pathname.startsWith("/admin/editor") || pathname.includes("/editor")
-  const current = NAV_ITEMS.find((i) => isActive(i.href))
 
   // Route change closes the drawer; Escape too.
   // biome-ignore lint/correctness/useExhaustiveDependencies: close on navigation only
