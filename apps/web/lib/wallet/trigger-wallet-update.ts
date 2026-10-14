@@ -15,6 +15,7 @@ import {
   buildGoogleClassId,
   getGoogleAccessToken,
 } from "@cuik/wallet/google"
+import type { ApnsClientCert } from "@cuik/wallet/shared"
 import {
   generateETag,
   resolvePassFields,
@@ -27,6 +28,7 @@ import { isCardCompleteMessage } from "@/lib/loyalty/card-complete"
 import { formatExpiry } from "@/lib/loyalty/expiration"
 import { allMilestoneMessages } from "@/lib/loyalty/milestones"
 import { nextExpiration } from "@/lib/loyalty/points-lots"
+import { apnsClientCertFor } from "@/lib/wallet/apns-client-cert"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 
 /**
@@ -212,6 +214,7 @@ export async function triggerWalletUpdate(ctx: {
     p8KeyPem: string
     teamId: string
     keyId: string
+    clientCert?: ApnsClientCert
   } | null = null
 
   // Registered Apple devices for this serial (also the "is this pass on an
@@ -238,6 +241,7 @@ export async function triggerWalletUpdate(ctx: {
         p8KeyPem,
         teamId: apnsConfig.teamId,
         keyId: apnsConfig.keyId,
+        clientCert: apnsClientCertFor(tenantAppleConfig, apnsConfig.topic),
       }
     }
   }

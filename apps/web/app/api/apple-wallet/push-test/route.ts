@@ -1,6 +1,7 @@
 import { and, appleDevices, db, eq, passInstances } from "@cuik/db"
 import { sendApnsPush } from "@cuik/wallet/apple"
 import { generateETag, validateAppleApnsEnv } from "@cuik/wallet/shared"
+import { apnsClientCertFor } from "@/lib/wallet/apns-client-cert"
 import { getTenantAppleConfig, resolveClientTenantId } from "@/lib/wallet/tenant-apple-config"
 
 export const runtime = "nodejs"
@@ -109,6 +110,7 @@ export async function POST(request: Request) {
       p8KeyPem,
       teamId: apnsConfig.teamId,
       keyId: apnsConfig.keyId,
+      clientCert: apnsClientCertFor(tenantConfig, apnsConfig.topic),
     })
 
     console.info(

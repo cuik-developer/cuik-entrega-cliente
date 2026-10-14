@@ -585,6 +585,12 @@ El paquete `.pkpass` lleva cada imagen en las tres escalas que lee Wallet, gener
 - **Visitas por tarjeta**: la tira usa el `maxVisits` de la **promocion activa** (lo que realmente cuenta las visitas) y solo si no hay, el del diseno (`stripMaxVisits`). Antes usaba el del diseno y, si diferian, las marcas caian en la casilla equivocada.
 - Codigo compartido por las tres rutas de Apple (`lib/wallet/strip-layout.ts`: `stripLayoutFrom`, `stripMaxVisits`, `stripCompleted`), asi un campo nuevo del diseno llega a la descarga inicial, al enlace por token y a la regeneracion tras un push por igual. **Android** sigue mostrando la imagen de fondo fija (Google no dibuja la tira); un endpoint de tira por cliente queda como siguiente paso.
 
+### 8.3d Credencial APNs por tenant (oct-2026)
+
+- Incidente: las campanas push de Don Clarito (pass type propio `pass.cuik.org.don-clarito`, modo produccion) fallaban con `400 TopicDisallowed` en produccion y `400 BadDeviceToken` en sandbox, aunque el Pass Type ID, el certificado y la llave `.p8` global estaban en el mismo equipo (`939CA98HMS`) y la llave era "Team scoped (All topics)". Los pass types compartidos (`pass.cuik.org`, `pass.cuik.org.puntos.demo`) si recibian push con la misma llave.
+- Regla desde entonces (`packages/wallet/src/apple/apns.ts`, `apps/web/lib/wallet/apns-client-cert.ts`): para un tenant cuyo `passTypeId` es distinto del topic global, el push se envia primero con el **certificado del pase del tenant** como certificado de cliente TLS (`http2.connect` con `cert`/`key`; Apple lo acepta para el topic de ese pass type por construccion) y, si falla por algo que no sea token muerto (410), se reintenta con la llave `.p8` global. El pass type compartido sigue solo con la llave. `ApnsPushTokenResult.authUsed` dice cual entrego (`cert` | `token`) y el error guarda ambos motivos ("cert: prod=… | token: prod=…"). Aplica a campanas, actualizacion tras visita y publicar diseno (los tres pasan `clientCert` via `apnsClientCertFor(tenantConfig, topicGlobal)`).
+- El motivo de Apple (`TopicDisallowed`, `BadDeviceToken`, `DeviceTokenNotForTopic`…) queda en `campaigns.notifications.error` y la pantalla de campanas lo muestra en "No se pudo enviar: …" (antes decia "error desconocido" cuando ningun destinatario recibio).
+
 ### 8.4 Apple vs Google
 
 | | Apple Wallet | Google Wallet |

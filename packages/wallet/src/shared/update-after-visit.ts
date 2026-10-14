@@ -42,6 +42,7 @@ async function updateApple(
       p8KeyPem: params.apple.p8KeyPem,
       teamId: params.apple.teamId,
       keyId: params.apple.keyId,
+      clientCert: params.apple.clientCert,
     })
 
     console.info(

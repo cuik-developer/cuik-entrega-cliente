@@ -40,6 +40,7 @@ import { headers } from "next/headers"
 import { z } from "zod"
 
 import { auth } from "@/lib/auth"
+import { apnsClientCertFor } from "@/lib/wallet/apns-client-cert"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 import { getDesignById, listDesignsByTenant } from "./queries"
 
@@ -328,6 +329,7 @@ async function sendApnsNotifications(
     p8KeyPem: Buffer.from(apnsConfig.p8Base64, "base64").toString("utf-8"),
     teamId: apnsConfig.teamId,
     keyId: apnsConfig.keyId,
+    clientCert: apnsClientCertFor(tenantConfig, apnsConfig.topic),
   })
     .then((result) => {
       console.info(

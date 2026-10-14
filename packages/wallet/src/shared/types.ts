@@ -135,12 +135,25 @@ export type CreateApplePassResult =
 
 // ─── APNs Push ─────────────────────────────────────────────────────────
 
+/**
+ * The tenant's Pass Type ID certificate used as the APNs client certificate.
+ * Apple accepts it for that pass type's topic by definition, so it does not
+ * depend on which team's key is configured globally.
+ */
+export type ApnsClientCert = {
+  certPem: string
+  keyPem: string
+  passphrase?: string
+}
+
 export type ApnsPushParams = {
   deviceTokens: string[]
   passTypeId: string
   p8KeyPem: string
   teamId: string
   keyId: string
+  /** When set, tried first; the token-based (.p8) credentials are the fallback. */
+  clientCert?: ApnsClientCert
 }
 
 export type ApnsPushTokenResult = {
@@ -148,6 +161,8 @@ export type ApnsPushTokenResult = {
   ok: boolean
   status: number
   envUsed: "production" | "sandbox"
+  /** Which credential delivered (or last failed). */
+  authUsed?: "cert" | "token"
   error?: string
 }
 
@@ -257,6 +272,7 @@ export type WalletUpdateParams = {
     p8KeyPem: string
     teamId: string
     keyId: string
+    clientCert?: ApnsClientCert
   } | null
   google: {
     issuerId: string

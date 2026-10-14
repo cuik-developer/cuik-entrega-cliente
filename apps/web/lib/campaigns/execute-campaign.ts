@@ -15,6 +15,7 @@ import { addLoyaltyObjectMessage, getGoogleAccessToken } from "@cuik/wallet/goog
 import { resolveTemplate, validateGoogleEnv } from "@cuik/wallet/shared"
 import type { SegmentationThresholds } from "@/lib/loyalty/client-segments"
 import { getThresholds } from "@/lib/loyalty/client-segments"
+import { apnsClientCertFor } from "@/lib/wallet/apns-client-cert"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 import { buildClientTemplateContexts } from "./client-template-context"
 import { resolveSegment } from "./resolve-segment"
@@ -446,6 +447,8 @@ async function processAppleBatches(
   // Resolve per-tenant passTypeId (APNs topic) with env fallback
   const tenantConfig = await getTenantAppleConfig(tenantId)
   const passTypeId = tenantConfig?.passTypeId ?? process.env.APPLE_APNS_TOPIC ?? null
+  // Tenant-specific pass type: its own certificate is the APNs credential (token as fallback).
+  const clientCert = apnsClientCertFor(tenantConfig, process.env.APPLE_APNS_TOPIC ?? null)
 
   if (!p8KeyPem || !teamId || !keyId || !passTypeId) {
     // Record all as failed
@@ -473,6 +476,7 @@ async function processAppleBatches(
           p8KeyPem,
           teamId,
           keyId,
+          clientCert,
         })
 
         if (result.sent > 0) {
