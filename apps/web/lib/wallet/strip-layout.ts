@@ -16,6 +16,7 @@ export type StampsConfigLike = {
   rowOffsets?: Array<{ x: number; y: number }>
   specialPositions?: number[]
   specialStampUrl?: string | null
+  specialStampScale?: number
 }
 
 /**
@@ -42,6 +43,10 @@ export function stripLayoutFrom(
     specialPositions: Array.isArray(cfg.specialPositions)
       ? cfg.specialPositions.filter((n) => Number.isInteger(n) && n >= 1)
       : [],
+    specialStampScale:
+      typeof cfg.specialStampScale === "number" && Number.isFinite(cfg.specialStampScale)
+        ? Math.min(200, Math.max(50, cfg.specialStampScale))
+        : 100,
   }
 }
 

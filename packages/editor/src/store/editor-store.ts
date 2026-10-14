@@ -36,6 +36,7 @@ const EMPTY_CONFIG: PassDesignConfigV2 = {
     rowOffsets: [],
     specialPositions: [],
     specialStampUrl: null,
+    specialStampScale: 100,
   },
   fields: { headerFields: [], secondaryFields: [], backFields: [] },
   logoText: "",

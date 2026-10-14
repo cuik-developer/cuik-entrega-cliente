@@ -131,6 +131,8 @@ export const stampsConfigSchema = z.object({
   specialPositions: specialPositionsSchema,
   /** Optional icon for the special stamps; null = the normal stamp with a badge drawn on it. */
   specialStampUrl: z.string().nullable().optional().default(null),
+  /** Size of the special icon as a percentage of the normal stamp (centred in the same cell). */
+  specialStampScale: z.number().min(50).max(200).optional().default(100),
 })
 
 // ── Pass design config v2 (declarative, no canvas nodes) ────────────
@@ -165,6 +167,7 @@ export const passDesignConfigV2Schema = z.object({
     rowOffsets: z.array(z.object({ x: z.number(), y: z.number() })).default([]),
     specialPositions: specialPositionsSchema,
     specialStampUrl: z.string().nullable().optional().default(null),
+    specialStampScale: z.number().min(50).max(200).optional().default(100),
   }),
   fields: z.object({
     headerFields: z.array(passFieldSchema).default([]),

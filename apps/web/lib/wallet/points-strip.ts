@@ -31,6 +31,8 @@ export type StripGridLayout = {
   rowOffsets?: Array<{ x: number; y: number }>
   /** Visit numbers (1-based) drawn with the special mark. */
   specialPositions?: number[]
+  /** Size of the special icon, % of the normal stamp. */
+  specialStampScale?: number
 }
 
 /** PNG / JPEG / WebP by magic bytes; defaults to PNG. */
@@ -113,6 +115,7 @@ export async function buildStripImages(params: {
       gridLayout: params.gridLayout,
       specialPositions: params.gridLayout?.specialPositions,
       specialStampImageDataUri: special ? toDataUri(special) : null,
+      specialStampScale: params.gridLayout?.specialStampScale,
       completed: params.completed,
     })
     return { strip2x: result.strip2x, strip1x: result.strip1x }

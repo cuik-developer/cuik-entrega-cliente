@@ -57,6 +57,12 @@ export function StampGridPreview({
         const isSpecial = (stampsConfig.specialPositions ?? []).includes(i + 1)
         const specialUrl = stampsConfig.specialStampUrl ?? null
         const imageUrl = isSpecial && specialUrl ? specialUrl : stampImageUrl
+        const scalePct =
+          isSpecial && specialUrl
+            ? Math.min(200, Math.max(50, stampsConfig.specialStampScale ?? 100)) / 100
+            : 1
+        const box = stampSize * scalePct
+        const shift = (stampSize - box) / 2
         const badge = Math.max(6, Math.round(stampSize * 0.22))
         // Same gift badge the server draws (orange disc, white star, top-right corner),
         // as a sibling so it keeps its own opacity while the empty stamp is faded.
@@ -87,10 +93,10 @@ export function StampGridPreview({
             <div
               className="absolute flex items-center justify-center"
               style={{
-                left: x2 * scale.x,
-                top: y2 * scale.y,
-                width: stampSize * scale.x,
-                height: stampSize * scale.y,
+                left: (x2 + shift) * scale.x,
+                top: (y2 + shift) * scale.y,
+                width: box * scale.x,
+                height: box * scale.y,
                 opacity,
               }}
             >

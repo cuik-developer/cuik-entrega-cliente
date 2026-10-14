@@ -304,6 +304,21 @@ export function StampsSection({
               isLoading={assetLoading.stamp}
               onUpload={(file) => onUploadSpecialStamp?.(file)}
             />
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] text-gray-400">
+                Tamaño del sello especial ({stampsConfig.specialStampScale ?? 100}% del sello
+                normal)
+              </span>
+              <input
+                type="range"
+                min={50}
+                max={200}
+                step={5}
+                value={stampsConfig.specialStampScale ?? 100}
+                onChange={(e) => updateStampsConfig({ specialStampScale: Number(e.target.value) })}
+                className="w-full accent-[#0e70db]"
+              />
+            </label>
             {stampsConfig.specialStampUrl && (
               <button
                 type="button"

@@ -62,6 +62,9 @@ function buildStripSvg(params: StripImageParams): string {
   const rowOffsets = gridLayout?.rowOffsets ?? []
   const special = new Set(params.specialPositions ?? [])
   const specialIcon = params.specialStampImageDataUri ?? null
+  const specialScale = Math.min(200, Math.max(50, params.specialStampScale ?? 100)) / 100
+  const specialSize = Math.round(stampSize * specialScale)
+  const specialShift = Math.round((stampSize - specialSize) / 2)
 
   const stampElements = Array.from({ length: maxVisits }, (_, i) => {
     const row = fillOrder === "interleaved" ? i % rows : Math.floor(i / cols)
@@ -74,7 +77,7 @@ function buildStripSvg(params: StripImageParams): string {
     const isSpecial = special.has(i + 1)
 
     if (isSpecial && specialIcon) {
-      return `  <image href="${specialIcon}" x="${x}" y="${y}" width="${stampSize}" height="${stampSize}" opacity="${opacity}" />`
+      return `  <image href="${specialIcon}" x="${x + specialShift}" y="${y + specialShift}" width="${specialSize}" height="${specialSize}" opacity="${opacity}" />`
     }
     const stamp = `  <image href="${stampImageDataUri}" x="${x}" y="${y}" width="${stampSize}" height="${stampSize}" opacity="${opacity}" />`
     return isSpecial ? `${stamp}\n${giftBadge(x, y, stampSize, filled)}` : stamp
