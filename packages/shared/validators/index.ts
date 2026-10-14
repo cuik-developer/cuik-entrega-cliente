@@ -116,10 +116,15 @@ export {
   fxRateSchema,
   type LoanInput,
   loanSchema,
+  PROSPECT_STAGES,
+  type ProspectInput,
+  type ProspectStageValue,
+  prospectSchema,
   type RecurringItemInput,
   recurringItemSchema,
   updateFinanceEntrySchema,
   updateLoanSchema,
+  updateProspectSchema,
   updateRecurringItemSchema,
 } from "./finance-schema"
 export {

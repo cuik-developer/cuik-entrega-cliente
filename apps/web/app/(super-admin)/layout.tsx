@@ -5,6 +5,7 @@ import {
   ClipboardList,
   CreditCard,
   Download,
+  Handshake,
   LayoutDashboard,
   LogOut,
   type LucideIcon,
@@ -43,6 +44,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: "Finanzas",
     items: [
       { href: "/admin/finanzas/tablero", label: "Tablero", icon: LayoutDashboard },
+      { href: "/admin/finanzas/prospectos", label: "Prospectos", icon: Handshake },
       { href: "/admin/finanzas", label: "Costos e ingresos", icon: Wallet },
     ],
   },

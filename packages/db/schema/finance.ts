@@ -1,5 +1,6 @@
 import {
   boolean,
+  date,
   index,
   integer,
   numeric,
@@ -9,7 +10,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core"
 import { user } from "./auth"
-import { tenants } from "./public"
+import { plans, tenants } from "./public"
 
 /**
  * Finance (super-admin only): Cuik's own money, not the merchants'. Costs,
@@ -102,3 +103,56 @@ export const loans = financeSchema.table("loans", {
   createdBy: text("created_by").references(() => user.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 })
+
+export type ProspectStage =
+  | "lead"
+  | "demo_scheduled"
+  | "demo_done"
+  | "proposal"
+  | "negotiation"
+  | "won"
+  | "lost"
+  | "standby"
+
+/**
+ * CRM: a merchant Cuik may sign. Carries the commercial terms it would be
+ * billed under (plan, amount, periodicity, mode, expected start) so the
+ * Tablero can project it weighted by `probability`. `tenantId` links the
+ * tenant created for its demo or after winning it. Migration 0029.
+ */
+export const prospects = financeSchema.table(
+  "prospects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    contactName: text("contact_name"),
+    phone: text("phone"),
+    email: text("email"),
+    city: text("city"),
+    /** Where it came from: referido, Instagram, visita en frío… */
+    source: text("source"),
+    stage: text("stage").$type<ProspectStage>().default("lead").notNull(),
+    /** 0..100, chance of winning it; weights the projection. */
+    probability: integer("probability").default(20).notNull(),
+    planId: uuid("plan_id").references(() => plans.id, { onDelete: "set null" }),
+    /** Amount per invoice under the expected terms. */
+    monthlyAmount: numeric("monthly_amount", { precision: 12, scale: 2 }),
+    currency: text("currency").$type<"PEN" | "USD">().default("PEN").notNull(),
+    intervalMonths: integer("interval_months").default(1).notNull(),
+    billingMode: text("billing_mode").$type<"advance" | "arrears">().default("arrears").notNull(),
+    /** First month it would be billed, "YYYY-MM". */
+    expectedStartMonth: text("expected_start_month"),
+    expectedCloseOn: date("expected_close_on"),
+    demoStartOn: date("demo_start_on"),
+    demoEndOn: date("demo_end_on"),
+    tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "set null" }),
+    nextStep: text("next_step"),
+    nextStepOn: date("next_step_on"),
+    lostReason: text("lost_reason"),
+    notes: text("notes"),
+    createdBy: text("created_by").references(() => user.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [index("finance_prospects_stage_idx").on(t.stage)],
+)

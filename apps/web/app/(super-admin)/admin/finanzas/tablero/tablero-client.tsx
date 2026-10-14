@@ -108,6 +108,7 @@ export function TableroClient() {
   const [fromDraft, setFromDraft] = useState("")
   const [toDraft, setToDraft] = useState("")
   const [ticketDraft, setTicketDraft] = useState("")
+  const [withProspects, setWithProspects] = useState(false)
   const seq = useRef(0)
 
   const query = useMemo(() => {
@@ -115,8 +116,9 @@ export function TableroClient() {
     if (from) q.set("from", from)
     if (to) q.set("to", to)
     if (ticket) q.set("ticket", ticket)
+    if (withProspects) q.set("prospects", "1")
     return q.toString()
-  }, [from, to, ticket])
+  }, [from, to, ticket, withProspects])
 
   const load = useCallback(async () => {
     const mine = ++seq.current
@@ -333,6 +335,18 @@ export function TableroClient() {
               ? "Caja: el dinero en el mes en que se mueve."
               : "Devengado: cada pago repartido en los meses que cubre."}
           </span>
+          <label className="flex items-center gap-1.5 text-[12px] text-ent-fg-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="accent-ent-accent"
+              checked={withProspects}
+              onChange={(e) => setWithProspects(e.target.checked)}
+            />
+            Incluir prospectos
+            {withProspects && d.prospectsIncluded > 0 && (
+              <span className="text-ent-fg-3">({d.prospectsIncluded}, ponderados)</span>
+            )}
+          </label>
           <div className="flex items-center gap-2 ml-auto flex-wrap">
             <Label className="text-[11.5px] text-ent-fg-3">Desde</Label>
             <Input
@@ -597,16 +611,18 @@ export function TableroClient() {
             ) : (
               <DataTable>
                 <tbody>
-                  {d.merchants.list.map((m) => (
-                    <Tr key={m.name}>
+                  {d.merchants.list.map((m, i) => (
+                    <Tr key={`${i}-${m.name}`}>
                       <Td>
                         <div className="truncate">{m.name}</div>
                         <div className="text-[11px] text-ent-fg-3">
-                          {m.startMonth > todayMonth
-                            ? `desde ${monthLabel(m.startMonth)}`
-                            : m.status === "trial"
-                              ? "en demo"
-                              : "activo"}
+                          {m.probability !== undefined
+                            ? `prospecto · ${m.probability} % · desde ${monthLabel(m.startMonth)}`
+                            : m.startMonth > todayMonth
+                              ? `desde ${monthLabel(m.startMonth)}`
+                              : m.status === "trial"
+                                ? "en demo"
+                                : "activo"}
                         </div>
                       </Td>
                       <Td className="text-right tabular-nums whitespace-nowrap">

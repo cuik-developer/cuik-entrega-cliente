@@ -77,6 +77,8 @@ export const financeLedgerQuerySchema = z
     to: z.preprocess(emptyToUndefined, windowMonthSchema.optional()),
     /** Average monthly ticket per merchant (PEN) for the break-even figure; default = current average. */
     ticket: z.preprocess(emptyToUndefined, z.coerce.number().positive().max(1_000_000).optional()),
+    /** "1": fold open prospects into the projection, weighted by probability. */
+    prospects: z.enum(["0", "1"]).default("0"),
     format: z.enum(["json", "xlsx"]).default("json"),
   })
   .refine((q) => !q.from || !q.to || q.from <= q.to, {
@@ -88,6 +90,56 @@ export const financeLedgerQuerySchema = z
     path: ["to"],
   })
 export type FinanceLedgerQuery = z.infer<typeof financeLedgerQuerySchema>
+
+/** CRM stages, in pipeline order. */
+export const PROSPECT_STAGES = [
+  "lead",
+  "demo_scheduled",
+  "demo_done",
+  "proposal",
+  "negotiation",
+  "won",
+  "lost",
+  "standby",
+] as const
+export type ProspectStageValue = (typeof PROSPECT_STAGES)[number]
+const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida (AAAA-MM-DD)")
+const optText = (max: number) =>
+  z.preprocess(emptyToNull, z.string().trim().max(max).nullable().optional())
+const optDate = z.preprocess(emptyToNull, dateSchema.nullable().optional())
+
+export const prospectSchema = z.object({
+  name: z.string().trim().min(1, "Indica el nombre del negocio").max(120),
+  contactName: optText(120),
+  phone: optText(40),
+  email: z.preprocess(
+    emptyToNull,
+    z.string().trim().email("Correo inválido").nullable().optional(),
+  ),
+  city: optText(80),
+  source: optText(80),
+  stage: z.enum(PROSPECT_STAGES).default("lead"),
+  probability: z.number().int().min(0).max(100).default(20),
+  planId: z.preprocess(emptyToNull, z.string().uuid().nullable().optional()),
+  monthlyAmount: z.preprocess(
+    (v) => (v === "" || v === undefined ? null : v),
+    z.number().min(0).max(10_000_000).nullable().optional(),
+  ),
+  currency: financeCurrencySchema.default("PEN"),
+  intervalMonths: everyMonthsSchema.default(1),
+  billingMode: z.enum(["advance", "arrears"]).default("arrears"),
+  expectedStartMonth: z.preprocess(emptyToNull, financeMonthSchema.nullable().optional()),
+  expectedCloseOn: optDate,
+  demoStartOn: optDate,
+  demoEndOn: optDate,
+  tenantId: z.preprocess(emptyToNull, z.string().uuid().nullable().optional()),
+  nextStep: optText(200),
+  nextStepOn: optDate,
+  lostReason: optText(200),
+  notes: optText(2000),
+})
+export type ProspectInput = z.infer<typeof prospectSchema>
+export const updateProspectSchema = prospectSchema.partial()
 
 /** Suggested categories (free text is allowed; these seed the selects). */
 export const FINANCE_COST_CATEGORIES = [

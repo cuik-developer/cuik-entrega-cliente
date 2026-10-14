@@ -19,7 +19,12 @@ export async function GET(request: Request) {
     )
     if (!parsed.success) return errorResponse("Validation failed", 400, parsed.error.flatten())
     const q = parsed.data
-    const dashboard = await buildFinanceDashboard({ from: q.from, to: q.to, ticket: q.ticket })
+    const dashboard = await buildFinanceDashboard({
+      from: q.from,
+      to: q.to,
+      ticket: q.ticket,
+      includeProspects: q.prospects === "1",
+    })
     if (q.format === "json") return successResponse(dashboard)
     const buffer = await buildFinanceExcel(dashboard)
     return new Response(buffer, {

@@ -1,4 +1,4 @@
-import { db, eq, sql, tenantBilling, tenantInvoices, tenants } from "@cuik/db"
+import { db, eq, prospects, sql, tenantBilling, tenantInvoices, tenants } from "@cuik/db"
 import { asInterval, coveredThrough, shiftMonth, todayYmd } from "./billing"
 import {
   breakEvenMerchants,
@@ -15,6 +15,7 @@ import {
   withCumulative,
 } from "./finance"
 import { loadLedgerInputs } from "./finance-data"
+import { type ProspectLike, prospectMonthlyPen, prospectsToExpected } from "./prospects"
 
 /** Fallback ticket when no merchant pays yet: the basic plan (S/ 79). */
 const DEFAULT_TICKET_PEN = 79
@@ -49,8 +50,17 @@ export type FinanceDashboard = {
     /** Merchants whose service already started and who have an amount set. */
     paying: number
     expectedMonthlyPen: number
-    list: { name: string; monthlyPen: number; status: string; startMonth: string }[]
+    list: {
+      name: string
+      monthlyPen: number
+      status: string
+      startMonth: string
+      /** Set for open prospects folded into the projection (weighted by this). */
+      probability?: number
+    }[]
   }
+  /** Open prospects folded into the projection (0 when the toggle is off). */
+  prospectsIncluded: number
   breakEven: {
     /** This month's fixed costs (recurring, as they accrue) plus loan installments, in soles. */
     outflowPen: number
@@ -136,6 +146,35 @@ export async function loadExpectedBilling(): Promise<ExpectedMerchant[]> {
   })
 }
 
+/** Open prospects with terms, for the weighted projection. */
+export async function loadOpenProspects(): Promise<
+  (ProspectLike & { name: string; tenantId: string | null })[]
+> {
+  const rows = await db
+    .select({
+      name: prospects.name,
+      tenantId: prospects.tenantId,
+      stage: prospects.stage,
+      probability: prospects.probability,
+      monthlyAmount: prospects.monthlyAmount,
+      currency: prospects.currency,
+      intervalMonths: prospects.intervalMonths,
+      billingMode: prospects.billingMode,
+      expectedStartMonth: prospects.expectedStartMonth,
+      demoEndOn: prospects.demoEndOn,
+      nextStepOn: prospects.nextStepOn,
+    })
+    .from(prospects)
+    .where(
+      sql`${prospects.stage} IN ('lead', 'demo_scheduled', 'demo_done', 'proposal', 'negotiation', 'standby') AND ${prospects.monthlyAmount} > 0 AND ${prospects.expectedStartMonth} IS NOT NULL`,
+    )
+  return rows.map((r) => ({
+    ...r,
+    monthlyAmount: r.monthlyAmount === null ? null : Number(r.monthlyAmount),
+    intervalMonths: asInterval(r.intervalMonths),
+  }))
+}
+
 function minMonth(months: (string | null | undefined)[]): string | null {
   let out: string | null = null
   for (const m of months) if (m && (out === null || m < out)) out = m
@@ -152,10 +191,16 @@ export async function buildFinanceDashboard(opts: {
   to?: string
   ticket?: number
   today?: string
+  /** Fold open prospects into the projection, weighted by probability. */
+  includeProspects?: boolean
 }): Promise<FinanceDashboard> {
   const today = opts.today ?? todayYmd()
   const todayMonth = today.slice(0, 7)
-  const [inputs, expectedRaw] = await Promise.all([loadLedgerInputs(), loadExpectedBilling()])
+  const [inputs, expectedRaw, openProspects] = await Promise.all([
+    loadLedgerInputs(),
+    loadExpectedBilling(),
+    opts.includeProspects ? loadOpenProspects() : Promise.resolve([]),
+  ])
 
   const fx = fxFor(todayMonth, inputs.rates)
   const expected: ExpectedMerchant[] = expectedRaw.map((e) => ({
@@ -164,6 +209,23 @@ export async function buildFinanceDashboard(opts: {
       (e.currency === "USD" ? e.amount * fx.rate : e.amount) / Math.max(1, e.intervalMonths),
     ),
   }))
+  // A prospect whose linked tenant already has billing terms is projected
+  // through the tenant at 100 %; counting it again weighted would double it.
+  const billedTenants = new Set(expectedRaw.map((e) => e.tenantId))
+  const unlinked = openProspects.filter((p) => !p.tenantId || !billedTenants.has(p.tenantId))
+  const prospectExpected = prospectsToExpected(unlinked, todayMonth)
+  const prospectList = unlinked
+    .filter((p) => p.probability > 0)
+    .map((p) => ({
+      name: p.name,
+      monthlyPen: round2((prospectMonthlyPen(p, fx.rate) * p.probability) / 100),
+      status: p.stage,
+      startMonth:
+        p.expectedStartMonth && p.expectedStartMonth > todayMonth
+          ? p.expectedStartMonth
+          : shiftMonth(todayMonth, 1),
+      probability: p.probability,
+    }))
 
   // Window: by default from the earliest thing on record (capped) to 12 months ahead.
   const earliest = minMonth([
@@ -189,7 +251,13 @@ export async function buildFinanceDashboard(opts: {
   const historyFrom = minMonth([earliest, from, todayMonth]) as string
   const historyTo = [to, todayMonth].sort()[1]
   const history = withCumulative(
-    buildLedger({ ...inputs, expected, from: historyFrom, to: historyTo, todayMonth }),
+    buildLedger({
+      ...inputs,
+      expected: [...expected, ...prospectExpected],
+      from: historyFrom,
+      to: historyTo,
+      todayMonth,
+    }),
   )
   const rows = history.filter((r) => r.month >= from && r.month <= to)
   const current = history.find((r) => r.month === todayMonth) ?? null
@@ -250,15 +318,19 @@ export async function buildFinanceDashboard(opts: {
     merchants: {
       paying: paying.length,
       expectedMonthlyPen,
-      list: expected
-        .map((e) => ({
-          name: e.name,
-          monthlyPen: e.monthlyPen,
-          status: e.status,
-          startMonth: e.startMonth,
-        }))
-        .sort((a, b) => b.monthlyPen - a.monthlyPen),
+      list: [
+        ...expected
+          .map((e) => ({
+            name: e.name,
+            monthlyPen: e.monthlyPen,
+            status: e.status,
+            startMonth: e.startMonth,
+          }))
+          .sort((a, b) => b.monthlyPen - a.monthlyPen),
+        ...prospectList.sort((a, b) => b.monthlyPen - a.monthlyPen),
+      ],
     },
+    prospectsIncluded: prospectExpected.length,
     breakEven: {
       outflowPen,
       ticketPen,
