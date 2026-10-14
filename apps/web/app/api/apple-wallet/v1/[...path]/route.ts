@@ -43,6 +43,13 @@ import {
 import { formatExpiry } from "@/lib/loyalty/expiration"
 import { nextExpiration } from "@/lib/loyalty/points-lots"
 import { buildStripImages } from "@/lib/wallet/points-strip"
+import {
+  type StampsConfigLike,
+  safeAssetUrl,
+  stripCompleted,
+  stripLayoutFrom,
+  stripMaxVisits,
+} from "@/lib/wallet/strip-layout"
 import { getTenantAppleConfig, resolveClientTenantId } from "@/lib/wallet/tenant-apple-config"
 
 /**
@@ -704,7 +711,7 @@ async function regeneratePass(ctx: {
 
     // Program type decides how the strip is built (points: background only).
     const [activePromo] = await db
-      .select({ type: promotions.type })
+      .select({ type: promotions.type, maxVisits: promotions.maxVisits })
       .from(promotions)
       .where(and(eq(promotions.tenantId, design.tenantId), eq(promotions.active, true)))
       .limit(1)
@@ -721,22 +728,26 @@ async function regeneratePass(ctx: {
     if (!iconAsset) return null
 
     // Calculate stamp state
-    const stampsConfig = design.stampsConfig as {
-      maxVisits: number
-      gridCols?: number
-      gridRows?: number
-      stampSize?: number
-      offsetX?: number
-      offsetY?: number
-      gapX?: number
-      gapY?: number
-      filledOpacity?: number
-      emptyOpacity?: number
-      fillOrder?: "row" | "interleaved"
-      rowOffsets?: Array<{ x: number; y: number }>
-    } | null
-    const maxVisits = stampsConfig?.maxVisits ?? 8
+    const stampsConfig = design.stampsConfig as StampsConfigLike | null
+    // Visits per card: the promotion's (what visits count against), else the design's.
+    const maxVisits = stripMaxVisits(activePromo, stampsConfig)
     const stampsInCycle = client.totalVisits % maxVisits
+    // A completed card whose reward is still pending is drawn full, not empty.
+    const pendingRewardRows = await db
+      .select({ cnt: count() })
+      .from(rewards)
+      .where(
+        and(
+          eq(rewards.clientId, client.id),
+          eq(rewards.tenantId, client.tenantId),
+          eq(rewards.status, "pending"),
+        ),
+      )
+    const completed = stripCompleted(
+      stampsInCycle,
+      Number(pendingRewardRows[0]?.cnt ?? 0),
+      client.totalVisits,
+    )
 
     // Generate auth token
     const authToken = generateAuthToken(appleConfig.authSecret, serialNumber)
@@ -744,10 +755,12 @@ async function regeneratePass(ctx: {
     // Load assets
     const stripBgUrl = assetMap.get("strip_bg")?.url
     const stampUrl = assetMap.get("stamp")?.url
-    const [iconBuffer, stripBgBuffer, stampBuffer] = await Promise.all([
+    const specialStampUrl = safeAssetUrl(stampsConfig?.specialStampUrl)
+    const [iconBuffer, stripBgBuffer, stampBuffer, specialStampBuffer] = await Promise.all([
       loadAssetBuffer(iconAsset.url),
       stripBgUrl ? loadAssetBuffer(stripBgUrl) : null,
       stampUrl ? loadAssetBuffer(stampUrl) : null,
+      specialStampUrl ? loadAssetBuffer(specialStampUrl).catch(() => null) : null,
     ])
 
     // Points passes: background only (no stamp grid). Stamps: grid as before.
@@ -758,21 +771,9 @@ async function regeneratePass(ctx: {
       stamp: stampBuffer,
       stampsInCycle,
       maxVisits,
-      gridLayout: stampsConfig
-        ? {
-            cols: stampsConfig.gridCols ?? 4,
-            rows: stampsConfig.gridRows ?? 2,
-            stampSize: stampsConfig.stampSize ?? 63,
-            offsetX: stampsConfig.offsetX ?? 197,
-            offsetY: stampsConfig.offsetY ?? 23,
-            gapX: stampsConfig.gapX ?? 98,
-            gapY: stampsConfig.gapY ?? 73,
-            filledOpacity: stampsConfig.filledOpacity ?? 1,
-            emptyOpacity: stampsConfig.emptyOpacity ?? 0.35,
-            fillOrder: stampsConfig.fillOrder ?? "row",
-            rowOffsets: stampsConfig.rowOffsets,
-          }
-        : undefined,
+      gridLayout: stripLayoutFrom(stampsConfig),
+      specialStamp: specialStampBuffer,
+      completed,
     })
 
     const logoAsset = assetMap.get("logo")
@@ -785,17 +786,7 @@ async function regeneratePass(ctx: {
       labelColor?: string
     } | null
 
-    // Pending rewards
-    const pendingRewardRows = await db
-      .select({ cnt: count() })
-      .from(rewards)
-      .where(
-        and(
-          eq(rewards.clientId, client.id),
-          eq(rewards.tenantId, client.tenantId),
-          eq(rewards.status, "pending"),
-        ),
-      )
+    // Pending rewards (counted above, before the strip)
     const pendingRewards = Number(pendingRewardRows[0]?.cnt ?? 0)
 
     // Resolve dynamic design fields (if configured)

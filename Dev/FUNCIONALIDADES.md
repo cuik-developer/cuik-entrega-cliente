@@ -578,6 +578,13 @@ El paquete `.pkpass` lleva cada imagen en las tres escalas que lee Wallet, gener
 
 **Icono de la notificacion push**: iOS usa el `icon.png` del paquete y **guarda la miniatura en cache del sistema**. Cambiar el icono y publicar actualiza el paquete (el servidor lo empaqueta bien, se ve en el log `icon=...b` de CreatePass), pero el telefono sigue mostrando la miniatura vieja hasta que se **reinicia**; eliminar y reinstalar el pase no basta. Verificado en prod el 12-oct-2026. Por eso el icono debe ser el isotipo permanente de la marca (cuadrado, pequeno); las variaciones de temporada van en el strip, el logo y los colores, que si se renuevan con cada push.
 
+### 8.3c Sellos especiales y tarjeta completa (oct-2026)
+
+- **Sellos especiales**: en el editor de diseno (Sellos → "Sellos especiales") se marcan las **visitas que tienen premio** (p. ej. la 3, la 6 y la ultima). Se guardan en `stampsConfig.specialPositions` (numeros de visita, 1-based, unicos y ordenados) y opcionalmente `stampsConfig.specialStampUrl` (icono propio subido con el mismo endpoint de assets; sin icono, el sello normal lleva una **insignia de regalo**: disco naranja `#FF4810` con estrella blanca en la esquina superior derecha, un poco mas tenue mientras el sello esta vacio para que el cliente vea desde el inicio donde estan los premios). Los chips del editor se dibujan en la casilla real segun el orden de llenado (fila por fila o intercalado), igual que `packages/wallet/src/apple/strip-image.ts` (`giftBadge`, `specialPositions`, `specialStampImageDataUri`). Sin migracion: `stamps_config` es jsonb y los disenos viejos simplemente no tienen el campo. No hay nuevo tipo de asset.
+- **Tarjeta completa**: cuando una visita llena el ultimo sello la tarjeta vuelve a 0 (`totalVisits % maxVisits`); antes la tira se veia vacia de inmediato. Ahora, mientras el premio siga **pendiente de canje** (`stripCompleted(stampsInCycle, pendingRewards)`), la tira se dibuja con **todos los sellos llenos**; al canjear vuelve a 0.
+- **Visitas por tarjeta**: la tira usa el `maxVisits` de la **promocion activa** (lo que realmente cuenta las visitas) y solo si no hay, el del diseno (`stripMaxVisits`). Antes usaba el del diseno y, si diferian, las marcas caian en la casilla equivocada.
+- Codigo compartido por las tres rutas de Apple (`lib/wallet/strip-layout.ts`: `stripLayoutFrom`, `stripMaxVisits`, `stripCompleted`), asi un campo nuevo del diseno llega a la descarga inicial, al enlace por token y a la regeneracion tras un push por igual. **Android** sigue mostrando la imagen de fondo fija (Google no dibuja la tira); un endpoint de tira por cliente queda como siguiente paso.
+
 ### 8.4 Apple vs Google
 
 | | Apple Wallet | Google Wallet |

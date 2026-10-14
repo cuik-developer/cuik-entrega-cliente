@@ -103,6 +103,13 @@ export const passDesignColorsSchema = z.object({
 
 // ── Stamps config ────────────────────────────────────────────────────
 export const fillOrderSchema = z.enum(["row", "interleaved"]).default("row")
+/** Sorted, unique, 1-based visit numbers (max 50 stamps per card). */
+const specialPositionsSchema = z
+  .array(z.number().int().min(1).max(50))
+  .max(50)
+  .optional()
+  .default([])
+  .transform((arr) => Array.from(new Set(arr)).sort((a, b) => a - b))
 
 export const stampsConfigSchema = z.object({
   maxVisits: z.number().int(),
@@ -120,6 +127,10 @@ export const stampsConfigSchema = z.object({
     .array(z.object({ x: z.number().min(-300).max(300), y: z.number().min(-200).max(200) }))
     .optional()
     .default([]),
+  /** Visit numbers (1-based) drawn with the special mark: the ones that carry a gift. Empty = off. */
+  specialPositions: specialPositionsSchema,
+  /** Optional icon for the special stamps; null = the normal stamp with a badge drawn on it. */
+  specialStampUrl: z.string().nullable().optional().default(null),
 })
 
 // ── Pass design config v2 (declarative, no canvas nodes) ────────────
@@ -152,6 +163,8 @@ export const passDesignConfigV2Schema = z.object({
     emptyOpacity: z.number().min(0).max(1).default(0.35),
     fillOrder: fillOrderSchema.default("row"),
     rowOffsets: z.array(z.object({ x: z.number(), y: z.number() })).default([]),
+    specialPositions: specialPositionsSchema,
+    specialStampUrl: z.string().nullable().optional().default(null),
   }),
   fields: z.object({
     headerFields: z.array(passFieldSchema).default([]),

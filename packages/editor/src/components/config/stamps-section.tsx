@@ -6,13 +6,26 @@ import { CollapsibleSection } from "./collapsible-section"
 interface StampsSectionProps {
   onUploadAsset: (key: AssetKey, file: File) => void
   onGenerateAsset: (key: AssetKey) => void
+  onUploadSpecialStamp?: (file: File) => void
 }
 
-export function StampsSection({ onUploadAsset, onGenerateAsset }: StampsSectionProps) {
+export function StampsSection({
+  onUploadAsset,
+  onGenerateAsset,
+  onUploadSpecialStamp,
+}: StampsSectionProps) {
   const stampUrl = useEditorStore((s) => s.config.assets.stamp)
   const stampsConfig = useEditorStore((s) => s.config.stampsConfig)
   const assetLoading = useEditorStore((s) => s.assetLoading)
   const updateStampsConfig = useEditorStore((s) => s.updateStampsConfig)
+  const specialPositions = stampsConfig.specialPositions ?? []
+  const specialOn = specialPositions.length > 0
+  const toggleSpecial = (n: number) => {
+    const next = specialPositions.includes(n)
+      ? specialPositions.filter((p) => p !== n)
+      : [...specialPositions, n].sort((a, b) => a - b)
+    updateStampsConfig({ specialPositions: next })
+  }
 
   return (
     <CollapsibleSection title="Sellos">
@@ -222,6 +235,87 @@ export function StampsSection({ onUploadAsset, onGenerateAsset }: StampsSectionP
           })}
         </div>
       )}
+
+      {/* Special stamps: the visits that carry a gift */}
+      <div className="flex flex-col gap-2 rounded-md border border-gray-200 bg-gray-50 p-3">
+        <label className="flex items-center justify-between gap-2">
+          <span className="text-xs font-medium text-gray-600">Sellos especiales</span>
+          <input
+            type="checkbox"
+            checked={specialOn}
+            onChange={(e) =>
+              updateStampsConfig({
+                specialPositions: e.target.checked ? [stampsConfig.maxVisits] : [],
+              })
+            }
+            className="accent-[#0e70db]"
+          />
+        </label>
+        <p className="text-[10px] text-gray-400">
+          Marca las visitas que tienen premio (por ejemplo la 3, la 6 y la última). Se dibujan con
+          una insignia de regalo o con el icono que subas. Caen en su casilla según el orden de
+          llenado.
+        </p>
+        {specialOn && (
+          <>
+            <div
+              className="grid gap-1"
+              style={{
+                gridTemplateColumns: `repeat(${Math.max(1, stampsConfig.gridCols)}, minmax(0, 1fr))`,
+              }}
+            >
+              {Array.from({ length: stampsConfig.maxVisits }, (_, i) => i + 1).map((n) => {
+                // Show the chips where the stamps land on the card (same fill order).
+                const rows = Math.max(1, stampsConfig.gridRows)
+                const cols = Math.max(1, stampsConfig.gridCols)
+                const idx = n - 1
+                const order = stampsConfig.fillOrder ?? "row"
+                const row = order === "interleaved" ? idx % rows : Math.floor(idx / cols)
+                const col = order === "interleaved" ? Math.floor(idx / rows) : idx % cols
+                const on = specialPositions.includes(n)
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => toggleSpecial(n)}
+                    className="h-7 rounded text-xs font-medium border transition-colors hover:border-gray-400"
+                    style={{
+                      gridRow: row + 1,
+                      gridColumn: col + 1,
+                      backgroundColor: on ? "#FF4810" : "#FFFFFF",
+                      borderColor: on ? "#FF4810" : "#E5E7EB",
+                      color: on ? "#FFFFFF" : "#4B5563",
+                    }}
+                    title={on ? `Visita ${n}: con premio` : `Visita ${n}`}
+                  >
+                    {n}
+                  </button>
+                )
+              })}
+            </div>
+            {specialPositions.some((p) => p > stampsConfig.maxVisits) && (
+              <p className="text-[10px] text-amber-700">
+                Hay visitas marcadas más allá del máximo ({stampsConfig.maxVisits}); se ignoran.
+              </p>
+            )}
+            <AssetSlot
+              label="Icono del sello especial (opcional)"
+              currentUrl={stampsConfig.specialStampUrl ?? null}
+              isLoading={assetLoading.stamp}
+              onUpload={(file) => onUploadSpecialStamp?.(file)}
+            />
+            {stampsConfig.specialStampUrl && (
+              <button
+                type="button"
+                className="self-start text-[11px] text-gray-500 hover:text-red-600"
+                onClick={() => updateStampsConfig({ specialStampUrl: null })}
+              >
+                Quitar icono y usar la insignia
+              </button>
+            )}
+          </>
+        )}
+      </div>
 
       {/* Opacity sliders */}
       <label className="flex flex-col gap-1.5">

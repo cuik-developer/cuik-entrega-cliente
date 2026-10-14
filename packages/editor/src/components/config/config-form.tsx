@@ -9,6 +9,8 @@ import { StripSection } from "./strip-section"
 interface ConfigFormProps {
   onUploadAsset: (key: AssetKey, file: File) => void
   onGenerateAsset: (key: AssetKey) => void
+  /** Uploads the optional icon for the special stamps and stores its URL in stampsConfig. */
+  onUploadSpecialStamp?: (file: File) => void
   promotionType?: PromotionType
   customVariables?: CustomVariable[]
 }
@@ -16,6 +18,7 @@ interface ConfigFormProps {
 export function ConfigForm({
   onUploadAsset,
   onGenerateAsset,
+  onUploadSpecialStamp,
   promotionType = "stamps",
   customVariables,
 }: ConfigFormProps) {
@@ -24,7 +27,11 @@ export function ConfigForm({
       <BrandingSection onUploadAsset={onUploadAsset} onGenerateAsset={onGenerateAsset} />
       <StripSection onUploadAsset={onUploadAsset} onGenerateAsset={onGenerateAsset} />
       {promotionType === "stamps" ? (
-        <StampsSection onUploadAsset={onUploadAsset} onGenerateAsset={onGenerateAsset} />
+        <StampsSection
+          onUploadAsset={onUploadAsset}
+          onGenerateAsset={onGenerateAsset}
+          onUploadSpecialStamp={onUploadSpecialStamp}
+        />
       ) : (
         <div className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-3">
           <p className="text-sm text-violet-700">

@@ -84,6 +84,22 @@ export function PassEditor({ config, callbacks }: PassEditorProps) {
     [callbacks, setAssetLoading, updateAsset],
   )
 
+  const updateStampsConfig = useEditorStore((s) => s.updateStampsConfig)
+  const handleUploadSpecialStamp = useCallback(
+    async (file: File) => {
+      setAssetLoading("stamp", true)
+      try {
+        const url = await callbacks.onUploadAsset(file)
+        updateStampsConfig({ specialStampUrl: url })
+      } catch (err) {
+        console.error("[PassEditor] Upload special stamp failed:", err)
+      } finally {
+        setAssetLoading("stamp", false)
+      }
+    },
+    [callbacks, setAssetLoading, updateStampsConfig],
+  )
+
   // ── Save & Publish ────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
     try {
@@ -205,6 +221,7 @@ export function PassEditor({ config, callbacks }: PassEditorProps) {
             <ConfigForm
               onUploadAsset={handleUploadAsset}
               onGenerateAsset={handleGenerateAsset}
+              onUploadSpecialStamp={handleUploadSpecialStamp}
               promotionType={config.promotionType}
               customVariables={config.customVariables}
             />

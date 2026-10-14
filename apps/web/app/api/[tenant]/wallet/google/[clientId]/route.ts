@@ -10,6 +10,7 @@ import {
   promotions,
   rewards,
 } from "@cuik/db"
+
 import {
   buildGoogleClassId,
   buildSaveToWalletUrl,
@@ -26,6 +27,7 @@ import {
   successResponse,
 } from "@/lib/api-utils"
 import { pointsExpiryTemplateVars } from "@/lib/loyalty/points-lots"
+import { type StampsConfigLike, stripMaxVisits } from "@/lib/wallet/strip-layout"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -81,14 +83,15 @@ export async function POST(
 
     // 5. Get active promotion type for loyalty label
     const [activePromotion] = await db
-      .select({ type: promotions.type })
+      .select({ type: promotions.type, maxVisits: promotions.maxVisits })
       .from(promotions)
       .where(and(eq(promotions.tenantId, tenant.id), eq(promotions.active, true)))
       .limit(1)
 
     // 6. Calculate stamp state
-    const stampsConfig = design.stampsConfig as { maxVisits: number } | null
-    const maxVisits = stampsConfig?.maxVisits ?? 8
+    const stampsConfig = design.stampsConfig as StampsConfigLike | null
+    // Same rule as the Apple routes: the promotion counts the visits, the design only draws them.
+    const maxVisits = stripMaxVisits(activePromotion, stampsConfig)
     const stampsInCycle = client.totalVisits % maxVisits
 
     // Check pending rewards

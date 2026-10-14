@@ -29,6 +29,8 @@ export type StripGridLayout = {
   emptyOpacity: number
   fillOrder: "row" | "interleaved"
   rowOffsets?: Array<{ x: number; y: number }>
+  /** Visit numbers (1-based) drawn with the special mark. */
+  specialPositions?: number[]
 }
 
 /** PNG / JPEG / WebP by magic bytes; defaults to PNG. */
@@ -46,6 +48,18 @@ export function sniffImageMime(buf: Buffer): "image/png" | "image/jpeg" | "image
 
 export function toDataUri(buf: Buffer): string {
   return `data:${sniffImageMime(buf)};base64,${buf.toString("base64")}`
+}
+
+/** Raster icon sharp can decode, at most 1 MB; anything else falls back to the badge. */
+const MAX_ICON_BYTES = 1_000_000
+async function usableIcon(buf: Buffer | null | undefined): Promise<Buffer | null> {
+  if (!buf || buf.length === 0 || buf.length > MAX_ICON_BYTES) return null
+  try {
+    const meta = await sharp(buf).metadata()
+    return meta.width && meta.height && meta.format !== "svg" ? buf : null
+  } catch {
+    return null
+  }
 }
 
 async function transparentStrip(width: number, height: number): Promise<Buffer> {
@@ -78,6 +92,10 @@ export async function buildStripImages(params: {
   stampsInCycle: number
   maxVisits: number
   gridLayout?: StripGridLayout
+  /** Icon for the special stamps (null = badge on the normal stamp). */
+  specialStamp?: Buffer | null
+  /** Card completed with the reward pending: draw every stamp filled. */
+  completed?: boolean
 }): Promise<{ strip2x: Buffer; strip1x: Buffer }> {
   const { programType, background, stamp } = params
 
@@ -86,12 +104,16 @@ export async function buildStripImages(params: {
   }
 
   if (background && stamp) {
+    const special = await usableIcon(params.specialStamp)
     const result = await generateStripImage({
       backgroundImageDataUri: toDataUri(background),
       stampImageDataUri: toDataUri(stamp),
       stampsInCycle: params.stampsInCycle,
       maxVisits: params.maxVisits,
       gridLayout: params.gridLayout,
+      specialPositions: params.gridLayout?.specialPositions,
+      specialStampImageDataUri: special ? toDataUri(special) : null,
+      completed: params.completed,
     })
     return { strip2x: result.strip2x, strip1x: result.strip1x }
   }

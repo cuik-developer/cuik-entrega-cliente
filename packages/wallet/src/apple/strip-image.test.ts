@@ -103,6 +103,43 @@ describe("_buildStripSvg", () => {
   })
 })
 
+describe("special stamps and completed card", () => {
+  it("draws a gift badge on the special positions, dimmer while empty", () => {
+    const svg = _buildStripSvg({ ...BASE_PARAMS, stampsInCycle: 3, specialPositions: [3, 6] })
+    const badges = svg.match(/<polygon /g) || []
+    expect(badges.length).toBe(2)
+    // Visit 3 is filled (full badge), visit 6 is still empty (dimmer badge).
+    expect(svg).toContain('<g opacity="1">')
+    expect(svg).toContain('<g opacity="0.85">')
+    // The stamps themselves are still all there.
+    expect((svg.match(/<image\s/g) || []).length).toBe(9)
+  })
+
+  it("uses the special icon instead of the badge when the design has one", () => {
+    const special = "data:image/png;base64,c3BlY2lhbA=="
+    const svg = _buildStripSvg({
+      ...BASE_PARAMS,
+      specialPositions: [8],
+      specialStampImageDataUri: special,
+    })
+    expect(svg).not.toContain("<polygon")
+    expect((svg.match(new RegExp(`href="${special}"`, "g")) || []).length).toBe(1)
+    expect((svg.match(/<image\s/g) || []).length).toBe(9)
+  })
+
+  it("ignores positions beyond the card and empty lists", () => {
+    const svg = _buildStripSvg({ ...BASE_PARAMS, specialPositions: [12, 40] })
+    expect(svg).not.toContain("<polygon")
+    expect(_buildStripSvg({ ...BASE_PARAMS, specialPositions: [] })).not.toContain("<polygon")
+  })
+
+  it("draws every stamp filled while the completed card's reward is pending", () => {
+    const svg = _buildStripSvg({ ...BASE_PARAMS, stampsInCycle: 0, completed: true })
+    expect(svg).not.toContain(`opacity="${STAMP_OPACITY_EMPTY}"`)
+    expect((svg.match(new RegExp(`opacity="${STAMP_OPACITY_FILLED}"`, "g")) || []).length).toBe(8)
+  })
+})
+
 describe("generateStripImage", () => {
   it("produces valid PNG buffers for strip2x and strip1x", async () => {
     // sharp is available, so we test the real output

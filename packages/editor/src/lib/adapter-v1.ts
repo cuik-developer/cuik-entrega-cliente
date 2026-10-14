@@ -156,6 +156,8 @@ export function adaptV1ToV2(
       emptyOpacity: stampGrid.emptyOpacity,
       fillOrder: "row",
       rowOffsets: [],
+      specialPositions: [],
+      specialStampUrl: null,
     },
     fields,
     logoText: "",

@@ -35,6 +35,8 @@ export function getDefaultConfigV2(businessName: string): PassDesignConfigV2 {
       emptyOpacity: 0.35,
       fillOrder: "row",
       rowOffsets: [],
+      specialPositions: [],
+      specialStampUrl: null,
     },
     fields: {
       headerFields: [{ key: "total", label: "# DE VISITAS", value: "0" }],

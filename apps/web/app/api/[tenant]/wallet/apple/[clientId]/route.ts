@@ -26,6 +26,13 @@ import {
 import { errorResponse, requireAuth, requireTenantMembership, resolveTenant } from "@/lib/api-utils"
 import { pointsExpiryTemplateVars } from "@/lib/loyalty/points-lots"
 import { buildStripImages } from "@/lib/wallet/points-strip"
+import {
+  type StampsConfigLike,
+  safeAssetUrl,
+  stripCompleted,
+  stripLayoutFrom,
+  stripMaxVisits,
+} from "@/lib/wallet/strip-layout"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 
 /**
@@ -92,7 +99,7 @@ export async function GET(
     let design: typeof passDesigns.$inferSelect | null = null
 
     const [activePromo] = await db
-      .select({ id: promotions.id, type: promotions.type })
+      .select({ id: promotions.id, type: promotions.type, maxVisits: promotions.maxVisits })
       .from(promotions)
       .where(and(eq(promotions.tenantId, tenant.id), eq(promotions.active, true)))
       .limit(1)
@@ -140,22 +147,26 @@ export async function GET(
     if (!iconAsset) return errorResponse("Pass design missing icon asset", 400)
 
     // 5. Calculate stamp count
-    const stampsConfig = design.stampsConfig as {
-      maxVisits: number
-      gridCols?: number
-      gridRows?: number
-      stampSize?: number
-      offsetX?: number
-      offsetY?: number
-      gapX?: number
-      gapY?: number
-      filledOpacity?: number
-      emptyOpacity?: number
-      fillOrder?: "row" | "interleaved"
-      rowOffsets?: Array<{ x: number; y: number }>
-    } | null
-    const maxVisits = stampsConfig?.maxVisits ?? 8
+    const stampsConfig = design.stampsConfig as StampsConfigLike | null
+    // Visits per card: the promotion's (what visits count against), else the design's.
+    const maxVisits = stripMaxVisits(activePromo, stampsConfig)
     const stampsInCycle = client.totalVisits % maxVisits
+    // A completed card whose reward is still pending is drawn full, not empty.
+    const pendingRewardRows = await db
+      .select({ cnt: count() })
+      .from(rewards)
+      .where(
+        and(
+          eq(rewards.clientId, client.id),
+          eq(rewards.tenantId, tenant.id),
+          eq(rewards.status, "pending"),
+        ),
+      )
+    const completed = stripCompleted(
+      stampsInCycle,
+      Number(pendingRewardRows[0]?.cnt ?? 0),
+      client.totalVisits,
+    )
 
     // 6. Generate auth token and serial
     const serialNumber = client.qrCode
@@ -164,10 +175,12 @@ export async function GET(
     // 7. Load assets and generate strip image
     const stripBgUrl = assetMap.get("strip_bg")?.url
     const stampUrl = assetMap.get("stamp")?.url
-    const [iconBuffer, stripBgAsset, stampAsset] = await Promise.all([
+    const specialStampUrl = safeAssetUrl(stampsConfig?.specialStampUrl)
+    const [iconBuffer, stripBgAsset, stampAsset, specialStampBuffer] = await Promise.all([
       loadAssetBuffer(iconAsset.url),
       stripBgUrl ? loadAssetBuffer(stripBgUrl) : null,
       stampUrl ? loadAssetBuffer(stampUrl) : null,
+      specialStampUrl ? loadAssetBuffer(specialStampUrl).catch(() => null) : null,
     ])
 
     // Points passes: background only (no stamp grid). Stamps: grid as before.
@@ -178,21 +191,9 @@ export async function GET(
       stamp: stampAsset,
       stampsInCycle,
       maxVisits,
-      gridLayout: stampsConfig
-        ? {
-            cols: stampsConfig.gridCols ?? 4,
-            rows: stampsConfig.gridRows ?? 2,
-            stampSize: stampsConfig.stampSize ?? 63,
-            offsetX: stampsConfig.offsetX ?? 197,
-            offsetY: stampsConfig.offsetY ?? 23,
-            gapX: stampsConfig.gapX ?? 98,
-            gapY: stampsConfig.gapY ?? 73,
-            filledOpacity: stampsConfig.filledOpacity ?? 1,
-            emptyOpacity: stampsConfig.emptyOpacity ?? 0.35,
-            fillOrder: stampsConfig.fillOrder ?? "row",
-            rowOffsets: stampsConfig.rowOffsets,
-          }
-        : undefined,
+      gridLayout: stripLayoutFrom(stampsConfig),
+      specialStamp: specialStampBuffer,
+      completed,
     })
 
     // Load optional logo
@@ -206,17 +207,7 @@ export async function GET(
       labelColor?: string
     } | null
 
-    // Count pending rewards
-    const pendingRewardRows = await db
-      .select({ cnt: count() })
-      .from(rewards)
-      .where(
-        and(
-          eq(rewards.clientId, client.id),
-          eq(rewards.tenantId, tenant.id),
-          eq(rewards.status, "pending"),
-        ),
-      )
+    // Pending rewards (counted above, before the strip)
     const pendingRewards = pendingRewardRows[0]?.cnt ?? 0
 
     // Parse wallet config for locations and relevantDate

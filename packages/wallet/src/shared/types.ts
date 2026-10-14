@@ -55,6 +55,12 @@ export type StripImageParams = {
   stampsInCycle: number
   maxVisits: number
   gridLayout?: StampGridLayout
+  /** Visit numbers (1-based) that carry a gift: drawn with the special icon or a badge. */
+  specialPositions?: number[]
+  /** Icon for the special stamps; without it the normal stamp gets a badge drawn on top. */
+  specialStampImageDataUri?: string | null
+  /** Card just completed and the reward is still pending: every stamp drawn filled. */
+  completed?: boolean
 }
 
 export type StripImageResult = {

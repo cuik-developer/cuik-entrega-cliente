@@ -16,6 +16,28 @@ import {
 import type { StripImageParams, StripImageResult } from "../shared/types"
 
 /**
+ * Gift badge drawn on a special stamp when the design has no icon of its own:
+ * an orange disc with a white star at the stamp's top-right corner. A little
+ * dimmer while the stamp is still empty, but never faded out, so the client
+ * sees where the gifts are from the first day.
+ */
+function giftBadge(x: number, y: number, stampSize: number, filled: boolean): string {
+  const r = Math.max(6, Math.round(stampSize * 0.22))
+  const cx = x + stampSize - r * 0.9
+  // Never above the strip: clamp so the disc stays inside the canvas.
+  const cy = Math.max(r, y + r * 0.9)
+  const star = Array.from({ length: 10 }, (_, k) => {
+    const radius = k % 2 === 0 ? r * 0.58 : r * 0.26
+    const angle = -Math.PI / 2 + (k * Math.PI) / 5
+    return `${(cx + radius * Math.cos(angle)).toFixed(1)},${(cy + radius * Math.sin(angle)).toFixed(1)}`
+  }).join(" ")
+  return `  <g opacity="${filled ? 1 : 0.85}">
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="#FF4810" stroke="#FFFFFF" stroke-width="${Math.max(1.5, r * 0.16).toFixed(1)}" />
+    <polygon points="${star}" fill="#FFFFFF" />
+  </g>`
+}
+
+/**
  * Build an SVG string for the Apple Wallet strip image.
  *
  * Layout: background image fills the canvas, then stamp icons are overlaid
@@ -38,6 +60,8 @@ function buildStripSvg(params: StripImageParams): string {
   const fillOrder = gridLayout?.fillOrder ?? "row"
   const rows = gridLayout?.rows ?? Math.ceil(maxVisits / cols)
   const rowOffsets = gridLayout?.rowOffsets ?? []
+  const special = new Set(params.specialPositions ?? [])
+  const specialIcon = params.specialStampImageDataUri ?? null
 
   const stampElements = Array.from({ length: maxVisits }, (_, i) => {
     const row = fillOrder === "interleaved" ? i % rows : Math.floor(i / cols)
@@ -45,9 +69,15 @@ function buildStripSvg(params: StripImageParams): string {
     const rowOff = rowOffsets[row] ?? { x: 0, y: 0 }
     const x = offsetX + col * gapX + rowOff.x
     const y = offsetY + row * gapY + rowOff.y
-    const opacity = i < stampsInCycle ? filledOpacity : emptyOpacity
+    const filled = params.completed === true || i < stampsInCycle
+    const opacity = filled ? filledOpacity : emptyOpacity
+    const isSpecial = special.has(i + 1)
 
-    return `  <image href="${stampImageDataUri}" x="${x}" y="${y}" width="${stampSize}" height="${stampSize}" opacity="${opacity}" />`
+    if (isSpecial && specialIcon) {
+      return `  <image href="${specialIcon}" x="${x}" y="${y}" width="${stampSize}" height="${stampSize}" opacity="${opacity}" />`
+    }
+    const stamp = `  <image href="${stampImageDataUri}" x="${x}" y="${y}" width="${stampSize}" height="${stampSize}" opacity="${opacity}" />`
+    return isSpecial ? `${stamp}\n${giftBadge(x, y, stampSize, filled)}` : stamp
   }).join("\n")
 
   return `<?xml version="1.0" encoding="UTF-8"?>

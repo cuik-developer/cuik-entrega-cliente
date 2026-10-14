@@ -34,6 +34,8 @@ const EMPTY_CONFIG: PassDesignConfigV2 = {
     emptyOpacity: 0.35,
     fillOrder: "row",
     rowOffsets: [],
+    specialPositions: [],
+    specialStampUrl: null,
   },
   fields: { headerFields: [], secondaryFields: [], backFields: [] },
   logoText: "",
