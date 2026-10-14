@@ -502,6 +502,9 @@ async function processAppleBatches(
         failed++
         if (result.status === "rejected") {
           errors.push(String(result.reason))
+        } else if (result.value.error) {
+          // Apple's per-token reason reaches the UI ("No se pudo enviar: prod=400 (…)").
+          errors.push(result.value.error)
         }
       }
     }
