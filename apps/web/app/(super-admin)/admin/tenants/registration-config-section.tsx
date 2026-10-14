@@ -152,6 +152,9 @@ export function RegistrationConfigSection({
                     Obligatorio
                   </Badge>
                 )}
+                <Badge className="text-[10px] bg-slate-100 text-slate-600 border border-slate-200">
+                  {config.birthday.askYear ? "Día, mes y año" : "Solo día y mes"}
+                </Badge>
               </div>
               <p className="text-xs text-ent-fg-3">
                 Pregunta: "{config.birthday.label ?? "Fecha de cumpleaños"}"

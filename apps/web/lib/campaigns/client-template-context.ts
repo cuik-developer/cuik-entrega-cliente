@@ -11,6 +11,7 @@ import {
   tenants,
 } from "@cuik/db"
 import type { TemplateContext } from "@cuik/wallet/shared"
+import { formatBirthday } from "@/lib/birthday"
 import { pointsExpiryTemplateVars } from "@/lib/loyalty/points-lots"
 
 /**
@@ -84,7 +85,7 @@ export async function buildClientTemplateContexts(
         lastName: c.lastName,
         phone: c.phone,
         email: c.email,
-        birthday: (c.birthday as string | null) ?? null,
+        birthday: formatBirthday(c.birthday as string | null) || null,
         tier: c.tier,
         totalVisits: c.totalVisits,
         pointsBalance: c.pointsBalance,

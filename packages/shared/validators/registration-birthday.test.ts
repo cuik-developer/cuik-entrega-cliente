@@ -7,7 +7,7 @@ const base = { name: "Ana", phone: "999", email: "ana@x.com", marketingOptIn: fa
 describe("registration config → birthday toggle", () => {
   it("defaults to disabled and is not asked for", () => {
     const cfg = registrationConfigSchema.parse({})
-    expect(cfg.birthday).toEqual({ enabled: false, required: false })
+    expect(cfg.birthday).toEqual({ enabled: false, required: false, askYear: false })
     const schema = buildRegistrationSchema(cfg)
     expect(schema.safeParse({ ...base, birthday: "1990-05-06" }).success).toBe(true) // ignored, not rejected
     expect("birthday" in schema.shape).toBe(false)

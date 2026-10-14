@@ -177,6 +177,7 @@ export {
   updateStampsPromotionSchema,
 } from "./promotion-schema"
 export {
+  BIRTHDAY_UNKNOWN_YEAR,
   DEFAULT_REGISTRATION_CONFIG,
   type RegistrationConfig,
   registrationConfigSchema,

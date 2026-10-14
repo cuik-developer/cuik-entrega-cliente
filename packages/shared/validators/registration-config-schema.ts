@@ -51,7 +51,16 @@ const birthdayFieldSchema = z.object({
   required: z.boolean().default(false),
   /** Custom question label, e.g. "Cumpleaños de tu engreid@" for a pet shop. Empty = default. */
   label: z.string().trim().min(1).max(60).optional(),
+  /**
+   * Ask the year too. Off by default: the form asks day + month only and the
+   * date is stored with `BIRTHDAY_UNKNOWN_YEAR`; every birthday feature
+   * compares month-day, so nothing else changes.
+   */
+  askYear: z.boolean().default(false),
 })
+
+/** Year stored when the client did not give one (a leap year, so 29 Feb fits). */
+export const BIRTHDAY_UNKNOWN_YEAR = 1904
 
 export const registrationConfigSchema = z
   .object({

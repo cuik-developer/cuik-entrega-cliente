@@ -1,5 +1,6 @@
 import { db, sql } from "@cuik/db"
 import ExcelJS from "exceljs"
+import { formatBirthdayShort } from "@/lib/birthday"
 import { formatDateForExport } from "@/lib/format-date"
 import {
   computeClientSegment,
@@ -268,7 +269,7 @@ function clientCells(row: Row, r: DatasetRequest, now: Date): Record<string, Cel
     phone: str(row.phone),
     dni: str(row.dni),
     status: STATUS_LABEL[str(row.status)] ?? str(row.status),
-    birthday: ymd(row.birthday),
+    birthday: formatBirthdayShort(ymd(row.birthday) || null),
     marketingOptIn: row.marketing_opt_in ? "Sí" : "No",
     createdAt: date(row.created_at, r.timezone),
     totalVisits: num(row.total_visits) ?? 0,

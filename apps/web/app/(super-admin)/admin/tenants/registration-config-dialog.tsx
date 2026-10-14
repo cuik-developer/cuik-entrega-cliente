@@ -110,6 +110,7 @@ export function RegistrationConfigDialog({
   const [birthdayEnabled, setBirthdayEnabled] = useState(false)
   const [birthdayRequired, setBirthdayRequired] = useState(false)
   const [birthdayLabel, setBirthdayLabel] = useState("")
+  const [birthdayAskYear, setBirthdayAskYear] = useState(false)
 
   // -- Marketing bonus --
   const [bonusEnabled, setBonusEnabled] = useState(false)
@@ -130,6 +131,7 @@ export function RegistrationConfigDialog({
         setBirthdayEnabled(config.birthday?.enabled ?? false)
         setBirthdayRequired(config.birthday?.required ?? false)
         setBirthdayLabel(config.birthday?.label ?? "")
+        setBirthdayAskYear(config.birthday?.askYear ?? false)
       } else {
         setFields([])
         setBirthdayEnabled(false)
@@ -264,6 +266,7 @@ export function RegistrationConfigDialog({
         birthday: {
           enabled: birthdayEnabled,
           required: birthdayEnabled && birthdayRequired,
+          askYear: birthdayEnabled && birthdayAskYear,
           ...(birthdayEnabled && birthdayLabel.trim() ? { label: birthdayLabel.trim() } : {}),
         },
       }
@@ -451,6 +454,16 @@ export function RegistrationConfigDialog({
                 <div className="flex items-center justify-between">
                   <Label className="text-xs">Obligatorio</Label>
                   <Switch checked={birthdayRequired} onCheckedChange={setBirthdayRequired} />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <Label className="text-xs">Pedir también el año</Label>
+                    <p className="text-[10px] text-ent-fg-3">
+                      Apagado: el cliente elige solo día y mes (registro más rápido). El saludo de
+                      cumpleaños funciona igual.
+                    </p>
+                  </div>
+                  <Switch checked={birthdayAskYear} onCheckedChange={setBirthdayAskYear} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Texto de la pregunta (opcional)</Label>

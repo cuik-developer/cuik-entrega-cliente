@@ -1,7 +1,7 @@
 "use client"
 
 import type { RegistrationConfig, StrategicField } from "@cuik/shared/validators"
-import { buildRegistrationSchema } from "@cuik/shared/validators"
+import { BIRTHDAY_UNKNOWN_YEAR, buildRegistrationSchema } from "@cuik/shared/validators"
 import {
   ArrowLeft,
   CheckCircle,
@@ -64,6 +64,21 @@ function resolveMarketingBonus(
 }
 
 const RESEND_COOLDOWN_SECONDS = 60
+const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+const MONTH_NAMES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Setiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+]
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: multi-step registration form with tightly coupled state
 export default function RegistroClient({
@@ -107,6 +122,8 @@ export default function RegistroClient({
 
   // Strategic fields custom data (dynamic keys)
   const [customData, setCustomData] = useState<Record<string, string>>({})
+  // Day + month picked so far when the year is not asked (partial picks must survive re-renders).
+  const [birthdayParts, setBirthdayParts] = useState({ mm: "", dd: "" })
 
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -341,6 +358,56 @@ export default function RegistroClient({
   // --- Birthday (first-class field, enabled from the registration config) ---
   const birthdayConfig = registrationConfig?.birthday
   function renderBirthdayField(label: string, required: boolean) {
+    // Day + month only (default): stored with the sentinel year, every
+    // birthday feature compares month-day so nothing else changes.
+    if (!birthdayConfig?.askYear) {
+      const { mm, dd } = birthdayParts
+      const daysIn = mm ? DAYS_IN_MONTH[Number(mm) - 1] : 31
+      const setPart = (month: string, day: string) => {
+        const max = month ? DAYS_IN_MONTH[Number(month) - 1] : 31
+        const d = day && Number(day) > max ? "" : day
+        setBirthdayParts({ mm: month, dd: d })
+        handleFormChange("birthday", month && d ? `${BIRTHDAY_UNKNOWN_YEAR}-${month}-${d}` : "")
+      }
+      return (
+        <div key="birthday" className="space-y-1.5">
+          <Label className="text-gray-700">
+            {label}
+            {required && <span className="text-red-500 ml-0.5">*</span>}
+          </Label>
+          <div className="grid grid-cols-[88px_1fr] gap-2">
+            <select
+              aria-label="Día"
+              required={required}
+              value={dd}
+              onChange={(e) => setPart(mm, e.target.value)}
+              className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+            >
+              <option value="">Día</option>
+              {Array.from({ length: daysIn }, (_, i) => String(i + 1).padStart(2, "0")).map((d) => (
+                <option key={d} value={d}>
+                  {Number(d)}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Mes"
+              required={required}
+              value={mm}
+              onChange={(e) => setPart(e.target.value, dd)}
+              className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+            >
+              <option value="">Mes</option>
+              {MONTH_NAMES.map((name, i) => (
+                <option key={name} value={String(i + 1).padStart(2, "0")}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )
+    }
     return (
       <div key="birthday" className="space-y-1.5">
         <Label htmlFor="birthday" className="text-gray-700">
