@@ -127,27 +127,35 @@ describe("special stamps and completed card", () => {
     expect((svg.match(/<image\s/g) || []).length).toBe(9)
   })
 
-  it("scales the special icon around the centre of its cell", () => {
+  it("draws the special icon at its own size, centred in the cell", () => {
     const special = "data:image/png;base64,c3BlY2lhbA=="
+    const big = STAMP_SIZE + 20
     const svg = _buildStripSvg({
       ...BASE_PARAMS,
       specialPositions: [1],
       specialStampImageDataUri: special,
-      specialStampScale: 150,
+      specialStampSize: big,
     })
-    const big = Math.round(STAMP_SIZE * 1.5)
     const shift = Math.round((STAMP_SIZE - big) / 2)
     expect(svg).toContain(
       `href="${special}" x="${STAMP_START_X + shift}" y="${STAMP_TOP_ROW_Y + shift}" width="${big}" height="${big}"`,
     )
-    // Out-of-range scales are clamped, never trusted.
+    // Out-of-range sizes are clamped; no size = the normal stamp size.
     const tiny = _buildStripSvg({
       ...BASE_PARAMS,
       specialPositions: [1],
       specialStampImageDataUri: special,
-      specialStampScale: 5,
+      specialStampSize: 2,
     })
-    expect(tiny).toContain(`width="${Math.round(STAMP_SIZE * 0.5)}"`)
+    expect(tiny).toContain(`width="16"`)
+    const same = _buildStripSvg({
+      ...BASE_PARAMS,
+      specialPositions: [1],
+      specialStampImageDataUri: special,
+    })
+    expect(same).toContain(
+      `href="${special}" x="${STAMP_START_X}" y="${STAMP_TOP_ROW_Y}" width="${STAMP_SIZE}"`,
+    )
   })
 
   it("ignores positions beyond the card and empty lists", () => {

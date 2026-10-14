@@ -62,8 +62,7 @@ function buildStripSvg(params: StripImageParams): string {
   const rowOffsets = gridLayout?.rowOffsets ?? []
   const special = new Set(params.specialPositions ?? [])
   const specialIcon = params.specialStampImageDataUri ?? null
-  const specialScale = Math.min(200, Math.max(50, params.specialStampScale ?? 100)) / 100
-  const specialSize = Math.round(stampSize * specialScale)
+  const specialSize = Math.round(Math.min(200, Math.max(16, params.specialStampSize ?? stampSize)))
   const specialShift = Math.round((stampSize - specialSize) / 2)
 
   const stampElements = Array.from({ length: maxVisits }, (_, i) => {

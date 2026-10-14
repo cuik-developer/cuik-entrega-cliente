@@ -158,7 +158,7 @@ export function adaptV1ToV2(
       rowOffsets: [],
       specialPositions: [],
       specialStampUrl: null,
-      specialStampScale: 100,
+      specialStampSize: null,
     },
     fields,
     logoText: "",

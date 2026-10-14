@@ -37,7 +37,7 @@ export function getDefaultConfigV2(businessName: string): PassDesignConfigV2 {
       rowOffsets: [],
       specialPositions: [],
       specialStampUrl: null,
-      specialStampScale: 100,
+      specialStampSize: null,
     },
     fields: {
       headerFields: [{ key: "total", label: "# DE VISITAS", value: "0" }],

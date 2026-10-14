@@ -20,8 +20,9 @@ describe("strip layout helpers", () => {
     const layout = stripLayoutFrom({ maxVisits: 10 })
     expect(layout?.cols).toBe(4)
     expect(layout?.specialPositions).toEqual([])
-    expect(layout?.specialStampScale).toBe(100)
-    expect(stripLayoutFrom({ maxVisits: 10, specialStampScale: 999 })?.specialStampScale).toBe(200)
+    expect(layout?.specialStampSize).toBeNull()
+    expect(stripLayoutFrom({ maxVisits: 10, specialStampSize: 999 })?.specialStampSize).toBe(200)
+    expect(stripLayoutFrom({ maxVisits: 10, specialStampSize: 80 })?.specialStampSize).toBe(80)
     expect(
       stripLayoutFrom({ maxVisits: 10, specialPositions: [3, 0, 2.5, -1, 10] as number[] })
         ?.specialPositions,

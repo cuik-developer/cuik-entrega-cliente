@@ -59,8 +59,8 @@ export type StripImageParams = {
   specialPositions?: number[]
   /** Icon for the special stamps; without it the normal stamp gets a badge drawn on top. */
   specialStampImageDataUri?: string | null
-  /** Size of the special icon as a percentage of the normal stamp (100 = same size). */
-  specialStampScale?: number
+  /** Exact size of the special icon in px, centred in the stamp cell; null = same as the normal stamp. */
+  specialStampSize?: number | null
   /** Card just completed and the reward is still pending: every stamp drawn filled. */
   completed?: boolean
 }

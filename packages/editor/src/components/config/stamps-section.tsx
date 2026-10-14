@@ -306,17 +306,21 @@ export function StampsSection({
             />
             <label className="flex flex-col gap-1">
               <span className="text-[10px] text-gray-400">
-                Tamaño del sello especial ({stampsConfig.specialStampScale ?? 100}% del sello
-                normal)
+                Tamaño del sello especial en px (vacío = igual que el normal,{" "}
+                {stampsConfig.stampSize}px)
               </span>
               <input
-                type="range"
-                min={50}
+                type="number"
+                min={16}
                 max={200}
-                step={5}
-                value={stampsConfig.specialStampScale ?? 100}
-                onChange={(e) => updateStampsConfig({ specialStampScale: Number(e.target.value) })}
-                className="w-full accent-[#0e70db]"
+                placeholder={String(stampsConfig.stampSize)}
+                value={stampsConfig.specialStampSize ?? ""}
+                onChange={(e) =>
+                  updateStampsConfig({
+                    specialStampSize: e.target.value === "" ? null : Number(e.target.value),
+                  })
+                }
+                className="w-full px-3 py-1.5 rounded-md bg-white border border-gray-200 text-gray-800 text-sm focus:outline-none focus:border-[#0e70db] focus:ring-1 focus:ring-[#0e70db]/20 transition-colors"
               />
             </label>
             {stampsConfig.specialStampUrl && (

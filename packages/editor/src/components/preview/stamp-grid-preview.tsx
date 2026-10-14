@@ -57,11 +57,10 @@ export function StampGridPreview({
         const isSpecial = (stampsConfig.specialPositions ?? []).includes(i + 1)
         const specialUrl = stampsConfig.specialStampUrl ?? null
         const imageUrl = isSpecial && specialUrl ? specialUrl : stampImageUrl
-        const scalePct =
+        const box =
           isSpecial && specialUrl
-            ? Math.min(200, Math.max(50, stampsConfig.specialStampScale ?? 100)) / 100
-            : 1
-        const box = stampSize * scalePct
+            ? Math.min(200, Math.max(16, stampsConfig.specialStampSize ?? stampSize))
+            : stampSize
         const shift = (stampSize - box) / 2
         const badge = Math.max(6, Math.round(stampSize * 0.22))
         // Same gift badge the server draws (orange disc, white star, top-right corner),
