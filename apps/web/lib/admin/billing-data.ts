@@ -1,5 +1,5 @@
 import { db, desc, eq, tenantBilling, tenantInvoices } from "@cuik/db"
-import { billingOutlook, todayYmd } from "./billing"
+import { asInterval, billingOutlook, todayYmd } from "./billing"
 
 /**
  * True when a failed insert/update hit the "one live invoice per period"
@@ -30,6 +30,7 @@ export async function loadBilling(tenantId: string) {
       serviceStartOn: config?.serviceStartOn ?? null,
       billingDay: config?.billingDay ?? null,
       billingMode: config?.billingMode ?? "arrears",
+      intervalMonths: asInterval(config?.billingIntervalMonths),
     },
     invoicedPeriods,
     todayYmd(),
@@ -47,6 +48,7 @@ export async function loadBilling(tenantId: string) {
           serviceStartOn: config.serviceStartOn,
           billingDay: config.billingDay,
           billingMode: config.billingMode,
+          billingIntervalMonths: asInterval(config.billingIntervalMonths),
           notes: config.notes,
           updatedAt: config.updatedAt.toISOString(),
         }

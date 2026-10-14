@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest"
 import {
   activeTimeLabel,
+  asInterval,
   billingOutlook,
   daysBetween,
   effectiveBillingDay,
   firstDue,
   formatYmd,
   monthsOfService,
+  periodLabel,
   periodOf,
 } from "./billing"
 
@@ -117,6 +119,64 @@ describe("billingOutlook", () => {
 
     it("before the service starts it is sin_iniciar in both modes", () => {
       expect(billingOutlook(MV, [], "2026-01-20").status).toBe("sin_iniciar")
+    })
+  })
+
+  describe("intervals: one invoice every 3, 6 or 12 months", () => {
+    it("annual in advance: due at start, then one year later; nothing asked in between", () => {
+      const R = {
+        serviceStartOn: "2026-10-15",
+        billingDay: null,
+        billingMode: "advance" as const,
+        intervalMonths: 12 as const,
+      }
+      const paid = billingOutlook(R, ["2026-10"], "2027-03-01")
+      expect(paid.status).toBe("al_dia")
+      expect(paid.currentPeriod).toBe("2026-10")
+      expect(paid.nextDue).toBe("2027-10-15")
+      expect(paid.nextPeriod).toBe("2027-10")
+      expect(billingOutlook(R, [], "2026-10-15").status).toBe("pendiente")
+      expect(billingOutlook(R, ["2026-10"], "2027-10-15").status).toBe("pendiente")
+      expect(billingOutlook(R, ["2026-10"], "2027-10-15").currentPeriod).toBe("2027-10")
+    })
+
+    it("annual in arrears: first invoice a year after the start, covering the first year", () => {
+      const R = {
+        serviceStartOn: "2026-02-01",
+        billingDay: null,
+        billingMode: "arrears" as const,
+        intervalMonths: 12 as const,
+      }
+      expect(firstDue(R)).toBe("2027-02-01")
+      const o = billingOutlook(R, [], "2026-10-13")
+      expect(o.status).toBe("al_dia")
+      expect(o.nextDue).toBe("2027-02-01")
+      expect(o.nextPeriod).toBe("2026-02")
+      expect(billingOutlook(R, [], "2027-02-01").currentPeriod).toBe("2026-02")
+    })
+
+    it("quarterly in arrears: Feb–Apr is invoiced 1 May, May–Jul on 1 Aug", () => {
+      const R = {
+        serviceStartOn: "2026-02-01",
+        billingDay: null,
+        billingMode: "arrears" as const,
+        intervalMonths: 3 as const,
+      }
+      const o = billingOutlook(R, ["2026-02"], "2026-06-10")
+      expect(o.status).toBe("al_dia")
+      expect(o.currentDue).toBe("2026-05-01")
+      expect(o.currentPeriod).toBe("2026-02")
+      expect(o.nextDue).toBe("2026-08-01")
+      expect(o.nextPeriod).toBe("2026-05")
+      expect(billingOutlook(R, ["2026-02"], "2026-08-02").status).toBe("pendiente")
+    })
+
+    it("period labels span the covered months", () => {
+      expect(periodLabel("2026-10", 1)).toBe("oct 2026")
+      expect(periodLabel("2026-10", 3)).toBe("oct 2026 – dic 2026")
+      expect(periodLabel("2026-10", 12)).toBe("oct 2026 – set 2027")
+      expect(asInterval(6)).toBe(6)
+      expect(asInterval(5)).toBe(1)
     })
   })
 

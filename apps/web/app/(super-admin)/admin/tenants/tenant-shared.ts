@@ -35,6 +35,8 @@ export interface ApiTenant {
     daysOverdue: number | null
     monthsOfService: number | null
     monthlyAmount?: number | null
+    /** Months each invoice covers (1, 3, 6, 12); the amount above is per invoice. */
+    intervalMonths?: number
     currency?: "PEN" | "USD"
     /** Detail GET only. */
     serviceStartOn?: string | null

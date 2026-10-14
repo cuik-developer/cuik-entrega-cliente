@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { daysBetween } from "@/lib/admin/billing"
 import { AdminNotices } from "./admin-notices"
-import { BillingCell, money, useBillingSummary } from "./billing-widgets"
+import { BillingCell, intervalSuffix, money, useBillingSummary } from "./billing-widgets"
 import { TenantHealthCell } from "./tenant-health"
 import { type ApiTenant, openTenantPanel, type PaginationMeta, statusConfig } from "./tenant-shared"
 
@@ -329,7 +329,8 @@ function TenantsPageInner() {
                       <BillingCell billing={t.billing ?? null} tenantId={t.id} />
                       <span className="text-[12px] text-ent-fg-2 tabular-nums">
                         {t.billing?.monthlyAmount != null
-                          ? money(t.billing.monthlyAmount, t.billing.currency ?? "PEN")
+                          ? money(t.billing.monthlyAmount, t.billing.currency ?? "PEN") +
+                            intervalSuffix(t.billing.intervalMonths)
                           : ""}
                       </span>
                     </div>
@@ -427,7 +428,8 @@ function TenantsPageInner() {
                         </Td>
                         <Td align="right" className="text-ent-fg-2">
                           {t.billing?.monthlyAmount != null ? (
-                            money(t.billing.monthlyAmount, t.billing.currency ?? "PEN")
+                            money(t.billing.monthlyAmount, t.billing.currency ?? "PEN") +
+                            intervalSuffix(t.billing.intervalMonths)
                           ) : (
                             <span className="text-ent-fg-3">—</span>
                           )}

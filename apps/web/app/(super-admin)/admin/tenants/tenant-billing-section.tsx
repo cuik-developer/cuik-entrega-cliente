@@ -22,10 +22,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
+  BILLING_INTERVAL_LABEL,
+  BILLING_INTERVALS,
   BILLING_STATUS_LABEL,
+  type BillingInterval,
   type BillingOutlook,
   type BillingStatus,
   formatYmd,
+  periodLabel,
 } from "@/lib/admin/billing"
 
 type Config = {
@@ -39,6 +43,7 @@ type Config = {
   serviceStartOn: string | null
   billingDay: number | null
   billingMode: "advance" | "arrears"
+  billingIntervalMonths: BillingInterval
   notes: string | null
   updatedAt: string
 }
@@ -96,7 +101,21 @@ type FormState = {
   serviceStartOn: string
   billingDay: string
   billingMode: "advance" | "arrears"
+  billingIntervalMonths: BillingInterval
   notes: string
+}
+
+const PERIOD_WORD: Record<BillingInterval, string> = {
+  1: "un mes",
+  3: "tres meses",
+  6: "seis meses",
+  12: "un año",
+}
+const PERIOD_EVERY: Record<BillingInterval, string> = {
+  1: "cada mes",
+  3: "cada tres meses",
+  6: "cada seis meses",
+  12: "cada año",
 }
 
 function formFrom(c: Config | null): FormState {
@@ -112,6 +131,7 @@ function formFrom(c: Config | null): FormState {
     serviceStartOn: c?.serviceStartOn ?? "",
     billingDay: c?.billingDay ? String(c.billingDay) : "",
     billingMode: c?.billingMode ?? "arrears",
+    billingIntervalMonths: c?.billingIntervalMonths ?? 1,
     notes: c?.notes ?? "",
   }
 }
@@ -421,10 +441,10 @@ export function TenantBillingSection({
           </div>
           <p className="text-xs text-ent-fg-3 mt-0.5">
             {o.status === "pendiente" || o.status === "vencida"
-              ? `El periodo ${o.currentPeriod} venció el ${formatYmd(o.currentDue ?? "")} y no tiene factura registrada${o.daysOverdue ? ` (hace ${o.daysOverdue} días)` : ""}.`
+              ? `El periodo ${periodLabel(o.currentPeriod ?? "", o.intervalMonths)} venció el ${formatYmd(o.currentDue ?? "")} y no tiene factura registrada${o.daysOverdue ? ` (hace ${o.daysOverdue} días)` : ""}.`
               : data.config?.monthlyAmount !== null && data.config?.monthlyAmount !== undefined
-                ? `Monto mensual acordado: ${money(data.config.monthlyAmount, currency)}.`
-                : "Sin monto mensual definido."}
+                ? `Monto ${BILLING_INTERVAL_LABEL[o.intervalMonths].toLowerCase()} acordado: ${money(data.config.monthlyAmount, currency)}.`
+                : "Sin monto definido."}
             {service ? ` ${service}` : ""}
           </p>
         </div>
@@ -594,28 +614,51 @@ export function TenantBillingSection({
                 ))}
               </select>
             </div>
-            <div className="space-y-1 col-span-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Periodicidad</Label>
+              <select
+                className="h-9 w-full rounded-md border border-ent-line bg-white px-2 text-sm"
+                value={String(form.billingIntervalMonths)}
+                onChange={(e) =>
+                  set("billingIntervalMonths", Number(e.target.value) as BillingInterval)
+                }
+              >
+                {BILLING_INTERVALS.map((n) => (
+                  <option key={n} value={String(n)}>
+                    {BILLING_INTERVAL_LABEL[n]}
+                    {n > 1 ? ` (cada ${n} meses)` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
               <Label className="text-xs">Modalidad</Label>
               <select
                 className="h-9 w-full rounded-md border border-ent-line bg-white px-2 text-sm"
                 value={form.billingMode}
                 onChange={(e) => set("billingMode", e.target.value as FormState["billingMode"])}
               >
-                <option value="arrears">A mes vencido: el mes se factura al terminar</option>
-                <option value="advance">Por adelantado: el mes se factura al empezar</option>
+                <option value="arrears">A periodo vencido: se factura al terminar</option>
+                <option value="advance">Por adelantado: se factura al empezar</option>
               </select>
             </div>
           </div>
           <p className="text-[11px] text-ent-fg-3">
             {form.billingMode === "arrears"
-              ? "Cada mes de servicio se factura el día de facturación del mes siguiente (tope 28); la primera factura, al cumplirse el primer mes. "
-              : "La primera factura corresponde al día de inicio y las siguientes cada mes el mismo día (tope 28). "}
+              ? `Cada periodo de servicio (${PERIOD_WORD[form.billingIntervalMonths]}) se factura el día de facturación siguiente a su fin (tope 28); la primera factura, al cumplirse el primer periodo. `
+              : `La primera factura corresponde al día de inicio y las siguientes ${PERIOD_EVERY[form.billingIntervalMonths]} el mismo día (tope 28). `}
             Una factura cuenta como pendiente desde ese día y como vencida a los 7 días sin
-            registrar.
+            registrar. Si cambias la periodicidad con facturas ya registradas, hazlo al cierre de un
+            periodo: los periodos anteriores no se recalculan y el monto debe ser el de cada
+            factura.
           </p>
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1 col-span-2">
-              <Label className="text-xs">Monto mensual</Label>
+              <Label className="text-xs">
+                {form.billingIntervalMonths === 1
+                  ? "Monto mensual"
+                  : `Monto por periodo (${BILLING_INTERVAL_LABEL[form.billingIntervalMonths].toLowerCase()})`}
+              </Label>
               <Input
                 type="number"
                 min={0}
@@ -688,7 +731,9 @@ export function TenantBillingSection({
                   const busy = busyInvoice === i.id
                   return (
                     <tr key={i.id} className="border-b border-slate-50 align-top">
-                      <td className="py-2 pr-3 font-medium text-ent-fg">{i.period}</td>
+                      <td className="py-2 pr-3 font-medium text-ent-fg" title={i.period}>
+                        {periodLabel(i.period, data?.config?.billingIntervalMonths ?? 1)}
+                      </td>
                       <td className="py-2 pr-3 text-ent-fg-2">{formatYmd(i.issuedOn)}</td>
                       <td className="py-2 pr-3 text-ent-fg-2">{i.number ?? "—"}</td>
                       <td className="py-2 pr-3 text-right tabular-nums">

@@ -2,7 +2,7 @@ import { and, campaigns, db, eq, globalConfig, gte, sql, user } from "@cuik/db"
 import { MensajePersonalizado, sendEmail } from "@cuik/email"
 import forge from "node-forge"
 import { createElement } from "react"
-import { daysBetween, formatYmd, todayYmd } from "./billing"
+import { daysBetween, formatYmd, periodLabel, todayYmd } from "./billing"
 import { billingDueRows, summarize } from "./billing-overview"
 import { getInternalTenantIds } from "./internal-tenants"
 
@@ -159,7 +159,7 @@ export async function collectAdminAlerts(now = new Date()): Promise<AdminAlert[]
       kind: "billing",
       severity: "critical",
       who: r.tenantName,
-      text: `Sin factura registrada para el periodo ${r.outlook.currentPeriod ?? "actual"}, ${d ? `hace ${plural(d, "día", "días")}` : "vence hoy"}.`,
+      text: `Sin factura registrada para el periodo ${r.outlook.currentPeriod ? periodLabel(r.outlook.currentPeriod, r.outlook.intervalMonths) : "actual"}, ${d ? `hace ${plural(d, "día", "días")}` : "vence hoy"}.`,
       href: tenantHref(r.tenantId, "facturacion"),
       days: -d,
     })

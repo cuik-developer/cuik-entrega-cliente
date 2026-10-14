@@ -214,11 +214,11 @@ export async function computePlatformMetrics(f: MetricsFilters): Promise<Platfor
           -- PEN (USD amounts fall back to the plan price rather than being added as
           -- if they were soles), else the plan price. A tenant counts once it is
           -- active or its service has started.
-          (SELECT coalesce(sum(coalesce(CASE WHEN tb.currency = 'PEN' THEN tb.monthly_amount END, p.price / 100.0)), 0)::numeric(12,2)
+          (SELECT coalesce(sum(coalesce(CASE WHEN tb.currency = 'PEN' THEN tb.monthly_amount / coalesce(tb.billing_interval_months, 1) END, p.price / 100.0)), 0)::numeric(12,2)
              FROM tenants t LEFT JOIN plans p ON p.id = t.plan_id LEFT JOIN tenant_billing tb ON tb.tenant_id = t.id
              WHERE t.id IN (SELECT id FROM s) AND t.status NOT IN ('cancelled', 'paused', 'pending')
                AND (t.status = 'active' OR tb.service_start_on <= ${f.to}::date)) AS mrr_cur,
-          (SELECT coalesce(sum(coalesce(CASE WHEN tb.currency = 'PEN' THEN tb.monthly_amount END, p.price / 100.0)), 0)::numeric(12,2)
+          (SELECT coalesce(sum(coalesce(CASE WHEN tb.currency = 'PEN' THEN tb.monthly_amount / coalesce(tb.billing_interval_months, 1) END, p.price / 100.0)), 0)::numeric(12,2)
              FROM tenants t LEFT JOIN plans p ON p.id = t.plan_id LEFT JOIN tenant_billing tb ON tb.tenant_id = t.id
              WHERE t.id IN (SELECT id FROM s) AND t.status NOT IN ('cancelled', 'paused', 'pending')
                AND ((t.status = 'active' AND coalesce(t.activated_at, t.created_at) <= (${prevTo}::date + 1))

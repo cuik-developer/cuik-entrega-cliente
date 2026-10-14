@@ -29,6 +29,7 @@ function toRow(r: Awaited<ReturnType<typeof billingDueRows>>[number]) {
     daysUntilNext: r.outlook.daysUntilNext,
     currentDue: r.outlook.currentDue,
     currentPeriod: r.outlook.currentPeriod,
+    intervalMonths: r.outlook.intervalMonths,
     daysOverdue: r.outlook.daysOverdue,
     monthlyAmount: r.outlook.monthlyAmount,
     currency: r.outlook.currency,

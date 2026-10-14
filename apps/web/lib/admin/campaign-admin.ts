@@ -263,7 +263,12 @@ export type AdminCampaignDetail = AdminCampaignRow & {
 }
 
 export async function adminCampaignDetail(campaignId: string): Promise<AdminCampaignDetail | null> {
-  const { rows } = await listAdminCampaigns({ id: campaignId, includeInternal: true, page: 1, limit: 1 })
+  const { rows } = await listAdminCampaigns({
+    id: campaignId,
+    includeInternal: true,
+    page: 1,
+    limit: 1,
+  })
   const row = rows[0]
   if (!row) return null
   const [segment] = await db

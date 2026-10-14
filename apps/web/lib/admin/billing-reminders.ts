@@ -1,7 +1,7 @@
 import { db, eq, globalConfig, user } from "@cuik/db"
 import { MensajePersonalizado, sendEmail } from "@cuik/email"
 import { createElement } from "react"
-import { daysBetween, formatYmd, todayYmd } from "./billing"
+import { daysBetween, formatYmd, periodLabel, todayYmd } from "./billing"
 import { type BillingDueRow, billingDueRows } from "./billing-overview"
 
 /** How many days before the due date the heads-up goes out. */
@@ -59,7 +59,7 @@ export function composeReminder(rows: BillingDueRow[], today: string, missedDays
           const since = r.outlook.daysOverdue
             ? `hace ${r.outlook.daysOverdue} ${r.outlook.daysOverdue === 1 ? "día" : "días"}`
             : "vence hoy"
-          return `• ${r.tenantName}: periodo ${r.outlook.currentPeriod ?? "—"}, ${since}${money(r)}`
+          return `• ${r.tenantName}: periodo ${r.outlook.currentPeriod ? periodLabel(r.outlook.currentPeriod, r.outlook.intervalMonths) : "—"}, ${since}${money(r)}`
         })
         .join("\n")}`,
     )

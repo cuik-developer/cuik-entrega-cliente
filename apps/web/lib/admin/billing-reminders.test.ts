@@ -14,6 +14,7 @@ function row(name: string, outlook: Partial<BillingDueRow["outlook"]>): BillingD
       currentPeriod: "2026-09",
       nextDue: "2026-10-16",
       nextPeriod: "2026-10",
+      intervalMonths: 1,
       daysUntilNext: 8,
       daysOverdue: null,
       monthsOfService: 1,
@@ -46,7 +47,7 @@ describe("composeReminder", () => {
     expect(r?.subject).toContain("1 sin registrar, 1 por emitir")
     expect(r?.paragraphs[0]).toContain("Dfrios")
     expect(r?.paragraphs[0]).toContain("11 oct")
-    expect(r?.paragraphs[1]).toContain("Retail: periodo 2026-09, hace 9 días (S/ 350.00)")
+    expect(r?.paragraphs[1]).toContain("Retail: periodo set 2026, hace 9 días (S/ 350.00)")
   })
 
   it("widens the window when the cron missed days, and ignores upcoming invoices of paused tenants", () => {

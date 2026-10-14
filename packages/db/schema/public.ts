@@ -136,6 +136,8 @@ export const tenantBilling = pgTable("tenant_billing", {
   billingDay: integer("billing_day"),
   /** "advance": the month is invoiced at its start; "arrears": once it ended. */
   billingMode: text("billing_mode").$type<"advance" | "arrears">().default("arrears").notNull(),
+  /** Months covered by each invoice: 1 (monthly), 3, 6 or 12. `monthly_amount` is the amount per invoice. */
+  billingIntervalMonths: integer("billing_interval_months").default(1).notNull(),
   notes: text("notes"),
   updatedBy: text("updated_by").references(() => user.id),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

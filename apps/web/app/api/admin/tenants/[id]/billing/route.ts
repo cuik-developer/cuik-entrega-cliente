@@ -54,6 +54,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       billingDay: b.billingDay ?? null,
       // Only written when sent, so an older client never resets the mode to the default.
       ...(b.billingMode ? { billingMode: b.billingMode } : {}),
+      ...(b.billingIntervalMonths ? { billingIntervalMonths: b.billingIntervalMonths } : {}),
       notes: b.notes ?? null,
       updatedBy: g.session.user.id,
       updatedAt: new Date(),

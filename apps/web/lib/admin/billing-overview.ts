@@ -1,5 +1,5 @@
 import { db, sql, tenantBilling, tenantInvoices, tenants } from "@cuik/db"
-import { type BillingOutlook, billingOutlook, todayYmd } from "./billing"
+import { asInterval, type BillingOutlook, billingOutlook, todayYmd } from "./billing"
 
 /**
  * Billing outlook for many tenants at once (tenant list column, manager
@@ -29,6 +29,7 @@ export async function billingOutlookFor(
         serviceStartOn: tenantBilling.serviceStartOn,
         billingDay: tenantBilling.billingDay,
         billingMode: tenantBilling.billingMode,
+        billingIntervalMonths: tenantBilling.billingIntervalMonths,
         monthlyAmount: tenantBilling.monthlyAmount,
         currency: tenantBilling.currency,
       })
@@ -44,7 +45,12 @@ export async function billingOutlookFor(
   for (const c of configs) {
     out.set(c.tenantId, {
       ...billingOutlook(
-        { serviceStartOn: c.serviceStartOn, billingDay: c.billingDay, billingMode: c.billingMode },
+        {
+          serviceStartOn: c.serviceStartOn,
+          billingDay: c.billingDay,
+          billingMode: c.billingMode,
+          intervalMonths: asInterval(c.billingIntervalMonths),
+        },
         periods.get(c.tenantId) ?? [],
         today,
       ),

@@ -30,6 +30,12 @@ export const tenantBillingSchema = z.object({
   billingDay: z.number().int().min(1).max(28).nullable().optional(),
   /** "advance": the month is invoiced at its start; "arrears": once it ended (DB default). Omitted = unchanged. */
   billingMode: z.enum(["advance", "arrears"]).optional(),
+  /** Months per invoice: 1, 3, 6 or 12. Omitted = unchanged. */
+  billingIntervalMonths: z
+    .number()
+    .int()
+    .refine((n) => [1, 3, 6, 12].includes(n), "Periodicidad inválida")
+    .optional(),
   notes: z.preprocess(emptyToNull, z.string().trim().max(2000).nullable().optional()),
 })
 

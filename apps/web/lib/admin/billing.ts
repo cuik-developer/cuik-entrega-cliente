@@ -22,6 +22,21 @@ export type BillingRule = {
   billingDay: number | null
   /** Defaults to "advance" (the original behaviour) when absent. */
   billingMode?: BillingMode | null
+  /** Months covered by each invoice: 1 (default), 3, 6 or 12. */
+  intervalMonths?: BillingInterval | null
+}
+
+export type BillingInterval = 1 | 3 | 6 | 12
+export const BILLING_INTERVALS: BillingInterval[] = [1, 3, 6, 12]
+/** Narrows a stored integer to a supported interval (anything else = monthly). */
+export function asInterval(n: number | null | undefined): BillingInterval {
+  return n === 3 || n === 6 || n === 12 ? n : 1
+}
+export const BILLING_INTERVAL_LABEL: Record<BillingInterval, string> = {
+  1: "Mensual",
+  3: "Trimestral",
+  6: "Semestral",
+  12: "Anual",
 }
 
 export type BillingStatus =
@@ -39,8 +54,10 @@ export type BillingOutlook = {
   currentPeriod: string | null
   /** Next due date strictly after today (or today itself when due today and not yet invoiced). */
   nextDue: string | null
-  /** Service month that `nextDue` invoices, "YYYY-MM" (the previous month in arrears). */
+  /** Service period that `nextDue` invoices, by its first month "YYYY-MM". */
   nextPeriod: string | null
+  /** Months each invoice covers (1, 3, 6 or 12), for period labels. */
+  intervalMonths: BillingInterval
   /** Days from today to `nextDue` (0 = today). */
   daysUntilNext: number | null
   /** Days since `currentDue` when it has no invoice. */
@@ -68,12 +85,50 @@ export function daysBetween(fromYmd: string, toYmd: string): number {
   return Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / 86_400_000)
 }
 
-/** Service month ("YYYY-MM") an invoice due on `dueYmd` pays for. */
-export function periodOf(dueYmd: string, mode: BillingMode = "advance"): string {
+/**
+ * Service period an invoice due on `dueYmd` pays for, as its first month
+ * ("YYYY-MM"). In advance that is the due month; in arrears the period ended
+ * just before the due date, so it started `months` months earlier.
+ */
+export function periodOf(
+  dueYmd: string,
+  mode: BillingMode = "advance",
+  months: BillingInterval = 1,
+): string {
   if (mode === "advance") return dueYmd.slice(0, 7)
-  const [y, m] = split(dueYmd)
-  const total = y * 12 + (m - 1) - 1
+  return shiftMonth(dueYmd.slice(0, 7), -months)
+}
+
+/** "YYYY-MM" moved by `n` months. */
+export function shiftMonth(ym: string, n: number): string {
+  const [y, m] = ym.split("-").map(Number)
+  const total = y * 12 + (m - 1) + n
   return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`
+}
+
+const MONTH_SHORT = [
+  "ene",
+  "feb",
+  "mar",
+  "abr",
+  "may",
+  "jun",
+  "jul",
+  "ago",
+  "set",
+  "oct",
+  "nov",
+  "dic",
+]
+
+/** "oct 2026" for a monthly period, "oct 2026 – sep 2027" for a longer one. */
+export function periodLabel(period: string, months: BillingInterval = 1): string {
+  const fmt = (ym: string) => {
+    const [y, m] = ym.split("-").map(Number)
+    return `${MONTH_SHORT[(m - 1 + 12) % 12] ?? ym} ${y}`
+  }
+  if (months <= 1) return fmt(period)
+  return `${fmt(period)} – ${fmt(shiftMonth(period, months - 1))}`
 }
 
 /** Due date (billing day) of the month that contains `ymd`. */
@@ -99,16 +154,16 @@ export function effectiveBillingDay(rule: BillingRule): number | null {
 }
 
 /**
- * First due date. In advance: the service start itself (the first month is
- * billed at start). In arrears: the billing day of the month after the start
- * (the first month is billed once it ended).
+ * First due date. In advance: the service start itself (the first period is
+ * billed at start). In arrears: the billing day one period after the start
+ * (the first period is billed once it ended).
  */
 export function firstDue(rule: BillingRule): string | null {
   if (!rule.serviceStartOn) return null
   if ((rule.billingMode ?? "advance") === "advance") return rule.serviceStartOn
   const day = effectiveBillingDay(rule)
   if (!day) return null
-  return addMonths(dueInMonthOf(rule.serviceStartOn, day), 1, day)
+  return addMonths(dueInMonthOf(rule.serviceStartOn, day), rule.intervalMonths ?? 1, day)
 }
 
 /** Full months elapsed between `serviceStartOn` and `today` (0 within the first month). */
@@ -162,11 +217,13 @@ export function billingOutlook(
     currentPeriod: null,
     nextDue: null,
     nextPeriod: null,
+    intervalMonths: rule.intervalMonths ?? 1,
     daysUntilNext: null,
     daysOverdue: null,
     monthsOfService: null,
   }
   const mode: BillingMode = rule.billingMode ?? "advance"
+  const every: BillingInterval = rule.intervalMonths ?? 1
   const first = firstDue(rule)
   const day = effectiveBillingDay(rule)
   if (!first || !day || !rule.serviceStartOn) return empty
@@ -179,20 +236,25 @@ export function billingOutlook(
       ...empty,
       status: started ? "al_dia" : "sin_iniciar",
       nextDue: first,
-      nextPeriod: periodOf(first, mode),
+      nextPeriod: periodOf(first, mode, every),
+      intervalMonths: every,
       daysUntilNext: daysBetween(today, first),
       monthsOfService: started ? monthsOfService(rule.serviceStartOn, today) : 0,
     }
   }
 
-  // Most recent due date ≤ today: the first one, or the billing day of this/previous month.
-  let currentDue = dueInMonthOf(today, day)
-  if (currentDue > today) currentDue = addMonths(currentDue, -1, day)
-  if (currentDue < first) currentDue = first
-  const currentPeriod = periodOf(currentDue, mode)
+  // Most recent due date ≤ today, stepping one period at a time from the first one.
+  let currentDue = first
+  for (;;) {
+    const next = addMonths(currentDue, every, day)
+    if (next > today) break
+    currentDue = next
+  }
+  const currentPeriod = periodOf(currentDue, mode, every)
   const invoicedNow = invoiced.has(currentPeriod)
 
-  const nextDue = invoicedNow || currentDue !== today ? addMonths(currentDue, 1, day) : currentDue
+  const nextDue =
+    invoicedNow || currentDue !== today ? addMonths(currentDue, every, day) : currentDue
   const daysOverdue = invoicedNow ? null : daysBetween(currentDue, today)
 
   let status: BillingStatus = "al_dia"
@@ -203,7 +265,8 @@ export function billingOutlook(
     currentDue,
     currentPeriod,
     nextDue,
-    nextPeriod: periodOf(nextDue, mode),
+    nextPeriod: periodOf(nextDue, mode, every),
+    intervalMonths: every,
     daysUntilNext: daysBetween(today, nextDue),
     daysOverdue,
     monthsOfService: monthsOfService(rule.serviceStartOn, today),

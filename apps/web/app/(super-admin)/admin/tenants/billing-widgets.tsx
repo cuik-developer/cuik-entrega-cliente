@@ -4,7 +4,13 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 
 import { Notice, StatusChip } from "@/components/admin/enterprise"
-import { BILLING_STATUS_LABEL, type BillingStatus, formatYmd } from "@/lib/admin/billing"
+import {
+  BILLING_STATUS_LABEL,
+  type BillingInterval,
+  type BillingStatus,
+  formatYmd,
+  periodLabel,
+} from "@/lib/admin/billing"
 import type { ApiTenant } from "./tenant-shared"
 
 const TONE: Record<BillingStatus, "ok" | "info" | "warn" | "bad" | "mute"> = {
@@ -58,6 +64,14 @@ export function BillingCell({
   )
 }
 
+/** " / trim." etc. after a per-invoice amount; empty for monthly. */
+export function intervalSuffix(months?: number | null): string {
+  if (months === 3) return " / trim."
+  if (months === 6) return " / sem."
+  if (months === 12) return " / año"
+  return ""
+}
+
 export type SummaryRow = {
   tenantId: string
   tenantName: string
@@ -68,6 +82,7 @@ export type SummaryRow = {
   daysOverdue: number | null
   monthlyAmount: number | null
   currency: "PEN" | "USD"
+  intervalMonths?: BillingInterval
 }
 
 export type BillingSummaryData = { dueSoon: SummaryRow[]; overdue: SummaryRow[] }
@@ -126,7 +141,9 @@ export function BillingNotices({ data }: { data: BillingSummaryData | null }) {
           {data.overdue.length === 1 ? (
             <>
               {names(data.overdue)} no tiene factura registrada para el periodo{" "}
-              {data.overdue[0].currentPeriod ?? "actual"}
+              {data.overdue[0].currentPeriod
+                ? periodLabel(data.overdue[0].currentPeriod, data.overdue[0].intervalMonths ?? 1)
+                : "actual"}
               {data.overdue[0].daysOverdue
                 ? ` (hace ${data.overdue[0].daysOverdue} ${data.overdue[0].daysOverdue === 1 ? "día" : "días"}`
                 : " (vence hoy"}
