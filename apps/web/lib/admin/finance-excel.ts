@@ -97,10 +97,11 @@ export async function buildFinanceExcel(d: FinanceDashboard): Promise<ArrayBuffe
     { header: "Neto devengado", key: "netAccrual", width: 15 },
     { header: "Acumulado devengado", key: "cumulativeAccrual", width: 19 },
     { header: "Aportes del socio", key: "contributions", width: 16 },
+    { header: "Cubierto por el socio (auto)", key: "autoContribution", width: 24 },
     { header: "Devoluciones", key: "returns", width: 13 },
     { header: "TC estimado", key: "fx", width: 11 },
   ]
-  header(ws2, 16)
+  header(ws2, 17)
   for (const r of d.rows) {
     const row = ws2.addRow({
       ...r,
@@ -120,6 +121,7 @@ export async function buildFinanceExcel(d: FinanceDashboard): Promise<ArrayBuffe
       "netAccrual",
       "cumulativeAccrual",
       "contributions",
+      "autoContribution",
       "returns",
     ]) {
       row.getCell(key).numFmt = money

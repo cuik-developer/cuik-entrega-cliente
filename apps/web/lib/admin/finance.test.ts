@@ -121,7 +121,54 @@ describe("ledger", () => {
     expect(r.costCash).toBe(42) // 12 × 3.5
     expect(r.loanPayments).toBe(763) // 218 × 3.5
     expect(r.netCash).toBe(-555)
+    expect(r.autoContribution).toBe(555) // the partner covers the gap, no entry needed
     expect(r.fxEstimated).toBe(false)
+  })
+
+  it("the automatic cover counts as investment; a registered contribution replaces it", () => {
+    const month = (netIncome: number, contribution = 0) => ({
+      ...base,
+      rates: { "2026-01": 1 },
+      recurring: [],
+      loans: [],
+      invoices: [],
+      entries: [
+        {
+          type: (netIncome >= 0 ? "income" : "cost") as "income" | "cost",
+          category: "x",
+          name: "x",
+          amount: Math.abs(netIncome),
+          currency: "PEN" as const,
+          month: "2026-10",
+          months: 1,
+          recognition: "cash" as const,
+        },
+        ...(contribution > 0
+          ? [
+              {
+                type: "contribution" as const,
+                category: "Socio",
+                name: "Aporte",
+                amount: contribution,
+                currency: "PEN" as const,
+                month: "2026-10",
+                months: 1,
+                recognition: "cash" as const,
+              },
+            ]
+          : []),
+      ],
+      from: "2026-10",
+      to: "2026-10",
+    })
+    expect(buildLedger(month(-800))[0].autoContribution).toBe(800)
+    expect(buildLedger(month(-800, 800))[0].autoContribution).toBe(0)
+    expect(buildLedger(month(-800, 300))[0].autoContribution).toBe(500)
+    expect(buildLedger(month(200))[0].autoContribution).toBe(0)
+    const rec = investmentRecovery(buildLedger(month(-800)))
+    expect(rec.invested).toBe(800)
+    expect(rec.cashOnHand).toBe(0)
+    expect(rec.recoveredIn).toBeNull()
   })
 
   it("an annual invoice: all cash in the month paid, a twelfth per month in accrual", () => {

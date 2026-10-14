@@ -91,6 +91,12 @@ export type MonthRow = {
   contributions: number
   /** Money paid back to the partner that month. */
   returns: number
+  /**
+   * What the partner had to put in that month beyond any registered
+   * contribution to cover the cash shortfall: max(0, −netCash − contributions).
+   * Counted automatically as his investment.
+   */
+  autoContribution: number
   /** Merchant income expected from billing terms for months no invoice covers yet (from `todayMonth` on). */
   projectedCash: number
   projectedAccrual: number
@@ -359,6 +365,7 @@ export function buildLedger(input: {
     const p = projected.get(month) ?? emptyBucket()
     const contributions = round2(contrib.get(month) ?? 0)
     const returns = round2(ret.get(month) ?? 0)
+    const netCash = round2(i.cash + p.cash - c.cash - l.cash)
     return {
       month,
       incomeCash: round2(i.cash),
@@ -368,9 +375,10 @@ export function buildLedger(input: {
       loanPayments: round2(l.cash),
       contributions,
       returns,
+      autoContribution: round2(Math.max(0, -netCash - contributions)),
       projectedCash: round2(p.cash),
       projectedAccrual: round2(p.accrual),
-      netCash: round2(i.cash + p.cash - c.cash - l.cash),
+      netCash,
       netAccrual: round2(i.accrual + p.accrual - c.accrual - l.cash),
       fxEstimated: i.estimated || c.estimated || l.estimated || p.estimated,
     }
@@ -398,6 +406,7 @@ export type LedgerTotals = {
   loanPayments: number
   contributions: number
   returns: number
+  autoContribution: number
   projectedCash: number
   projectedAccrual: number
   netCash: number
@@ -413,6 +422,7 @@ export function sumLedger(rows: MonthRow[]): LedgerTotals {
     loanPayments: 0,
     contributions: 0,
     returns: 0,
+    autoContribution: 0,
     projectedCash: 0,
     projectedAccrual: 0,
     netCash: 0,
@@ -426,6 +436,7 @@ export function sumLedger(rows: MonthRow[]): LedgerTotals {
     t.loanPayments += r.loanPayments
     t.contributions += r.contributions
     t.returns += r.returns
+    t.autoContribution += r.autoContribution
     t.projectedCash += r.projectedCash
     t.projectedAccrual += r.projectedAccrual
     t.netCash += r.netCash
@@ -445,7 +456,8 @@ export function breakEvenMerchants(monthlyOutflowPen: number, avgTicketPen: numb
 }
 
 /**
- * Partner position over time: what he put in (contributions), what he got back
+ * Partner position over time: what he put in (registered contributions plus
+ * the shortfall of every negative month, `autoContribution`), what he got back
  * (returns), and the month the business could pay him back in full.
  *
  * Contributions fund the negative months already in the ledger, so the company
@@ -470,7 +482,7 @@ export function investmentRecovery(
   let generated = 0
   let recoveredIn: string | null = null
   for (const r of rows) {
-    invested += r.contributions
+    invested += r.contributions + r.autoContribution
     returned += r.returns
     generated += r.netCash
     if (recoveredIn === null && invested > 0 && generated >= openingInvestment) {

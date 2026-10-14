@@ -232,7 +232,11 @@ export function TableroClient() {
       value: soles(loanBalancePen),
       hint: d.loans.length === 0 ? "sin préstamo" : `${remaining} cuotas`,
     },
-    { label: "Puesto por el socio", value: soles(d.recovery.invested), hint: "aportes" },
+    {
+      label: "Puesto por el socio",
+      value: soles(d.recovery.invested),
+      hint: "aportes + meses cubiertos",
+    },
     {
       label: "Pendiente de recuperar",
       value: soles(d.recovery.outstanding),
@@ -473,7 +477,7 @@ export function TableroClient() {
                 <Th className="text-right">Cuotas</Th>
                 <Th className="text-right">Neto</Th>
                 <Th className="text-right">Acumulado</Th>
-                <Th className="text-right">Aportes</Th>
+                <Th className="text-right">Pone el socio</Th>
               </tr>
             </thead>
             <tbody>
@@ -516,8 +520,14 @@ export function TableroClient() {
                     <Td className="text-right tabular-nums">
                       {soles(p.cumulative, { sign: true })}
                     </Td>
-                    <Td className="text-right tabular-nums">
+                    <Td className="text-right tabular-nums whitespace-nowrap">
                       {r.contributions > 0 ? soles(r.contributions) : ""}
+                      {r.autoContribution > 0 && (
+                        <span className={cn(r.contributions > 0 && "ml-1")}>
+                          {soles(r.autoContribution)}
+                          <span className="ml-1 text-[10.5px] text-ent-fg-3">auto</span>
+                        </span>
+                      )}
                       {r.returns > 0 && (
                         <span className="ml-1 text-[10.5px]">−{soles(r.returns)} dev.</span>
                       )}
@@ -545,7 +555,9 @@ export function TableroClient() {
                   })}
                 </Td>
                 <Td />
-                <Td className="text-right tabular-nums">{soles(d.totals.toDate.contributions)}</Td>
+                <Td className="text-right tabular-nums">
+                  {soles(d.totals.toDate.contributions + d.totals.toDate.autoContribution)}
+                </Td>
               </tr>
               <tr className="text-ent-fg-3">
                 <Td>Proyección</Td>
