@@ -46,10 +46,23 @@ export type TemplateContext = {
  * - Strings without placeholders pass through unchanged
  * - NO eval, NO user code execution — pure property traversal
  */
+/** Year stored when the client gave day and month only (see registration-config-schema). */
+const BIRTHDAY_UNKNOWN_YEAR = "1904"
+
+/** "1990-05-12" → "12/05/1990"; the sentinel year is hidden: "1904-05-12" → "12/05". */
+function formatBirthdayForPass(value: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!m) return value
+  const [, y, mo, d] = m
+  return y === BIRTHDAY_UNKNOWN_YEAR ? `${d}/${mo}` : `${d}/${mo}/${y}`
+}
+
 export function resolveTemplate(template: string, context: TemplateContext): string {
   return template.replace(/\{\{([^}]+)\}\}/g, (_match, path: string) => {
-    const value = getNestedValue(context, path.trim())
+    const key = path.trim()
+    const value = getNestedValue(context, key)
     if (value === null || value === undefined) return ""
+    if (key === "client.birthday" && typeof value === "string") return formatBirthdayForPass(value)
     return String(value)
   })
 }
