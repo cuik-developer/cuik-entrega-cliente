@@ -477,8 +477,11 @@ async function processAppleBatches(
           teamId,
           keyId,
           clientCert,
-          // Scheduled send: APNs keeps it for a day if the phone is asleep.
+          // Scheduled send: APNs keeps it for a day if the phone is asleep,
+          // and delivers it at once ("alert"/10) rather than when iOS feels
+          // like it ("background"/5), same as a visit.
           storeForSeconds: APNS_STORE_ONE_DAY,
+          immediate: true,
         })
 
         // One line per client with what APNs answered: lets us tell "Apple took it

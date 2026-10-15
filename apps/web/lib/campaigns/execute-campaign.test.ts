@@ -483,7 +483,10 @@ describe("executeCampaign", () => {
       expect(result.failedCount).toBe(0)
       expect(mockSendApnsPush).toHaveBeenCalledTimes(1)
       // Campaigns are stored by APNs for a day (a sleeping phone still gets them).
-      expect(mockSendApnsPush.mock.calls[0]?.[0].storeForSeconds).toBe(86_400)
+      expect(mockSendApnsPush.mock.calls[0]?.[0]).toMatchObject({
+        storeForSeconds: 86_400,
+        immediate: true,
+      })
       expect(mockAddMessage).toHaveBeenCalledTimes(1)
       expect(mockAddMessage.mock.calls[0]?.[0].objectId).toBe("issuer.serial-2")
 
