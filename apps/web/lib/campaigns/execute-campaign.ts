@@ -479,6 +479,20 @@ async function processAppleBatches(
           clientCert,
         })
 
+        // One line per client with what APNs answered: lets us tell "Apple took it
+        // but the phone never asked for the pass" from a real rejection.
+        console.info(
+          `[Campaign:APNs] campaign=${campaignId} client=${client.clientId} sent=${result.sent}/${result.total}`,
+          JSON.stringify(
+            result.results.map((r) => ({
+              s: r.status,
+              env: r.envUsed,
+              auth: r.authUsed,
+              e: r.error,
+            })),
+          ),
+        )
+
         if (result.sent > 0) {
           await recordNotification(campaignId, client.clientId, "wallet_push", "sent", null)
           return { ok: true }

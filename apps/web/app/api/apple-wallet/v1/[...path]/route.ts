@@ -960,12 +960,22 @@ async function regeneratePass(ctx: {
       return null
     }
 
-    // Update pass_instances with new etag
-    const now = new Date()
-    const etag = generateETag(serialNumber, client.totalVisits, now)
+    // Serving a pass is not a change: keep lastUpdatedAt where the last real
+    // change (visit, campaign, design) put it. Bumping it here made every
+    // fetched pass look "updated" to the next registrations query, so iOS got
+    // asked to refresh unchanged passes ("Server requested update … but the
+    // pass was unchanged") and If-Modified-Since never matched. Only a pass
+    // with no timestamp yet gets one.
+    const [current] = await db
+      .select({ lastUpdatedAt: passInstances.lastUpdatedAt })
+      .from(passInstances)
+      .where(eq(passInstances.serialNumber, serialNumber))
+      .limit(1)
+    const stamp = current?.lastUpdatedAt ?? new Date()
+    const etag = generateETag(serialNumber, client.totalVisits, stamp)
     await db
       .update(passInstances)
-      .set({ etag, lastUpdatedAt: now })
+      .set({ etag, ...(current?.lastUpdatedAt ? {} : { lastUpdatedAt: stamp }) })
       .where(eq(passInstances.serialNumber, serialNumber))
 
     return passResult.buffer
