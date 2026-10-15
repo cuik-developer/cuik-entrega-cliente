@@ -1,4 +1,4 @@
-import { campaigns, db, eq, sql } from "@cuik/db"
+import { campaignSegments, campaigns, db, eq, sql } from "@cuik/db"
 import { executeCampaign } from "./execute-campaign"
 
 /** Sends of one automation campaign per local day (the first one plus two retries). */
@@ -33,6 +33,25 @@ export function shouldRetryAutomation(row: AutomationCampaignRow): boolean {
  * crash mid-send cannot loop forever. Returns the execution result.
  */
 export async function retryAutomationCampaign(row: AutomationCampaignRow) {
+  // Never re-send without its recipient list: a campaign whose segment row was
+  // not written (crash between the two inserts) would otherwise fall back to
+  // "every client" in executeCampaign.
+  const [segment] = await db
+    .select({ filter: campaignSegments.filter })
+    .from(campaignSegments)
+    .where(eq(campaignSegments.campaignId, row.id))
+    .limit(1)
+  const ids = (segment?.filter as { clientIds?: unknown } | null)?.clientIds
+  if (!Array.isArray(ids) || ids.length === 0) {
+    console.warn(`[Automation:Retry] campaign=${row.id} skipped: no recipient list`)
+    return {
+      status: "failed" as const,
+      errors: ["Sin lista de destinatarios: no se reintenta"],
+      targetCount: 0,
+      sentCount: 0,
+      failedCount: 0,
+    }
+  }
   const next = automationAttempts(row.content) + 1
   await db
     .update(campaigns)

@@ -125,7 +125,8 @@ async function refreshPassAfterStampsRedeem(qrCode: string, tenantId: string, te
       )
       .limit(1),
   ])
-  if (!client) return
+  // No active stamps promotion: nothing sensible to draw ("0 de 0"); leave the pass.
+  if (!client || !promotion?.maxVisits) return
   // Counted now, next to the client read, so a visit landing in between cannot
   // leave the pass showing the wrong number of pending rewards.
   const [pending] = await db
@@ -139,7 +140,7 @@ async function refreshPassAfterStampsRedeem(qrCode: string, tenantId: string, te
       ),
     )
   const pendingRewards = Number(pending?.cnt ?? 0)
-  const maxVisits = promotion?.maxVisits ?? 0
+  const maxVisits = promotion.maxVisits
   await triggerWalletUpdate({
     qrCode,
     clientId: client.id,

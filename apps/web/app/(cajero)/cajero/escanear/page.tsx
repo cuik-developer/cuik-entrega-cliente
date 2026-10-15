@@ -450,8 +450,9 @@ export default function EscanearPage() {
   }, [step, manualMode, locationsLoaded, startCamera, stopCamera])
 
   const redeemingRef = useRef(false)
-  const handleRedeem = async () => {
-    if (!result || redeemingRef.current) return
+  /** True when this call ran the redeem (false: nothing to do or one already in flight). */
+  const handleRedeem = async (): Promise<boolean> => {
+    if (!result || redeemingRef.current) return false
     redeemingRef.current = true
 
     try {
@@ -460,7 +461,7 @@ export default function EscanearPage() {
       const qrCode = lastQrRef.current || pendingQrCode
       if (!qrCode) {
         toast.error("Vuelve a escanear el QR del cliente para canjear")
-        return
+        return true
       }
 
       const res = await fetch(`/api/${tenantSlug}/redeem`, {
@@ -491,6 +492,7 @@ export default function EscanearPage() {
     } finally {
       redeemingRef.current = false
     }
+    return true
   }
 
   const handleManualSubmit = () => {
@@ -853,7 +855,7 @@ function SuccessStepView({
   reset,
 }: {
   result: VisitApiResult
-  handleRedeem: () => void
+  handleRedeem: () => Promise<boolean>
   reset: () => void
 }) {
   return (
@@ -976,7 +978,7 @@ function AlreadyScannedStepView({
   reset,
 }: {
   result: VisitApiResult
-  handleRedeem: () => void
+  handleRedeem: () => Promise<boolean>
   reset: () => void
 }) {
   return (
@@ -1061,7 +1063,7 @@ function RewardStepView({
   reset,
 }: {
   result: StampsVisitApiResult
-  handleRedeem: () => void
+  handleRedeem: () => Promise<boolean>
   reset: () => void
 }) {
   return (
@@ -1085,8 +1087,8 @@ function RewardStepView({
         <Button
           className="w-full h-11 bg-amber-500 hover:bg-amber-600 text-white font-semibold gap-2"
           onClick={async () => {
-            await handleRedeem()
-            reset()
+            // A second tap while the first redeem is in flight does nothing.
+            if (await handleRedeem()) reset()
           }}
         >
           <CheckCircle2 className="w-4 h-4" /> Confirmar canje
