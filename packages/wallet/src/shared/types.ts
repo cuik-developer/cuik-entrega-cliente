@@ -160,6 +160,12 @@ export type ApnsPushParams = {
    * (campaigns, birthday) pass a day so a sleeping phone still gets them.
    */
   storeForSeconds?: number
+  /**
+   * Send as an `alert` push with priority 10 (deliver now) instead of a
+   * `background` push with priority 5 (the system may defer). Diagnostic
+   * only for now: used by the push-test route.
+   */
+  immediate?: boolean
 }
 
 export type ApnsPushTokenResult = {

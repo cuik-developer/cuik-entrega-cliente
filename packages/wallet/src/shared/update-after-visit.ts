@@ -45,8 +45,18 @@ async function updateApple(
       clientCert: params.apple.clientCert,
     })
 
+    // Same per-token detail as campaign sends: which environment and credential
+    // Apple actually took, so "accepted but never fetched" can be told apart.
     console.info(
       `[Wallet:APNs] Push sent for serial=${params.serialNumber}: ${result.sent}/${result.total} succeeded`,
+      JSON.stringify(
+        result.results.map((r) => ({
+          s: r.status,
+          env: r.envUsed,
+          auth: r.authUsed,
+          ...(r.error ? { e: r.error } : {}),
+        })),
+      ),
     )
 
     return result

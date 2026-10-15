@@ -82,6 +82,7 @@ function sendToDevice(
   passTypeId: string,
   auth: ApnsAuth,
   storeForSeconds: number,
+  immediate: boolean,
 ): Promise<SendOutcome> {
   return new Promise((resolve) => {
     let client: http2.ClientHttp2Session | null = null
@@ -118,8 +119,10 @@ function sendToDevice(
         ":method": "POST",
         ":path": `/3/device/${deviceToken}`,
         "apns-topic": passTypeId,
-        "apns-push-type": APNS_PUSH_TYPE,
-        "apns-priority": APNS_PRIORITY,
+        // Apple requires priority 5 for "background"; an immediate push must
+        // go out as "alert" with priority 10 (same empty payload).
+        "apns-push-type": immediate ? "alert" : APNS_PUSH_TYPE,
+        "apns-priority": immediate ? "10" : APNS_PRIORITY,
         // "0" = deliver now or drop: the immediate delivery visits rely on.
         // Scheduled sends ask APNs to store the push (latest one per device)
         // so a phone that is asleep or offline still gets it later.
@@ -209,12 +212,27 @@ async function attempt(
   passTypeId: string,
   auth: ApnsAuth,
   storeForSeconds: number,
+  immediate: boolean,
 ): Promise<Attempt> {
-  const prod = await sendToDevice(APNS_PRODUCTION_HOST, token, passTypeId, auth, storeForSeconds)
+  const prod = await sendToDevice(
+    APNS_PRODUCTION_HOST,
+    token,
+    passTypeId,
+    auth,
+    storeForSeconds,
+    immediate,
+  )
   if (prod.ok) return { ok: true, status: prod.status, envUsed: "production", dead: false }
 
   if (prod.status === 400 || prod.status === 410) {
-    const sandbox = await sendToDevice(APNS_SANDBOX_HOST, token, passTypeId, auth, storeForSeconds)
+    const sandbox = await sendToDevice(
+      APNS_SANDBOX_HOST,
+      token,
+      passTypeId,
+      auth,
+      storeForSeconds,
+      immediate,
+    )
     if (sandbox.ok) {
       return { ok: true, status: sandbox.status, envUsed: "sandbox", dead: false }
     }
@@ -258,6 +276,7 @@ export async function sendApnsPush(params: ApnsPushParams): Promise<ApnsPushResu
     keyId,
     clientCert,
     storeForSeconds = 0,
+    immediate = false,
   } = params
 
   if (deviceTokens.length === 0) {
@@ -285,6 +304,7 @@ export async function sendApnsPush(params: ApnsPushParams): Promise<ApnsPushResu
         passTypeId,
         { kind: "cert", cert: clientCert },
         storeForSeconds,
+        immediate,
       )
       if (byCert.ok) {
         results.push({
@@ -311,7 +331,13 @@ export async function sendApnsPush(params: ApnsPushParams): Promise<ApnsPushResu
       // Fall back to the provider token and report both outcomes. A 403 means
       // Apple refused the certificate: skip it for the remaining tokens.
       if (byCert.status === 403) certUsable = false
-      const byToken = await attempt(token, passTypeId, await tokenAuth(), storeForSeconds)
+      const byToken = await attempt(
+        token,
+        passTypeId,
+        await tokenAuth(),
+        storeForSeconds,
+        immediate,
+      )
       if (byToken.ok) {
         results.push({
           tokenPrefix,
@@ -334,7 +360,7 @@ export async function sendApnsPush(params: ApnsPushParams): Promise<ApnsPushResu
       continue
     }
 
-    const byToken = await attempt(token, passTypeId, await tokenAuth(), storeForSeconds)
+    const byToken = await attempt(token, passTypeId, await tokenAuth(), storeForSeconds, immediate)
     results.push({
       tokenPrefix,
       ok: byToken.ok,

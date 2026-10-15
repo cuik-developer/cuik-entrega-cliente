@@ -1,4 +1,4 @@
-import { and, appleDevices, db, eq, passInstances } from "@cuik/db"
+import { appleDevices, db, eq, passInstances } from "@cuik/db"
 import { sendApnsPush } from "@cuik/wallet/apple"
 import { generateETag, validateAppleApnsEnv } from "@cuik/wallet/shared"
 import { apnsClientCertFor } from "@/lib/wallet/apns-client-cert"
@@ -20,8 +20,15 @@ export const dynamic = "force-dynamic"
  */
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { serialNumber?: string; secret?: string }
+    const body = (await request.json()) as {
+      serialNumber?: string
+      secret?: string
+      immediate?: boolean
+    }
     const { serialNumber, secret } = body
+    // "alert"/priority 10 instead of "background"/5: tells a deferred push apart
+    // from one the phone never got.
+    const immediate = body.immediate === true
 
     if (!secret || secret !== process.env.CRON_SECRET) {
       return Response.json({ error: "Unauthorized" }, { status: 401 })
@@ -111,10 +118,11 @@ export async function POST(request: Request) {
       teamId: apnsConfig.teamId,
       keyId: apnsConfig.keyId,
       clientCert: apnsClientCertFor(tenantConfig, apnsConfig.topic),
+      immediate,
     })
 
     console.info(
-      `[Wallet:PushTest] serial=${serialNumber}`,
+      `[Wallet:PushTest] serial=${serialNumber} immediate=${immediate}`,
       `devices=${deviceRows.length} tokens=${tokens.length}`,
       `sent=${pushResult.sent}/${pushResult.total}`,
       `lastUpdatedAt=${now.toISOString()} etag=${etag}`,
@@ -133,6 +141,7 @@ export async function POST(request: Request) {
           ok: r.ok,
           status: r.status,
           envUsed: r.envUsed,
+          authUsed: r.authUsed,
           error: r.error,
         })),
       },
