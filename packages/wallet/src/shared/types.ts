@@ -154,6 +154,12 @@ export type ApnsPushParams = {
   keyId: string
   /** When set, tried first; the token-based (.p8) credentials are the fallback. */
   clientCert?: ApnsClientCert
+  /**
+   * Seconds APNs keeps the push while the phone is unreachable. 0 (default):
+   * deliver now or drop, the fastest delivery (visits). Scheduled sends
+   * (campaigns, birthday) pass a day so a sleeping phone still gets them.
+   */
+  storeForSeconds?: number
 }
 
 export type ApnsPushTokenResult = {

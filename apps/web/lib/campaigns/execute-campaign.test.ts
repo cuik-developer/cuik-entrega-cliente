@@ -124,6 +124,7 @@ vi.mock("@cuik/db", () => {
 })
 
 vi.mock("@cuik/wallet/apple", () => ({
+  APNS_STORE_ONE_DAY: 86_400,
   sendApnsPush: vi.fn(),
 }))
 
@@ -481,6 +482,8 @@ describe("executeCampaign", () => {
       expect(result.sentCount).toBe(2)
       expect(result.failedCount).toBe(0)
       expect(mockSendApnsPush).toHaveBeenCalledTimes(1)
+      // Campaigns are stored by APNs for a day (a sleeping phone still gets them).
+      expect(mockSendApnsPush.mock.calls[0]?.[0].storeForSeconds).toBe(86_400)
       expect(mockAddMessage).toHaveBeenCalledTimes(1)
       expect(mockAddMessage.mock.calls[0]?.[0].objectId).toBe("issuer.serial-2")
 

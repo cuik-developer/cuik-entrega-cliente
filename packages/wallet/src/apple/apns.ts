@@ -63,8 +63,8 @@ async function createApnsJwt(p8KeyPem: string, teamId: string, keyId: string): P
  */
 type ApnsAuth = { kind: "token"; jwt: string } | { kind: "cert"; cert: ApnsClientCert }
 
-/** How long APNs keeps an undelivered pass-update push (24 h). */
-const APNS_EXPIRATION_SECONDS = 24 * 60 * 60
+/** Storage for scheduled sends that must survive a sleeping phone (campaigns, birthday). */
+export const APNS_STORE_ONE_DAY = 24 * 60 * 60
 
 /** Connect + response budget per APNs request. */
 const APNS_TIMEOUT_MS = 10_000
@@ -81,6 +81,7 @@ function sendToDevice(
   deviceToken: string,
   passTypeId: string,
   auth: ApnsAuth,
+  storeForSeconds: number,
 ): Promise<SendOutcome> {
   return new Promise((resolve) => {
     let client: http2.ClientHttp2Session | null = null
@@ -119,10 +120,11 @@ function sendToDevice(
         "apns-topic": passTypeId,
         "apns-push-type": APNS_PUSH_TYPE,
         "apns-priority": APNS_PRIORITY,
-        // Stored and retried by APNs for a day: with "0" APNs makes a single
-        // attempt and drops the push when the phone is asleep or offline,
-        // while still answering 200. Apple keeps only the latest per device.
-        "apns-expiration": String(Math.floor(Date.now() / 1000) + APNS_EXPIRATION_SECONDS),
+        // "0" = deliver now or drop: the immediate delivery visits rely on.
+        // Scheduled sends ask APNs to store the push (latest one per device)
+        // so a phone that is asleep or offline still gets it later.
+        "apns-expiration":
+          storeForSeconds > 0 ? String(Math.floor(Date.now() / 1000) + storeForSeconds) : "0",
         ...(auth.kind === "token" ? { authorization: `bearer ${auth.jwt}` } : {}),
         "content-type": "application/json",
       })
@@ -202,12 +204,17 @@ type Attempt = {
  * One delivery attempt with one credential: production first; on 400/410
  * the sandbox (passes signed for development live there).
  */
-async function attempt(token: string, passTypeId: string, auth: ApnsAuth): Promise<Attempt> {
-  const prod = await sendToDevice(APNS_PRODUCTION_HOST, token, passTypeId, auth)
+async function attempt(
+  token: string,
+  passTypeId: string,
+  auth: ApnsAuth,
+  storeForSeconds: number,
+): Promise<Attempt> {
+  const prod = await sendToDevice(APNS_PRODUCTION_HOST, token, passTypeId, auth, storeForSeconds)
   if (prod.ok) return { ok: true, status: prod.status, envUsed: "production", dead: false }
 
   if (prod.status === 400 || prod.status === 410) {
-    const sandbox = await sendToDevice(APNS_SANDBOX_HOST, token, passTypeId, auth)
+    const sandbox = await sendToDevice(APNS_SANDBOX_HOST, token, passTypeId, auth, storeForSeconds)
     if (sandbox.ok) {
       return { ok: true, status: sandbox.status, envUsed: "sandbox", dead: false }
     }
@@ -243,7 +250,15 @@ async function attempt(token: string, passTypeId: string, auth: ApnsAuth): Promi
  * @returns Per-token results with status, environment and credential used
  */
 export async function sendApnsPush(params: ApnsPushParams): Promise<ApnsPushResult> {
-  const { deviceTokens, passTypeId, p8KeyPem, teamId, keyId, clientCert } = params
+  const {
+    deviceTokens,
+    passTypeId,
+    p8KeyPem,
+    teamId,
+    keyId,
+    clientCert,
+    storeForSeconds = 0,
+  } = params
 
   if (deviceTokens.length === 0) {
     return { sent: 0, total: 0, results: [] }
@@ -265,7 +280,12 @@ export async function sendApnsPush(params: ApnsPushParams): Promise<ApnsPushResu
     const tokenPrefix = token.slice(0, 8)
 
     if (clientCert && certUsable) {
-      const byCert = await attempt(token, passTypeId, { kind: "cert", cert: clientCert })
+      const byCert = await attempt(
+        token,
+        passTypeId,
+        { kind: "cert", cert: clientCert },
+        storeForSeconds,
+      )
       if (byCert.ok) {
         results.push({
           tokenPrefix,
@@ -291,7 +311,7 @@ export async function sendApnsPush(params: ApnsPushParams): Promise<ApnsPushResu
       // Fall back to the provider token and report both outcomes. A 403 means
       // Apple refused the certificate: skip it for the remaining tokens.
       if (byCert.status === 403) certUsable = false
-      const byToken = await attempt(token, passTypeId, await tokenAuth())
+      const byToken = await attempt(token, passTypeId, await tokenAuth(), storeForSeconds)
       if (byToken.ok) {
         results.push({
           tokenPrefix,
@@ -314,7 +334,7 @@ export async function sendApnsPush(params: ApnsPushParams): Promise<ApnsPushResu
       continue
     }
 
-    const byToken = await attempt(token, passTypeId, await tokenAuth())
+    const byToken = await attempt(token, passTypeId, await tokenAuth(), storeForSeconds)
     results.push({
       tokenPrefix,
       ok: byToken.ok,

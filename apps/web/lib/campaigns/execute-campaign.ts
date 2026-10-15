@@ -10,7 +10,7 @@ import {
   tenants,
 } from "@cuik/db"
 import type { CampaignExecutionResult, SegmentFilter } from "@cuik/shared/types/campaign"
-import { sendApnsPush } from "@cuik/wallet/apple"
+import { APNS_STORE_ONE_DAY, sendApnsPush } from "@cuik/wallet/apple"
 import { addLoyaltyObjectMessage, getGoogleAccessToken } from "@cuik/wallet/google"
 import { resolveTemplate, validateGoogleEnv } from "@cuik/wallet/shared"
 import type { SegmentationThresholds } from "@/lib/loyalty/client-segments"
@@ -477,6 +477,8 @@ async function processAppleBatches(
           teamId,
           keyId,
           clientCert,
+          // Scheduled send: APNs keeps it for a day if the phone is asleep.
+          storeForSeconds: APNS_STORE_ONE_DAY,
         })
 
         // One line per client with what APNs answered: lets us tell "Apple took it
