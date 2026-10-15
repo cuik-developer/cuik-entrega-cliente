@@ -294,9 +294,10 @@ export async function GET(
           customData: (client.customData as Record<string, unknown> | null) ?? null,
         },
         stamps: {
-          current: stampsInCycle,
+          // A completed card with its reward pending is drawn full: say so in the text too.
+          current: completed ? maxVisits : stampsInCycle,
           max: maxVisits,
-          remaining: maxVisits - stampsInCycle,
+          remaining: completed ? 0 : maxVisits - stampsInCycle,
           total: client.totalVisits,
         },
         points: {

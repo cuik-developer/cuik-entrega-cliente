@@ -63,6 +63,9 @@ async function createApnsJwt(p8KeyPem: string, teamId: string, keyId: string): P
  */
 type ApnsAuth = { kind: "token"; jwt: string } | { kind: "cert"; cert: ApnsClientCert }
 
+/** How long APNs keeps an undelivered pass-update push (24 h). */
+const APNS_EXPIRATION_SECONDS = 24 * 60 * 60
+
 /** Connect + response budget per APNs request. */
 const APNS_TIMEOUT_MS = 10_000
 
@@ -116,7 +119,10 @@ function sendToDevice(
         "apns-topic": passTypeId,
         "apns-push-type": APNS_PUSH_TYPE,
         "apns-priority": APNS_PRIORITY,
-        "apns-expiration": "0",
+        // Stored and retried by APNs for a day: with "0" APNs makes a single
+        // attempt and drops the push when the phone is asleep or offline,
+        // while still answering 200. Apple keeps only the latest per device.
+        "apns-expiration": String(Math.floor(Date.now() / 1000) + APNS_EXPIRATION_SECONDS),
         ...(auth.kind === "token" ? { authorization: `bearer ${auth.jwt}` } : {}),
         "content-type": "application/json",
       })

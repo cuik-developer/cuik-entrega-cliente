@@ -68,12 +68,16 @@ export async function POST(request: Request) {
         if (r.clients > 0) expired.push({ tenant: row.slug, clients: r.clients, points: r.points })
         errors.push(...r.errors.map((e) => `${row.slug}: ${e}`))
 
-        if (warning.enabled && (force || hourLocal(tz) === warning.sendHour)) {
+        // At sendHour the warnings are created and sent; later hours of the same
+        // day only retry a failed send (up to 3 attempts in total).
+        const hour = hourLocal(tz)
+        if (warning.enabled && (force || hour >= warning.sendHour)) {
           const w = await runPointsExpirationWarning({
             tenantId: row.tenantId,
             tenantName: row.name,
             timezone: tz,
             config: warning,
+            retryOnly: !force && hour > warning.sendHour,
           })
           if (w.status === "sent") {
             warned.push({ tenant: row.slug, campaigns: w.campaigns, sentCount: w.sentCount })

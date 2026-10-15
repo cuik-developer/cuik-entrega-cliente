@@ -173,10 +173,7 @@ export async function handleGetPass(
   // Only applies when the pass has a lastUpdatedAt and the client sent the header
   if (ifModifiedSince && passInstance.lastUpdatedAt) {
     const sinceDate = new Date(ifModifiedSince)
-    // HTTP dates have second precision; compare at that precision or a pass
-    // updated at 12:00:03.684 never matches "If-Modified-Since: 12:00:03".
-    const updatedSecond = Math.floor(passInstance.lastUpdatedAt.getTime() / 1000) * 1000
-    if (!Number.isNaN(sinceDate.getTime()) && updatedSecond <= sinceDate.getTime()) {
+    if (!Number.isNaN(sinceDate.getTime()) && passInstance.lastUpdatedAt <= sinceDate) {
       return { status: 304, headers: notModifiedHeaders }
     }
   }

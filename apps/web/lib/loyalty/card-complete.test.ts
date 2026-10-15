@@ -44,4 +44,26 @@ describe("card complete notice", () => {
     expect(isCardCompleteMessage("Tu próxima visita tiene premio", automations)).toBe(false)
     expect(isCardCompleteMessage("20 % de descuento este viernes", automations)).toBe(false)
   })
+
+  it("never mistakes a campaign for the notice", () => {
+    // A template with no real wording would match any text: never recognised.
+    const onlyPlaceholder = { cardComplete: { enabled: true, message: "{{premio}} 🎉" } }
+    expect(isCardCompleteMessage("Hoy 2x1 en helados", onlyPlaceholder)).toBe(false)
+    // Same opening but a different message: anchored, so not recognised.
+    const greeting = { cardComplete: { enabled: true, message: "¡Felicidades {{client.name}}!" } }
+    expect(isCardCompleteMessage("¡Felicidades Ana!", greeting)).toBe(true)
+    expect(
+      isCardCompleteMessage("¡Felicidades Ana! Hoy tienes 2x1 en toda la carta", greeting),
+    ).toBe(false)
+    // A notice cut at the 150-character limit is still recognised.
+    const long = {
+      cardComplete: {
+        enabled: true,
+        message: "Completaste tu tarjeta {{client.name}}, tu premio es {{premio}}. Pídelo en caja",
+      },
+    }
+    const cut = cardCompleteNotice(long, { ...ctx, reward: "y".repeat(160) }) as string
+    expect(cut.endsWith("…")).toBe(true)
+    expect(isCardCompleteMessage(cut, long)).toBe(true)
+  })
 })

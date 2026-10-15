@@ -14,6 +14,7 @@ import {
 import type { AutomationsConfig, PointsExpiryAutomation } from "@cuik/shared/validators"
 import { automationsConfigSchema, DEFAULT_POINTS_EXPIRY_AUTOMATION } from "@cuik/shared/validators"
 
+import { retryAutomationCampaign, shouldRetryAutomation } from "@/lib/campaigns/automation-retry"
 import { executeCampaign } from "@/lib/campaigns/execute-campaign"
 import { triggerWalletUpdate } from "@/lib/wallet/trigger-wallet-update"
 import { addDays, formatExpiry, localDateString, localMidnight } from "./expiration"
@@ -150,6 +151,8 @@ export async function runPointsExpirationWarning(params: {
   timezone: string
   config: PointsExpiryAutomation
   now?: Date
+  /** Later hours of the day: only re-send failed warnings, never create new ones. */
+  retryOnly?: boolean
 }): Promise<WarningRunResult> {
   const { tenantId, tenantName, timezone, config } = params
   if (!config.enabled) return { status: "skipped", reason: "disabled" }
@@ -157,7 +160,7 @@ export async function runPointsExpirationWarning(params: {
   const dateLocal = localDateString(now, timezone)
 
   const existing = await db
-    .select({ id: campaigns.id })
+    .select({ id: campaigns.id, status: campaigns.status, content: campaigns.content })
     .from(campaigns)
     .where(
       and(
@@ -166,8 +169,37 @@ export async function runPointsExpirationWarning(params: {
         sql`${campaigns.content}->>'date' = ${dateLocal}`,
       ),
     )
-    .limit(1)
-  if (existing.length > 0) return { status: "skipped", reason: "already_sent" }
+  if (existing.length > 0) {
+    // Today's warnings exist. Re-send the ones whose send failed (still drafts)
+    // instead of waiting for tomorrow, which can be after the points expire.
+    const pending = existing.filter(shouldRetryAutomation)
+    if (pending.length === 0) return { status: "skipped", reason: "already_sent" }
+    let targetCount = 0
+    let sentCount = 0
+    const errors: string[] = []
+    for (const row of pending) {
+      const result = await retryAutomationCampaign(row)
+      targetCount += result.targetCount
+      sentCount += result.sentCount
+      if (result.status === "failed") {
+        errors.push(...result.errors)
+        continue
+      }
+      await markRetriedLotsWarned(tenantId, row, now)
+    }
+    if (errors.length > 0 && sentCount === 0) {
+      return { status: "failed", campaigns: pending.length, targetCount, sentCount, errors }
+    }
+    return {
+      status: "sent",
+      campaigns: pending.length,
+      targetCount,
+      sentCount,
+      ...(errors.length > 0 ? { errors } : {}),
+    }
+  }
+
+  if (params.retryOnly) return { status: "skipped", reason: "already_sent" }
 
   // Lots whose last valid day is within the next `daysBefore` days.
   const windowEnd = localMidnight(addDays(dateLocal, config.daysBefore + 1), timezone)
@@ -258,4 +290,38 @@ export async function runPointsExpirationWarning(params: {
     sentCount,
     ...(errors.length > 0 ? { errors } : {}),
   }
+}
+
+/**
+ * After a retried warning goes out, mark the lots it covered as warned (same
+ * clients, same expiry instant), exactly as the first run does on success.
+ */
+async function markRetriedLotsWarned(
+  tenantId: string,
+  row: { id: string; content: unknown },
+  now: Date,
+): Promise<void> {
+  const expiresAtRaw = (row.content as { expiresAt?: unknown } | null)?.expiresAt
+  const expiresAt = typeof expiresAtRaw === "string" ? new Date(expiresAtRaw) : null
+  if (!expiresAt || Number.isNaN(expiresAt.getTime())) return
+  const [segment] = await db
+    .select({ filter: campaignSegments.filter })
+    .from(campaignSegments)
+    .where(eq(campaignSegments.campaignId, row.id))
+    .limit(1)
+  const clientIds = (segment?.filter as { clientIds?: unknown } | null)?.clientIds
+  if (!Array.isArray(clientIds) || clientIds.length === 0) return
+  const ids = clientIds.filter((id): id is string => typeof id === "string")
+  if (ids.length === 0) return
+  await db
+    .update(pointsTransactions)
+    .set({ warnedAt: now })
+    .where(
+      and(
+        eq(pointsTransactions.tenantId, tenantId),
+        eq(pointsTransactions.expiresAt, expiresAt),
+        isNull(pointsTransactions.warnedAt),
+        sql`${pointsTransactions.clientId} = ANY(${`{${ids.join(",")}}`}::uuid[])`,
+      ),
+    )
 }

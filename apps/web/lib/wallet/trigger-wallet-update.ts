@@ -29,6 +29,7 @@ import { formatExpiry } from "@/lib/loyalty/expiration"
 import { allMilestoneMessages } from "@/lib/loyalty/milestones"
 import { nextExpiration } from "@/lib/loyalty/points-lots"
 import { apnsClientCertFor } from "@/lib/wallet/apns-client-cert"
+import { stripCompleted } from "@/lib/wallet/strip-layout"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 
 /**
@@ -127,6 +128,9 @@ export async function triggerWalletUpdate(ctx: {
     })
     .where(eq(passInstances.serialNumber, serialNumber))
 
+  const cardFull =
+    ctx.maxVisits > 0 && stripCompleted(ctx.stampsInCycle, ctx.pendingRewards, ctx.totalVisits)
+
   // Load active design + resolve fields for wallet update
   let resolvedDesignFields: ReturnType<typeof resolvePassFields> | undefined
   try {
@@ -182,9 +186,10 @@ export async function triggerWalletUpdate(ctx: {
           customData: (clientRow?.customData as Record<string, unknown> | null) ?? null,
         },
         stamps: {
-          current: ctx.stampsInCycle,
+          // Completed card with the reward pending: "6 de 6", like the strip.
+          current: cardFull ? ctx.maxVisits : ctx.stampsInCycle,
           max: ctx.maxVisits,
-          remaining: ctx.maxVisits - ctx.stampsInCycle,
+          remaining: cardFull ? 0 : ctx.maxVisits - ctx.stampsInCycle,
           total: ctx.totalVisits,
         },
         points: {

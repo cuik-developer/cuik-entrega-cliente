@@ -344,6 +344,10 @@ export default function EscanearPage() {
     [tenantSlug, selectedLocationId],
   )
 
+  // QR of the client being served (camera or manual): the reward is redeemed for
+  // this client, never for one scanned earlier in the session.
+  const lastQrRef = useRef("")
+
   const processQr = useCallback(
     async (qrCode: string) => {
       if (processingRef.current) return
@@ -354,6 +358,7 @@ export default function EscanearPage() {
         setStep("error")
         return
       }
+      lastQrRef.current = qrCode
 
       // Validate location selection when tenant has locations
       if (locations.length > 0 && !selectedLocationId) {
@@ -444,14 +449,19 @@ export default function EscanearPage() {
     }
   }, [step, manualMode, locationsLoaded, startCamera, stopCamera])
 
+  const redeemingRef = useRef(false)
   const handleRedeem = async () => {
-    if (!result) return
+    if (!result || redeemingRef.current) return
+    redeemingRef.current = true
 
     try {
       // We need to find the client's QR to redeem. Use a reverse lookup approach.
       // Since we just scanned the QR, we can store it. Let's just call redeem with the same QR.
-      const qrCode = manualQr || lastQrRef.current || pendingQrCode
-      if (!qrCode) return
+      const qrCode = lastQrRef.current || pendingQrCode
+      if (!qrCode) {
+        toast.error("Vuelve a escanear el QR del cliente para canjear")
+        return
+      }
 
       const res = await fetch(`/api/${tenantSlug}/redeem`, {
         method: "POST",
@@ -460,19 +470,28 @@ export default function EscanearPage() {
       })
 
       const json = await res.json()
-      if (json.data?.code === "OK" && !isPointsResult(result)) {
-        setResult((prev) =>
-          prev && !isPointsResult(prev)
-            ? { ...prev, pendingRewards: json.data.remainingPendingRewards }
-            : prev,
+      if (json.data?.code === "OK") {
+        if (!isPointsResult(result)) {
+          setResult((prev) =>
+            prev && !isPointsResult(prev)
+              ? { ...prev, pendingRewards: json.data.remainingPendingRewards }
+              : prev,
+          )
+        }
+        toast.success("Premio canjeado")
+      } else {
+        toast.error(
+          json.data?.code === "NO_PENDING_REWARD"
+            ? "Este cliente no tiene premios pendientes"
+            : "No se pudo canjear. Intenta de nuevo",
         )
       }
     } catch {
-      // silently fail, user can try again
+      toast.error("Error de conexión. Intenta de nuevo")
+    } finally {
+      redeemingRef.current = false
     }
   }
-
-  const lastQrRef = useRef("")
 
   const handleManualSubmit = () => {
     if (!manualQr.trim()) return
@@ -489,6 +508,7 @@ export default function EscanearPage() {
     setCameraError(false)
     setPurchaseAmount("")
     setPendingQrCode("")
+    lastQrRef.current = ""
   }
 
   return (

@@ -41,12 +41,21 @@ export async function POST(request: Request) {
       const config = getBirthdayConfig(tenant.automations)
       if (!config.enabled) continue
       const tz = tenant.timezone ?? "America/Lima"
-      if (!force && hourLocal(tz) !== config.sendHour) {
+      // At sendHour the greeting is created and sent; on the later hours of the
+      // same day only a failed send is retried (up to 3 attempts in total).
+      const hour = hourLocal(tz)
+      if (!force && hour < config.sendHour) {
         skipped.push({ tenant: tenant.slug, reason: "not_the_hour" })
         continue
       }
+      const retryOnly = !force && hour > config.sendHour
       try {
-        const r = await runBirthdayAutomation({ tenantId: tenant.id, timezone: tz, config })
+        const r = await runBirthdayAutomation({
+          tenantId: tenant.id,
+          timezone: tz,
+          config,
+          retryOnly,
+        })
         if (r.status === "sent") {
           sent.push({
             tenant: tenant.slug,

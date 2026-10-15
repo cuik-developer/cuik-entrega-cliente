@@ -214,34 +214,6 @@ describe("handleGetPass", () => {
     expect(result.headers?.ETag).toBe('"some-etag"')
   })
 
-  it("If-Modified-Since compares at second precision (HTTP dates have no ms)", async () => {
-    const pass = (lastUpdatedAt: Date) =>
-      createMockDeps({
-        getPassInstance: vi.fn().mockResolvedValue({
-          authToken: "token",
-          lastUpdatedAt,
-          etag: null,
-          clientId: "c1",
-          designId: "d1",
-          campaignMessage: null,
-        }),
-      })
-    const params = {
-      passTypeId: PASS_TYPE_ID,
-      serialNumber: SERIAL,
-      authHeader: VALID_AUTH,
-      ifModifiedSince: "Wed, 14 Oct 2026 17:00:03 GMT",
-    }
-    // Same second as the header: unchanged.
-    expect((await handleGetPass(pass(new Date("2026-10-14T17:00:03.684Z")), params)).status).toBe(
-      304,
-    )
-    // A later second: changed.
-    expect((await handleGetPass(pass(new Date("2026-10-14T17:00:04.010Z")), params)).status).toBe(
-      200,
-    )
-  })
-
   it("returns 200 with passInstance data when pass needs update", async () => {
     const lastUpdated = new Date("2026-03-01T10:00:00Z")
     const deps = createMockDeps({

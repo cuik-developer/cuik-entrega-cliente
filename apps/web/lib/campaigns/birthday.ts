@@ -2,6 +2,7 @@ import { and, campaignSegments, campaigns, clients, db, eq, sql } from "@cuik/db
 import type { AutomationsConfig, BirthdayAutomation } from "@cuik/shared/validators"
 import { automationsConfigSchema, DEFAULT_BIRTHDAY_AUTOMATION } from "@cuik/shared/validators"
 
+import { retryAutomationCampaign, shouldRetryAutomation } from "./automation-retry"
 import { executeCampaign } from "./execute-campaign"
 
 export type BirthdayClient = { id: string; name: string; lastName: string | null }
@@ -147,13 +148,15 @@ export async function runBirthdayAutomation(params: {
   timezone: string
   config: BirthdayAutomation
   dateLocal?: string
+  /** Later hours of the day: only re-send a failed greeting, never create one. */
+  retryOnly?: boolean
 }): Promise<BirthdayRunResult> {
   const { tenantId, timezone, config } = params
   if (!config.enabled) return { status: "skipped", reason: "disabled" }
   const dateLocal = params.dateLocal ?? todayLocal(timezone)
 
   const existing = await db
-    .select({ id: campaigns.id })
+    .select({ id: campaigns.id, status: campaigns.status, content: campaigns.content })
     .from(campaigns)
     .where(
       and(
@@ -163,7 +166,25 @@ export async function runBirthdayAutomation(params: {
       ),
     )
     .limit(1)
-  if (existing.length > 0) return { status: "skipped", reason: "already_sent" }
+  if (existing.length > 0) {
+    // Today's greeting exists. If its send failed (still a draft), try again
+    // on this hourly run instead of losing the greeting for the year.
+    const row = existing[0]
+    if (!shouldRetryAutomation(row)) return { status: "skipped", reason: "already_sent" }
+    const retried = await retryAutomationCampaign(row)
+    if (retried.status === "failed") {
+      return { status: "failed", campaignId: row.id, errors: retried.errors }
+    }
+    return {
+      status: "sent",
+      campaignId: row.id,
+      targetCount: retried.targetCount,
+      sentCount: retried.sentCount,
+      failedCount: retried.failedCount,
+    }
+  }
+
+  if (params.retryOnly) return { status: "skipped", reason: "already_sent" }
 
   const birthdayClients = await findBirthdayClients(tenantId, dateLocal)
   if (birthdayClients.length === 0) return { status: "skipped", reason: "no_birthdays" }

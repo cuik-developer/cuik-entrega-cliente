@@ -56,14 +56,40 @@ export function cardCompleteNotice(automations: unknown, ctx: CardCompleteContex
  * True when `text` was produced by this merchant's card-complete template (for
  * any client name or reward), so a later visit can drop it from the pass the
  * way stale milestone notices are dropped.
+ *
+ * Strict on purpose: a false positive erases a real campaign message. The
+ * template must carry real wording (a template made only of placeholders
+ * would match anything), and the whole text must match, or, when the notice
+ * was cut at the pass limit, its first wording must open the text.
  */
 export function isCardCompleteMessage(text: string, automations: unknown): boolean {
   const cfg = getCardCompleteConfig(automations)
-  const pattern = cfg.message
+  const literals = cfg.message
     .trim()
     .replace(/\s+/g, " ")
     .split(/\{\{\s*[\w.]+\s*\}\}/)
+  if (wordingLength(literals.join("")) < MIN_TEMPLATE_WORDING) return false
+
+  const t = text.replace(/\s+/g, " ").trim()
+  const pattern = literals
     .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s*"))
-    .join("[\\s\\S]*")
-  return new RegExp(`^${pattern}`).test(text.replace(/\s+/g, " ").trim())
+    .join("[\\s\\S]*?")
+  if (new RegExp(`^${pattern}$`).test(t)) return true
+
+  // Cut at the 150-character limit with "…": compare the opening wording only.
+  const opening = literals[0]?.trim() ?? ""
+  return (
+    t.endsWith("…") &&
+    t.length >= MAX_PASS_MESSAGE &&
+    wordingLength(opening) >= MIN_TEMPLATE_WORDING &&
+    t.startsWith(opening)
+  )
+}
+
+/** Letters/digits a template needs before its text can be recognised on a pass. */
+const MIN_TEMPLATE_WORDING = 6
+
+/** Letters and digits only (spaces, punctuation and emoji do not count). */
+function wordingLength(s: string): number {
+  return s.replace(/[^\p{L}\p{N}]/gu, "").length
 }
