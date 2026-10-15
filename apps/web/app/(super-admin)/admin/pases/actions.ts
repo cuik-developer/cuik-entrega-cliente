@@ -330,6 +330,8 @@ async function sendApnsNotifications(
     teamId: apnsConfig.teamId,
     keyId: apnsConfig.keyId,
     clientCert: apnsClientCertFor(tenantConfig, apnsConfig.topic),
+    // Delivered at once, like a visit (see update-after-visit.ts).
+    immediate: true,
   })
     .then((result) => {
       console.info(

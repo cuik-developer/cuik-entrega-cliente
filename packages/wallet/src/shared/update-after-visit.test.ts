@@ -74,6 +74,8 @@ describe("updateWalletAfterVisit", () => {
   it("calls APNs when apple config is provided", async () => {
     const result = await updateWalletAfterVisit(baseParams())
     expect(mockSendApnsPush).toHaveBeenCalledTimes(1)
+    // Visits go out as an immediate push ("alert"/10): iOS may defer "background"/5.
+    expect(mockSendApnsPush.mock.calls[0]?.[0]).toMatchObject({ immediate: true })
     expect(result.apple).toHaveProperty("sent")
   })
 

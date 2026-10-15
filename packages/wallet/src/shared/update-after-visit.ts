@@ -43,6 +43,9 @@ async function updateApple(
       teamId: params.apple.teamId,
       keyId: params.apple.keyId,
       clientCert: params.apple.clientCert,
+      // A visit must show on the pass now: "alert"/10 is delivered at once,
+      // while iOS may defer "background"/5 per pass type (seen 15 Oct 2026).
+      immediate: true,
     })
 
     // Same per-token detail as campaign sends: which environment and credential
