@@ -49,13 +49,13 @@ export const updateTenantSchema = createTenantSchema.partial().extend({
 export type UpdateTenantInput = z.infer<typeof updateTenantSchema>
 
 export const createSolicitudSchema = z.object({
-  businessName: z.string().trim().min(1, "Business name is required"),
-  businessType: z.string().trim().optional(),
-  contactName: z.string().trim().min(1, "Contact name is required"),
-  email: z.string().trim().email("Invalid email address"),
-  phone: z.string().trim().optional(),
-  city: z.string().trim().optional(),
-  message: z.string().trim().optional(),
+  businessName: z.string().trim().min(1, "Business name is required").max(160),
+  businessType: z.string().trim().max(160).optional(),
+  contactName: z.string().trim().min(1, "Contact name is required").max(160),
+  email: z.string().trim().email("Invalid email address").max(254),
+  phone: z.string().trim().max(40).optional(),
+  city: z.string().trim().max(160).optional(),
+  message: z.string().trim().max(2000).optional(),
 })
 
 export type CreateSolicitudInput = z.infer<typeof createSolicitudSchema>

@@ -325,6 +325,7 @@ npm install -g nano-banana
 | `NEXT_PUBLIC_APP_URL` | * | URL publica de la aplicacion. Usado para construir enlaces en emails y pases | `https://app.cuik.org` |
 | `NODE_ENV` | * | Entorno de ejecucion | `production` |
 | `CRON_SECRET` | Recomendado | Secret para autenticar llamadas a endpoints cron | Generar con `openssl rand -hex 32` |
+| `TURNSTILE_SECRET_KEY` | Recomendado | Secret key de Cloudflare Turnstile (anti-bots) para los formularios publicos: libro de reclamaciones, contacto, solicitud de demo (`/login?view=demo`) y registro de clientes. La site key es publica y va en el codigo (`apps/web/lib/turnstile.ts`). **Sin esta variable la verificacion se omite** (los formularios siguen funcionando y el servidor avisa una vez en el log `[turnstile] TURNSTILE_SECRET_KEY is not set`); con ella, un envio sin token valido recibe 400 | Cloudflare › Turnstile › widget de cuik.org › Secret key |
 
 ### Archivo `.env` completo de referencia
 
@@ -379,6 +380,7 @@ GEMINI_API_KEY=""  # Google Gemini API key para generacion de assets con IA
 NEXT_PUBLIC_APP_URL="https://app.cuik.org"
 NODE_ENV="production"
 CRON_SECRET="<openssl rand -hex 32>"
+TURNSTILE_SECRET_KEY=""  # Cloudflare Turnstile; vacio = verificacion anti-bots omitida
 ```
 
 ---

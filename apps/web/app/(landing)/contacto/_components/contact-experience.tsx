@@ -14,6 +14,7 @@ import type { CSSProperties, ReactNode } from "react"
 import { useEffect, useRef, useState } from "react"
 import { stepSpring, useReducedMotion } from "@/components/landing/fx"
 import { CONTACT_EMAIL, WHATSAPP_URL } from "@/components/landing/site-footer"
+import { type TurnstileHandle, TurnstileWidget } from "@/components/turnstile-widget"
 
 /**
  * Contáctanos as a conversation, in the home's visual language: white field
@@ -132,6 +133,10 @@ export function ContactExperience() {
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [failed, setFailed] = useState<string | null>(null)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const turnstileRef = useRef<TurnstileHandle>(null)
+  /** Honeypot: hidden from people; bots that fill it get a quiet success. */
+  const [website, setWebsite] = useState("")
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
   const questions = profile ? questionsFor(profile) : []
   const q = questions[qi]
@@ -185,12 +190,22 @@ export function ContactExperience() {
       const res = await fetch("/api/contacto", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...answers, profile, website: "" }),
+        body: JSON.stringify({
+          ...answers,
+          profile,
+          website,
+          turnstileToken: turnstileToken ?? undefined,
+        }),
       })
       const json = await res.json().catch(() => ({}))
       if (res.ok) setStage("sent")
-      else setFailed(json?.error ?? "No pudimos enviar tu mensaje.")
+      else {
+        // Tokens are single-use: get a fresh one before the next try.
+        turnstileRef.current?.reset()
+        setFailed(json?.error ?? "No pudimos enviar tu mensaje.")
+      }
     } catch {
+      turnstileRef.current?.reset()
       setFailed("No pudimos enviar tu mensaje.")
     } finally {
       setSending(false)
@@ -456,6 +471,21 @@ export function ContactExperience() {
                     {q.type === "textarea" ? " · Shift+Enter para otra línea" : ""}
                   </span>
                 </div>
+              </div>
+
+              {/* Outside the per-question block so it survives each step. Invisible
+                  for most people; a box shows only when Cloudflare asks for a click. */}
+              <TurnstileWidget ref={turnstileRef} onToken={setTurnstileToken} className="mt-4" />
+              <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">
+                <label htmlFor="ce-website">No llenar este campo</label>
+                <input
+                  id="ce-website"
+                  name="website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
+                />
               </div>
             </div>
           )}

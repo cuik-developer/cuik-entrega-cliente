@@ -15,9 +15,10 @@ import {
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Suspense, useState } from "react"
+import { Suspense, useRef, useState } from "react"
 import { toast } from "sonner"
 import { CuikLogo } from "@/components/cuik-logo"
+import { type TurnstileHandle, TurnstileWidget } from "@/components/turnstile-widget"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { authClient } from "@/lib/auth-client"
@@ -81,6 +82,11 @@ function LoginContent() {
   })
   const [demoLoading, setDemoLoading] = useState(false)
   const [demoSent, setDemoSent] = useState(false)
+  const [demoError, setDemoError] = useState("")
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const turnstileRef = useRef<TurnstileHandle>(null)
+  /** Honeypot: hidden from people; bots that fill it get a quiet success. */
+  const [demoWebsite, setDemoWebsite] = useState("")
 
   const handleLogin = async () => {
     setLoading(true)
@@ -118,6 +124,7 @@ function LoginContent() {
   const handleDemoSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setDemoLoading(true)
+    setDemoError("")
 
     try {
       const res = await fetch("/api/solicitudes", {
@@ -131,20 +138,30 @@ function LoginContent() {
           phone: demoForm.phone,
           city: demoForm.city,
           message: demoForm.message || undefined,
+          website: demoWebsite,
+          turnstileToken: turnstileToken ?? undefined,
         }),
       })
 
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
 
       if (!res.ok || !data.success) {
-        toast.error(data.error ?? "Error al enviar la solicitud")
-        setDemoLoading(false)
+        // Tokens are single-use: get a fresh one before the next try.
+        turnstileRef.current?.reset()
+        const message =
+          res.status === 400 && data.error === "Validation failed"
+            ? "Revisa los datos del formulario."
+            : (data.error ?? "Error al enviar la solicitud")
+        setDemoError(message)
+        toast.error(message)
         return
       }
 
       setDemoSent(true)
     } catch (err) {
+      turnstileRef.current?.reset()
       const message = err instanceof Error ? err.message : "Error inesperado"
+      setDemoError(message)
       toast.error(message)
     } finally {
       setDemoLoading(false)
@@ -525,6 +542,7 @@ function LoginContent() {
                         <textarea
                           id="demo-message"
                           rows={2}
+                          maxLength={2000}
                           className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0e70db]/30 focus:border-[#0e70db] transition-all resize-none"
                           placeholder="Contanos sobre tu negocio, qué necesitas, o cualquier duda..."
                           value={demoForm.message}
@@ -532,6 +550,27 @@ function LoginContent() {
                         />
                       </div>
                     </div>
+                    <div
+                      aria-hidden="true"
+                      className="absolute -left-[9999px] h-px w-px overflow-hidden"
+                    >
+                      <label htmlFor="demo-website">No llenar este campo</label>
+                      <input
+                        id="demo-website"
+                        name="website"
+                        tabIndex={-1}
+                        autoComplete="off"
+                        value={demoWebsite}
+                        onChange={(e) => setDemoWebsite(e.target.value)}
+                      />
+                    </div>
+                    {/* Invisible for most people; a box shows only when Cloudflare asks for a click. */}
+                    <TurnstileWidget ref={turnstileRef} onToken={setTurnstileToken} />
+                    {demoError && (
+                      <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        {demoError}
+                      </div>
+                    )}
                     <Button
                       type="submit"
                       disabled={demoLoading}

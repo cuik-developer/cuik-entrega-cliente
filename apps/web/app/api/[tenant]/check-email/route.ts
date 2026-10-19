@@ -1,7 +1,8 @@
 import { clients, db, sql } from "@cuik/db"
 import { z } from "zod"
 import { errorResponse, resolveTenant, successResponse } from "@/lib/api-utils"
-import { checkRateLimit } from "@/lib/rate-limit"
+import { clientIp } from "@/lib/client-ip"
+import { checkRateLimit, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit"
 
 const checkEmailSchema = z.object({
   email: z.string().email(),
@@ -25,12 +26,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
 
     const email = parsed.data.email.trim().toLowerCase()
 
-    // Rate limit: 10 requests per 10 minutes per IP+email combo
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown"
-    const rateLimitKey = `check-email:${ip}:${email}`
-
-    if (!checkRateLimit(rateLimitKey, 10)) {
-      return errorResponse("Demasiados intentos", 429)
+    // 20 lookups per 10 minutes per IP. Keyed on the IP alone: an IP+email key
+    // let one client enumerate unlimited addresses (a fresh bucket per email).
+    if (!checkRateLimit(`check-email:${clientIp(request)}`, 20, 10 * 60 * 1000)) {
+      return errorResponse(RATE_LIMIT_MESSAGE, 429)
     }
 
     const rows = await db

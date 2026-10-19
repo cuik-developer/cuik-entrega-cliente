@@ -1,12 +1,27 @@
 import { z } from "zod"
 import type { RegistrationConfig } from "./registration-config-schema"
 
+/** Length caps of the public registration (anti-abuse; generous for real data). */
+export const CLIENT_FIELD_MAX = {
+  name: 80,
+  lastName: 80,
+  dni: 20,
+  phone: 40,
+  email: 254,
+  customText: 200,
+} as const
+
 export const registerClientSchema = z.object({
-  name: z.string().trim().min(1, "Name is required"),
-  lastName: z.string().trim().optional(),
-  dni: z.string().trim().min(1, "DNI is required"),
-  phone: z.string().trim().optional(),
-  email: z.string().trim().min(1, "El email es requerido").email("Email inválido"),
+  name: z.string().trim().min(1, "Name is required").max(CLIENT_FIELD_MAX.name),
+  lastName: z.string().trim().max(CLIENT_FIELD_MAX.lastName).optional(),
+  dni: z.string().trim().min(1, "DNI is required").max(CLIENT_FIELD_MAX.dni),
+  phone: z.string().trim().max(CLIENT_FIELD_MAX.phone).optional(),
+  email: z
+    .string()
+    .trim()
+    .min(1, "El email es requerido")
+    .email("Email inválido")
+    .max(CLIENT_FIELD_MAX.email),
   marketingOptIn: z.boolean().default(false),
 })
 
@@ -23,11 +38,16 @@ export type RegisterClientInput = z.infer<typeof registerClientSchema>
 export function buildRegistrationSchema(config: RegistrationConfig | null) {
   // Base fields — always present in dynamic mode
   const baseShape: Record<string, z.ZodTypeAny> = {
-    name: z.string().trim().min(1, "El nombre es requerido"),
-    lastName: z.string().trim().optional(),
-    dni: z.string().trim().optional(),
-    phone: z.string().trim().min(1, "El teléfono es requerido"),
-    email: z.string().trim().min(1, "El email es requerido").email("Email inválido"),
+    name: z.string().trim().min(1, "El nombre es requerido").max(CLIENT_FIELD_MAX.name),
+    lastName: z.string().trim().max(CLIENT_FIELD_MAX.lastName).optional(),
+    dni: z.string().trim().max(CLIENT_FIELD_MAX.dni).optional(),
+    phone: z.string().trim().min(1, "El teléfono es requerido").max(CLIENT_FIELD_MAX.phone),
+    email: z
+      .string()
+      .trim()
+      .min(1, "El email es requerido")
+      .email("Email inválido")
+      .max(CLIENT_FIELD_MAX.email),
     marketingOptIn: z.boolean().default(false),
   }
 
@@ -61,7 +81,7 @@ export function buildRegistrationSchema(config: RegistrationConfig | null) {
 
     switch (field.type) {
       case "text": {
-        const textField = z.string().trim()
+        const textField = z.string().trim().max(CLIENT_FIELD_MAX.customText)
         fieldValidator = field.required
           ? textField.min(1, `${field.label} es requerido`)
           : textField.optional()
@@ -73,7 +93,7 @@ export function buildRegistrationSchema(config: RegistrationConfig | null) {
           const enumField = z.enum([first, ...rest])
           fieldValidator = field.required ? enumField : enumField.optional()
         } else {
-          const strField = z.string().trim()
+          const strField = z.string().trim().max(CLIENT_FIELD_MAX.customText)
           fieldValidator = field.required ? strField.min(1) : strField.optional()
         }
         break
@@ -89,7 +109,7 @@ export function buildRegistrationSchema(config: RegistrationConfig | null) {
         break
       }
       default:
-        fieldValidator = z.string().optional()
+        fieldValidator = z.string().max(CLIENT_FIELD_MAX.customText).optional()
     }
 
     customDataShape[field.key] = fieldValidator

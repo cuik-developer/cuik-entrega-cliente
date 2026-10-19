@@ -2,6 +2,9 @@ import { MensajePersonalizado, sendEmail } from "@cuik/email"
 import { z } from "zod"
 
 import { errorResponse, successResponse } from "@/lib/api-utils"
+import { clientIp } from "@/lib/client-ip"
+import { checkRateLimit, HOUR_MS, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit"
+import { TURNSTILE_FAILED_MESSAGE, verifyTurnstile } from "@/lib/turnstile"
 
 export const dynamic = "force-dynamic"
 
@@ -22,6 +25,7 @@ const contactSchema = z.object({
   message: z.string().trim().min(10, "Cuéntanos un poco más").max(3000),
   // Honeypot: real people never fill it in.
   website: z.string().optional(),
+  turnstileToken: z.string().max(4096).optional(),
 })
 
 /**
@@ -39,6 +43,14 @@ export async function POST(request: Request) {
     const d = parsed.data
     // Bots that filled the honeypot get a quiet 200 and nothing else.
     if (d.website) return successResponse({ sent: true })
+
+    const ip = clientIp(request)
+    if (!(await verifyTurnstile(d.turnstileToken, ip))) {
+      return errorResponse(TURNSTILE_FAILED_MESSAGE, 400, { code: "turnstile_failed" })
+    }
+    if (!checkRateLimit(`contacto:ip:${ip}`, 5, HOUR_MS)) {
+      return errorResponse(RATE_LIMIT_MESSAGE, 429)
+    }
 
     const to = process.env.SA_EMAIL || "sa@cuik.app"
     const lines = [

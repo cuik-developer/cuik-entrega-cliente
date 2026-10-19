@@ -2,14 +2,30 @@ import { db, solicitudes } from "@cuik/db"
 import { SolicitudRecibida, sendEmail } from "@cuik/email"
 import { createSolicitudSchema } from "@cuik/shared/validators"
 import { errorResponse, successResponse } from "@/lib/api-utils"
+import { clientIp } from "@/lib/client-ip"
+import { checkRateLimit, HOUR_MS, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit"
+import { TURNSTILE_FAILED_MESSAGE, verifyTurnstile } from "@/lib/turnstile"
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
+    const body = await request.json().catch(() => null)
+    // Honeypot: real people never fill it in. Bots get a quiet 201, nothing stored.
+    if (body && typeof body === "object" && (body as { website?: unknown }).website) {
+      return successResponse({ received: true }, 201)
+    }
     const parsed = createSolicitudSchema.safeParse(body)
 
     if (!parsed.success) {
       return errorResponse("Validation failed", 400, parsed.error.flatten())
+    }
+
+    const ip = clientIp(request)
+    const token = (body as { turnstileToken?: unknown }).turnstileToken
+    if (!(await verifyTurnstile(typeof token === "string" ? token : null, ip))) {
+      return errorResponse(TURNSTILE_FAILED_MESSAGE, 400, { code: "turnstile_failed" })
+    }
+    if (!checkRateLimit(`solicitudes:ip:${ip}`, 5, HOUR_MS)) {
+      return errorResponse(RATE_LIMIT_MESSAGE, 429)
     }
 
     const [solicitud] = await db

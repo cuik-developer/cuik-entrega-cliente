@@ -4,8 +4,11 @@ import { z } from "zod"
 
 import { errorResponse, successResponse } from "@/lib/api-utils"
 import { complaintDueOn, limaYmd } from "@/lib/business-days"
+import { clientIp } from "@/lib/client-ip"
 import { emailStatusOf, longDate } from "@/lib/complaints"
 import { LEGAL, LEGAL_PAGES_ENABLED } from "@/lib/legal"
+import { checkRateLimit, DAY_MS, HOUR_MS, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit"
+import { TURNSTILE_FAILED_MESSAGE, verifyTurnstile } from "@/lib/turnstile"
 
 export const dynamic = "force-dynamic"
 
@@ -30,7 +33,49 @@ const schema = z.object({
   detalle: z.string().trim().min(20, "Cuéntanos con más detalle").max(4000),
   pedido: z.string().trim().min(5, "Indica qué solución esperas").max(2000),
   acepta: z.literal(true, { errorMap: () => ({ message: "Debes aceptar la declaración" }) }),
+  turnstileToken: z.string().max(4096).optional(),
 })
+
+const limaDateTime = (d: Date) =>
+  new Intl.DateTimeFormat("es-PE", {
+    timeZone: "America/Lima",
+    dateStyle: "long",
+    timeStyle: "short",
+  }).format(d)
+
+/** Honeypot: a hidden `website` field real people never fill in. */
+const filledHoneypot = (body: unknown) =>
+  Boolean(body && typeof body === "object" && (body as { website?: unknown }).website)
+
+/** What a bot that filled the honeypot gets: a plausible 201, nothing stored or emailed. */
+function fakeFiled() {
+  const now = new Date()
+  return successResponse(
+    {
+      numero: `LR-${limaYmd(now).slice(0, 4)}-${now.getTime().toString(36).toUpperCase()}`,
+      fecha: limaDateTime(now),
+    },
+    201,
+  )
+}
+
+/**
+ * Turnstile, then 3 sheets per IP per hour and 3 per consumer email per day.
+ * Runs after validation, so typos never use up a consumer's attempts.
+ */
+async function antiSpam(request: Request, email: string, token: string | undefined) {
+  const ip = clientIp(request)
+  if (!(await verifyTurnstile(token, ip))) {
+    return errorResponse(TURNSTILE_FAILED_MESSAGE, 400, { code: "turnstile_failed" })
+  }
+  if (
+    !checkRateLimit(`reclamaciones:ip:${ip}`, 3, HOUR_MS) ||
+    !checkRateLimit(`reclamaciones:email:${email.toLowerCase()}`, 3, DAY_MS)
+  ) {
+    return errorResponse(RATE_LIMIT_MESSAGE, 429)
+  }
+  return null
+}
 
 /**
  * POST /api/reclamaciones — Hoja de Reclamación virtual. Numbers the sheet,
@@ -43,6 +88,7 @@ export async function POST(request: Request) {
   if (!LEGAL_PAGES_ENABLED) return errorResponse("No disponible", 404)
   try {
     const body = await request.json().catch(() => null)
+    if (filledHoneypot(body)) return fakeFiled()
     const parsed = schema.safeParse(body)
     if (!parsed.success) {
       return errorResponse("Revisa los campos marcados", 400, parsed.error.flatten())
@@ -55,12 +101,11 @@ export async function POST(request: Request) {
       })
     }
 
+    const blocked = await antiSpam(request, d.email, d.turnstileToken)
+    if (blocked) return blocked
+
     const now = new Date()
-    const lima = new Intl.DateTimeFormat("es-PE", {
-      timeZone: "America/Lima",
-      dateStyle: "long",
-      timeStyle: "short",
-    }).format(now)
+    const lima = limaDateTime(now)
     const dueOn = complaintDueOn(now)
     const vence = longDate(dueOn)
 

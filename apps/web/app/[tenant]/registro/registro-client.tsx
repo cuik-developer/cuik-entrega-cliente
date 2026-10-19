@@ -1,7 +1,11 @@
 "use client"
 
 import type { RegistrationConfig, StrategicField } from "@cuik/shared/validators"
-import { BIRTHDAY_UNKNOWN_YEAR, buildRegistrationSchema } from "@cuik/shared/validators"
+import {
+  BIRTHDAY_UNKNOWN_YEAR,
+  buildRegistrationSchema,
+  CLIENT_FIELD_MAX,
+} from "@cuik/shared/validators"
 import {
   ArrowLeft,
   CheckCircle,
@@ -17,6 +21,7 @@ import {
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { type TurnstileHandle, TurnstileWidget } from "@/components/turnstile-widget"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -130,6 +135,8 @@ export default function RegistroClient({
   const [error, setError] = useState<string | null>(null)
   /** Set when the form found an existing client: offer the email step instead. */
   const [alreadyRegistered, setAlreadyRegistered] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const turnstileRef = useRef<TurnstileHandle>(null)
 
   // --- Validation ---
   const isFormValid = useMemo(() => {
@@ -301,6 +308,7 @@ export default function RegistroClient({
         phone: form.telefono,
         email: form.email,
         marketingOptIn: form.aceptaPromos,
+        turnstileToken: turnstileToken ?? undefined,
       }
 
       // Add birthday if present
@@ -333,6 +341,8 @@ export default function RegistroClient({
       const data = await response.json()
 
       if (!response.ok) {
+        // Tokens are single-use: get a fresh one before the next try.
+        turnstileRef.current?.reset()
         const code = data?.details?.code
         setAlreadyRegistered(code === "dni_exists" || code === "email_exists")
         setError(data.error || "Error al registrarse")
@@ -355,6 +365,7 @@ export default function RegistroClient({
         router.push(`/${slug}/bienvenido?${searchParams.toString()}`)
       }, 1500)
     } catch (_err) {
+      turnstileRef.current?.reset()
       setError("Error de conexion. Intenta de nuevo.")
       setSubmitting(false)
     }
@@ -453,6 +464,7 @@ export default function RegistroClient({
               id={`strategic-${field.key}`}
               type="text"
               required={field.required}
+              maxLength={CLIENT_FIELD_MAX.customText}
               value={customData[field.key] ?? ""}
               onChange={(e) => handleCustomDataChange(field.key, e.target.value)}
               placeholder={field.placeholder ?? ""}
@@ -639,6 +651,7 @@ export default function RegistroClient({
                     type="email"
                     required
                     autoFocus
+                    maxLength={CLIENT_FIELD_MAX.email}
                     value={emailInput}
                     onChange={(e) => {
                       setEmailInput(e.target.value)
@@ -690,8 +703,6 @@ export default function RegistroClient({
           <Card className="shadow-lg">
             <CardContent className="pt-2">
               <form onSubmit={handleFormSubmit} className="space-y-4">
-                {errorBanner}
-
                 {/* Nombre (always shown) */}
                 <div className="space-y-1.5">
                   <Label htmlFor="nombre" className="text-gray-700">
@@ -703,6 +714,7 @@ export default function RegistroClient({
                     type="text"
                     required
                     autoFocus
+                    maxLength={CLIENT_FIELD_MAX.name}
                     value={form.nombre}
                     onChange={(e) => handleFormChange("nombre", e.target.value)}
                     placeholder="Juan"
@@ -718,6 +730,7 @@ export default function RegistroClient({
                   <Input
                     id="apellido"
                     type="text"
+                    maxLength={CLIENT_FIELD_MAX.lastName}
                     value={form.apellido}
                     onChange={(e) => handleFormChange("apellido", e.target.value)}
                     placeholder="Perez"
@@ -733,6 +746,7 @@ export default function RegistroClient({
                   <Input
                     id="dni"
                     type="text"
+                    maxLength={CLIENT_FIELD_MAX.dni}
                     value={form.dni}
                     onChange={(e) => handleFormChange("dni", e.target.value)}
                     placeholder="12345678"
@@ -749,6 +763,7 @@ export default function RegistroClient({
                     id="telefono"
                     type="tel"
                     required
+                    maxLength={CLIENT_FIELD_MAX.phone}
                     value={form.telefono}
                     onChange={(e) => handleFormChange("telefono", e.target.value)}
                     placeholder="+51 999 999 999"
@@ -851,6 +866,13 @@ export default function RegistroClient({
                     </div>
                   </div>
                 </div>
+
+                {/* Errors (duplicates, too many tries, failed check) sit next to the button
+                    the person just pressed, at the end of a long form. */}
+                {errorBanner}
+
+                {/* Invisible for most people; shows a box only when Cloudflare asks for a click. */}
+                <TurnstileWidget ref={turnstileRef} onToken={setTurnstileToken} />
 
                 {/* Submit */}
                 <Button

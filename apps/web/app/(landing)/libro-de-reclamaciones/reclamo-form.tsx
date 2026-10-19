@@ -2,6 +2,7 @@
 
 import { CheckCircle2, Loader2 } from "lucide-react"
 import { useRef, useState } from "react"
+import { type TurnstileHandle, TurnstileWidget } from "@/components/turnstile-widget"
 
 /**
  * Hoja de Reclamación (D.S. 011-2011-PCM): consumer identification, the
@@ -79,6 +80,10 @@ export function ReclamoForm() {
   const [done, setDone] = useState<{ numero: string; fecha: string; email: string } | null>(null)
   const topRef = useRef<HTMLDivElement>(null)
   const [failed, setFailed] = useState<string | null>(null)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const turnstileRef = useRef<TurnstileHandle>(null)
+  /** Honeypot: hidden from people, bots that fill it get a fake success. */
+  const [website, setWebsite] = useState("")
 
   const set =
     <K extends keyof Form>(k: K) =>
@@ -105,9 +110,11 @@ export function ReclamoForm() {
       const res = await fetch("/api/reclamaciones", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, website, turnstileToken: turnstileToken ?? undefined }),
       })
       const json = await res.json().catch(() => ({}))
+      // Tokens are single-use: ask for a fresh one whatever the answer was.
+      turnstileRef.current?.reset()
       if (res.ok) {
         // Filed: clear every field and show the confirmation above the form.
         setDone({ ...json.data, email: form.email })
@@ -126,6 +133,7 @@ export function ReclamoForm() {
         el?.focus({ preventScroll: true })
       } else setFailed(json?.error ?? "No pudimos registrar tu reclamo.")
     } catch {
+      turnstileRef.current?.reset()
       setFailed("No pudimos registrar tu reclamo.")
     } finally {
       setLoading(false)
@@ -411,20 +419,36 @@ export function ReclamoForm() {
       </label>
       <Err k="acepta" />
 
+      <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">
+        <label htmlFor="r-website">No llenar este campo</label>
+        <input
+          id="r-website"
+          name="website"
+          tabIndex={-1}
+          autoComplete="off"
+          value={website}
+          onChange={(e) => setWebsite(e.target.value)}
+        />
+      </div>
+
       {failed && (
         <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
           {failed}
         </div>
       )}
 
-      <button
-        type="submit"
-        disabled={loading}
-        className="inline-flex items-center gap-2 h-13 px-7 rounded-xl bg-[#0e70db] hover:bg-[#0c5fc0] text-white font-bold shadow-lg shadow-blue-200/50 transition-all active:scale-[0.97] disabled:opacity-60"
-      >
-        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-        {loading ? "Enviando…" : "Enviar reclamo"}
-      </button>
+      <div className="space-y-3">
+        {/* Invisible for most people; shows a box only when Cloudflare asks for a click. */}
+        <TurnstileWidget ref={turnstileRef} onToken={setTurnstileToken} />
+        <button
+          type="submit"
+          disabled={loading}
+          className="inline-flex items-center gap-2 h-13 px-7 rounded-xl bg-[#0e70db] hover:bg-[#0c5fc0] text-white font-bold shadow-lg shadow-blue-200/50 transition-all active:scale-[0.97] disabled:opacity-60"
+        >
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+          {loading ? "Enviando…" : "Enviar reclamo"}
+        </button>
+      </div>
     </form>
   )
 }

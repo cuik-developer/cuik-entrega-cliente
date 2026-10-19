@@ -80,6 +80,7 @@ export {
 } from "./catalog-schema"
 export {
   buildRegistrationSchema,
+  CLIENT_FIELD_MAX,
   type DynamicRegisterClientInput,
   type RegisterClientInput,
   registerClientSchema,
