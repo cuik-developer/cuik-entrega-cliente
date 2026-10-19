@@ -17,7 +17,15 @@ import {
 const REPO_ROOT = join(__dirname, "..", "..", "..", "..")
 const SKIP_DIRS = new Set(["node_modules", ".next", ".turbo", "dist", ".git", ".claude"])
 // The only place allowed to request the old "background"/5 kind.
-const DIAGNOSTIC_ROUTE = ["apps", "web", "app", "api", "apple-wallet", "push-test", "route.ts"].join(sep)
+const DIAGNOSTIC_ROUTE = [
+  "apps",
+  "web",
+  "app",
+  "api",
+  "apple-wallet",
+  "push-test",
+  "route.ts",
+].join(sep)
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
