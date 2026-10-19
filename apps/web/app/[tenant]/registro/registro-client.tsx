@@ -128,6 +128,8 @@ export default function RegistroClient({
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** Set when the form found an existing client: offer the email step instead. */
+  const [alreadyRegistered, setAlreadyRegistered] = useState(false)
 
   // --- Validation ---
   const isFormValid = useMemo(() => {
@@ -202,6 +204,7 @@ export default function RegistroClient({
   function goBackToEmail() {
     setStep("email")
     setError(null)
+    setAlreadyRegistered(false)
   }
 
   async function handleEmailSubmit(e: React.FormEvent) {
@@ -330,6 +333,8 @@ export default function RegistroClient({
       const data = await response.json()
 
       if (!response.ok) {
+        const code = data?.details?.code
+        setAlreadyRegistered(code === "dni_exists" || code === "email_exists")
         setError(data.error || "Error al registrarse")
         setSubmitting(false)
         return
@@ -599,6 +604,15 @@ export default function RegistroClient({
   const errorBanner = error ? (
     <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
       {error}
+      {alreadyRegistered && (
+        <button
+          type="button"
+          onClick={goBackToEmail}
+          className="mt-2 block font-semibold underline underline-offset-2"
+        >
+          Volver al paso del correo
+        </button>
+      )}
     </div>
   ) : null
 

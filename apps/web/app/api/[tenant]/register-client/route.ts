@@ -8,6 +8,7 @@ import {
   passDesigns,
   passInstances,
   promotions,
+  sql,
   tenants,
   visits,
 } from "@cuik/db"
@@ -48,7 +49,11 @@ async function checkDniUniqueness(tenantId: string, dni: string | undefined) {
     .limit(1)
 
   if (existingClient.length > 0) {
-    return errorResponse("Client with this DNI already exists in this tenant", 409)
+    return errorResponse(
+      "Ya estás registrado con este DNI. Ingresa el correo con el que te registraste y te enviaremos tu tarjeta.",
+      409,
+      { code: "dni_exists" },
+    )
   }
   return null
 }
@@ -122,10 +127,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     }
 
     const data = parsed.data as Record<string, unknown>
+    // One spelling per address: check-email and send-pass-link look clients up in lowercase.
+    if (typeof data.email === "string") data.email = data.email.trim().toLowerCase()
     const dni = data.dni as string | undefined
 
     const dniError = await checkDniUniqueness(tenant.id, dni)
     if (dniError) return dniError
+
+    // The unique index is case-sensitive, so catch "Ana@x" vs "ana@x" before inserting.
+    if (typeof data.email === "string" && data.email) {
+      const sameEmail = await db
+        .select({ id: clients.id })
+        .from(clients)
+        .where(sql`LOWER(${clients.email}) = ${data.email} AND ${clients.tenantId} = ${tenant.id}`)
+        .limit(1)
+      if (sameEmail.length > 0) {
+        return errorResponse(
+          "Este correo ya está registrado. Vuelve al inicio e ingrésalo para recibir tu tarjeta.",
+          409,
+          { code: "email_exists" },
+        )
+      }
+    }
 
     const hex = crypto.randomUUID().replace(/-/g, "").slice(0, 12)
     const qrCode = `cuik:${slug}:${hex}`
@@ -142,8 +165,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
         (err as { code: string }).code === "23505"
       ) {
         return errorResponse(
-          "Este email ya esta registrado. Ingresa tu email en la pagina de registro para acceder a tu pase.",
+          "Este correo ya está registrado. Vuelve al inicio e ingrésalo para recibir tu tarjeta.",
           409,
+          { code: "email_exists" },
         )
       }
       throw err

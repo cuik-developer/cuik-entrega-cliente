@@ -1,4 +1,4 @@
-import { and, clients, db, eq } from "@cuik/db"
+import { clients, db, sql } from "@cuik/db"
 import { z } from "zod"
 import { errorResponse, resolveTenant, successResponse } from "@/lib/api-utils"
 import { checkRateLimit } from "@/lib/rate-limit"
@@ -36,7 +36,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     const rows = await db
       .select({ id: clients.id })
       .from(clients)
-      .where(and(eq(clients.email, email), eq(clients.tenantId, tenant.id)))
+      // Stored emails may carry capitals (older sign-ups): compare case-insensitively,
+      // the same way send-pass-link looks the client up.
+      .where(sql`LOWER(${clients.email}) = ${email} AND ${clients.tenantId} = ${tenant.id}`)
       .limit(1)
 
     return successResponse({ exists: rows.length > 0 })
