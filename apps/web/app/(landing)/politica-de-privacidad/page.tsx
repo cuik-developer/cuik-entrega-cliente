@@ -40,7 +40,7 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <p>
-          <strong>Si visitás el sitio:</strong> datos técnicos de navegación (dirección IP,
+          <strong>Si visitas el sitio:</strong> datos técnicos de navegación (dirección IP,
           navegador, páginas vistas) y, solo si aceptas las cookies de medición, estadísticas de
           uso. Ver la <Link href="/politica-de-cookies">Política de Cookies</Link>.
         </p>

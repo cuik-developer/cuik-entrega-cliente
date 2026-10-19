@@ -8,7 +8,7 @@
  * unpublished until the identity above is final. While false: no footer links,
  * no banner, and the routes answer 404.
  */
-export const LEGAL_PAGES_ENABLED = false
+export const LEGAL_PAGES_ENABLED = true
 
 export const LEGAL = {
   brand: "Cuik",
