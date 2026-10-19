@@ -28,6 +28,9 @@ import { type ComplaintStatus, deadlineBadge, longDate } from "@/lib/complaints"
 import { cn } from "@/lib/utils"
 
 type Filter = "all" | ComplaintStatus
+/** Same minimum as the PATCH route's answer schema. */
+const ANSWER_MIN = 10
+
 const FILTERS: { value: Filter; label: string }[] = [
   { value: "pending", label: "Pendientes" },
   { value: "answered", label: "Respondidas" },
@@ -417,6 +420,11 @@ function ComplaintDetail({
                 placeholder="Respuesta al consumidor: qué se revisó, qué se resolvió y qué medidas se tomaron."
                 className="text-[13px]"
               />
+              <p
+                className={`text-[11.5px] ${answer.trim().length < ANSWER_MIN ? "text-amber-600" : "text-muted-foreground"}`}
+              >
+                Mínimo {ANSWER_MIN} caracteres ({answer.trim().length}/{ANSWER_MIN})
+              </p>
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="complaint-notify"
@@ -432,7 +440,7 @@ function ComplaintDetail({
                   size="sm"
                   className="h-8 text-[12.5px]"
                   onClick={submitAnswer}
-                  disabled={busy !== null || answer.trim().length < 10}
+                  disabled={busy !== null || answer.trim().length < ANSWER_MIN}
                 >
                   {busy === "answer" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   {c.status === "answered" ? "Guardar respuesta" : "Responder"}
