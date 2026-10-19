@@ -161,9 +161,10 @@ export type ApnsPushParams = {
    */
   storeForSeconds?: number
   /**
-   * Send as an `alert` push with priority 10 (deliver now) instead of a
-   * `background` push with priority 5 (the system may defer). Diagnostic
-   * only for now: used by the push-test route.
+   * Defaults to true: every pass update goes out as an `alert` push with
+   * priority 10 (fixed by decision, 19 Oct 2026; see APNS_PRIORITY). `false`
+   * (`background`/5, which iOS may defer) is for the push-test diagnostic
+   * only; push-priority.guard.test.ts fails if any other file passes it.
    */
   immediate?: boolean
 }

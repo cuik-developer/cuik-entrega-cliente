@@ -2,6 +2,8 @@ import http2 from "node:http2"
 import { importPKCS8, SignJWT } from "jose"
 
 import {
+  APNS_DIAGNOSTIC_PRIORITY,
+  APNS_DIAGNOSTIC_PUSH_TYPE,
   APNS_PORT,
   APNS_PRIORITY,
   APNS_PRODUCTION_HOST,
@@ -119,10 +121,10 @@ function sendToDevice(
         ":method": "POST",
         ":path": `/3/device/${deviceToken}`,
         "apns-topic": passTypeId,
-        // Apple requires priority 5 for "background"; an immediate push must
-        // go out as "alert" with priority 10 (same empty payload).
-        "apns-push-type": immediate ? "alert" : APNS_PUSH_TYPE,
-        "apns-priority": immediate ? "10" : APNS_PRIORITY,
+        // Fixed: every pass update is "alert"/10 (see APNS_PRIORITY). Only the
+        // push-test diagnostic may ask for the old "background"/5 kind.
+        "apns-push-type": immediate ? APNS_PUSH_TYPE : APNS_DIAGNOSTIC_PUSH_TYPE,
+        "apns-priority": immediate ? APNS_PRIORITY : APNS_DIAGNOSTIC_PRIORITY,
         // "0" = deliver now or drop: the immediate delivery visits rely on.
         // Scheduled sends ask APNs to store the push (latest one per device)
         // so a phone that is asleep or offline still gets it later.
@@ -276,7 +278,8 @@ export async function sendApnsPush(params: ApnsPushParams): Promise<ApnsPushResu
     keyId,
     clientCert,
     storeForSeconds = 0,
-    immediate = false,
+    // Fixed default (19 Oct 2026): a caller that says nothing gets "alert"/10.
+    immediate = true,
   } = params
 
   if (deviceTokens.length === 0) {

@@ -28,6 +28,7 @@ Antes de modificar cualquier archivo listado en [.claude/PROTECTED.md](.claude/P
 - Los colores en pass.json deben ser `rgb(r,g,b)`, NO hex — Apple rechaza hex
 - `passkit-generator` esta pineado a 3.5.7 por un workaround de Symbol hack para `additionalInfoFields`
 - El `authSecret` de cada tenant se encripta con AES-256-GCM (`apps/web/lib/encryption.ts`) antes de guardarse en `tenants.apple_config`
+- Los push de visitas, canjes, publicacion de diseno y campanas siempre van como `alert` con prioridad 10. Decision fija del 19 oct 2026: no se cambia. La prioridad 5 queda solo para el diagnostico de `push-test` (lo vigila `packages/wallet/src/apple/push-priority.guard.test.ts`)
 
 ## Base de datos
 

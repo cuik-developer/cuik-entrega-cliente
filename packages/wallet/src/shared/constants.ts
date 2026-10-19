@@ -57,9 +57,22 @@ export const APNS_SANDBOX_HOST = "api.sandbox.push.apple.com"
 
 export const APNS_PORT = 443
 
-export const APNS_PUSH_TYPE = "background"
+/**
+ * FIXED BY BUSINESS DECISION (19 Oct 2026). DO NOT CHANGE.
+ * Every pass-update push (visit, redeem, design publish and campaigns,
+ * including birthday, points-expiry and recurring sends) goes out as "alert"
+ * with priority 10. On 15 Oct 2026 iOS stopped acting on "background"/5
+ * pushes for one pass type: Apple accepted them and the phones never fetched
+ * the pass. See cb057bb and 08e89c9. Guarded by push-priority.guard.test.ts.
+ */
+export const APNS_PUSH_TYPE = "alert"
 
-export const APNS_PRIORITY = "5"
+export const APNS_PRIORITY = "10"
+
+/** Diagnostic only (push-test route): the old deferrable kind, to compare against. */
+export const APNS_DIAGNOSTIC_PUSH_TYPE = "background"
+
+export const APNS_DIAGNOSTIC_PRIORITY = "5"
 
 // ─── Google Wallet API URLs ────────────────────────────────────────────
 
