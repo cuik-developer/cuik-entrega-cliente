@@ -203,3 +203,46 @@ export const designChangeRequests = pgTable("design_change_requests", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })
+
+export type ComplaintStatus = "pending" | "answered" | "closed"
+
+/**
+ * Libro de Reclamaciones (DS 011-2011-PCM): one row per Hoja de Reclamación
+ * filed on the public site. `numero` is the correlative shown to the
+ * consumer; `dueOn` is the legal answer deadline (15 business days in Lima,
+ * see apps/web/lib/business-days.ts). Super-admin only. Migration 0030.
+ */
+export const complaints = pgTable(
+  "complaints",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    numero: text("numero").notNull().unique(),
+    tipo: text("tipo").$type<"reclamo" | "queja">().notNull(),
+    nombre: text("nombre").notNull(),
+    documentoTipo: text("documento_tipo").notNull(),
+    documento: text("documento").notNull(),
+    domicilio: text("domicilio").notNull(),
+    telefono: text("telefono").notNull(),
+    email: text("email").notNull(),
+    menor: boolean("menor").default(false).notNull(),
+    apoderado: text("apoderado"),
+    bienTipo: text("bien_tipo").$type<"producto" | "servicio">().notNull(),
+    bienDescripcion: text("bien_descripcion").notNull(),
+    monto: numeric("monto", { precision: 12, scale: 2 }),
+    detalle: text("detalle").notNull(),
+    pedido: text("pedido").notNull(),
+    status: text("status").$type<ComplaintStatus>().default("pending").notNull(),
+    dueOn: date("due_on").notNull(),
+    answer: text("answer"),
+    answeredAt: timestamp("answered_at"),
+    answeredBy: text("answered_by").references(() => user.id, { onDelete: "set null" }),
+    /** Outcome of the two filing emails (Cuik + consumer copy). */
+    emailStatus: text("email_status").$type<"sent" | "failed" | "partial">(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("complaints_status_idx").on(table.status),
+    index("complaints_created_idx").on(table.createdAt),
+  ],
+)

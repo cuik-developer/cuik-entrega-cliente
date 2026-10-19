@@ -1,7 +1,10 @@
+import { complaints, db, eq } from "@cuik/db"
 import { MensajePersonalizado, sendEmail } from "@cuik/email"
 import { z } from "zod"
 
 import { errorResponse, successResponse } from "@/lib/api-utils"
+import { complaintDueOn } from "@/lib/business-days"
+import { emailStatusOf, longDate } from "@/lib/complaints"
 import { LEGAL, LEGAL_PAGES_ENABLED } from "@/lib/legal"
 
 export const dynamic = "force-dynamic"
@@ -31,9 +34,10 @@ const schema = z.object({
 
 /**
  * POST /api/reclamaciones — Hoja de Reclamación virtual. Numbers the sheet,
- * emails a copy to the consumer and the original to Cuik. Not persisted in
- * the database yet: the number is derived from the timestamp so it is unique
- * and traceable from the email itself.
+ * stores it in public.complaints with its legal due date (15 business days,
+ * Lima — see lib/business-days.ts), then emails the original to Cuik and a
+ * copy to the consumer. The sheet counts as filed once stored: a failed email
+ * is only recorded in `email_status`; it is answered from /admin/reclamaciones.
  */
 export async function POST(request: Request) {
   if (!LEGAL_PAGES_ENABLED) return errorResponse("No disponible", 404)
@@ -57,7 +61,41 @@ export async function POST(request: Request) {
       dateStyle: "long",
       timeStyle: "short",
     }).format(now)
-    const numero = `LR-${now.getFullYear()}-${now.getTime().toString(36).toUpperCase()}`
+    const dueOn = complaintDueOn(now)
+    const vence = longDate(dueOn)
+
+    // Store first: if this fails the consumer is told to write by email (502).
+    // The number comes from the timestamp; on a same-millisecond clash, bump it.
+    let numero = ""
+    for (let attempt = 0; ; attempt++) {
+      numero = `LR-${now.getFullYear()}-${(now.getTime() + attempt).toString(36).toUpperCase()}`
+      try {
+        await db.insert(complaints).values({
+          numero,
+          tipo: d.tipo,
+          nombre: d.nombre,
+          documentoTipo: d.documentoTipo,
+          documento: d.documento,
+          domicilio: d.domicilio,
+          telefono: d.telefono,
+          email: d.email,
+          menor: d.menor,
+          apoderado: d.menor && d.apoderado ? d.apoderado : null,
+          bienTipo: d.bienTipo,
+          bienDescripcion: d.bienDescripcion,
+          monto: d.monto ? d.monto.replace(",", ".") : null,
+          detalle: d.detalle,
+          pedido: d.pedido,
+          dueOn,
+          createdAt: now,
+          updatedAt: now,
+        })
+        break
+      } catch (err) {
+        if ((err as { code?: string })?.code === "23505" && attempt < 3) continue
+        throw err
+      }
+    }
     const tipo = d.tipo === "reclamo" ? "Reclamo" : "Queja"
 
     const lines = [
@@ -85,22 +123,32 @@ export async function POST(request: Request) {
       })
 
     const to = process.env.SA_EMAIL || "sa@cuik.app"
-    await Promise.all([
+    const results = await Promise.allSettled([
       sendEmail({
         to,
         subject: `Libro de Reclamaciones · ${tipo} ${numero} · ${d.nombre}`,
         template: template("Nueva Hoja de Reclamación", [
-          `Responder a ${d.email} dentro de 15 días hábiles.`,
+          `Responder a ${d.email} a más tardar el ${vence} (15 días hábiles), desde Super-admin › Reclamaciones.`,
         ]),
       }),
       sendEmail({
         to: d.email,
         subject: `Copia de tu Hoja de Reclamación ${numero}`,
         template: template(`Recibimos tu ${tipo.toLowerCase()}`, [
-          `Esta es tu copia. ${LEGAL.razonSocial} responderá en un plazo máximo de 15 días hábiles, conforme al Código de Protección y Defensa del Consumidor. Si necesitas agregar algo, responde a este correo citando el número ${numero}.`,
+          `Esta es tu copia. ${LEGAL.razonSocial} responderá en un plazo máximo de 15 días hábiles, conforme al Código de Protección y Defensa del Consumidor: a más tardar el ${vence}. Si necesitas agregar algo, responde a este correo citando el número ${numero}.`,
         ]),
       }),
     ])
+    const emailStatus = emailStatusOf(results)
+    if (emailStatus !== "sent") {
+      console.error("[POST /api/reclamaciones] email", numero, emailStatus, results)
+    }
+    // Already filed: a failure here must not turn the 201 into an error.
+    await db
+      .update(complaints)
+      .set({ emailStatus })
+      .where(eq(complaints.numero, numero))
+      .catch((err) => console.error("[POST /api/reclamaciones] email_status", numero, err))
 
     return successResponse({ numero, fecha: lima }, 201)
   } catch (error) {

@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  BookOpen,
   Building2,
   ClipboardList,
   CreditCard,
@@ -38,6 +39,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/admin/campanas", label: "Campañas", icon: Megaphone },
       { href: "/admin/metricas", label: "Métricas", icon: TrendingUp },
       { href: "/admin/exportar", label: "Exportar datos", icon: Download },
+      { href: "/admin/reclamaciones", label: "Reclamaciones", icon: BookOpen },
     ],
   },
   {
