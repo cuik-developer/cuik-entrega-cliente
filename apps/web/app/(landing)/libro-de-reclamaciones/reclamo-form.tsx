@@ -1,7 +1,7 @@
 "use client"
 
 import { CheckCircle2, Loader2 } from "lucide-react"
-import { useState } from "react"
+import { useRef, useState } from "react"
 
 /**
  * Hoja de Reclamación (D.S. 011-2011-PCM): consumer identification, the
@@ -30,6 +30,24 @@ const EMPTY = {
 
 type Form = typeof EMPTY
 
+/** Input id of each field, to take the visitor to the first one with an error. */
+const FIELD_ID: Record<string, string> = {
+  nombre: "r-nombre",
+  documentoTipo: "r-doctipo",
+  documento: "r-doc",
+  domicilio: "r-dom",
+  telefono: "r-tel",
+  email: "r-email",
+  apoderado: "r-apoderado",
+  bienTipo: "r-bientipo",
+  bienDescripcion: "r-bien",
+  monto: "r-monto",
+  detalle: "r-detalle",
+  pedido: "r-pedido",
+  acepta: "r-acepta",
+}
+const ORDER = Object.keys(FIELD_ID)
+
 const input =
   "w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-4 focus:ring-[#0e70db]/15 focus:border-[#0e70db] transition-[box-shadow,border-color]"
 const label = "block text-xs font-semibold text-gray-600 mb-1.5"
@@ -38,7 +56,8 @@ export function ReclamoForm() {
   const [form, setForm] = useState<Form>(EMPTY)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
-  const [done, setDone] = useState<{ numero: string; fecha: string } | null>(null)
+  const [done, setDone] = useState<{ numero: string; fecha: string; email: string } | null>(null)
+  const topRef = useRef<HTMLDivElement>(null)
   const [failed, setFailed] = useState<string | null>(null)
 
   const set =
@@ -54,6 +73,7 @@ export function ReclamoForm() {
     setLoading(true)
     setFailed(null)
     setErrors({})
+    setDone(null)
     try {
       const res = await fetch("/api/reclamaciones", {
         method: "POST",
@@ -62,12 +82,20 @@ export function ReclamoForm() {
       })
       const json = await res.json().catch(() => ({}))
       if (res.ok) {
-        setDone(json.data)
+        // Filed: clear every field and show the confirmation above the form.
+        setDone({ ...json.data, email: form.email })
+        setForm(EMPTY)
+        topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
         return
       }
       const fe = json?.details?.fieldErrors as Record<string, string[]> | undefined
       if (res.status === 400 && fe) {
         setErrors(Object.fromEntries(Object.entries(fe).map(([k, v]) => [k, v[0]])))
+        setFailed("Revisa los campos marcados en rojo.")
+        const first = ORDER.find((k) => fe[k]?.length)
+        const el = first ? document.getElementById(FIELD_ID[first]) : null
+        el?.scrollIntoView({ behavior: "smooth", block: "center" })
+        el?.focus({ preventScroll: true })
       } else setFailed(json?.error ?? "No pudimos registrar tu reclamo.")
     } catch {
       setFailed("No pudimos registrar tu reclamo.")
@@ -76,29 +104,28 @@ export function ReclamoForm() {
     }
   }
 
-  if (done) {
-    return (
-      <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-8 text-center">
-        <div className="w-12 h-12 mx-auto rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-          <CheckCircle2 className="w-6 h-6" />
-        </div>
-        <h3 className="mt-4 text-xl font-extrabold text-gray-900">Reclamo registrado</h3>
-        <p className="mt-2 text-gray-600">
-          Hoja de Reclamación <strong className="text-gray-900">{done.numero}</strong> ·{" "}
-          {done.fecha}
-        </p>
-        <p className="mt-1 text-sm text-gray-500">
-          Te enviamos una copia a {form.email}. Responderemos en un máximo de 15 días hábiles.
-        </p>
-      </div>
-    )
-  }
-
   const Err = ({ k }: { k: string }) =>
     errors[k] ? <p className="mt-1 text-xs text-red-600">{errors[k]}</p> : null
 
   return (
     <form onSubmit={submit} noValidate className="space-y-8" data-clarity-mask="true">
+      <div ref={topRef} className="scroll-mt-24" />
+      {done && (
+        <div
+          aria-live="polite"
+          className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-5 flex gap-3 items-start"
+        >
+          <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
+          <div>
+            <div className="font-bold text-gray-900">Reclamo enviado</div>
+            <p className="mt-1 text-sm text-gray-600">
+              Hoja de Reclamación <strong className="text-gray-900">{done.numero}</strong> ·{" "}
+              {done.fecha}. Te enviamos una copia a {done.email}. Responderemos en un máximo de 15
+              días hábiles.
+            </p>
+          </div>
+        </div>
+      )}
       <fieldset className="space-y-4">
         <legend className="text-sm font-bold text-gray-900">
           1. Identificación del consumidor
@@ -301,7 +328,13 @@ export function ReclamoForm() {
             onChange={set("detalle")}
             placeholder="Cuéntanos qué pasó, cuándo y con qué comercio o servicio."
           />
-          <Err k="detalle" />
+          {errors.detalle ? (
+            <Err k="detalle" />
+          ) : (
+            <p className="mt-1 text-xs text-gray-400">
+              Mínimo 20 caracteres ({form.detalle.trim().length}/20)
+            </p>
+          )}
         </div>
         <div>
           <label htmlFor="r-pedido" className={label}>
@@ -321,6 +354,7 @@ export function ReclamoForm() {
 
       <label className="flex items-start gap-3 text-sm text-gray-600 cursor-pointer">
         <input
+          id="r-acepta"
           type="checkbox"
           checked={form.acepta}
           onChange={set("acepta")}
