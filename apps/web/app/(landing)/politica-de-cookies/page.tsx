@@ -63,8 +63,8 @@ const SECTIONS: LegalSection[] = [
             <td>Medición</td>
             <td>Entender qué páginas se visitan y desde dónde, para mejorar el sitio.</td>
             <td>
-              Herramientas de analítica web. Hoy no cargamos ninguna; si la añadimos, solo se
-              activará si aceptaste.
+              Microsoft Clarity (“_clck”, “_clsk”, “CLID”, “MUID”, entre otras): mide cómo se navega
+              el sitio público. Solo se activa si aceptaste.
             </td>
             <td>Sí.</td>
           </tr>
@@ -76,10 +76,27 @@ const SECTIONS: LegalSection[] = [
     id: "terceros",
     title: "Cookies de terceros",
     body: (
-      <p>
-        Si en el futuro incorporamos herramientas de medición o publicidad de terceros, se listarán
-        en esta página con su proveedor, finalidad y duración antes de activarse.
-      </p>
+      <>
+        <p>
+          Usamos <strong>Microsoft Clarity</strong>, de Microsoft Corporation (Estados Unidos), para
+          entender cómo se navega el sitio público: qué páginas se ven, hasta dónde se desplaza la
+          gente y dónde hace clic, con grabaciones de la sesión y mapas de calor. El texto que
+          escribes queda oculto y Clarity nunca se carga en el Panel, en la caja ni en tu pase. Sus
+          cookies duran hasta un año. Más detalle en la{" "}
+          <a
+            href="https://privacy.microsoft.com/es-es/privacystatement"
+            target="_blank"
+            rel="noreferrer"
+          >
+            declaración de privacidad de Microsoft
+          </a>
+          .
+        </p>
+        <p>
+          Si incorporamos otras herramientas de medición o publicidad, se listarán aquí con su
+          proveedor, finalidad y duración antes de activarse.
+        </p>
+      </>
     ),
   },
   {

@@ -98,7 +98,7 @@ export function ReclamoForm() {
     errors[k] ? <p className="mt-1 text-xs text-red-600">{errors[k]}</p> : null
 
   return (
-    <form onSubmit={submit} noValidate className="space-y-8">
+    <form onSubmit={submit} noValidate className="space-y-8" data-clarity-mask="true">
       <fieldset className="space-y-4">
         <legend className="text-sm font-bold text-gray-900">
           1. Identificación del consumidor

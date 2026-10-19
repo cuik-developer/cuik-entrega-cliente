@@ -17,9 +17,9 @@ const SECTIONS: LegalSection[] = [
     body: (
       <p>
         Esta política explica cómo <strong>{LEGAL.razonSocial}</strong> (“Cuik”), RUC {LEGAL.ruc},
-        recopila, usa, conserva y protege los datos personales de quienes visitan {LEGAL.site},
-        contratan la plataforma como Comercios o se registran como Clientes en el programa de un
-        Comercio.
+        con domicilio en {LEGAL.domicilio}, recopila, usa, conserva y protege los datos personales
+        de quienes visitan {LEGAL.site}, contratan la plataforma como Comercios o se registran como
+        Clientes en el programa de un Comercio.
       </p>
     ),
   },
@@ -112,6 +112,11 @@ const SECTIONS: LegalSection[] = [
           <li>
             <strong>Proveedores de infraestructura y correo</strong> (hosting, almacenamiento, envío
             de notificaciones y correos transaccionales).
+          </li>
+          <li>
+            <strong>Microsoft Clarity</strong>, solo si aceptas las cookies de medición: registra de
+            forma anónima cómo se navega el sitio público (clics, desplazamiento y páginas vistas),
+            con el texto escrito oculto. No se usa en el Panel ni en tu pase.
           </li>
           <li>
             <strong>El Comercio</strong> del programa en el que te registraste, que ve tus datos y

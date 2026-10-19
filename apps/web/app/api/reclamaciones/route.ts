@@ -3,7 +3,7 @@ import { MensajePersonalizado, sendEmail } from "@cuik/email"
 import { z } from "zod"
 
 import { errorResponse, successResponse } from "@/lib/api-utils"
-import { complaintDueOn } from "@/lib/business-days"
+import { complaintDueOn, limaYmd } from "@/lib/business-days"
 import { emailStatusOf, longDate } from "@/lib/complaints"
 import { LEGAL, LEGAL_PAGES_ENABLED } from "@/lib/legal"
 
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     // The number comes from the timestamp; on a same-millisecond clash, bump it.
     let numero = ""
     for (let attempt = 0; ; attempt++) {
-      numero = `LR-${now.getFullYear()}-${(now.getTime() + attempt).toString(36).toUpperCase()}`
+      numero = `LR-${limaYmd(now).slice(0, 4)}-${(now.getTime() + attempt).toString(36).toUpperCase()}`
       try {
         await db.insert(complaints).values({
           numero,

@@ -17,10 +17,9 @@ const SECTIONS: LegalSection[] = [
       <>
         <p>
           Cuik es una plataforma de fidelización digital operada por{" "}
-          <strong>{LEGAL.razonSocial}</strong>, RUC {LEGAL.ruc}, con domicilio en {LEGAL.domicilio}{" "}
-          (en adelante, “Cuik”). Permite a negocios físicos crear programas de lealtad (estampillas,
-          puntos, descuentos y cupones de regalo) que sus clientes guardan como pases digitales en
-          Apple Wallet y Google Wallet.
+          <strong>{LEGAL.razonSocial}</strong>, RUC {LEGAL.ruc} (en adelante, “Cuik”). Permite a
+          negocios físicos crear programas de lealtad (estampillas, puntos, descuentos y cupones de
+          regalo) que sus clientes guardan como pases digitales en Apple Wallet y Google Wallet.
         </p>
         <p>
           Estos Términos regulan el uso del sitio {LEGAL.site}, del panel de administración, de la
