@@ -7,6 +7,7 @@ import { complaintDueOn, limaYmd } from "@/lib/business-days"
 import { clientIp } from "@/lib/client-ip"
 import { emailStatusOf, longDate } from "@/lib/complaints"
 import { LEGAL, LEGAL_PAGES_ENABLED } from "@/lib/legal"
+import { notifyDecision, sendCapReachedNotice } from "@/lib/notify-cap"
 import { checkRateLimit, DAY_MS, HOUR_MS, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit"
 import { TURNSTILE_FAILED_MESSAGE, verifyTurnstile } from "@/lib/turnstile"
 
@@ -168,14 +169,22 @@ export async function POST(request: Request) {
       })
 
     const to = process.env.SA_EMAIL || "sa@cuik.app"
+    // Daily cap on Cuik's own notification (lib/notify-cap.ts). The sheet is
+    // already stored and the consumer always gets their copy.
+    const decision = notifyDecision("reclamaciones")
+    if (decision === "cap-reached") void sendCapReachedNotice("reclamaciones")
     const results = await Promise.allSettled([
-      sendEmail({
-        to,
-        subject: `Libro de Reclamaciones · ${tipo} ${numero} · ${d.nombre}`,
-        template: template("Nueva Hoja de Reclamación", [
-          `Responder a ${d.email} a más tardar el ${vence} (15 días hábiles), desde Super-admin › Reclamaciones.`,
-        ]),
-      }),
+      ...(decision === "send"
+        ? [
+            sendEmail({
+              to,
+              subject: `Libro de Reclamaciones · ${tipo} ${numero} · ${d.nombre}`,
+              template: template("Nueva Hoja de Reclamación", [
+                `Responder a ${d.email} a más tardar el ${vence} (15 días hábiles), desde Super-admin › Reclamaciones.`,
+              ]),
+            }),
+          ]
+        : []),
       sendEmail({
         to: d.email,
         subject: `Copia de tu Hoja de Reclamación ${numero}`,

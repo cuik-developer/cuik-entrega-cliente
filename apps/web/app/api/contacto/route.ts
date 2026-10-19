@@ -3,6 +3,7 @@ import { z } from "zod"
 
 import { errorResponse, successResponse } from "@/lib/api-utils"
 import { clientIp } from "@/lib/client-ip"
+import { notifyDecision, sendCapReachedNotice } from "@/lib/notify-cap"
 import { checkRateLimit, HOUR_MS, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit"
 import { TURNSTILE_FAILED_MESSAGE, verifyTurnstile } from "@/lib/turnstile"
 
@@ -62,6 +63,15 @@ export async function POST(request: Request) {
       d.source ? `Nos conoció: ${d.source}` : null,
       `Novedades por correo: ${d.newsletter ? "sí" : "no"}`,
     ].filter((l): l is string => Boolean(l))
+
+    // Daily cap on notifications (lib/notify-cap.ts): past it the message is
+    // only logged, since Contacto stores nothing.
+    const decision = notifyDecision("contacto")
+    if (decision !== "send") {
+      if (decision === "cap-reached") await sendCapReachedNotice("contacto")
+      console.warn("[POST /api/contacto] daily notify cap: not emailed", { email: d.email })
+      return successResponse({ sent: true })
+    }
 
     await sendEmail({
       to,

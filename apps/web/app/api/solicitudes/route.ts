@@ -3,6 +3,7 @@ import { SolicitudRecibida, sendEmail } from "@cuik/email"
 import { createSolicitudSchema } from "@cuik/shared/validators"
 import { errorResponse, successResponse } from "@/lib/api-utils"
 import { clientIp } from "@/lib/client-ip"
+import { notifyDecision, sendCapReachedNotice } from "@/lib/notify-cap"
 import { checkRateLimit, HOUR_MS, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit"
 import { TURNSTILE_FAILED_MESSAGE, verifyTurnstile } from "@/lib/turnstile"
 
@@ -42,17 +43,21 @@ export async function POST(request: Request) {
 
     // Notify SA about new solicitud (fire-and-forget)
     const saEmail = process.env.SA_EMAIL || "sa@cuik.app"
-    sendEmail({
-      to: saEmail,
-      subject: `Nueva solicitud: ${solicitud.businessName}`,
-      template: SolicitudRecibida({
-        businessName: solicitud.businessName,
-        contactName: solicitud.contactName,
-        contactEmail: solicitud.email,
-        phone: solicitud.phone ?? "",
-        message: "",
-      }),
-    }).catch((err) => console.error("[EMAIL] Failed to send solicitud notification:", err))
+    // Daily cap on notifications (lib/notify-cap.ts); the request is stored anyway.
+    const decision = notifyDecision("solicitudes")
+    if (decision === "cap-reached") void sendCapReachedNotice("solicitudes")
+    if (decision === "send")
+      sendEmail({
+        to: saEmail,
+        subject: `Nueva solicitud: ${solicitud.businessName}`,
+        template: SolicitudRecibida({
+          businessName: solicitud.businessName,
+          contactName: solicitud.contactName,
+          contactEmail: solicitud.email,
+          phone: solicitud.phone ?? "",
+          message: "",
+        }),
+      }).catch((err) => console.error("[EMAIL] Failed to send solicitud notification:", err))
 
     return successResponse(solicitud, 201)
   } catch (error) {

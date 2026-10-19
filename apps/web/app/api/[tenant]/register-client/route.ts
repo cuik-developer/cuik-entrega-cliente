@@ -29,7 +29,10 @@ import {
 } from "@cuik/wallet/google"
 import { resolvePassFields, type TemplateContext, validateGoogleEnv } from "@cuik/wallet/shared"
 import { errorResponse, resolveTenant, successResponse } from "@/lib/api-utils"
+import { clientIp } from "@/lib/client-ip"
 import { insertEarnLot } from "@/lib/loyalty/points-lots"
+import { checkRateLimit, HOUR_MS, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit"
+import { TURNSTILE_FAILED_MESSAGE, verifyTurnstile } from "@/lib/turnstile"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 
 // ── Registration helpers ─────────────────────────────────────────────
@@ -124,6 +127,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
 
     if (!parsed.success) {
       return errorResponse("Validation failed", 400, parsed.error.flatten())
+    }
+
+    // Anti-bot: Turnstile token from the form (the schema strips it), then a
+    // per-IP cap. Counted after validation so typos never lock a person out.
+    const ip = clientIp(request)
+    const token = (body as { turnstileToken?: unknown } | null)?.turnstileToken
+    if (!(await verifyTurnstile(typeof token === "string" ? token : null, ip))) {
+      return errorResponse(TURNSTILE_FAILED_MESSAGE, 400, { code: "turnstile_failed" })
+    }
+    if (!checkRateLimit(`register-client:ip:${ip}`, 30, HOUR_MS)) {
+      return errorResponse(RATE_LIMIT_MESSAGE, 429)
     }
 
     const data = parsed.data as Record<string, unknown>
