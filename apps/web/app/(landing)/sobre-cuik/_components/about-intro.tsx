@@ -60,7 +60,7 @@ export function AboutIntro() {
                 </Button>
               </Link>
             </div>
-            <p className="text-xs text-gray-400">Toca un teléfono para traerlo al frente.</p>
+            <p className="text-xs text-gray-400">Toca o desliza los teléfonos para cambiar de tarjeta.</p>
           </div>
 
           <div

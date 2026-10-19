@@ -159,18 +159,13 @@ export function FanHero({
     }
   }, [])
 
-  // Pointer tilt + idle drift, one rAF loop, spring-smoothed. The listener lives on the
-  // whole hero because the stage itself ignores the pointer (see .ah-stage).
+  // Idle drift, one rAF loop, spring-smoothed. The passes no longer follow the
+  // cursor (removed 19 Oct 2026 by request); only the slow drift remains.
   useEffect(() => {
     const el = stage.current
-    const host = hero.current
-    if (!el || !host || reduce) return
-    const fine = window.matchMedia("(hover: hover) and (pointer: fine)").matches
+    if (!el || reduce) return
     let rx = { v: 0, x: 0 }
     let ry = { v: 0, x: 0 }
-    let tx = 0
-    let ty = 0
-    let hover = false
     let raf = 0
     let last = 0
     const t0 = performance.now()
@@ -181,35 +176,40 @@ export function FanHero({
       const t = (now - t0) / 1000
       const driftX = Math.sin(t * 0.35) * 2.2
       const driftY = Math.sin(t * 0.23 + 1) * 3.5
-      rx = stepSpring(rx, hover ? tx : driftX, dt, 0.7)
-      ry = stepSpring(ry, hover ? ty : driftY, dt, 0.7)
+      rx = stepSpring(rx, driftX, dt, 0.7)
+      ry = stepSpring(ry, driftY, dt, 0.7)
       el.style.setProperty("--rx", `${rx.x.toFixed(3)}deg`)
       el.style.setProperty("--ry", `${ry.x.toFixed(3)}deg`)
       raf = requestAnimationFrame(frame)
     }
     raf = requestAnimationFrame(frame)
-
-    const move = (e: PointerEvent) => {
-      const r = el.getBoundingClientRect()
-      const px = (e.clientX - r.left) / r.width
-      const py = (e.clientY - r.top) / r.height
-      ty = (px - 0.5) * 2 * 10
-      tx = -(py - 0.5) * 2 * 7
-      hover = true
-    }
-    const leave = () => {
-      hover = false
-    }
-    if (fine) {
-      host.addEventListener("pointermove", move)
-      host.addEventListener("pointerleave", leave)
-    }
-    return () => {
-      cancelAnimationFrame(raf)
-      host.removeEventListener("pointermove", move)
-      host.removeEventListener("pointerleave", leave)
-    }
+    return () => cancelAnimationFrame(raf)
   }, [reduce])
+
+  // Swipe on touch screens: left brings the pass on the right to the front,
+  // right brings the one on the left (slots 2 and 1). Taps still work as before.
+  useEffect(() => {
+    const host = hero.current
+    if (!host) return
+    let x0 = 0
+    let y0 = 0
+    const start = (e: TouchEvent) => {
+      x0 = e.touches[0].clientX
+      y0 = e.touches[0].clientY
+    }
+    const end = (e: TouchEvent) => {
+      const dx = e.changedTouches[0].clientX - x0
+      const dy = e.changedTouches[0].clientY - y0
+      if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return
+      bringToFrontRef.current(dx < 0 ? 2 : 1)
+    }
+    host.addEventListener("touchstart", start, { passive: true })
+    host.addEventListener("touchend", end, { passive: true })
+    return () => {
+      host.removeEventListener("touchstart", start)
+      host.removeEventListener("touchend", end)
+    }
+  }, [])
 
   // Tap a pass: it swaps places with the one at the front.
   const bringToFront = (slot: number) => {
@@ -222,6 +222,8 @@ export function FanHero({
       return next
     })
   }
+  const bringToFrontRef = useRef(bringToFront)
+  bringToFrontRef.current = bringToFront
 
   const stateClass =
     phase === "pending"

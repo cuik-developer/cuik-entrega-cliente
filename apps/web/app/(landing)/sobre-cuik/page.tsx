@@ -19,6 +19,7 @@ import type { ReactNode } from "react"
 import { FxStyles, Reveal, TiltCard } from "@/components/landing/fx"
 import { SiteFooter, WHATSAPP_URL } from "@/components/landing/site-footer"
 import { SiteNav } from "@/components/landing/site-nav"
+import { VerticalsMarquee } from "@/components/landing/verticals-marquee"
 import { Button } from "@/components/ui/button"
 import { AboutIntro } from "./_components/about-intro"
 import { ProblemFlip } from "./_components/problem-flip"
@@ -122,9 +123,10 @@ export default function SobreCuikPage() {
       <FxStyles />
       <SiteNav solid />
       <AboutIntro />
+      <VerticalsMarquee />
 
       {/* ── El problema (be!'s long two-column block, told with the object) ── */}
-      <section className="relative pt-10 pb-16 sm:pt-14 sm:pb-20 overflow-hidden">
+      <section className="relative pt-14 pb-16 sm:pt-20 sm:pb-20 overflow-hidden">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 grid lg:grid-cols-[minmax(0,7fr)_minmax(0,4fr)] gap-14 lg:gap-16 items-center">
           <div>
             <Reveal>

@@ -1,7 +1,7 @@
 "use client"
 
 import { Cake, Gift, PawPrint } from "lucide-react"
-import { useEffect, useState } from "react"
+import { type TouchEvent, useEffect, useRef, useState } from "react"
 import { LivePass, type PassFrame, type PushContent } from "./live-pass"
 
 /**
@@ -102,12 +102,31 @@ export function HeroCarousel({ active }: { active: boolean }) {
 
   const { front, scene } = TIMELINE[step]
 
+  // Swipe on touch screens: left brings the phone on the right (slot 1) to the
+  // front, right brings the one on the left (slot 2). Taps work as before.
+  const touch = useRef({ x: 0, y: 0 })
+  const onTouchStart = (e: TouchEvent) => {
+    touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  }
+  const onTouchEnd = (e: TouchEvent) => {
+    const dx = e.changedTouches[0].clientX - touch.current.x
+    const dy = e.changedTouches[0].clientY - touch.current.y
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return
+    goTo((front + (dx < 0 ? 1 : 2)) % PHONES.length)
+  }
+
   return (
     <div
-      className="hc-stage relative w-[320px] sm:w-[380px] lg:w-[420px] h-[380px] sm:h-[440px] lg:h-[500px]"
-      style={{ transformStyle: "preserve-3d", animation: "float 6s ease-in-out infinite" }}
+      className="touch-pan-y"
+      style={{ transformStyle: "preserve-3d" }}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
     >
-      <style>{`
+      <div
+        className="hc-stage relative w-[320px] sm:w-[380px] lg:w-[420px] h-[380px] sm:h-[440px] lg:h-[500px]"
+        style={{ transformStyle: "preserve-3d", animation: "float 6s ease-in-out infinite" }}
+      >
+        <style>{`
         /* pointer-events: none on the stage: the back phones sit behind its 3D plane (translateZ < 0),
            and a hittable parent plane would win every click over them. */
         .hc-stage { container-type: inline-size; --hc-ease: cubic-bezier(0.77, 0, 0.175, 1); pointer-events: none; }
@@ -130,35 +149,36 @@ export function HeroCarousel({ active }: { active: boolean }) {
         }
       `}</style>
 
-      {PHONES.map((p, i) => {
-        const slot = (i - front + PHONES.length) % PHONES.length
-        const isFront = slot === 0
-        return (
-          <button
-            key={p.key}
-            type="button"
-            onClick={() => goTo(i)}
-            aria-label={isFront ? p.alt : `Ver ${p.alt}`}
-            tabIndex={isFront ? -1 : 0}
-            className={`hc-phone slot-${slot}`}
-            style={{ width: p.width }}
-          >
-            <LivePass
-              base={p.base}
-              next={p.next}
-              alt={p.alt}
-              frame={p.frame}
-              crossfade={isFront && scene !== "idle"}
-              push={isFront && scene === "push" ? (p.push ?? null) : null}
-              priority
-            />
-            <span className={`hc-hit ${p.frame}`} aria-hidden="true" />
-          </button>
-        )
-      })}
+        {PHONES.map((p, i) => {
+          const slot = (i - front + PHONES.length) % PHONES.length
+          const isFront = slot === 0
+          return (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => goTo(i)}
+              aria-label={isFront ? p.alt : `Ver ${p.alt}`}
+              tabIndex={isFront ? -1 : 0}
+              className={`hc-phone slot-${slot}`}
+              style={{ width: p.width }}
+            >
+              <LivePass
+                base={p.base}
+                next={p.next}
+                alt={p.alt}
+                frame={p.frame}
+                crossfade={isFront && scene !== "idle"}
+                push={isFront && scene === "push" ? (p.push ?? null) : null}
+                priority
+              />
+              <span className={`hc-hit ${p.frame}`} aria-hidden="true" />
+            </button>
+          )
+        })}
 
-      {/* Shadow underneath the group */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[80%] h-6 bg-black/10 rounded-full blur-2xl" />
+        {/* Shadow underneath the group */}
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[80%] h-6 bg-black/10 rounded-full blur-2xl" />
+      </div>
     </div>
   )
 }
