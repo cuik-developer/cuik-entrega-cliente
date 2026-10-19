@@ -194,7 +194,8 @@ export function ContactExperience() {
           ...answers,
           profile,
           website,
-          turnstileToken: turnstileToken ?? undefined,
+          turnstileToken:
+            turnstileToken ?? (await turnstileRef.current?.waitForToken()) ?? undefined,
         }),
       })
       const json = await res.json().catch(() => ({}))

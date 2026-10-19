@@ -139,7 +139,8 @@ function LoginContent() {
           city: demoForm.city,
           message: demoForm.message || undefined,
           website: demoWebsite,
-          turnstileToken: turnstileToken ?? undefined,
+          turnstileToken:
+            turnstileToken ?? (await turnstileRef.current?.waitForToken()) ?? undefined,
         }),
       })
 

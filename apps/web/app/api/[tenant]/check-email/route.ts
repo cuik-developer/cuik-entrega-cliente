@@ -26,9 +26,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
 
     const email = parsed.data.email.trim().toLowerCase()
 
-    // 20 lookups per 10 minutes per IP. Keyed on the IP alone: an IP+email key
+    // 60 lookups per 10 minutes per IP (a shop Wi-Fi is shared by many customers). Keyed on the IP alone: an IP+email key
     // let one client enumerate unlimited addresses (a fresh bucket per email).
-    if (!checkRateLimit(`check-email:${clientIp(request)}`, 20, 10 * 60 * 1000)) {
+    if (!checkRateLimit(`check-email:${clientIp(request)}`, 60, 10 * 60 * 1000)) {
       return errorResponse(RATE_LIMIT_MESSAGE, 429)
     }
 

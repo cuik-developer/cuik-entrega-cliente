@@ -1,6 +1,6 @@
 "use client"
 
-import { type Ref, useEffect, useImperativeHandle, useRef } from "react"
+import { type Ref, useCallback, useEffect, useImperativeHandle, useRef } from "react"
 import { TURNSTILE_SITE_KEY } from "@/lib/turnstile"
 
 /**
@@ -64,6 +64,11 @@ function loadTurnstile(): Promise<TurnstileApi> {
 export type TurnstileHandle = {
   /** Discards the current token (reports null) and asks for a new one. */
   reset: () => void
+  /**
+   * The current token, waiting up to `timeoutMs` for the challenge to finish.
+   * Covers a quick submit right after the page loads; null if none arrives.
+   */
+  waitForToken: (timeoutMs?: number) => Promise<string | null>
 }
 
 export function TurnstileWidget({
@@ -78,20 +83,34 @@ export function TurnstileWidget({
   const container = useRef<HTMLDivElement>(null)
   const widgetId = useRef<string | null>(null)
   const onTokenRef = useRef(onToken)
+  const tokenRef = useRef<string | null>(null)
 
   useEffect(() => {
     onTokenRef.current = onToken
   }, [onToken])
 
+  /** Every token change goes through here, so waitForToken sees it too. */
+  const report = useCallback((token: string | null) => {
+    tokenRef.current = token
+    onTokenRef.current(token)
+  }, [])
+
   useImperativeHandle(
     ref,
     () => ({
       reset() {
-        onTokenRef.current(null)
+        report(null)
         if (widgetId.current && window.turnstile) window.turnstile.reset(widgetId.current)
       },
+      async waitForToken(timeoutMs = 6000) {
+        const until = Date.now() + timeoutMs
+        while (!tokenRef.current && Date.now() < until) {
+          await new Promise((r) => setTimeout(r, 150))
+        }
+        return tokenRef.current
+      },
     }),
-    [],
+    [report],
   )
 
   useEffect(() => {
@@ -103,10 +122,10 @@ export function TurnstileWidget({
           sitekey: TURNSTILE_SITE_KEY,
           appearance: "interaction-only",
           language: "es",
-          callback: (token) => onTokenRef.current(token),
-          "expired-callback": () => onTokenRef.current(null),
-          "error-callback": () => onTokenRef.current(null),
-          "timeout-callback": () => onTokenRef.current(null),
+          callback: (token) => report(token),
+          "expired-callback": () => report(null),
+          "error-callback": () => report(null),
+          "timeout-callback": () => report(null),
         })
       })
       .catch((err) => console.warn("[turnstile]", err))
@@ -115,7 +134,7 @@ export function TurnstileWidget({
       if (widgetId.current) window.turnstile?.remove(widgetId.current)
       widgetId.current = null
     }
-  }, [])
+  }, [report])
 
   return <div ref={container} className={className} />
 }

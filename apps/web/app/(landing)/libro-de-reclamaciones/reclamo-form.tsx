@@ -110,7 +110,12 @@ export function ReclamoForm() {
       const res = await fetch("/api/reclamaciones", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, website, turnstileToken: turnstileToken ?? undefined }),
+        body: JSON.stringify({
+          ...form,
+          website,
+          turnstileToken:
+            turnstileToken ?? (await turnstileRef.current?.waitForToken()) ?? undefined,
+        }),
       })
       const json = await res.json().catch(() => ({}))
       // Tokens are single-use: ask for a fresh one whatever the answer was.

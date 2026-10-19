@@ -24,7 +24,7 @@ index 5503530..c04a4b1 100644
 +    if (!(await verifyTurnstile(typeof token === "string" ? token : null, ip))) {
 +      return errorResponse(TURNSTILE_FAILED_MESSAGE, 400, { code: "turnstile_failed" })
 +    }
-+    if (!checkRateLimit(`register-client:ip:${ip}`, 10, HOUR_MS)) {
++    if (!checkRateLimit(`register-client:ip:${ip}`, 30, HOUR_MS)) {
 +      return errorResponse(RATE_LIMIT_MESSAGE, 429)
 +    }
 +

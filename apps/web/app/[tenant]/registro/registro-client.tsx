@@ -308,7 +308,7 @@ export default function RegistroClient({
         phone: form.telefono,
         email: form.email,
         marketingOptIn: form.aceptaPromos,
-        turnstileToken: turnstileToken ?? undefined,
+        turnstileToken: turnstileToken ?? (await turnstileRef.current?.waitForToken()) ?? undefined,
       }
 
       // Add birthday if present
