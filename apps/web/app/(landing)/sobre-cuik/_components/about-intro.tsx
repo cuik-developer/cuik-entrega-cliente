@@ -23,7 +23,7 @@ export function AboutIntro() {
   }, [])
 
   return (
-    <section ref={ref} className="relative overflow-hidden pt-12 pb-20 sm:pt-20 sm:pb-28">
+    <section ref={ref} className="relative overflow-hidden pt-12 pb-6 sm:pt-20 sm:pb-8">
       <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
         <div className="absolute top-[-20%] left-[10%] w-[600px] h-[600px] rounded-full bg-[#0e70db]/[0.04] blur-3xl" />
         <div className="absolute bottom-[-10%] right-[5%] w-[500px] h-[500px] rounded-full bg-[#ff4810]/[0.03] blur-3xl" />

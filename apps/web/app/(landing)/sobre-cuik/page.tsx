@@ -124,7 +124,7 @@ export default function SobreCuikPage() {
       <AboutIntro />
 
       {/* ── El problema (be!'s long two-column block, told with the object) ── */}
-      <section className="relative py-20 sm:py-28 overflow-hidden">
+      <section className="relative pt-10 pb-16 sm:pt-14 sm:pb-20 overflow-hidden">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 grid lg:grid-cols-[minmax(0,7fr)_minmax(0,4fr)] gap-14 lg:gap-16 items-center">
           <div>
             <Reveal>
