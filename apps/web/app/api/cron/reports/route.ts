@@ -1,4 +1,5 @@
 import { errorResponse, successResponse } from "@/lib/api-utils"
+import { isCronAuthorized } from "@/lib/cron-auth"
 import { runDueReports } from "@/lib/reports/send-report"
 
 /**
@@ -11,8 +12,7 @@ import { runDueReports } from "@/lib/reports/send-report"
  */
 export async function POST(request: Request) {
   try {
-    const secret = request.headers.get("x-cron-secret")
-    if (secret !== process.env.CRON_SECRET) {
+    if (!isCronAuthorized(request)) {
       return errorResponse("Unauthorized", 401)
     }
     const force = new URL(request.url).searchParams.get("force") === "1"

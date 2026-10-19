@@ -3,6 +3,7 @@ import { campaigns, db, sql } from "@cuik/db"
 import { errorResponse, successResponse } from "@/lib/api-utils"
 import { executeCampaign } from "@/lib/campaigns"
 import { runDueRecurringCampaigns } from "@/lib/campaigns/recurring"
+import { isCronAuthorized } from "@/lib/cron-auth"
 
 const STUCK_AFTER_MINUTES = 30
 
@@ -37,9 +38,7 @@ async function recoverStuckCampaigns(): Promise<number> {
 
 export async function POST(request: Request) {
   try {
-    // Verify cron secret
-    const cronSecret = request.headers.get("x-cron-secret")
-    if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
+    if (!isCronAuthorized(request)) {
       return errorResponse("Unauthorized", 401)
     }
 

@@ -6,6 +6,7 @@ import {
   paginationMeta,
   parsePagination,
   requireAuth,
+  requireTenantAdmin,
   requireTenantMembership,
   resolveTenant,
   successResponse,
@@ -62,7 +63,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       })
     }
 
-    const { page, limit, offset } = parsePagination(url.searchParams)
+    // Cashiers look clients up (search or QR) but cannot page through the
+    // whole list with DNI, phone and email; that is for owner and admin.
+    const isAdmin = (await requireTenantAdmin(session, tenant.id)) === null
+    if (!isAdmin && (!search || search.trim().length < 2)) {
+      return errorResponse("Busca por nombre, DNI, teléfono o correo", 403)
+    }
+
+    const pagination = parsePagination(url.searchParams)
+    const { page, offset } = pagination
+    const limit = isAdmin ? pagination.limit : Math.min(pagination.limit, 20)
 
     const conditions = [eq(clients.tenantId, tenant.id)]
 

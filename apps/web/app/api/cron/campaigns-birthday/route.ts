@@ -2,6 +2,7 @@ import { db, sql, tenants } from "@cuik/db"
 
 import { errorResponse, successResponse } from "@/lib/api-utils"
 import { getBirthdayConfig, hourLocal, runBirthdayAutomation } from "@/lib/campaigns/birthday"
+import { isCronAuthorized } from "@/lib/cron-auth"
 
 /**
  * POST /api/cron/campaigns-birthday[?force=1]
@@ -12,8 +13,7 @@ import { getBirthdayConfig, hourLocal, runBirthdayAutomation } from "@/lib/campa
  */
 export async function POST(request: Request) {
   try {
-    const secret = request.headers.get("x-cron-secret")
-    if (secret !== process.env.CRON_SECRET) {
+    if (!isCronAuthorized(request)) {
       return errorResponse("Unauthorized", 401)
     }
     const force = new URL(request.url).searchParams.get("force") === "1"

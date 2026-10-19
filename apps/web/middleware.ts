@@ -67,9 +67,11 @@ export async function middleware(request: NextRequest) {
     !pathname.startsWith("/api/admin/") &&
     !pathname.startsWith("/api/auth/") &&
     !pathname.startsWith("/api/me/")
-  // Server Actions of the tenant panel arrive as POST with a `next-action` header.
-  const isServerAction =
-    Boolean(request.headers.get("next-action")) && !pathname.startsWith("/admin")
+  // Server Actions arrive as POST with a `next-action` header. They can be
+  // posted to any path, so the path must not exempt them: while the view is
+  // active every action is refused, super-admin ones included (exit the view,
+  // through /api/admin/sa-view, to edit).
+  const isServerAction = Boolean(request.headers.get("next-action"))
   if (
     request.method !== "GET" &&
     request.method !== "HEAD" &&

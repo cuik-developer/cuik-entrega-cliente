@@ -12,6 +12,25 @@ import { headers } from "next/headers"
 
 import { auth } from "@/lib/auth"
 import { getTenantForUser } from "@/lib/tenant-context"
+import { getMemberRole, isTenantAdmin } from "@/lib/tenant-roles"
+
+/**
+ * The tenant of a caller allowed to change its settings (owner or admin).
+ * Server actions can be called directly, so the panel hiding these screens
+ * from cashiers is not enough.
+ */
+async function getTenantForAdmin(userId: string) {
+  const tenant = await getTenantForUser(userId)
+  if (!tenant) return { tenant: null, error: "Sin comercio asignado" } as const
+  const role = await getMemberRole(userId, tenant.organizationId)
+  if (!isTenantAdmin(role)) {
+    return {
+      tenant: null,
+      error: "Solo el dueño o un administrador puede cambiar la configuración",
+    } as const
+  }
+  return { tenant, error: null } as const
+}
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -104,9 +123,9 @@ export async function saveTenantConfig(data: TenantConfigInput): Promise<ActionR
   }
 
   try {
-    const tenant = await getTenantForUser(session.user.id)
+    const { tenant, error: tenantError } = await getTenantForAdmin(session.user.id)
     if (!tenant) {
-      return { success: false, error: "Sin comercio asignado" }
+      return { success: false, error: tenantError }
     }
 
     const result = await db
@@ -151,9 +170,9 @@ export async function saveWalletConfig(
   }
 
   try {
-    const tenant = await getTenantForUser(session.user.id)
+    const { tenant, error: tenantError } = await getTenantForAdmin(session.user.id)
     if (!tenant) {
-      return { success: false, error: "Sin comercio asignado" }
+      return { success: false, error: tenantError }
     }
 
     const result = await db
@@ -227,9 +246,9 @@ export async function addLocation(
   }
 
   try {
-    const tenant = await getTenantForUser(session.user.id)
+    const { tenant, error: tenantError } = await getTenantForAdmin(session.user.id)
     if (!tenant) {
-      return { success: false, error: "Sin comercio asignado" }
+      return { success: false, error: tenantError }
     }
 
     const [row] = await db
@@ -263,9 +282,9 @@ export async function deleteLocation(locationId: string): Promise<ActionResult<v
   }
 
   try {
-    const tenant = await getTenantForUser(session.user.id)
+    const { tenant, error: tenantError } = await getTenantForAdmin(session.user.id)
     if (!tenant) {
-      return { success: false, error: "Sin comercio asignado" }
+      return { success: false, error: tenantError }
     }
 
     const result = await db
@@ -297,9 +316,9 @@ export async function toggleLocation(
   }
 
   try {
-    const tenant = await getTenantForUser(session.user.id)
+    const { tenant, error: tenantError } = await getTenantForAdmin(session.user.id)
     if (!tenant) {
-      return { success: false, error: "Sin comercio asignado" }
+      return { success: false, error: tenantError }
     }
 
     const result = await db

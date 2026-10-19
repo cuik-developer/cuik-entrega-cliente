@@ -1,5 +1,6 @@
 import { sendBillingReminders } from "@/lib/admin/billing-reminders"
 import { errorResponse, successResponse } from "@/lib/api-utils"
+import { isCronAuthorized } from "@/lib/cron-auth"
 
 /**
  * POST /api/cron/billing-reminders[?force=1]
@@ -9,8 +10,7 @@ import { errorResponse, successResponse } from "@/lib/api-utils"
  */
 export async function POST(request: Request) {
   try {
-    const secret = request.headers.get("x-cron-secret")
-    if (!secret || secret !== process.env.CRON_SECRET) {
+    if (!isCronAuthorized(request)) {
       return errorResponse("Unauthorized", 401)
     }
     const force = new URL(request.url).searchParams.get("force") === "1"

@@ -1,4 +1,5 @@
 import { errorResponse, successResponse } from "@/lib/api-utils"
+import { isCronAuthorized } from "@/lib/cron-auth"
 import { ARCHIVE_RETENTION_DAYS, purgeArchivedClients } from "@/lib/loyalty/purge-archived-clients"
 
 /**
@@ -10,8 +11,7 @@ import { ARCHIVE_RETENTION_DAYS, purgeArchivedClients } from "@/lib/loyalty/purg
  */
 export async function POST(request: Request) {
   try {
-    const secret = request.headers.get("x-cron-secret")
-    if (!secret || secret !== process.env.CRON_SECRET) {
+    if (!isCronAuthorized(request)) {
       return errorResponse("Unauthorized", 401)
     }
     const result = await purgeArchivedClients()

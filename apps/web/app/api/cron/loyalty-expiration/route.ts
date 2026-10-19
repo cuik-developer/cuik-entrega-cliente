@@ -3,6 +3,7 @@ import { pointsPromotionConfigSchema } from "@cuik/shared/validators"
 
 import { errorResponse, successResponse } from "@/lib/api-utils"
 import { hourLocal } from "@/lib/campaigns/birthday"
+import { isCronAuthorized } from "@/lib/cron-auth"
 import {
   expireDuePoints,
   getPointsExpiryConfig,
@@ -20,8 +21,7 @@ import {
  */
 export async function POST(request: Request) {
   try {
-    const secret = request.headers.get("x-cron-secret")
-    if (!secret || secret !== process.env.CRON_SECRET) {
+    if (!isCronAuthorized(request)) {
       return errorResponse("Unauthorized", 401)
     }
     const force = new URL(request.url).searchParams.get("force") === "1"

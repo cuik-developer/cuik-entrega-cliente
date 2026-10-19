@@ -1,11 +1,11 @@
 import { db, sql, tenants } from "@cuik/db"
 import { calculateRetentionCohorts } from "@/lib/analytics"
 import { errorResponse, successResponse } from "@/lib/api-utils"
+import { isCronAuthorized } from "@/lib/cron-auth"
 
 export async function POST(request: Request) {
   try {
-    const secret = request.headers.get("x-cron-secret")
-    if (secret !== process.env.CRON_SECRET) {
+    if (!isCronAuthorized(request)) {
       return errorResponse("Unauthorized", 401)
     }
 

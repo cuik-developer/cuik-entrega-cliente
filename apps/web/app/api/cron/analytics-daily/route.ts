@@ -2,6 +2,7 @@ import { db, sql, tenants } from "@cuik/db"
 
 import { aggregateVisitsDaily, daysToAggregate } from "@/lib/analytics/aggregate-visits-daily"
 import { errorResponse, successResponse } from "@/lib/api-utils"
+import { isCronAuthorized } from "@/lib/cron-auth"
 
 const DEFAULT_DAYS = 3
 const MAX_DAYS = 90
@@ -15,8 +16,7 @@ const MAX_DAYS = 90
  */
 export async function POST(request: Request) {
   try {
-    const secret = request.headers.get("x-cron-secret")
-    if (secret !== process.env.CRON_SECRET) {
+    if (!isCronAuthorized(request)) {
       return errorResponse("Unauthorized", 401)
     }
 

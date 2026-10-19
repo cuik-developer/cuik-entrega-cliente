@@ -1,4 +1,16 @@
-import { and, clients, count, db, eq, promotions, rewards, sql, tenants, visits } from "@cuik/db"
+import {
+  and,
+  clients,
+  count,
+  db,
+  eq,
+  locations,
+  promotions,
+  rewards,
+  sql,
+  tenants,
+  visits,
+} from "@cuik/db"
 import { pointsPromotionConfigSchema, stampsPromotionConfigSchema } from "@cuik/shared/validators"
 
 import { updateRewardsRedeemed, updateVisitsDaily } from "../analytics/update-visits-daily"
@@ -12,6 +24,20 @@ import type {
   VisitResultCode,
 } from "./types"
 
+/** `locationId` when it is a location of `tenantId`, otherwise undefined. */
+async function tenantLocationId(
+  tenantId: string,
+  locationId: string | undefined,
+): Promise<string | undefined> {
+  if (!locationId) return undefined
+  const [row] = await db
+    .select({ id: locations.id })
+    .from(locations)
+    .where(and(eq(locations.id, locationId), eq(locations.tenantId, tenantId)))
+    .limit(1)
+  return row?.id
+}
+
 export async function registerVisit(params: {
   qrCode: string
   tenantId: string
@@ -19,7 +45,10 @@ export async function registerVisit(params: {
   locationId?: string
   amount?: string
 }): Promise<VisitResult | PointsVisitResult> {
-  const { qrCode, tenantId, cashierId, locationId, amount } = params
+  const { qrCode, tenantId, cashierId, amount } = params
+  // Only a location of this tenant is recorded; any other id is dropped and
+  // the visit is stored without a location.
+  const locationId = await tenantLocationId(tenantId, params.locationId)
 
   // Track analytics context outside the transaction (separate vars for TS closure narrowing)
   let analyticsLocationId: string | null = null

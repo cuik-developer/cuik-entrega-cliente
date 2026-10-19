@@ -1,6 +1,7 @@
 import { and, db, eq, sql, tasks } from "@cuik/db"
 
 import { errorResponse, successResponse } from "@/lib/api-utils"
+import { isCronAuthorized } from "@/lib/cron-auth"
 import { getNextRun } from "@/lib/office/cron-utils"
 import { executeCollaborativeTask, executeTask } from "@/lib/office/orchestrator"
 
@@ -8,9 +9,7 @@ export const runtime = "nodejs"
 
 export async function POST(request: Request) {
   try {
-    // Verify cron secret
-    const cronSecret = request.headers.get("x-cron-secret")
-    if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
+    if (!isCronAuthorized(request)) {
       return errorResponse("Unauthorized", 401)
     }
 

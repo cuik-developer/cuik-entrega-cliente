@@ -64,11 +64,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
 
     const token = generateClientToken(secret, client.id)
 
-    // Build access link from request headers
-    const forwardedProto = request.headers.get("x-forwarded-proto") ?? "https"
-    const forwardedHost =
-      request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "localhost"
-    const accessLink = `${forwardedProto}://${forwardedHost}/${slug}/bienvenido?clientToken=${token}`
+    // Official domain only: a Host / X-Forwarded-Host sent by the caller must
+    // never decide where the emailed token points.
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://cuik.org").replace(/\/+$/, "")
+    const accessLink = `${appUrl}/${slug}/bienvenido?clientToken=${token}`
 
     // Fire-and-forget email send
     void sendEmail({
