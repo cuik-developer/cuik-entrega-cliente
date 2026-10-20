@@ -1,10 +1,12 @@
 import { and, clients, db, eq, passInstances, rewardCatalog, tenants } from "@cuik/db"
+import { generateAuthToken } from "@cuik/wallet/apple"
 import { notFound } from "next/navigation"
 import {
   assemblePassConfig,
   getActiveDesignForTenant,
 } from "@/app/(dashboard)/panel/mi-pase/queries"
 import { verifyClientToken } from "@/lib/client-token"
+import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 import type { ServerData } from "./bienvenido-client"
 import BienvenidoClient from "./bienvenido-client"
 
@@ -60,7 +62,7 @@ export default async function TenantBienvenidoPage({
           const clientRows = await db
             .select({ id: clients.id, name: clients.name, qrCode: clients.qrCode })
             .from(clients)
-            .where(eq(clients.id, result.clientId))
+            .where(and(eq(clients.id, result.clientId), eq(clients.tenantId, tenant.id)))
             .limit(1)
 
           const client = clientRows[0]
@@ -79,8 +81,18 @@ export default async function TenantBienvenidoPage({
 
             const pass = passRows[0]
 
-            const appleUrl = pass?.authToken
-              ? `/api/${slug}/wallet/apple/${client.id}/${pass.authToken}`
+            // Rebuild the download token from the tenant's CURRENT Apple secret.
+            // The stored pass_instances.auth_token was signed with the secret in
+            // force at registration; after the tenant's certificate/secret changes
+            // the download route rejects it ("Invalid token"). Passes already on
+            // phones keep working: the Apple web service also accepts the old one.
+            const appleConfig = pass ? await getTenantAppleConfig(tenant.id) : null
+            const appleToken =
+              appleConfig?.authSecret && client.qrCode
+                ? generateAuthToken(appleConfig.authSecret, client.qrCode)
+                : (pass?.authToken ?? null)
+            const appleUrl = appleToken
+              ? `/api/${slug}/wallet/apple/${client.id}/${appleToken}`
               : null
             const googleUrl = pass?.googleSaveUrl ?? null
 
