@@ -112,6 +112,9 @@ export const auth = betterAuth({
     },
   },
   emailAndPassword: {
+    // A reset proves the inbox: end every other session of that account, so a
+    // session opened by whoever registered the address first does not survive.
+    revokeSessionsOnPasswordReset: true,
     enabled: true,
     // The reset link went to that inbox: the address is proven.
     async onPasswordReset({ user: resetUser }) {

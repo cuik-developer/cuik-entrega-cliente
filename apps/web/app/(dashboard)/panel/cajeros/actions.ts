@@ -21,6 +21,7 @@ import {
 import { headers } from "next/headers"
 import { z } from "zod"
 import { auth } from "@/lib/auth"
+import { decrypt, encrypt } from "@/lib/encryption"
 import { saViewTenantFromCookieHeader } from "@/lib/sa-view"
 import {
   getMemberRole,
@@ -205,7 +206,14 @@ export async function getTeam(organizationIdRaw: string): Promise<
           ),
         ),
     ])
-    return { success: true, data: { members, invitations, viewerRole: ctx.role } }
+    // The raw invitation id is the sign-up credential carried by the email link
+    // (lib/auth-guards.ts). The panel only gets an encrypted handle, so an
+    // inviter cannot register the invitee's address without their inbox.
+    const safeInvitations = invitations.map((inv) => ({ ...inv, id: encrypt(inv.id) }))
+    return {
+      success: true,
+      data: { members, invitations: safeInvitations, viewerRole: ctx.role },
+    }
   } catch (err) {
     console.error("[getTeam]", err)
     return { success: false, error: "Error al cargar el equipo" }
@@ -248,9 +256,18 @@ export async function cancelTeamInvitation(raw: {
   organizationId: string
   invitationId: string
 }): Promise<ActionResult<null>> {
-  const parsed = z.object({ organizationId: id, invitationId: id }).safeParse(raw)
+  const parsed = z
+    .object({ organizationId: id, invitationId: z.string().min(1).max(512) })
+    .safeParse(raw)
   if (!parsed.success) return { success: false, error: "Datos inválidos" }
-  const { organizationId, invitationId } = parsed.data
+  const { organizationId } = parsed.data
+  // `invitationId` is the encrypted handle getTeam hands to the panel.
+  let invitationId: string
+  try {
+    invitationId = decrypt(parsed.data.invitationId)
+  } catch {
+    return { success: false, error: "Invitación no encontrada" }
+  }
   const ctx = await requireTeamManager(organizationId)
   if (ctx.error) return { success: false, error: ctx.error }
   try {

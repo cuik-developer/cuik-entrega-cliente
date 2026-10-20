@@ -84,6 +84,9 @@ function buildUpdateData(
 
 // ── Route Handler ───────────────────────────────────────────────────
 
+/** The tenant slug moved between the read and the locked re-read. */
+class SlugChangedError extends Error {}
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { session, error: authError } = await requireAuth(request)
@@ -122,6 +125,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     let updated: typeof existing | undefined
     try {
       updated = await db.transaction(async (tx) => {
+        // Lock the tenant and re-read its slug inside the transaction, so two
+        // concurrent renames cannot leave tenant and organization apart.
+        const [locked] = await tx
+          .select({ slug: tenants.slug })
+          .from(tenants)
+          .where(eq(tenants.id, id))
+          .for("update")
+        if (newSlug && locked && locked.slug !== existing.slug) throw new SlugChangedError()
         const [row] = await tx.update(tenants).set(updateData).where(eq(tenants.id, id)).returning()
         // Move the linked organization with it, or members lose the tenant.
         if (newSlug) {
@@ -135,6 +146,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     } catch (err) {
       if (newSlug && isUniqueViolation(err)) {
         return errorResponse("Slug already taken", 409)
+      }
+      if (err instanceof SlugChangedError) {
+        return errorResponse("The slug changed meanwhile; reload and try again", 409)
       }
       throw err
     }
