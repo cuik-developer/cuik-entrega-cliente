@@ -33,6 +33,7 @@ import { clientIp } from "@/lib/client-ip"
 import { insertEarnLot } from "@/lib/loyalty/points-lots"
 import { checkRateLimit, HOUR_MS, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit"
 import { TURNSTILE_FAILED_MESSAGE, verifyTurnstile } from "@/lib/turnstile"
+import { googleSaveOrigins } from "@/lib/wallet/google-save-origins"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 
 // ── Registration helpers ─────────────────────────────────────────────
@@ -441,7 +442,7 @@ async function generateGoogleWalletUrl(ctx: {
       objectId: upsertResult.objectId,
       serviceAccountEmail: googleConfig.serviceAccountJson.client_email,
       privateKey: googleConfig.serviceAccountJson.private_key,
-      origins: [url.origin],
+      origins: googleSaveOrigins(url.origin),
     })
 
     await db

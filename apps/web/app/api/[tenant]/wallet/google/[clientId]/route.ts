@@ -27,6 +27,7 @@ import {
   successResponse,
 } from "@/lib/api-utils"
 import { pointsExpiryTemplateVars } from "@/lib/loyalty/points-lots"
+import { googleSaveOrigins } from "@/lib/wallet/google-save-origins"
 import { type StampsConfigLike, stripMaxVisits } from "@/lib/wallet/strip-layout"
 
 export const runtime = "nodejs"
@@ -239,7 +240,7 @@ export async function POST(
       objectId: upsertResult.objectId,
       serviceAccountEmail: googleConfig.serviceAccountJson.client_email,
       privateKey: googleConfig.serviceAccountJson.private_key,
-      origins: [url.origin],
+      origins: googleSaveOrigins(url.origin),
     })
 
     // 11. Save/update pass_instances

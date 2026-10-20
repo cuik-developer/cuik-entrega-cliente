@@ -1,11 +1,14 @@
 import { and, clients, db, eq, passInstances, rewardCatalog, tenants } from "@cuik/db"
 import { generateAuthToken } from "@cuik/wallet/apple"
+import { buildSaveToWalletUrl } from "@cuik/wallet/google"
+import { validateGoogleEnv } from "@cuik/wallet/shared"
 import { notFound } from "next/navigation"
 import {
   assemblePassConfig,
   getActiveDesignForTenant,
 } from "@/app/(dashboard)/panel/mi-pase/queries"
 import { verifyClientToken } from "@/lib/client-token"
+import { googleSaveOrigins } from "@/lib/wallet/google-save-origins"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 import type { ServerData } from "./bienvenido-client"
 import BienvenidoClient from "./bienvenido-client"
@@ -74,6 +77,7 @@ export default async function TenantBienvenidoPage({
               .select({
                 authToken: passInstances.authToken,
                 googleSaveUrl: passInstances.googleSaveUrl,
+                googleObjectId: passInstances.googleObjectId,
               })
               .from(passInstances)
               .where(eq(passInstances.clientId, client.id))
@@ -94,7 +98,23 @@ export default async function TenantBienvenidoPage({
             const appleUrl = appleToken
               ? `/api/${slug}/wallet/apple/${client.id}/${appleToken}`
               : null
-            const googleUrl = pass?.googleSaveUrl ?? null
+            // Sign a fresh Google save link too: the stored one expires after
+            // 24 h and only lists the origin it was created on (www before the
+            // 20 Oct redirect), so Google answers "something went wrong".
+            let googleUrl = pass?.googleSaveUrl ?? null
+            const googleConfig = pass?.googleObjectId ? validateGoogleEnv() : null
+            if (pass?.googleObjectId && googleConfig) {
+              try {
+                googleUrl = await buildSaveToWalletUrl({
+                  objectId: pass.googleObjectId,
+                  serviceAccountEmail: googleConfig.serviceAccountJson.client_email,
+                  privateKey: googleConfig.serviceAccountJson.private_key,
+                  origins: googleSaveOrigins(),
+                })
+              } catch (err) {
+                console.error("[bienvenido] Could not sign Google save link:", err)
+              }
+            }
 
             serverData = {
               nombre: client.name,
