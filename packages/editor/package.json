@@ -17,7 +17,7 @@
   "dependencies": {
     "@cuik/shared": "workspace:*",
     "immer": "^10.1.1",
-    "nanoid": "^5.1.2",
+    "nanoid": "^5.1.16",
     "zustand": "^5.0.3"
   },
   "peerDependencies": {
