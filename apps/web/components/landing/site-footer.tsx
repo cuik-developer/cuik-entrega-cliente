@@ -1,4 +1,4 @@
-import { Instagram, MessageCircle } from "lucide-react"
+import { Facebook, Instagram, MessageCircle } from "lucide-react"
 import Link from "next/link"
 import { CuikLogo } from "@/components/cuik-logo"
 import { Clarity } from "@/components/landing/clarity"
@@ -6,7 +6,9 @@ import { CookieBanner } from "@/components/landing/cookie-banner"
 import { LEGAL_PAGES_ENABLED } from "@/lib/legal"
 
 export const WHATSAPP_URL = "https://wa.me/51972213023"
-export const INSTAGRAM_URL = "https://www.instagram.com/cuik.ia/"
+export const INSTAGRAM_URL = "https://www.instagram.com/cuik_org/"
+export const INSTAGRAM_HANDLE = "@cuik_org"
+export const FACEBOOK_URL = "https://www.facebook.com/cuik.org"
 // Public inbox shown on /contacto.
 export const CONTACT_EMAIL = "francesco.leon@cuik.org"
 
@@ -65,6 +67,11 @@ export function SiteFooter() {
                   label: "Instagram de Cuik",
                   href: INSTAGRAM_URL,
                   icon: <Instagram className="w-4 h-4" />,
+                },
+                {
+                  label: "Facebook de Cuik",
+                  href: FACEBOOK_URL,
+                  icon: <Facebook className="w-4 h-4" />,
                 },
                 {
                   label: "Escríbenos por WhatsApp",

@@ -396,7 +396,7 @@ export default function HomePage() {
         <div>
           <Badge className="bg-white/10 text-blue-100 border-white/15 font-semibold px-3.5 py-1.5 text-xs tracking-wide uppercase backdrop-blur">
             <Zap className="w-3 h-3 mr-1.5" />
-            Plataforma #1 de fidelización en LATAM
+            Fidelización digital para negocios locales
           </Badge>
         </div>
         <h1 className="mt-4 text-4xl sm:text-5xl font-extrabold leading-[1.08] tracking-tight text-balance max-w-2xl">
@@ -461,12 +461,11 @@ export default function HomePage() {
       {/* ─── Stats Bar ───────────────────────────────── */}
       <section className="py-12 bg-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+          <div className="grid grid-cols-3 gap-4 sm:gap-8 text-center">
             {[
-              { value: 500, suffix: "+", label: "Comercios activos" },
-              { value: 50, suffix: "K+", label: "Clientes fidelizados" },
               { value: 40, suffix: "%", label: "Más retención" },
               { value: 24, suffix: "h", label: "Activación" },
+              { value: 2, suffix: "", label: "Wallets: Apple y Google" },
             ].map((stat) => (
               <div key={stat.label}>
                 <div className="text-3xl sm:text-4xl font-extrabold text-gray-900">

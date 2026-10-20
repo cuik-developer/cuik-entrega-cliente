@@ -1,6 +1,11 @@
 import { Clock, Instagram, Mail } from "lucide-react"
 import type { Metadata } from "next"
-import { CONTACT_EMAIL, INSTAGRAM_URL, SiteFooter } from "@/components/landing/site-footer"
+import {
+  CONTACT_EMAIL,
+  INSTAGRAM_HANDLE,
+  INSTAGRAM_URL,
+  SiteFooter,
+} from "@/components/landing/site-footer"
 import { SiteNav } from "@/components/landing/site-nav"
 import { ContactExperience } from "./_components/contact-experience"
 
@@ -31,7 +36,7 @@ export default function ContactoPage() {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 hover:text-gray-900 transition-colors"
           >
-            <Instagram className="w-4 h-4 text-pink-500" /> @cuik.ia
+            <Instagram className="w-4 h-4 text-pink-500" /> {INSTAGRAM_HANDLE}
           </a>
           <span className="inline-flex items-center gap-2">
             <Clock className="w-4 h-4 text-gray-400" /> Lunes a viernes, 9:00 a 18:00 (Lima)
