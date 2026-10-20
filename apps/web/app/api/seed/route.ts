@@ -111,11 +111,35 @@ function generateVisitRecords(
   return visitRecords
 }
 
-// DEV ONLY — seed endpoint
-// Call with: curl http://localhost:3000/api/seed
-export async function GET() {
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json({ error: "Not available in production" }, { status: 403 })
+/**
+ * The seed only exists in `next dev` with ALLOW_SEED=true. NODE_ENV is inlined
+ * at build time, so in a production build this is constant false and the route
+ * is a plain 404 (it TRUNCATEs every table).
+ */
+function seedEnabled(): boolean {
+  return process.env.NODE_ENV === "development" && process.env.ALLOW_SEED === "true"
+}
+
+/**
+ * Who may seed: a super_admin session, or anyone while the database has no
+ * users yet (a fresh local DB has nobody who could log in to seed it).
+ */
+async function seedAllowedFor(request: Request): Promise<boolean> {
+  const res = await db.execute<{ n: number }>(sql`SELECT count(*)::int AS n FROM public."user"`)
+  if (Number(res.rows[0]?.n ?? 0) === 0) return true
+  const session = await auth.api.getSession({ headers: request.headers })
+  return (session?.user as { role?: string } | undefined)?.role === "super_admin"
+}
+
+// DEV ONLY — seed endpoint (pnpm db:seed calls it)
+// Call with: ALLOW_SEED=true in the dev server env, then
+//   curl http://localhost:3000/api/seed   (fresh DB, or with a super_admin session cookie)
+export async function GET(request: Request) {
+  if (!seedEnabled()) {
+    return new Response("Not Found", { status: 404 })
+  }
+  if (!(await seedAllowedFor(request))) {
+    return NextResponse.json({ error: "Forbidden — super_admin only" }, { status: 403 })
   }
 
   try {

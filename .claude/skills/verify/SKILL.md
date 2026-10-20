@@ -48,7 +48,7 @@ Expect 36 tables across 6 schemas. A trailing `dependency.c` notice from PG is n
 ```bash
 cd apps/web && DATABASE_URL=postgresql://cuik@localhost:5433/cuik_verify CRON_SECRET=verify-cron-secret-0000 \
   BETTER_AUTH_SECRET=<64hex> BETTER_AUTH_URL=http://localhost:3000 NEXT_PUBLIC_APP_URL=http://localhost:3000 \
-  TRUSTED_ORIGINS=http://localhost:3000 ENCRYPTION_KEY=<64hex> NODE_ENV=development \
+  TRUSTED_ORIGINS=http://localhost:3000 ENCRYPTION_KEY=<64hex> NODE_ENV=development ALLOW_SEED=true \
   corepack pnpm exec next dev -p 3000 > "$SCRATCH/next-dev.log" 2>&1   # run_in_background
 ```
 
@@ -56,7 +56,7 @@ Ready in ~20s. Warning about a duplicate `pnpm-lock.yaml` in the parent checkout
 
 ## 4. Seed
 
-`curl http://localhost:3000/api/seed` (~40s). Creates tenants `mascota-veloz` (active) and `cafe-central` (trial), 5 users, 6 clients, 2 promos, **0 campaigns**. All seeded users use password `password123`.
+`curl http://localhost:3000/api/seed` (~40s; needs `ALLOW_SEED=true` on the dev server, else 404, and a super_admin session cookie unless the DB has no users yet). Creates tenants `mascota-veloz` (active) and `cafe-central` (trial), 5 users, 6 clients, 2 promos, **0 campaigns**. All seeded users use password `password123`.
 
 **Never probe readiness against `/api/seed`.** Two overlapping seed calls race (one truncates while the other inserts): FK violation on `visits`, a deadlock, and a half-seeded DB that then says "Organization already exists". Probe `GET /` (or any cheap route) and call `/api/seed` exactly once with a long timeout. Recovery: `dropdb --force` + `createdb` + schemas + `drizzle-kit push` + one seed.
 

@@ -441,11 +441,11 @@ Las migraciones estan en `packages/db/migrations/` y se gestionan con Drizzle Ki
 
 ### 4.3 Seed inicial (datos de demo)
 
-El seed crea datos de demo para desarrollo/testing. **NO ejecutar en produccion** (esta bloqueado por `NODE_ENV === "production"`).
+El seed crea datos de demo para desarrollo/testing. **NO existe en produccion**: `/api/seed` responde 404 salvo en `next dev` (`NODE_ENV=development`) con `ALLOW_SEED=true`. Con la BD ya poblada exige ademas una sesion super_admin (`SEED_COOKIE` para `pnpm db:seed`); con la BD vacia (sin usuarios) no la pide.
 
 ```bash
 # Requiere que la app este corriendo (usa la API de Better Auth internamente)
-pnpm dev  # en otra terminal
+ALLOW_SEED=true pnpm dev  # en otra terminal
 
 # Seed via API endpoint (solo en dev)
 pnpm db:seed
