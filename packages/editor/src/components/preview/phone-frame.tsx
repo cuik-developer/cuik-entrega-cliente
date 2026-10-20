@@ -414,15 +414,12 @@ function AndroidFrame({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Pass content area */}
-        <div className="flex-1 overflow-hidden px-4 pb-3" style={{ background: "#F5F5F5" }}>
-          <div
-            className="overflow-hidden rounded-xl"
-            style={{
-              boxShadow: "0 2px 12px rgba(0,0,0,0.08), 0 0.5px 2px rgba(0,0,0,0.06)",
-            }}
-          >
-            {children}
-          </div>
+        {/* Scrolls: the details (text modules) sit below the card, as in Google Wallet. */}
+        <div
+          className="flex-1 overflow-y-auto px-4 pb-3 [scrollbar-width:none]"
+          style={{ background: "#F5F5F5" }}
+        >
+          {children}
         </div>
       </div>
 

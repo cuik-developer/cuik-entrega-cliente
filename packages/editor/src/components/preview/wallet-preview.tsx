@@ -1,94 +1,112 @@
-import { QrCode } from "lucide-react"
+"use client"
 
+import { QrCode } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+
+import { resolvePreviewValue } from "../../lib/preview-values"
+import { APPLE_MAX_HEADER_FIELDS, APPLE_MAX_SECONDARY_AUX_FIELDS } from "../../lib/validate-config"
 import type { PassDesignConfigV2, PromotionType } from "../../types"
 import { StampGridPreview } from "./stamp-grid-preview"
 
-/** Resolve template variables like {{client.name}} to preview values */
-function resolvePreviewValue(
-  value: string,
-  promotionType: PromotionType,
-  maxVisits: number,
-): string {
-  const previewValues: Record<string, string> = {
-    "{{client.name}}": "Juan Perez",
-    "{{client.lastName}}": "Perez",
-    "{{client.tier}}": "Regular",
-    "{{client.phone}}": "+51 999 888 777",
-    "{{client.email}}": "cliente@email.com",
-    "{{stamps.current}}": "5",
-    "{{stamps.max}}": String(maxVisits),
-    "{{stamps.remaining}}": String(maxVisits - 5),
-    "{{stamps.total}}": promotionType === "points" ? "12" : "15",
-    "{{points.balance}}": "325",
-    "{{rewards.pending}}": "1",
-    "{{tenant.name}}": "Mi Comercio",
-  }
+/** Width of a store card on an iPhone, in points: every pt size below is scaled from it. */
+const IPHONE_CARD_PT = 343
+/** Logo box of a store card (packages/wallet image-set.ts buildLogoSet: contain, centred). */
+const LOGO_BOX_PT = { width: 160, height: 50 }
 
-  let resolved = value
-  for (const [key, val] of Object.entries(previewValues)) {
-    resolved = resolved.replaceAll(key, val)
-  }
-  // Resolve {{client.customData.*}} to a readable placeholder based on the key name
-  resolved = resolved.replace(/\{\{client\.customData\.(\w+)\}\}/g, (_match, key: string) =>
-    key
-      .replace(/([A-Z])/g, " $1")
-      .replace(/^./, (c) => c.toUpperCase())
-      .trim(),
-  )
-  // Catch any remaining unresolved {{...}} patterns
-  resolved = resolved.replace(/\{\{[^}]+\}\}/g, "—")
-  return resolved
-}
+export const APPLE_FONT_STACK = '-apple-system, "SF Pro Text", system-ui, sans-serif'
 
 interface WalletPreviewProps {
   config: PassDesignConfigV2
   previewFilledStamps?: number
   /** When "points", hides the stamp grid overlay on the strip */
   promotionType?: PromotionType
+  /** Visits per card the server uses (promotion first). Defaults to the design's. */
+  maxVisits?: number
+  /** "Tarjeta completa": every stamp filled, as the server draws a pending reward. */
+  completed?: boolean
+  tenantName?: string
 }
 
 export function WalletPreview({
   config,
   previewFilledStamps = 3,
   promotionType = "stamps",
+  maxVisits: maxVisitsProp,
+  completed = false,
+  tenantName = "Mi Comercio",
 }: WalletPreviewProps) {
   const { backgroundColor, foregroundColor, labelColor } = config.colors
-  const headerField = config.fields.headerFields[0] ?? null
+  const maxVisits = maxVisitsProp || config.stampsConfig.maxVisits || 8
+  const state = {
+    promotionType,
+    maxVisits,
+    current: Math.min(previewFilledStamps, maxVisits),
+    completed,
+    tenantName,
+  }
+
+  // pt → px of this preview (the card is drawn at its own width).
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [pt, setPt] = useState(1)
+  useEffect(() => {
+    const el = cardRef.current
+    if (!el) return
+    const observer = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width
+      if (w) setPt(w / IPHONE_CARD_PT)
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  // iOS shows at most 3 header fields and 4 secondary + auxiliary fields.
+  const headerFields = config.fields.headerFields.slice(0, APPLE_MAX_HEADER_FIELDS)
+  const secondaryFields = config.fields.secondaryFields.slice(0, APPLE_MAX_SECONDARY_AUX_FIELDS)
 
   return (
     <div
+      ref={cardRef}
       className="w-full overflow-hidden rounded-xl"
-      style={{
-        backgroundColor,
-        color: foregroundColor,
-      }}
+      style={{ backgroundColor, color: foregroundColor, fontFamily: APPLE_FONT_STACK }}
     >
-      {/* Header bar */}
-      <div className="flex items-center justify-between px-3 py-2">
-        <div className="flex items-center gap-2">
+      {/* Header: logo box (160 × 50 pt) + header fields. logoText is never shown on iOS. */}
+      <div
+        className="flex items-center justify-between gap-2"
+        style={{ padding: `${8 * pt}px ${12 * pt}px` }}
+      >
+        <div
+          className="flex shrink-0 items-center justify-center"
+          style={{ width: LOGO_BOX_PT.width * pt, height: LOGO_BOX_PT.height * pt }}
+        >
           {config.assets.logo && (
             // biome-ignore lint/performance/noImgElement: standalone package without Next.js
             <img
               src={config.assets.logo}
               alt="Logo"
-              className="h-7 w-auto object-contain"
+              className="h-full w-full object-contain object-center"
               draggable={false}
             />
           )}
-          {config.logoText && (
-            <span className="text-sm font-semibold" style={{ color: foregroundColor }}>
-              {resolvePreviewValue(config.logoText, promotionType, config.stampsConfig.maxVisits)}
-            </span>
-          )}
         </div>
-        {headerField && (
-          <div className="text-right">
-            <div className="text-[9px] uppercase tracking-wider" style={{ color: labelColor }}>
-              {headerField.label}
-            </div>
-            <div className="text-lg font-bold leading-tight" style={{ color: foregroundColor }}>
-              {resolvePreviewValue(headerField.value, promotionType, config.stampsConfig.maxVisits)}
-            </div>
+        {headerFields.length > 0 && (
+          <div className="flex min-w-0 items-start justify-end" style={{ gap: 10 * pt }}>
+            {headerFields.map((field, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: keys may repeat while editing
+              <div key={`${field.key}-${i}`} className="min-w-0 text-right">
+                <div
+                  className="truncate uppercase"
+                  style={{ color: labelColor, fontSize: 9 * pt, letterSpacing: "0.04em" }}
+                >
+                  {field.label}
+                </div>
+                <div
+                  className="truncate font-semibold leading-tight"
+                  style={{ color: foregroundColor, fontSize: 15 * pt }}
+                >
+                  {resolvePreviewValue(field.value, state)}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -104,32 +122,36 @@ export function WalletPreview({
             draggable={false}
           />
         ) : (
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundColor: "rgba(128,128,128,0.15)",
-            }}
-          />
+          <div className="absolute inset-0" style={{ backgroundColor: "rgba(128,128,128,0.15)" }} />
         )}
         {promotionType === "stamps" && (
           <StampGridPreview
             stampsConfig={config.stampsConfig}
             stampImageUrl={config.assets.stamp}
-            filledCount={previewFilledStamps}
+            filledCount={state.current}
+            maxVisits={maxVisits}
+            completed={completed}
           />
         )}
       </div>
 
-      {/* Secondary fields */}
-      {config.fields.secondaryFields.length > 0 && (
-        <div className="flex gap-6 px-3 py-2">
-          {config.fields.secondaryFields.map((field) => (
-            <div key={field.key || field.label}>
-              <div className="text-[9px] uppercase tracking-wider" style={{ color: labelColor }}>
+      {/* Secondary (+ auxiliary) fields, wrapped like iOS */}
+      {secondaryFields.length > 0 && (
+        <div
+          className="flex flex-wrap"
+          style={{ padding: `${8 * pt}px ${12 * pt}px`, columnGap: 18 * pt, rowGap: 6 * pt }}
+        >
+          {secondaryFields.map((field, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: keys may repeat while editing
+            <div key={`${field.key}-${i}`} className="min-w-0 max-w-full">
+              <div
+                className="truncate uppercase"
+                style={{ color: labelColor, fontSize: 9 * pt, letterSpacing: "0.04em" }}
+              >
                 {field.label}
               </div>
-              <div className="text-sm" style={{ color: foregroundColor }}>
-                {resolvePreviewValue(field.value, promotionType, config.stampsConfig.maxVisits)}
+              <div className="truncate" style={{ color: foregroundColor, fontSize: 14 * pt }}>
+                {resolvePreviewValue(field.value, state)}
               </div>
             </div>
           ))}
