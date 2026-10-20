@@ -12,11 +12,13 @@ const nextConfig = {
   // path + query kept). /api/* is NOT redirected: installed Apple passes call
   // https://www.cuik.org/api/apple-wallet/v1/... (Apple's web service does not
   // follow redirects) and Google Wallet loads images from
-  // https://www.cuik.org/api/assets/... . /_next/* is left alone as well.
+  // https://www.cuik.org/api/assets/... . /_next/* is left alone as well, and so
+  // is /defaults/* (default pass images Google fetches as NEXT_PUBLIC_APP_URL +
+  // /defaults/..., which may be www).
   async redirects() {
     return [
       {
-        source: "/:path((?!api/|api$|_next/).*)",
+        source: "/:path((?!api/|api$|_next/|defaults/).*)",
         has: [{ type: "host", value: "www.cuik.org" }],
         destination: "https://cuik.org/:path",
         permanent: true,
