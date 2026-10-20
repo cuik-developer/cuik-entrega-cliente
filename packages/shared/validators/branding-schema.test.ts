@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { tenantBrandingSchema } from "./branding-schema"
+import { isOwnAssetUrl, tenantBrandingInputSchema, tenantBrandingSchema } from "./branding-schema"
 
 describe("tenantBrandingSchema", () => {
   const validConfig = {
     primaryColor: "#0e70db",
     accentColor: "#ff4810",
-    logoUrl: "https://cdn.cuik.app/logos/tenant-x.png",
+    logoUrl: "/api/assets/tenants/t1/assets/logo.png",
   }
 
   it("accepts a valid branding config with all fields", () => {
@@ -23,7 +23,7 @@ describe("tenantBrandingSchema", () => {
     })
     expect(withIcon.iconUrl).toBe("/api/assets/x/icon.png")
     expect(tenantBrandingSchema.parse(validConfig).iconUrl).toBeNull()
-    expect(tenantBrandingSchema.safeParse({ ...validConfig, iconUrl: "" }).success).toBe(false)
+    expect(tenantBrandingInputSchema.safeParse({ ...validConfig, iconUrl: "" }).success).toBe(false)
   })
 
   it("accepts null logoUrl", () => {
@@ -95,7 +95,7 @@ describe("tenantBrandingSchema", () => {
     expect(
       tenantBrandingSchema.safeParse({ ...validConfig, logoUrl: "/api/assets/t/x.png" }).success,
     ).toBe(true)
-    expect(tenantBrandingSchema.safeParse({ ...validConfig, logoUrl: "" }).success).toBe(false)
+    expect(tenantBrandingInputSchema.safeParse({ ...validConfig, logoUrl: "" }).success).toBe(false)
   })
 
   it("accepts uppercase hex color", () => {
@@ -114,5 +114,61 @@ describe("tenantBrandingSchema", () => {
       logoUrl: null,
     })
     expect(result.success).toBe(true)
+  })
+})
+
+describe("branding image URLs are restricted to our own assets", () => {
+  const base = { primaryColor: "#0e70db", accentColor: "#ff4810" }
+  const own = [
+    "/api/assets/tenants/0b1c/assets/5f0e-uuid.png",
+    "https://cuik.org/api/assets/tenants/x/assets/a.webp",
+    "https://www.cuik.org/api/assets/tenants/x/assets/a.jpg",
+  ]
+  const foreign = [
+    "https://evil.example/logo.png",
+    "http://cuik.org/api/assets/x.png",
+    "https://cuik.org.evil.example/api/assets/x.png",
+    "https://evil.example/api/assets/x.png",
+    "//evil.example/api/assets/x.png",
+    "javascript:alert(1)",
+    "data:image/png;base64,AAAA",
+    "/api/assets/",
+    "/api/assets/../auth/session",
+    "/api/assets//evil.example/x.png",
+    "/api/assets/x.png?redirect=https://evil.example",
+    "/api/assets/x.png#frag",
+    '/api/assets/x" onerror="alert(1)',
+    "/api/other/x.png",
+    `/api/assets/${"a".repeat(600)}.png`,
+  ]
+
+  it.each(own)("accepts own asset %s (write and read)", (url) => {
+    expect(isOwnAssetUrl(url)).toBe(true)
+    expect(tenantBrandingInputSchema.parse({ ...base, logoUrl: url, iconUrl: url }).logoUrl).toBe(
+      url,
+    )
+    const read = tenantBrandingSchema.parse({ ...base, logoUrl: url, iconUrl: url })
+    expect(read.logoUrl).toBe(url)
+    expect(read.iconUrl).toBe(url)
+  })
+
+  it.each(foreign)("rejects %s on write", (url) => {
+    expect(isOwnAssetUrl(url)).toBe(false)
+    expect(tenantBrandingInputSchema.safeParse({ ...base, logoUrl: url }).success).toBe(false)
+    expect(tenantBrandingInputSchema.safeParse({ ...base, iconUrl: url }).success).toBe(false)
+  })
+
+  it.each(foreign)("reads a stored %s as null but keeps the colors", (url) => {
+    const read = tenantBrandingSchema.safeParse({ ...base, logoUrl: url, iconUrl: url })
+    expect(read.success).toBe(true)
+    if (read.success) {
+      expect(read.data).toEqual({ ...base, logoUrl: null, iconUrl: null })
+    }
+  })
+
+  it("reads a non-string stored URL as null", () => {
+    const read = tenantBrandingSchema.parse({ ...base, logoUrl: 42, iconUrl: {} })
+    expect(read.logoUrl).toBeNull()
+    expect(read.iconUrl).toBeNull()
   })
 })

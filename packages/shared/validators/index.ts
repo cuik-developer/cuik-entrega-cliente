@@ -51,7 +51,9 @@ export {
   updateInvoiceSchema,
 } from "./billing-schema"
 export {
+  isOwnAssetUrl,
   type TenantBranding,
+  tenantBrandingInputSchema,
   tenantBrandingSchema,
 } from "./branding-schema"
 export {

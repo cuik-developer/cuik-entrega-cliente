@@ -3,7 +3,7 @@
 import { and, db, eq, ne, passDesigns, tenants } from "@cuik/db"
 import type { PassDesignConfigV2 } from "@cuik/shared/types/editor"
 import type { TenantBranding } from "@cuik/shared/validators"
-import { tenantBrandingSchema } from "@cuik/shared/validators"
+import { tenantBrandingInputSchema, tenantBrandingSchema } from "@cuik/shared/validators"
 import { getConfigVersion } from "@cuik/shared/validators/pass-design-schema"
 import { revalidatePath } from "next/cache"
 
@@ -60,7 +60,8 @@ export async function saveBranding(
   const { error } = await requireBranding()
   if (error) return { success: false, error }
 
-  const parsed = tenantBrandingSchema.safeParse(config)
+  // Writes are strict: logo/icon must be our own /api/assets/... files.
+  const parsed = tenantBrandingInputSchema.safeParse(config)
   if (!parsed.success) {
     return { success: false, error: parsed.error.errors[0].message }
   }
