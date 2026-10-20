@@ -3,14 +3,26 @@ const nextConfig = {
   output: "standalone",
   compress: false, // Disable gzip — .pkpass is already a zip; double-compression corrupts it
   serverExternalPackages: ["sharp", "passkit-generator"],
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   images: {
     unoptimized: true,
   },
   // Do not advertise the framework.
   poweredByHeader: false,
+  // One canonical host for pages: www.cuik.org -> https://cuik.org (308,
+  // path + query kept). /api/* is NOT redirected: installed Apple passes call
+  // https://www.cuik.org/api/apple-wallet/v1/... (Apple's web service does not
+  // follow redirects) and Google Wallet loads images from
+  // https://www.cuik.org/api/assets/... . /_next/* is left alone as well.
+  async redirects() {
+    return [
+      {
+        source: "/:path((?!api/|api$|_next/).*)",
+        has: [{ type: "host", value: "www.cuik.org" }],
+        destination: "https://cuik.org/:path",
+        permanent: true,
+      },
+    ]
+  },
   // Baseline browser protections for every route (approved 19 Oct 2026):
   // https only, no framing of cuik.org (clickjacking), no MIME sniffing,
   // a lean referrer, and the camera only for the cashier's QR scanner.
