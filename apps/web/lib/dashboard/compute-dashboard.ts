@@ -130,7 +130,8 @@ export async function getTodayItems(params: {
         ),
       ),
 
-    // Non-owner team members with no registered visit in the last 7 days.
+    // Cashiers (any role but owner/admin) with no registered visit in the last 7 days.
+    // Owners and admins run the business and rarely scan, so they are left out.
     db
       .select({ name: user.name })
       .from(member)
@@ -138,7 +139,7 @@ export async function getTodayItems(params: {
       .where(
         and(
           eq(member.organizationId, organizationId),
-          sql`${member.role} <> 'owner'`,
+          sql`${member.role} NOT IN ('owner', 'admin')`,
           sql`NOT EXISTS (
             SELECT 1 FROM loyalty.visits v
             WHERE v.tenant_id = ${tenantId}
