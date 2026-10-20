@@ -46,7 +46,6 @@ export interface EditorStoreV2 {
   addField: (section: FieldSection) => void
   removeField: (section: FieldSection, index: number) => void
   updateLogoText: (text: string) => void
-  updateFullConfig: (config: PassDesignConfigV2) => void
   serialize: () => PassDesignConfigV2
   markClean: () => void
   setSaving: (saving: boolean) => void

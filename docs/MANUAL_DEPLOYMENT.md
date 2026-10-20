@@ -300,23 +300,9 @@ openssl rand -hex 32
 
 > **CRITICO:** Si pierdes esta clave, no podras descifrar los certificados Apple almacenados en la base de datos para cada tenant. Guardala en un lugar seguro.
 
-### 3.9 Generacion de Assets con IA (opcional)
+### 3.9 Generacion de Assets con IA (retirada)
 
-| Variable | Obligatoria | Descripcion |
-|---|---|---|
-| `GEMINI_API_KEY` | No | API key de Google Gemini para generacion de imagenes con IA (strip, logo, stamps). Sin esta variable, el boton "Generar diseño completo" en el editor de pases no funcionara, pero se pueden subir imagenes manualmente |
-
-**Como obtener:**
-1. Ir a [Google AI Studio](https://aistudio.google.com/apikey)
-2. Crear una API key
-3. Copiar la key y agregarla al `.env`
-
-**Requisito adicional:** El CLI `nano-banana` debe estar instalado globalmente:
-```bash
-npm install -g nano-banana
-```
-
-> **Nota:** Esta variable es OPCIONAL. Sin ella, toda la plataforma funciona normalmente — solo se deshabilita la generacion automatica de assets visuales con IA.
+La generacion de imagenes/diseno con IA del editor de pases se elimino (20 Oct 2026): ya no existen `/api/admin/generate-assets` ni `/api/admin/generate-full-design`, y la app no lee `GEMINI_API_KEY` ni usa el CLI `nano-banana`. Si la variable sigue definida en Dokploy se puede borrar.
 
 ### 3.10 Aplicacion
 
@@ -372,9 +358,6 @@ SA_EMAIL="admin@tu-empresa.com"
 
 # ─── Encriptacion ──────────────────────────────────────
 ENCRYPTION_KEY="<openssl rand -hex 32>"
-
-# ─── IA (opcional) ─────────────────────────────────────
-GEMINI_API_KEY=""  # Google Gemini API key para generacion de assets con IA
 
 # ─── Aplicacion ────────────────────────────────────────
 NEXT_PUBLIC_APP_URL="https://app.cuik.org"

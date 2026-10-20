@@ -123,14 +123,6 @@ export const useEditorStore = create<EditorStoreV2>()(
       })
     },
 
-    updateFullConfig: (config) => {
-      set((state) => {
-        // Preserve version, replace everything else
-        state.config = { ...config, version: state.config.version }
-        state.isDirty = true
-      })
-    },
-
     serialize: () => {
       return JSON.parse(JSON.stringify(get().config)) as PassDesignConfigV2
     },

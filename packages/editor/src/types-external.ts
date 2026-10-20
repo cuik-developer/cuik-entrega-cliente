@@ -29,9 +29,4 @@ export interface EditorCallbacks {
   /** Omitted when the user may not publish (Equipo Cuik staff): the button is hidden. */
   onPublish?: () => Promise<void>
   onUploadAsset: (file: File) => Promise<string>
-  onGenerateAsset: (assetType: string, prompt?: string) => Promise<string>
-  onGenerateFullDesign?: (
-    businessName: string,
-    businessType?: string,
-  ) => Promise<PassDesignConfigV2>
 }

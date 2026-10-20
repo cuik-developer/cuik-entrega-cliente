@@ -5,15 +5,10 @@ import { CollapsibleSection } from "./collapsible-section"
 
 interface StampsSectionProps {
   onUploadAsset: (key: AssetKey, file: File) => void
-  onGenerateAsset: (key: AssetKey) => void
   onUploadSpecialStamp?: (file: File) => void
 }
 
-export function StampsSection({
-  onUploadAsset,
-  onGenerateAsset,
-  onUploadSpecialStamp,
-}: StampsSectionProps) {
+export function StampsSection({ onUploadAsset, onUploadSpecialStamp }: StampsSectionProps) {
   const stampUrl = useEditorStore((s) => s.config.assets.stamp)
   const stampsConfig = useEditorStore((s) => s.config.stampsConfig)
   const assetLoading = useEditorStore((s) => s.assetLoading)
@@ -34,7 +29,6 @@ export function StampsSection({
         currentUrl={stampUrl}
         isLoading={assetLoading.stamp}
         onUpload={(file) => onUploadAsset("stamp", file)}
-        onGenerate={() => onGenerateAsset("stamp")}
       />
 
       {/* Grid mismatch warning */}

@@ -5,10 +5,9 @@ import { CollapsibleSection } from "./collapsible-section"
 
 interface BrandingSectionProps {
   onUploadAsset: (key: AssetKey, file: File) => void
-  onGenerateAsset: (key: AssetKey) => void
 }
 
-export function BrandingSection({ onUploadAsset, onGenerateAsset }: BrandingSectionProps) {
+export function BrandingSection({ onUploadAsset }: BrandingSectionProps) {
   const logoUrl = useEditorStore((s) => s.config.assets.logo)
   const iconUrl = useEditorStore((s) => s.config.assets.icon)
   const logoText = useEditorStore((s) => s.config.logoText)
@@ -22,7 +21,6 @@ export function BrandingSection({ onUploadAsset, onGenerateAsset }: BrandingSect
         currentUrl={logoUrl}
         isLoading={assetLoading.logo}
         onUpload={(file) => onUploadAsset("logo", file)}
-        onGenerate={() => onGenerateAsset("logo")}
       />
 
       <AssetSlot
@@ -30,7 +28,6 @@ export function BrandingSection({ onUploadAsset, onGenerateAsset }: BrandingSect
         currentUrl={iconUrl}
         isLoading={assetLoading.icon}
         onUpload={(file) => onUploadAsset("icon", file)}
-        onGenerate={() => onGenerateAsset("icon")}
       />
 
       <label className="flex flex-col gap-1.5">

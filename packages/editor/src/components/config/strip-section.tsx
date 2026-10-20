@@ -4,16 +4,15 @@ import { CollapsibleSection } from "./collapsible-section"
 
 interface StripSectionProps {
   onUploadAsset: (key: AssetKey, file: File) => void
-  onGenerateAsset: (key: AssetKey) => void
 }
 
-export function StripSection({ onUploadAsset, onGenerateAsset }: StripSectionProps) {
+export function StripSection({ onUploadAsset }: StripSectionProps) {
   const stripBgUrl = useEditorStore((s) => s.config.assets.stripBg)
   const assetLoading = useEditorStore((s) => s.assetLoading)
 
   return (
     <CollapsibleSection title="Imagen de Fondo (Strip)">
-      {/* Strip preview with wider aspect ratio hint, then upload/generate via AssetSlot */}
+      {/* Strip preview with wider aspect ratio hint, then upload */}
       <div className="flex flex-col gap-2">
         <span className="text-xs font-medium text-gray-600">Fondo</span>
 
@@ -109,31 +108,6 @@ export function StripSection({ onUploadAsset, onGenerateAsset }: StripSectionPro
               <line x1="12" y1="3" x2="12" y2="15" />
             </svg>
             Subir
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onGenerateAsset("stripBg")}
-            disabled={assetLoading.stripBg}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-[#0e70db]/10 text-[#0e70db] text-xs font-medium hover:bg-[#0e70db]/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-[#0e70db]/30"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <title>Generate with AI</title>
-              <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
-              <path d="M20 3v4" />
-              <path d="M22 5h-4" />
-            </svg>
-            Generar con IA
           </button>
         </div>
       </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowLeft, Loader2, Save, Send, Sparkles } from "lucide-react"
+import { ArrowLeft, Loader2, Save, Send } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { useEditorStore } from "../store/editor-store"
@@ -11,14 +11,6 @@ import { GoogleWalletPreview } from "./preview/google-wallet-preview"
 import { PhoneFrame } from "./preview/phone-frame"
 import { WalletPreview } from "./preview/wallet-preview"
 import { WalletToggle } from "./preview/wallet-toggle"
-
-// ── Asset key to generate API asset type mapping ────────────────────
-const ASSET_KEY_TO_TYPE: Record<AssetKey, string> = {
-  stripBg: "strip",
-  logo: "logo",
-  stamp: "stamp",
-  icon: "icon",
-}
 
 // ── Component ───────────────────────────────────────────────────────
 
@@ -31,8 +23,6 @@ export function PassEditor({ config, callbacks }: PassEditorProps) {
   const hasInitialized = useRef(false)
   const [previewType, setPreviewType] = useState<PassType>(config.passType)
 
-  const [isGeneratingFull, setIsGeneratingFull] = useState(false)
-
   // Store selectors
   const initialize = useEditorStore((s) => s.initialize)
   const storeConfig = useEditorStore((s) => s.config)
@@ -43,7 +33,6 @@ export function PassEditor({ config, callbacks }: PassEditorProps) {
   const serialize = useEditorStore((s) => s.serialize)
   const updateAsset = useEditorStore((s) => s.updateAsset)
   const setAssetLoading = useEditorStore((s) => s.setAssetLoading)
-  const updateFullConfig = useEditorStore((s) => s.updateFullConfig)
 
   // ── Initialize store on mount ─────────────────────────────────────
   useEffect(() => {
@@ -61,22 +50,6 @@ export function PassEditor({ config, callbacks }: PassEditorProps) {
         updateAsset(key, url)
       } catch (err) {
         console.error(`[PassEditor] Upload ${key} failed:`, err)
-      } finally {
-        setAssetLoading(key, false)
-      }
-    },
-    [callbacks, setAssetLoading, updateAsset],
-  )
-
-  const handleGenerateAsset = useCallback(
-    async (key: AssetKey) => {
-      const assetType = ASSET_KEY_TO_TYPE[key]
-      setAssetLoading(key, true)
-      try {
-        const url = await callbacks.onGenerateAsset(assetType)
-        updateAsset(key, url)
-      } catch (err) {
-        console.error(`[PassEditor] Generate ${key} failed:`, err)
       } finally {
         setAssetLoading(key, false)
       }
@@ -132,22 +105,6 @@ export function PassEditor({ config, callbacks }: PassEditorProps) {
     }
   }, [callbacks, isDirty, serialize, setSaving, markClean])
 
-  const handleGenerateFullDesign = useCallback(async () => {
-    if (!callbacks.onGenerateFullDesign) return
-    setIsGeneratingFull(true)
-    try {
-      const fullConfig = await callbacks.onGenerateFullDesign(
-        storeConfig.logoText || config.designName,
-        config.businessType,
-      )
-      updateFullConfig(fullConfig)
-    } catch (err) {
-      console.error("[PassEditor] Full design generation failed:", err)
-    } finally {
-      setIsGeneratingFull(false)
-    }
-  }, [callbacks, storeConfig.logoText, config.designName, updateFullConfig, config.businessType])
-
   return (
     <div className="flex flex-col h-full bg-gray-50 text-gray-900">
       {/* Top bar */}
@@ -198,32 +155,10 @@ export function PassEditor({ config, callbacks }: PassEditorProps) {
       <div className="flex flex-1 min-h-0">
         {/* LEFT column: Config form (~40%) */}
         <aside className="w-[40%] min-w-[320px] max-w-[480px] border-r border-gray-200 flex flex-col bg-white">
-          {/* Generate full design button — fixed at top */}
-          {callbacks.onGenerateFullDesign && (
-            <div className="p-4 border-b border-gray-200 shrink-0">
-              <button
-                type="button"
-                onClick={handleGenerateFullDesign}
-                disabled={isGeneratingFull}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[#0e70db] text-white text-sm font-semibold transition-all hover:bg-[#0c5fb8] hover:shadow-lg hover:shadow-blue-500/25 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {isGeneratingFull ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Sparkles className="size-4" />
-                )}
-                {isGeneratingFull ? "Generando diseño..." : "Generar diseño completo"}
-              </button>
-              <p className="text-[11px] text-gray-400 text-center mt-1.5">
-                Genera colores, imágenes y branding con IA
-              </p>
-            </div>
-          )}
           {/* Scrollable config area — subtle scrollbar */}
           <div className="flex-1 min-h-0 overflow-y-auto [scrollbar-width:thin] [scrollbar-color:rgba(0,0,0,0.15)_transparent]">
             <ConfigForm
               onUploadAsset={handleUploadAsset}
-              onGenerateAsset={handleGenerateAsset}
               onUploadSpecialStamp={handleUploadSpecialStamp}
               promotionType={config.promotionType}
               customVariables={config.customVariables}

@@ -161,53 +161,6 @@ export function EditorPageClient({
       const result = await response.json()
       return result.data.url
     },
-
-    onGenerateAsset: async (assetType: string, prompt?: string): Promise<string> => {
-      const response = await fetch("/api/admin/generate-assets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tenantId: initialDesign.tenantId,
-          assetType,
-          businessName: tenantName,
-          businessType: businessType || undefined,
-          prompt: prompt || undefined,
-          promotionType: promotionContext?.type ?? "stamps",
-        }),
-      })
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({ error: "Error de servidor" }))
-        throw new Error(body.error ?? "Error al generar asset")
-      }
-
-      const result = await response.json()
-      return result.data.url
-    },
-
-    onGenerateFullDesign: async (
-      businessName: string,
-      businessType?: string,
-    ): Promise<PassDesignConfigV2> => {
-      const response = await fetch("/api/admin/generate-full-design", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tenantId: initialDesign.tenantId,
-          businessName,
-          businessType,
-          promotionType: promotionContext?.type ?? "stamps",
-        }),
-      })
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({ error: "Error de servidor" }))
-        throw new Error(body.error ?? "Error al generar diseño completo")
-      }
-
-      const result = await response.json()
-      return result.data.config as PassDesignConfigV2
-    },
   }
 
   const [publishDialogOpen, setPublishDialogOpen] = useState(false)

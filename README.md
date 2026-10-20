@@ -55,7 +55,6 @@ cuik_loyanty/
 │       │       ├── admin/solicitudes/  # GET, PATCH — SA gestiona leads
 │       │       ├── admin/tenants/      # GET, PATCH — SA gestiona tenants
 │       │       ├── admin/assets/       # POST upload — MinIO asset storage
-│       │       ├── admin/generate-assets/ # POST — AI image generation (nano-banana)
 │       │       ├── assets/             # GET [...key] — public asset proxy (MinIO)
 │       │       ├── [tenant]/info/      # GET — info publica del tenant
 │       │       ├── [tenant]/register-client/  # POST — registro de clientes
@@ -93,7 +92,6 @@ cuik_loyanty/
 - **pnpm** >= 10.x (`corepack enable && corepack prepare pnpm@10.12.1 --activate`)
 - **PostgreSQL** >= 16 (local o Docker)
 - **Docker** (para MinIO y Redis en desarrollo)
-- **nano-banana** (opcional, para generacion IA de assets)
 
 ## Instalacion
 
@@ -169,7 +167,6 @@ El servidor arranca en **http://localhost:3000**.
 | `/api/apple-wallet/v1/[...path]` | * | Apple | Web Service Protocol (device reg, pass refresh) | **Funcional** |
 | `/api/admin/pass-designs/[id]/preview` | POST | super_admin | Preview strip image | **Funcional** |
 | `/api/admin/assets/upload` | POST | super_admin | Upload asset a MinIO (multipart, 5MB max) | **Funcional** |
-| `/api/admin/generate-assets` | POST | super_admin | Generar imagen con IA (nano-banana) | **Funcional** |
 | `/api/assets/[...key]` | GET | Publico | Proxy de assets MinIO (cache immutable) | **Funcional** |
 | `/api/[tenant]/analytics/visits` | GET | admin | Visitas diarias (day/week/month) | **Funcional** |
 | `/api/[tenant]/analytics/retention` | GET | admin | Cohortes de retencion | **Funcional** |
