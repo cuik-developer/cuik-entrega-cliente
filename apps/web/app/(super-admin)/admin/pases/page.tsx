@@ -79,17 +79,28 @@ export default function PasesPage() {
   const [creating, setCreating] = useState(false)
 
   const fetchDesigns = async () => {
-    const result = await listDesigns()
-    if (result.success) {
-      setDesigns(result.data as DesignRow[])
+    try {
+      const result = await listDesigns()
+      if (result.success) {
+        setDesigns(result.data as DesignRow[])
+      } else {
+        toast.error(result.error)
+      }
+    } catch {
+      toast.error("No se pudo cargar. Recarga la página.")
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const fetchTenants = async () => {
-    const result = await listTenants()
-    if (result.success) {
-      setAllTenants(result.data)
+    try {
+      const result = await listTenants()
+      if (result.success) {
+        setAllTenants(result.data)
+      }
+    } catch {
+      // fetchDesigns already reports the failure
     }
   }
 

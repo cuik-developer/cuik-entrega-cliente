@@ -569,13 +569,18 @@ export default function BrandingPage() {
   useEffect(() => {
     async function load() {
       setTenantsLoading(true)
-      const result = await listTenantsForBranding()
-      if (result.success) {
-        setTenants(result.data)
-      } else {
-        toast.error(result.error)
+      try {
+        const result = await listTenantsForBranding()
+        if (result.success) {
+          setTenants(result.data)
+        } else {
+          toast.error(result.error)
+        }
+      } catch {
+        toast.error("No se pudo cargar. Recarga la página.")
+      } finally {
+        setTenantsLoading(false)
       }
-      setTenantsLoading(false)
     }
     load()
   }, [])
@@ -586,7 +591,14 @@ export default function BrandingPage() {
     setBrandingLoading(true)
     setSuggestions(null)
 
-    const result = await getBranding(tenantId)
+    let result: Awaited<ReturnType<typeof getBranding>>
+    try {
+      result = await getBranding(tenantId)
+    } catch {
+      toast.error("No se pudo cargar. Recarga la página.")
+      setBrandingLoading(false)
+      return
+    }
 
     if (!result.success) {
       toast.error(result.error)

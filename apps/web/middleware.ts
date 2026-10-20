@@ -67,11 +67,14 @@ export async function middleware(request: NextRequest) {
     !pathname.startsWith("/api/admin/") &&
     !pathname.startsWith("/api/auth/") &&
     !pathname.startsWith("/api/me/")
-  // Server Actions arrive as POST with a `next-action` header. They can be
-  // posted to any path, so the path must not exempt them: while the view is
-  // active every action is refused, super-admin ones included (exit the view,
-  // through /api/admin/sa-view, to edit).
-  const isServerAction = Boolean(request.headers.get("next-action"))
+  // Server Actions arrive as POST with a `next-action` header, posted to the
+  // page they run on. Those of the super-admin pages (/admin/*) stay allowed,
+  // so forgetting to press "Salir" (the cookie lasts 1 h) does not leave
+  // Pases, Branding, etc. spinning; the panel's own actions are still refused.
+  // A super-admin could hand-craft a panel action against an /admin path, but
+  // they can already edit everything from the super-admin itself.
+  const isServerAction =
+    Boolean(request.headers.get("next-action")) && !pathname.startsWith("/admin")
   if (
     request.method !== "GET" &&
     request.method !== "HEAD" &&
