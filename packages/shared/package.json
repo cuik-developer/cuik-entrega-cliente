@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@cuik/db": "workspace:*",
-    "drizzle-orm": "^0.45.1",
+    "drizzle-orm": "^0.45.4",
     "zod": "^3.24.1"
   },
   "devDependencies": {
