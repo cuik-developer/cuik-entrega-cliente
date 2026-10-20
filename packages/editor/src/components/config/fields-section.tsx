@@ -224,7 +224,12 @@ function FieldGroup({
     if (!field) return
     const update: { label: string; key?: string } = { label: newLabel }
     const autoKey = toFieldKey(field.label)
-    if (!field.key || field.key === autoKey || /^campo(_\d+)?$/.test(field.key)) {
+    // An auto key may carry the _2/_3 suffix uniqueFieldKey added while typing.
+    const suffix = field.key.slice(autoKey.length + 1)
+    const isAutoKey =
+      field.key === autoKey ||
+      (autoKey !== "" && field.key.startsWith(`${autoKey}_`) && /^\d+$/.test(suffix))
+    if (!field.key || isAutoKey || /^campo(_\d+)?$/.test(field.key)) {
       update.key = uniqueFieldKey(newLabel, keysExcept(index))
     }
     updateField(section, index, update)

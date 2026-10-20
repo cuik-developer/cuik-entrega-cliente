@@ -161,12 +161,17 @@ export function PassEditor({ config, callbacks }: PassEditorProps) {
    * saves. Invalid colours or repeated keys block the save with a message.
    */
   const saveNow = useCallback(async (): Promise<boolean> => {
+    const before = useEditorStore.getState().config
     const { config: prepared, errors } = prepareForSave(serialize())
     setSaveErrors(errors)
     if (errors.length > 0) return false
     await callbacks.onSave(prepared)
-    // Keep the editor showing exactly what was stored (clean afterwards).
-    initialize(prepared, useEditorStore.getState().passType)
+    // Keep the editor showing exactly what was stored (clean afterwards),
+    // unless the user kept editing while the save was in flight: keep those
+    // edits and stay dirty.
+    if (useEditorStore.getState().config === before) {
+      initialize(prepared, useEditorStore.getState().passType)
+    }
     return true
   }, [callbacks, serialize, initialize])
 
@@ -211,16 +216,26 @@ export function PassEditor({ config, callbacks }: PassEditorProps) {
     }
   }, [real.url])
 
+  // Bumped on every request and on close: a late response must not reopen the dialog.
+  const realRequest = useRef(0)
+  const closeRealView = useCallback(() => {
+    realRequest.current++
+    setReal({ open: false, url: null, loading: false, error: null })
+  }, [])
+
   const handleRealView = useCallback(async () => {
     if (!callbacks.onRenderStrip) return
+    const request = ++realRequest.current
     setReal({ open: true, url: null, loading: true, error: null })
     try {
       const blob = await callbacks.onRenderStrip(serialize(), {
         stampsInCycle: completedPreview ? 0 : filled,
         completed: completedPreview,
       })
+      if (request !== realRequest.current) return
       setReal({ open: true, url: URL.createObjectURL(blob), loading: false, error: null })
     } catch (err) {
+      if (request !== realRequest.current) return
       setReal({
         open: true,
         url: null,
@@ -389,7 +404,7 @@ export function PassEditor({ config, callbacks }: PassEditorProps) {
           url={real.url}
           loading={real.loading}
           error={real.error}
-          onClose={() => setReal({ open: false, url: null, loading: false, error: null })}
+          onClose={closeRealView}
         />
       )}
     </div>
