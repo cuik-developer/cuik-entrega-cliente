@@ -1,3 +1,4 @@
+import type { AdminCampaignDetail } from "@/lib/admin/campaign-admin"
 import type { PlatformMetrics } from "@/lib/admin/platform-metrics"
 
 /**
@@ -70,9 +71,49 @@ export function redactMetricsForStaff(
   }
 }
 
-/** Campaign detail for "campaigns": no per-client failure list (names are personal data). */
-export function redactCampaignDetailForStaff<T extends { failures: unknown[] }>(
-  detail: T,
-): T & { failuresHidden: true } {
-  return { ...detail, failures: [], failuresHidden: true }
+/** Shown to staff instead of the raw send error (it can name clients or carry provider internals). */
+export const STAFF_CAMPAIGN_ERROR_TEXT = "Falló el envío (el detalle solo lo ve el propietario)"
+
+/**
+ * Campaign detail for "campaigns", as an allow-list: what staff need to read
+ * the campaign and its message. Dropped: the per-client failure list (names
+ * are personal data), the raw `content` JSON, the raw lastError text
+ * (replaced by a generic text plus `hasError`, so the UI still marks the
+ * campaign as failed) and the segment filter internals.
+ */
+export function redactCampaignDetailForStaff(detail: AdminCampaignDetail) {
+  return {
+    id: detail.id,
+    tenantId: detail.tenantId,
+    tenantName: detail.tenantName,
+    tenantSlug: detail.tenantSlug,
+    name: detail.name,
+    type: detail.type,
+    status: detail.status,
+    message: detail.message,
+    scheduledAt: detail.scheduledAt,
+    sentAt: detail.sentAt,
+    createdAt: detail.createdAt,
+    targetCount: detail.targetCount,
+    sentCount: detail.sentCount,
+    skippedNoPass: detail.skippedNoPass,
+    failedNotifications: detail.failedNotifications,
+    hasError: Boolean(detail.lastError),
+    lastError: detail.lastError ? STAFF_CAMPAIGN_ERROR_TEXT : null,
+    lastErrorAt: detail.lastErrorAt,
+    recurringId: detail.recurringId,
+    recurringName: detail.recurringName,
+    automation: detail.automation,
+    effectiveness: detail.effectiveness,
+    segment: detail.segment ? { segmentName: detail.segment.segmentName, filter: null } : null,
+    byChannel: detail.byChannel.map((ch) => ({
+      channel: ch.channel,
+      sent: ch.sent,
+      delivered: ch.delivered,
+      failed: ch.failed,
+    })),
+    failures: [] as AdminCampaignDetail["failures"],
+    failuresHidden: true as const,
+    content: null,
+  } satisfies AdminCampaignDetail & { hasError: boolean; failuresHidden: true }
 }
