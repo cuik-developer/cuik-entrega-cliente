@@ -1,4 +1,4 @@
-import { db, eq, passDesigns, promotions } from "@cuik/db"
+import { and, db, eq, passDesigns, promotions } from "@cuik/db"
 import { stampsConfigSaveSchema } from "@cuik/shared/validators/pass-design-schema"
 import { loadAssetBuffer } from "@cuik/wallet/shared"
 import { z } from "zod"
@@ -31,6 +31,9 @@ const DEFAULT_ASSET = /^\/defaults\/[a-z0-9-]+\.png$/
 
 function ownImageUrl(url: string | null | undefined): string | null {
   if (typeof url !== "string") return null
+  // Our asset keys never contain "%": an encoded "%2e%2e" would be resolved as
+  // ".." by the HTTP fallback of loadAssetBuffer and reach other app routes.
+  if (url.includes("%")) return null
   return safeAssetUrl(url) ?? (DEFAULT_ASSET.test(url.trim()) ? url.trim() : null)
 }
 
@@ -77,18 +80,27 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   // ── Design + linked promotion (maxVisits / program type) ─────────
   const [design] = await db
-    .select({ promotionId: passDesigns.promotionId })
+    .select({ promotionId: passDesigns.promotionId, tenantId: passDesigns.tenantId })
     .from(passDesigns)
     .where(eq(passDesigns.id, id))
     .limit(1)
   if (!design) return errorResponse("Diseño no encontrado", 404)
 
+  // Linked promotion, else the tenant's active one: the wallet routes count
+  // against the active promotion even for a design that is not linked to it.
   let promo: { maxVisits: number | null; type: string } | undefined
   if (design.promotionId) {
     ;[promo] = await db
       .select({ maxVisits: promotions.maxVisits, type: promotions.type })
       .from(promotions)
       .where(eq(promotions.id, design.promotionId))
+      .limit(1)
+  }
+  if (!promo) {
+    ;[promo] = await db
+      .select({ maxVisits: promotions.maxVisits, type: promotions.type })
+      .from(promotions)
+      .where(and(eq(promotions.tenantId, design.tenantId), eq(promotions.active, true)))
       .limit(1)
   }
 

@@ -52,6 +52,8 @@ interface EditorPageClientProps {
     rewardValue: string | null
     active: boolean
   }
+  /** Linked promotion, else the tenant's active one: what the wallet routes count against. */
+  livePromotion?: { type: string; maxVisits: number | null }
   strategicFields?: Array<{ key: string; label: string }>
   /** False for Equipo Cuik staff: they save drafts, the owner publishes. */
   canPublish?: boolean
@@ -61,6 +63,7 @@ interface EditorPageClientProps {
 
 function resolveConfig(
   design: EditorPageClientProps["initialDesign"],
+  assets: EditorPageClientProps["initialAssets"],
   tenantName: string,
 ): PassDesignConfigV2 {
   const version = getConfigVersion(design.canvasData)
@@ -70,7 +73,23 @@ function resolveConfig(
   }
 
   if (version === "v1") {
-    return adaptV1ToV2(design.canvasData, design.colors, design.stampsConfig)
+    const adapted = adaptV1ToV2(
+      design.canvasData,
+      design.colors,
+      design.stampsConfig,
+      design.fields,
+    )
+    // The wallet routes read pass_assets: images missing from the canvas nodes
+    // (a design created with its promotion has none) come from there, so a
+    // save + publish does not wipe them.
+    const fromRows = (type: string) => assets.find((a) => a.type === type)?.url ?? null
+    adapted.assets = {
+      stripBg: adapted.assets.stripBg ?? fromRows("strip_bg"),
+      logo: adapted.assets.logo ?? fromRows("logo"),
+      stamp: adapted.assets.stamp ?? fromRows("stamp"),
+      icon: adapted.assets.icon ?? fromRows("icon"),
+    }
+    return adapted
   }
 
   // "empty" — brand new design
@@ -81,10 +100,11 @@ function resolveConfig(
 
 export function EditorPageClient({
   initialDesign,
-  initialAssets: _initialAssets,
+  initialAssets,
   tenantName,
   businessType,
   promotionContext,
+  livePromotion,
   strategicFields,
   canPublish = true,
 }: EditorPageClientProps) {
@@ -92,7 +112,7 @@ export function EditorPageClient({
   const [duplicating, setDuplicating] = useState(false)
   // Staff cannot save over a published design (it is live): they work on a copy.
   const staffOnPublished = !canPublish && initialDesign.isActive
-  const initialConfig = resolveConfig(initialDesign, tenantName)
+  const initialConfig = resolveConfig(initialDesign, initialAssets, tenantName)
 
   // Convert strategic fields to editor custom variables
   const customVariables = strategicFields?.map((f) => ({
@@ -107,9 +127,9 @@ export function EditorPageClient({
     tenantName,
     businessType,
     passType: initialDesign.type,
-    promotionType: (promotionContext?.type as "stamps" | "points") ?? "stamps",
+    promotionType: (livePromotion?.type as "stamps" | "points") ?? "stamps",
     // The server draws and counts the promotion's visits (stripMaxVisits).
-    promotionMaxVisits: promotionContext?.maxVisits ?? null,
+    promotionMaxVisits: livePromotion?.maxVisits ?? null,
     initialConfig,
     customVariables,
   }

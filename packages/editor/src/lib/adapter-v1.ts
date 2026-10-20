@@ -112,13 +112,47 @@ function extractFieldsFromNodes(nodes: V1Node[]) {
 }
 
 /**
+ * The stored `fields` column when it holds field arrays (what the wallet
+ * routes read), else null. Extra keys are kept.
+ */
+function storedFieldsOf(fields: unknown): PassDesignConfigV2["fields"] | null {
+  if (fields == null || typeof fields !== "object") return null
+  const f = fields as Record<string, unknown>
+  const sections = ["headerFields", "secondaryFields", "backFields"] as const
+  if (!sections.some((s) => Array.isArray(f[s]))) return null
+  const list = (s: (typeof sections)[number]) =>
+    Array.isArray(f[s]) ? (f[s] as FieldEntry[]) : ([] as FieldEntry[])
+  return {
+    ...f,
+    headerFields: list("headerFields"),
+    secondaryFields: list("secondaryFields"),
+    backFields: list("backFields"),
+  } as PassDesignConfigV2["fields"]
+}
+
+/** Non-null keys of the stored `stamps_config` column (what the wallet routes read). */
+function storedStampKeys(stampsConfig: unknown): Record<string, unknown> {
+  if (stampsConfig == null || typeof stampsConfig !== "object" || Array.isArray(stampsConfig)) {
+    return {}
+  }
+  return Object.fromEntries(Object.entries(stampsConfig).filter(([, v]) => v != null))
+}
+
+/**
  * Adapts a v1 pass design (canvas nodes + separate columns) into the
  * declarative v2 config format.
+ *
+ * The wallet routes read the `stamps_config` and `fields` COLUMNS, not the
+ * canvas nodes, so their stored values win: opening and saving a v1 design
+ * must not change the live pass (e.g. the 13 Oct 2026 strip migration values
+ * and `stripVersion` in stamps_config, or the fields of a design created with
+ * a promotion, which has no nodes at all).
  */
 export function adaptV1ToV2(
   canvasData: unknown,
   colors: unknown,
   stampsConfig: unknown,
+  storedFields?: unknown,
 ): PassDesignConfigV2 {
   const canvas = canvasData as V1CanvasData | null
   const cols = (colors ?? {}) as V1Colors
@@ -159,8 +193,9 @@ export function adaptV1ToV2(
       specialPositions: [],
       specialStampUrl: null,
       specialStampSize: null,
+      ...storedStampKeys(stampsConfig),
     },
-    fields,
+    fields: storedFieldsOf(storedFields) ?? fields,
     logoText: "",
   }
 }

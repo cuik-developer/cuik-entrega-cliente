@@ -1,4 +1,4 @@
-import { db, eq, promotions, solicitudes, tenants } from "@cuik/db"
+import { and, db, eq, promotions, solicitudes, tenants } from "@cuik/db"
 import { notFound } from "next/navigation"
 import { NoAccess } from "@/components/admin/admin-access"
 import { currentAdminAccess } from "@/lib/admin-access"
@@ -63,6 +63,18 @@ export default async function EditorPage({ params }: EditorPageProps) {
     }
   }
 
+  // Not linked: the wallet routes count against the tenant's active promotion,
+  // so the previews use it too (the "Promoción vinculada" banner stays empty).
+  let livePromotion: { type: string; maxVisits: number | null } | undefined = promotionContext
+  if (!livePromotion) {
+    const [active] = await db
+      .select({ type: promotions.type, maxVisits: promotions.maxVisits })
+      .from(promotions)
+      .where(and(eq(promotions.tenantId, design.tenantId), eq(promotions.active, true)))
+      .limit(1)
+    livePromotion = active
+  }
+
   const tenantName = tenant?.name ?? "Comercio"
   const businessType = solicitud?.businessType ?? undefined
 
@@ -80,6 +92,7 @@ export default async function EditorPage({ params }: EditorPageProps) {
       tenantName={tenantName}
       businessType={businessType}
       promotionContext={promotionContext}
+      livePromotion={livePromotion}
       strategicFields={strategicFields}
       canPublish={canPublish}
     />

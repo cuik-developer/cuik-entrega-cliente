@@ -140,8 +140,8 @@ export function StampsSection({
       {promotionMaxVisits ? (
         <div className="flex flex-col gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-3 py-2">
           <span className="text-xs text-violet-800">
-            Sellos por tarjeta: <strong>{promotionMaxVisits}</strong> (de la promoción vinculada).
-            Es lo que se dibuja en la franja y lo que cuenta el servidor.
+            Sellos por tarjeta: <strong>{promotionMaxVisits}</strong> (de la promoción del
+            comercio). Es lo que se dibuja en la franja y lo que cuenta el servidor.
           </span>
           {stampsConfig.maxVisits !== promotionMaxVisits && (
             <span className="text-[11px] text-amber-800">
