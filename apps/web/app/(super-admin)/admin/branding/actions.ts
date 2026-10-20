@@ -6,9 +6,8 @@ import type { TenantBranding } from "@cuik/shared/validators"
 import { tenantBrandingSchema } from "@cuik/shared/validators"
 import { getConfigVersion } from "@cuik/shared/validators/pass-design-schema"
 import { revalidatePath } from "next/cache"
-import { headers } from "next/headers"
 
-import { auth } from "@/lib/auth"
+import { requireSuperAdminOrAction } from "@/lib/admin-access"
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -16,26 +15,15 @@ type ActionResult<T> = { success: true; data: T } | { success: false; error: str
 
 // ── Auth helper for server actions ──────────────────────────────────
 
-async function requireSuperAdmin() {
-  const headersList = await headers()
-  const session = await auth.api.getSession({ headers: headersList })
-
-  if (!session) {
-    return { session: null, error: "No autenticado" } as const
-  }
-
-  const role = session.user.role ?? "user"
-  if (role !== "super_admin") {
-    return { session: null, error: "No autorizado — se requiere super_admin" } as const
-  }
-
-  return { session, error: null } as const
-}
+// Owner, or Equipo Cuik staff with "branding". Branding only feeds the
+// merchant panel and the registration pages (wallet passes never read it), so
+// a staff save pushes nothing to customers' phones.
+const requireBranding = () => requireSuperAdminOrAction("branding")
 
 // ── Actions ─────────────────────────────────────────────────────────
 
 export async function getBranding(tenantId: string): Promise<ActionResult<TenantBranding | null>> {
-  const { error } = await requireSuperAdmin()
+  const { error } = await requireBranding()
   if (error) return { success: false, error }
 
   try {
@@ -69,7 +57,7 @@ export async function saveBranding(
   tenantId: string,
   config: TenantBranding,
 ): Promise<ActionResult<void>> {
-  const { error } = await requireSuperAdmin()
+  const { error } = await requireBranding()
   if (error) return { success: false, error }
 
   const parsed = tenantBrandingSchema.safeParse(config)
@@ -103,7 +91,7 @@ export async function saveBranding(
 export async function getPublishedPassColors(
   tenantId: string,
 ): Promise<ActionResult<{ suggestedPrimary: string; suggestedAccent: string } | null>> {
-  const { error } = await requireSuperAdmin()
+  const { error } = await requireBranding()
   if (error) return { success: false, error }
 
   try {
@@ -167,7 +155,7 @@ export async function listTenantsForBranding(): Promise<
     }[]
   >
 > {
-  const { error } = await requireSuperAdmin()
+  const { error } = await requireBranding()
   if (error) return { success: false, error }
 
   try {

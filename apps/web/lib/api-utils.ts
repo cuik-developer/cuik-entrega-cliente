@@ -1,6 +1,12 @@
-import { and, db, eq, inArray, member, organization, tenants } from "@cuik/db"
+import { and, db, eq, inArray, member, organization, tenants, user } from "@cuik/db"
 import { auth } from "@/lib/auth"
 import { saViewTenantFromCookieHeader } from "@/lib/sa-view"
+import {
+  type AdminAccess,
+  canAccess,
+  normalizeStaffPermissions,
+  type StaffPermission,
+} from "@/lib/staff-permissions"
 
 // --- Response helpers ---
 
@@ -44,6 +50,50 @@ export function requireRole(
   // A super-admin viewing a tenant passes "admin" checks (read-only, see above).
   if (role === "admin" && userRole === "super_admin" && session.saViewTenantId) return null
   return errorResponse("Forbidden — insufficient role", 403)
+}
+
+// --- Equipo Cuik (staff) helpers ---
+
+/** Permissions granted to a staff user, read fresh from the DB (never from the client). */
+export async function getStaffPermissions(userId: string): Promise<StaffPermission[]> {
+  const [row] = await db
+    .select({ role: user.role, permissions: user.staffPermissions })
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1)
+  if (!row || row.role !== "staff") return []
+  return normalizeStaffPermissions(row.permissions)
+}
+
+/** Super-admin access of a session: owner, staff with their permissions, or none. */
+export async function adminAccessOf(session: {
+  user: { id: string; role?: string | null }
+}): Promise<AdminAccess> {
+  const role = session.user.role ?? "user"
+  if (role === "super_admin") return { kind: "super_admin" }
+  if (role === "staff")
+    return { kind: "staff", permissions: await getStaffPermissions(session.user.id) }
+  return { kind: "none" }
+}
+
+/**
+ * Null when the caller is super_admin, or staff holding at least one of
+ * `permission`; 403 otherwise. Use it ONLY on operations deliberately opened
+ * to Equipo Cuik — everything else keeps `requireRole(session, "super_admin")`.
+ */
+export async function requireSuperAdminOr(
+  session: { user: { id: string; role?: string | null } },
+  permission: StaffPermission | readonly StaffPermission[],
+) {
+  const role = session.user.role ?? "user"
+  if (role === "super_admin") return null
+  if (role === "staff" && canAccess(await adminAccessOf(session), permission)) return null
+  return errorResponse("Forbidden — insufficient role", 403)
+}
+
+/** True when the session belongs to an Equipo Cuik member (responses must be redacted). */
+export function isStaffSession(session: { user: { role?: string | null } }): boolean {
+  return session.user.role === "staff"
 }
 
 // --- Tenant helpers ---

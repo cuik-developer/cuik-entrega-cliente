@@ -15,6 +15,8 @@ export const user = pgTable("user", {
   banned: boolean("banned").default(false),
   banReason: text("ban_reason"),
   banExpires: timestamp("ban_expires"),
+  /** Equipo Cuik (role "staff"): super-admin areas this person may use. Null/empty = none. */
+  staffPermissions: text("staff_permissions").array(),
 })
 
 /** @deprecated Use `user` instead — kept for FK references in other schemas */

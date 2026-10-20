@@ -26,7 +26,8 @@ export interface EditorConfig {
 
 export interface EditorCallbacks {
   onSave: (config: PassDesignConfigV2) => Promise<void>
-  onPublish: () => Promise<void>
+  /** Omitted when the user may not publish (Equipo Cuik staff): the button is hidden. */
+  onPublish?: () => Promise<void>
   onUploadAsset: (file: File) => Promise<string>
   onGenerateAsset: (assetType: string, prompt?: string) => Promise<string>
   onGenerateFullDesign?: (

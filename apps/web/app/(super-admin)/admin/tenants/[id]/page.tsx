@@ -4,9 +4,11 @@ import { Loader2 } from "lucide-react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import { useAdminAccess } from "@/components/admin/admin-access"
 import { Crumbs } from "@/components/admin/enterprise"
 import { Button } from "@/components/ui/button"
 import { PlanSelectionModal } from "../plan-selection-modal"
+import { StaffTenantDetail } from "../staff-tenant-views"
 import { TenantDetail } from "../tenant-detail"
 import { type ApiTenant, type PlanModalAction, patchTenant } from "../tenant-shared"
 
@@ -28,6 +30,13 @@ const VALID_TABS = new Set([
  * remembered for this tenant in the session is opened.
  */
 export default function TenantPage() {
+  const { id } = useParams<{ id: string }>()
+  // Equipo Cuik "tenants_view": read-only, redacted card instead of the manager.
+  const isOwner = useAdminAccess().kind === "super_admin"
+  return isOwner ? <OwnerTenantPage /> : <StaffTenantDetail id={id} />
+}
+
+function OwnerTenantPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const search = useSearchParams()

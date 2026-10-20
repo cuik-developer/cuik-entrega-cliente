@@ -11,6 +11,7 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core"
+import { user } from "./auth"
 import { clients, promotions } from "./loyalty"
 import { tenants } from "./public"
 
@@ -47,6 +48,11 @@ export const passDesigns = passesSchema.table(
     isTemplate: boolean("is_template").default(false).notNull(),
     isActive: boolean("is_active").default(true).notNull(),
     version: integer("version").default(1).notNull(),
+    /** Set when an Equipo Cuik member saves the design ("listo para publicar"); publishing clears it. */
+    reviewRequestedAt: timestamp("review_requested_at"),
+    reviewRequestedBy: text("review_requested_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

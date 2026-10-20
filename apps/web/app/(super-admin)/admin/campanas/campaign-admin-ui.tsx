@@ -4,6 +4,7 @@ import { Loader2, RotateCcw } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import { useAdminAccess } from "@/components/admin/admin-access"
 import {
   DataTable,
   FieldList,
@@ -170,6 +171,8 @@ export function CampaignAdminDetailDialog({
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
   const [retrying, setRetrying] = useState(false)
+  // Retrying sends messages: owner only (Equipo Cuik sees, does not send).
+  const canRetry = useAdminAccess().kind === "super_admin"
 
   useEffect(() => {
     if (!campaignId) {
@@ -259,7 +262,7 @@ export function CampaignAdminDetailDialog({
           <div className="space-y-3 text-[12.5px]">
             <div className="flex items-center gap-3 flex-wrap">
               <StatusChip tone={statusTone(c)}>{statusLabel(c)}</StatusChip>
-              {isFailed(c) && (
+              {isFailed(c) && canRetry && (
                 <Button
                   size="sm"
                   className="h-7 text-[12px] gap-1"

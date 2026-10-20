@@ -1,4 +1,4 @@
-import { db, desc, eq, passAssets, passDesigns, promotions, tenants } from "@cuik/db"
+import { db, desc, eq, passAssets, passDesigns, promotions, tenants, user } from "@cuik/db"
 
 export async function getDesignById(id: string) {
   const results = await db.select().from(passDesigns).where(eq(passDesigns.id, id)).limit(1)
@@ -20,10 +20,12 @@ export async function listDesignsByTenant(tenantId?: string) {
       promotionType: promotions.type,
       promotionName: promotions.rewardValue,
       promotionActive: promotions.active,
+      reviewRequestedByName: user.name,
     })
     .from(passDesigns)
     .innerJoin(tenants, eq(passDesigns.tenantId, tenants.id))
     .leftJoin(promotions, eq(passDesigns.promotionId, promotions.id))
+    .leftJoin(user, eq(user.id, passDesigns.reviewRequestedBy))
     .orderBy(desc(passDesigns.updatedAt))
 
   if (tenantId) {

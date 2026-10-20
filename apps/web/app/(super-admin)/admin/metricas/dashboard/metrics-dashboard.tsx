@@ -3,6 +3,7 @@
 import { Loader2 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import { useAdminAccess } from "@/components/admin/admin-access"
 import type { PlatformMetrics } from "@/lib/admin/platform-metrics"
 
 import { ChurnTable } from "./churn-table"
@@ -23,6 +24,8 @@ function toQuery(f: Filters): string {
 }
 
 export function MetricsDashboard() {
+  // Exports are owner-only (the API refuses them to Equipo Cuik as well).
+  const canExport = useAdminAccess().kind === "super_admin"
   const [filters, setFilters] = useState<Filters>({
     preset: "30d",
     ...presetRange("30d"),
@@ -110,12 +113,16 @@ export function MetricsDashboard() {
         options={data?.options ?? null}
         minDate={minDate}
         loading={loading}
-        onExport={exportXlsx}
+        onExport={canExport ? exportXlsx : undefined}
         exporting={exporting}
         internalExcluded={data?.internalExcluded ?? 0}
-        onExportDetail={() => {
-          window.location.href = `/api/admin/reports/export?from=${filters.from}&to=${filters.to}`
-        }}
+        onExportDetail={
+          canExport
+            ? () => {
+                window.location.href = `/api/admin/reports/export?from=${filters.from}&to=${filters.to}`
+              }
+            : undefined
+        }
       />
 
       {error && (

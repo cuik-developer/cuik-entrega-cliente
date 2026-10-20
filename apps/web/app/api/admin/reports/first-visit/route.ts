@@ -1,6 +1,6 @@
 import { db, sql, visits } from "@cuik/db"
 
-import { requireAuth, requireRole, successResponse } from "@/lib/api-utils"
+import { requireAuth, requireSuperAdminOr, successResponse } from "@/lib/api-utils"
 
 export const dynamic = "force-dynamic"
 
@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   const { session, error: authError } = await requireAuth(request)
   if (authError) return authError
 
-  const roleError = requireRole(session, "super_admin")
+  const roleError = await requireSuperAdminOr(session, "metrics")
   if (roleError) return roleError
 
   const rows = await db

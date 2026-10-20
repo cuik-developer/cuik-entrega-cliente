@@ -1,5 +1,5 @@
 import { asc, db, desc, ilike, or, sql, tenants } from "@cuik/db"
-import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
+import { errorResponse, requireAuth, requireSuperAdminOr, successResponse } from "@/lib/api-utils"
 
 /**
  * Lightweight tenant lookup for the top-bar search: name or slug containing
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   try {
     const { session, error: authError } = await requireAuth(request)
     if (authError) return authError
-    const roleError = requireRole(session, "super_admin")
+    const roleError = await requireSuperAdminOr(session, ["tenants_view", "campaigns"])
     if (roleError) return roleError
 
     const url = new URL(request.url)

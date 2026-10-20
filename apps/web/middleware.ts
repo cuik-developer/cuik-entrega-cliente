@@ -118,8 +118,10 @@ export async function middleware(request: NextRequest) {
     return roleRedirect(userRole, request.url)
   }
 
-  // /admin/* → super_admin only
-  if (pathname.startsWith("/admin") && userRole !== "super_admin") {
+  // /admin/* → super_admin, or Equipo Cuik staff: each page and API checks the
+  // staff member's permissions itself (default deny), the middleware only
+  // keeps everyone else out.
+  if (pathname.startsWith("/admin") && userRole !== "super_admin" && userRole !== "staff") {
     return roleRedirect(userRole, request.url)
   }
 

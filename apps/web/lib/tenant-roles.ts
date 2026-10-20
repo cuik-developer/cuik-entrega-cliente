@@ -11,7 +11,7 @@ import { and, db, eq, member, organization, sql, tenants, user } from "@cuik/db"
  *
  * The global `user.role` ("admin" | "user") is derived from these memberships
  * (`syncGlobalRole`) so the login redirect and the /panel gate keep working;
- * `super_admin` is never touched.
+ * `super_admin` and `staff` (Equipo Cuik) are never touched.
  */
 
 import { asTenantRole, isTenantAdmin, type TenantRole } from "./tenant-roles-shared"
@@ -37,10 +37,14 @@ export async function getMemberRole(
  * Recompute the global role of a user from every membership: owner or admin
  * somewhere → "admin", otherwise "user". Super-admins are left alone.
  */
-export async function syncGlobalRole(userId: string): Promise<"admin" | "user" | "super_admin"> {
+export async function syncGlobalRole(
+  userId: string,
+): Promise<"admin" | "user" | "super_admin" | "staff"> {
   const [u] = await db.select({ role: user.role }).from(user).where(eq(user.id, userId)).limit(1)
   if (!u) return "user"
   if (u.role === "super_admin") return "super_admin"
+  // Equipo Cuik is managed from /admin/equipo only; memberships never change it.
+  if (u.role === "staff") return "staff"
   // Only organizations linked to a tenant count: Better Auth lets any user
   // create an organization of their own, which must never grant a role here.
   const rows = await db

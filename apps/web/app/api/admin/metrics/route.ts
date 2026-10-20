@@ -2,7 +2,14 @@ import ExcelJS from "exceljs"
 import { z } from "zod"
 
 import { computePlatformMetrics, type MetricsFilters } from "@/lib/admin/platform-metrics"
-import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
+import { redactMetricsForStaff } from "@/lib/admin/staff-redact"
+import {
+  errorResponse,
+  isStaffSession,
+  requireAuth,
+  requireSuperAdminOr,
+  successResponse,
+} from "@/lib/api-utils"
 
 export const dynamic = "force-dynamic"
 
@@ -28,7 +35,7 @@ export async function GET(request: Request) {
   try {
     const { session, error: authError } = await requireAuth(request)
     if (authError) return authError
-    const roleError = requireRole(session, "super_admin")
+    const roleError = await requireSuperAdminOr(session, "metrics")
     if (roleError) return roleError
 
     const parsed = querySchema.safeParse(Object.fromEntries(new URL(request.url).searchParams))
@@ -48,6 +55,11 @@ export async function GET(request: Request) {
         .map((s) => s.trim())
         .filter((s) => /^[0-9a-f-]{36}$/i.test(s)),
       includeInternal: q.includeInternal === "1",
+    }
+    // Equipo Cuik "metrics": on-screen aggregates only — no revenue, no Excel export.
+    if (isStaffSession(session)) {
+      if (q.format !== "json") return errorResponse("Forbidden — insufficient role", 403)
+      return successResponse(redactMetricsForStaff(await computePlatformMetrics(filters)))
     }
     const data = await computePlatformMetrics(filters)
     if (q.format === "json") return successResponse(data)

@@ -96,10 +96,11 @@ export function FiltersBar({
   options: PlatformMetrics["options"] | null
   minDate?: Date
   loading: boolean
-  onExport: () => void
+  /** Omitted for Equipo Cuik staff (no exports): the buttons are hidden. */
+  onExport?: () => void
   exporting: boolean
   /** Old client-level workbook (one sheet per tenant, one row per visit). */
-  onExportDetail: () => void
+  onExportDetail?: () => void
   internalExcluded: number
 }) {
   const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined)
@@ -259,29 +260,33 @@ export function FiltersBar({
 
         <div className="ml-auto flex items-center gap-2">
           {loading && <Loader2 className="w-4 h-4 animate-spin text-ent-fg-3" />}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 text-xs gap-1.5"
-            onClick={onExport}
-            disabled={exporting}
-          >
-            {exporting ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Download className="w-3.5 h-3.5" />
-            )}
-            Exportar con estos filtros
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 text-xs text-ent-fg-3"
-            onClick={onExportDetail}
-            title="Excel con una hoja por comercio y una fila por visita (nivel cliente)"
-          >
-            Detalle por cliente
-          </Button>
+          {onExport && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1.5"
+              onClick={onExport}
+              disabled={exporting}
+            >
+              {exporting ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5" />
+              )}
+              Exportar con estos filtros
+            </Button>
+          )}
+          {onExportDetail && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-ent-fg-3"
+              onClick={onExportDetail}
+              title="Excel con una hoja por comercio y una fila por visita (nivel cliente)"
+            >
+              Detalle por cliente
+            </Button>
+          )}
         </div>
       </div>
       {activeCount > 0 && (

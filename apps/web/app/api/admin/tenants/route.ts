@@ -1,12 +1,14 @@
 import { and, count, db, desc, eq, ilike, tenants } from "@cuik/db"
 import { billingOutlookFor } from "@/lib/admin/billing-overview"
+import { toStaffTenantView } from "@/lib/admin/staff-redact"
 import { enrichTenantRows } from "@/lib/admin/tenant-summary"
 import {
   errorResponse,
+  isStaffSession,
   paginationMeta,
   parsePagination,
   requireAuth,
-  requireRole,
+  requireSuperAdminOr,
   successResponse,
 } from "@/lib/api-utils"
 
@@ -15,7 +17,7 @@ export async function GET(request: Request) {
     const { session, error: authError } = await requireAuth(request)
     if (authError) return authError
 
-    const roleError = requireRole(session, "super_admin")
+    const roleError = await requireSuperAdminOr(session, "tenants_view")
     if (roleError) return roleError
 
     const { searchParams } = new URL(request.url)
@@ -71,6 +73,13 @@ export async function GET(request: Request) {
       .offset(offset)
 
     const enriched = await enrichTenantRows(tenantRows)
+    // Equipo Cuik "tenants_view": no contact data, billing or Apple config.
+    if (isStaffSession(session)) {
+      return successResponse({
+        items: enriched.map(toStaffTenantView),
+        pagination: paginationMeta(total, page, limit),
+      })
+    }
     const billing = await billingOutlookFor(enriched.map((t) => t.id))
     const results = enriched.map((t) => {
       const b = billing.get(t.id)

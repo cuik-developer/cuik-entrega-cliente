@@ -2,7 +2,9 @@ import { DEFAULT_PLATFORM_CONFIG, DEFAULT_SOLICITUD_EMAIL_TEMPLATES } from "@cui
 
 export const dynamic = "force-dynamic"
 
+import { NoAccess } from "@/components/admin/admin-access"
 import { Card, CardContent } from "@/components/ui/card"
+import { currentAdminAccess } from "@/lib/admin-access"
 
 import { getGlobalConfig, getInternalTenantsConfig, getSolicitudEmailTemplates } from "./actions"
 import { ConfigForm } from "./config-form"
@@ -10,6 +12,9 @@ import { EmailTemplatesForm } from "./email-templates-form"
 import { InternalTenantsForm } from "./internal-tenants-form"
 
 export default async function SuperAdminConfigPage() {
+  const { access } = await currentAdminAccess()
+  if (access.kind !== "super_admin") return <NoAccess access={access} />
+
   const [result, templatesResult, internalResult] = await Promise.all([
     getGlobalConfig(),
     getSolicitudEmailTemplates(),

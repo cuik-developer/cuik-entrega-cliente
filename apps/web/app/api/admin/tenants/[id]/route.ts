@@ -2,8 +2,16 @@ import { and, db, eq, ne, plans, tenants } from "@cuik/db"
 import { updateTenantSchema } from "@cuik/shared/validators"
 import type { z } from "zod"
 import { billingOutlookFor } from "@/lib/admin/billing-overview"
+import { toStaffTenantView } from "@/lib/admin/staff-redact"
 import { enrichTenantRows, invalidateTenantSummary } from "@/lib/admin/tenant-summary"
-import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
+import {
+  errorResponse,
+  isStaffSession,
+  requireAuth,
+  requireRole,
+  requireSuperAdminOr,
+  successResponse,
+} from "@/lib/api-utils"
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -110,7 +118,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   try {
     const { session, error: authError } = await requireAuth(request)
     if (authError) return authError
-    const roleError = requireRole(session, "super_admin")
+    // Equipo Cuik "tenants_view": read-only and redacted (no contact, billing, Apple config).
+    const roleError = await requireSuperAdminOr(session, "tenants_view")
     if (roleError) return roleError
 
     const { id } = await params
@@ -141,6 +150,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       .where(eq(tenants.id, id))
       .limit(1)
     if (rows.length === 0) return errorResponse("Tenant not found", 404)
+
+    if (isStaffSession(session)) {
+      const [staffItem] = await enrichTenantRows(rows)
+      return successResponse(toStaffTenantView(staffItem))
+    }
 
     const [[item], billingMap] = await Promise.all([
       enrichTenantRows(rows),

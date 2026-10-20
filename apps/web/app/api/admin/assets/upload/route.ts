@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
+import { errorResponse, requireAuth, requireSuperAdminOr, successResponse } from "@/lib/api-utils"
 import { generateAssetKey, uploadAsset } from "@/lib/storage"
 
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/svg+xml"] as const
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   const { session, error: authError } = await requireAuth(request)
   if (authError) return authError
 
-  const roleError = requireRole(session, "super_admin")
+  const roleError = await requireSuperAdminOr(session, ["designs", "branding"])
   if (roleError) return roleError
 
   // Parse multipart form data

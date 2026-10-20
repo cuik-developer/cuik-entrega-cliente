@@ -3,7 +3,7 @@ import { describePointsRate, type PointsRate } from "@cuik/shared/validators"
 import { z } from "zod"
 import { generateImage } from "@/lib/ai/generate-image"
 import { ASSET_DIMENSIONS, buildPrompt } from "@/lib/ai/prompt-templates"
-import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
+import { errorResponse, requireAuth, requireSuperAdminOr, successResponse } from "@/lib/api-utils"
 import { generateAssetKey, uploadAsset } from "@/lib/storage"
 
 // ─── Validation ─────────────────────────────────────────────────────
@@ -234,7 +234,7 @@ export async function POST(request: Request) {
     const { session, error: authError } = await requireAuth(request)
     if (authError) return authError
 
-    const roleError = requireRole(session, "super_admin")
+    const roleError = await requireSuperAdminOr(session, "designs")
     if (roleError) return roleError
 
     const body = await request.json()

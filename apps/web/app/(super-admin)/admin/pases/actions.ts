@@ -5,7 +5,9 @@ import {
   appleDevices,
   clients,
   db,
+  desc,
   eq,
+  isNotNull,
   ne,
   passAssets,
   passDesigns,
@@ -14,6 +16,7 @@ import {
   rewards,
   sql,
   tenants,
+  user,
 } from "@cuik/db"
 import type { PassDesignConfigV2 } from "@cuik/shared/types/editor"
 import {
@@ -36,10 +39,9 @@ import {
   validateGoogleEnv,
 } from "@cuik/wallet/shared"
 import { revalidatePath } from "next/cache"
-import { headers } from "next/headers"
 import { z } from "zod"
 
-import { auth } from "@/lib/auth"
+import { requireSuperAdminOrAction } from "@/lib/admin-access"
 import { apnsClientCertFor } from "@/lib/wallet/apns-client-cert"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 import { getDesignById, listDesignsByTenant } from "./queries"
@@ -48,23 +50,15 @@ import { getDesignById, listDesignsByTenant } from "./queries"
 
 type ActionResult<T> = { success: true; data: T } | { success: false; error: string }
 
+const STAFF_ACTIVE_DESIGN_ERROR =
+  "Este diseño está publicado: duplícalo como borrador para editarlo. Solo el dueño publica."
+
 // ── Auth helper for server actions ──────────────────────────────────
 
-async function requireSuperAdmin() {
-  const headersList = await headers()
-  const session = await auth.api.getSession({ headers: headersList })
-
-  if (!session) {
-    return { session: null, error: "No autenticado" } as const
-  }
-
-  const role = session.user.role ?? "user"
-  if (role !== "super_admin") {
-    return { session: null, error: "No autorizado — se requiere super_admin" } as const
-  }
-
-  return { session, error: null } as const
-}
+// Equipo Cuik staff with "designs" may list, create, duplicate and save
+// drafts; publishing and deleting stay owner-only (no permission = owner).
+const requireSuperAdmin = () => requireSuperAdminOrAction()
+const requireDesigns = () => requireSuperAdminOrAction("designs")
 
 // ── Schemas ─────────────────────────────────────────────────────────
 
@@ -96,7 +90,7 @@ const updateDesignSchema = z.object({
 export async function createDesign(
   input: z.infer<typeof createDesignSchema>,
 ): Promise<ActionResult<{ id: string }>> {
-  const { error } = await requireSuperAdmin()
+  const { error, access } = await requireDesigns()
   if (error) return { success: false, error }
 
   const parsed = createDesignSchema.safeParse(input)
@@ -116,6 +110,10 @@ export async function createDesign(
       colors: initialConfig?.colors ?? null,
       fields: initialConfig?.fields ?? null,
       stampsConfig: initialConfig?.stampsConfig ?? null,
+      // `is_active` defaults to true and register-client hands out the active
+      // design to new clients, so a staff-created design must start as a
+      // draft (only the owner's publish activates it). Owner behavior unchanged.
+      ...(access.kind === "staff" ? { isActive: false } : {}),
     })
     .returning({ id: passDesigns.id })
 
@@ -128,8 +126,9 @@ export async function updateDesign(
   designId: string,
   payload: z.infer<typeof updateDesignSchema>,
 ): Promise<ActionResult<{ id: string }>> {
-  const { error } = await requireSuperAdmin()
-  if (error) return { success: false, error }
+  const guard = await requireDesigns()
+  if (guard.error !== null) return { success: false, error: guard.error }
+  const { session, access } = guard
 
   const parsed = updateDesignSchema.safeParse(payload)
   if (!parsed.success) {
@@ -140,6 +139,21 @@ export async function updateDesign(
 
   const updateValues: Record<string, unknown> = {
     updatedAt: new Date(),
+  }
+
+  // Staff saves drafts only: the colors/fields of an active design are read
+  // live when passes regenerate, so editing it would publish without review.
+  // Their save marks the draft "listo para publicar" for the owner.
+  if (access.kind === "staff") {
+    const [target] = await db
+      .select({ isActive: passDesigns.isActive })
+      .from(passDesigns)
+      .where(eq(passDesigns.id, designId))
+      .limit(1)
+    if (!target) return { success: false, error: "Diseño no encontrado" }
+    if (target.isActive) return { success: false, error: STAFF_ACTIVE_DESIGN_ERROR }
+    updateValues.reviewRequestedAt = new Date()
+    updateValues.reviewRequestedBy = session.user.id
   }
 
   // If canvasData is a v2 config, denormalize colors/stamps/fields from it
@@ -163,7 +177,15 @@ export async function updateDesign(
     if (fields !== undefined) updateValues.fields = fields
   }
 
-  await db.update(passDesigns).set(updateValues).where(eq(passDesigns.id, designId))
+  await db
+    .update(passDesigns)
+    .set(updateValues)
+    .where(
+      access.kind === "staff"
+        ? // Re-checked in the write: a publish between the read and here keeps it out.
+          and(eq(passDesigns.id, designId), eq(passDesigns.isActive, false))
+        : eq(passDesigns.id, designId),
+    )
 
   revalidatePath(`/admin/pases/${designId}/editor`)
   revalidatePath("/admin/pases")
@@ -396,6 +418,9 @@ export async function publishDesign(
     .set({
       isActive: true,
       version: newVersion,
+      // Published: the "listo para publicar" mark from Equipo Cuik is done.
+      reviewRequestedAt: null,
+      reviewRequestedBy: null,
       updatedAt: new Date(),
     })
     .where(eq(passDesigns.id, designId))
@@ -435,10 +460,81 @@ export async function deleteDesign(designId: string): Promise<ActionResult<{ id:
   return { success: true, data: { id: designId } }
 }
 
+/**
+ * Copy of a design as an inactive draft (same tenant, type, promotion and
+ * content), so a published pass can be reworked without touching it live.
+ * Assets are referenced from `canvasData` and synced on publish.
+ */
+export async function duplicateDesign(designId: string): Promise<ActionResult<{ id: string }>> {
+  const { error } = await requireDesigns()
+  if (error) return { success: false, error }
+  if (!z.string().uuid().safeParse(designId).success) {
+    return { success: false, error: "Diseño no encontrado" }
+  }
+
+  const [source] = await db.select().from(passDesigns).where(eq(passDesigns.id, designId)).limit(1)
+  if (!source) return { success: false, error: "Diseño no encontrado" }
+
+  const [inserted] = await db
+    .insert(passDesigns)
+    .values({
+      tenantId: source.tenantId,
+      promotionId: source.promotionId,
+      name: `${source.name} (borrador)`.slice(0, 100),
+      type: source.type,
+      canvasData: source.canvasData,
+      colors: source.colors,
+      fields: source.fields,
+      stampsConfig: source.stampsConfig,
+      isActive: false,
+      version: source.version,
+    })
+    .returning({ id: passDesigns.id })
+
+  revalidatePath("/admin/pases")
+  return { success: true, data: { id: inserted.id } }
+}
+
+/** Drafts an Equipo Cuik member saved and the owner has not published yet (owner only). */
+export async function listDesignsAwaitingReview(): Promise<
+  ActionResult<
+    {
+      id: string
+      name: string
+      tenantName: string
+      requestedAt: Date
+      requestedByName: string | null
+    }[]
+  >
+> {
+  const { error } = await requireSuperAdmin()
+  if (error) return { success: false, error }
+
+  const rows = await db
+    .select({
+      id: passDesigns.id,
+      name: passDesigns.name,
+      tenantName: tenants.name,
+      requestedAt: passDesigns.reviewRequestedAt,
+      requestedByName: user.name,
+    })
+    .from(passDesigns)
+    .innerJoin(tenants, eq(tenants.id, passDesigns.tenantId))
+    .leftJoin(user, eq(user.id, passDesigns.reviewRequestedBy))
+    .where(isNotNull(passDesigns.reviewRequestedAt))
+    .orderBy(desc(passDesigns.reviewRequestedAt))
+    .limit(50)
+
+  return {
+    success: true,
+    data: rows.flatMap((r) => (r.requestedAt ? [{ ...r, requestedAt: r.requestedAt }] : [])),
+  }
+}
+
 export async function listDesigns(
   tenantId?: string,
 ): Promise<ActionResult<Awaited<ReturnType<typeof listDesignsByTenant>>>> {
-  const { error } = await requireSuperAdmin()
+  const { error } = await requireDesigns()
   if (error) return { success: false, error }
 
   const designs = await listDesignsByTenant(tenantId)
@@ -448,7 +544,7 @@ export async function listDesigns(
 export async function getDesign(
   designId: string,
 ): Promise<ActionResult<NonNullable<Awaited<ReturnType<typeof getDesignById>>>>> {
-  const { error } = await requireSuperAdmin()
+  const { error } = await requireDesigns()
   if (error) return { success: false, error }
 
   const result = await getDesignById(designId)
@@ -462,7 +558,7 @@ export async function getDesign(
 export async function listTenants(): Promise<
   ActionResult<{ id: string; businessName: string; slug: string }[]>
 > {
-  const { error } = await requireSuperAdmin()
+  const { error } = await requireDesigns()
   if (error) return { success: false, error }
 
   const results = await db

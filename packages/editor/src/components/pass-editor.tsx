@@ -115,6 +115,7 @@ export function PassEditor({ config, callbacks }: PassEditorProps) {
   }, [callbacks, serialize, setSaving, markClean])
 
   const handlePublish = useCallback(async () => {
+    if (!callbacks.onPublish) return
     try {
       // Auto-save before publishing if there are unsaved changes
       if (isDirty) {
@@ -180,14 +181,16 @@ export function PassEditor({ config, callbacks }: PassEditorProps) {
             )}
             Guardar
           </button>
-          <button
-            type="button"
-            onClick={handlePublish}
-            className="flex items-center gap-1.5 rounded-md bg-[#0e70db] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#0c5fb8]"
-          >
-            <Send className="size-3.5" />
-            Publicar
-          </button>
+          {callbacks.onPublish && (
+            <button
+              type="button"
+              onClick={handlePublish}
+              className="flex items-center gap-1.5 rounded-md bg-[#0e70db] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#0c5fb8]"
+            >
+              <Send className="size-3.5" />
+              Publicar
+            </button>
+          )}
         </div>
       </div>
 

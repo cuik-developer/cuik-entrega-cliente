@@ -74,7 +74,9 @@ export function KpiGrid({
     return out
   }
 
-  const kpis: Kpi[] = [
+  // Equipo Cuik gets metrics without revenue (see staff-redact): no MRR tile.
+  const revenueHidden = (data as { revenueHidden?: boolean }).revenueHidden === true
+  const allKpis: Kpi[] = [
     {
       key: "active",
       label: "Comercios con visitas",
@@ -156,6 +158,7 @@ export function KpiGrid({
       icon: Coins,
     },
   ]
+  const kpis = revenueHidden ? allKpis.filter((kpi) => kpi.key !== "mrr") : allKpis
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">

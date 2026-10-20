@@ -16,6 +16,7 @@ import {
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useCallback, useEffect, useState } from "react"
+import { useAdminAccess } from "@/components/admin/admin-access"
 import {
   DataTable,
   PageHeader,
@@ -40,6 +41,8 @@ import {
 import { daysBetween } from "@/lib/admin/billing"
 import { AdminNotices } from "./admin-notices"
 import { BillingCell, intervalSuffix, money, useBillingSummary } from "./billing-widgets"
+import { DesignReviewNotice } from "./design-review-notice"
+import { StaffTenantList } from "./staff-tenant-views"
 import { TenantHealthCell } from "./tenant-health"
 import { type ApiTenant, openTenantPanel, type PaginationMeta, statusConfig } from "./tenant-shared"
 
@@ -99,11 +102,10 @@ function AppleChip({ t }: { t: ApiTenant }) {
    ──────────────────────────────────────────────────────────── */
 /** `useSearchParams` needs a Suspense boundary for the production build to prerender the page. */
 export default function TenantsPage() {
-  return (
-    <Suspense fallback={null}>
-      <TenantsPageInner />
-    </Suspense>
-  )
+  // Equipo Cuik "tenants_view" gets a read-only, redacted list (no actions,
+  // billing or contact data); the owner gets the full manager.
+  const isOwner = useAdminAccess().kind === "super_admin"
+  return <Suspense fallback={null}>{isOwner ? <TenantsPageInner /> : <StaffTenantList />}</Suspense>
 }
 
 function TenantsPageInner() {
@@ -213,6 +215,7 @@ function TenantsPageInner() {
       )}
 
       <AdminNotices />
+      <DesignReviewNotice />
 
       <Panel>
         <Toolbar>

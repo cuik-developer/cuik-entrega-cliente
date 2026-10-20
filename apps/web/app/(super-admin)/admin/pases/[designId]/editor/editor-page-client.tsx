@@ -6,6 +6,7 @@ import type { PassDesignConfigV2 } from "@cuik/shared/types/editor"
 import { getConfigVersion } from "@cuik/shared/validators/pass-design-schema"
 import { AlertTriangle, Loader2 } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
 
@@ -19,7 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
-import { publishDesign, updateDesign } from "../../actions"
+import { duplicateDesign, publishDesign, updateDesign } from "../../actions"
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -52,6 +53,8 @@ interface EditorPageClientProps {
     active: boolean
   }
   strategicFields?: Array<{ key: string; label: string }>
+  /** False for Equipo Cuik staff: they save drafts, the owner publishes. */
+  canPublish?: boolean
 }
 
 // ── Resolve config ──────────────────────────────────────────────────
@@ -83,7 +86,12 @@ export function EditorPageClient({
   businessType,
   promotionContext,
   strategicFields,
+  canPublish = true,
 }: EditorPageClientProps) {
+  const router = useRouter()
+  const [duplicating, setDuplicating] = useState(false)
+  // Staff cannot save over a published design (it is live): they work on a copy.
+  const staffOnPublished = !canPublish && initialDesign.isActive
   const initialConfig = resolveConfig(initialDesign, tenantName)
 
   // Convert strategic fields to editor custom variables
@@ -114,16 +122,26 @@ export function EditorPageClient({
       })
 
       if (result.success) {
-        toast.success("Diseno guardado correctamente")
+        toast.success(
+          canPublish
+            ? "Diseno guardado correctamente"
+            : "Borrador guardado: quedó listo para que el dueño lo revise y publique",
+        )
       } else {
         toast.error(result.error)
+        // Keep the editor dirty: nothing was saved.
+        throw new Error(result.error)
       }
     },
 
-    onPublish: async () => {
-      // Show confirmation dialog instead of window.confirm
-      setPublishDialogOpen(true)
-    },
+    ...(canPublish
+      ? {
+          onPublish: async () => {
+            // Show confirmation dialog instead of window.confirm
+            setPublishDialogOpen(true)
+          },
+        }
+      : {}),
 
     onUploadAsset: async (file: File): Promise<string> => {
       const formData = new FormData()
@@ -197,6 +215,21 @@ export function EditorPageClient({
 
   const isPromoInactive = promotionContext && !promotionContext.active
 
+  const handleDuplicate = async () => {
+    setDuplicating(true)
+    try {
+      const result = await duplicateDesign(initialDesign.id)
+      if (result.success) {
+        toast.success("Borrador creado")
+        router.push(`/admin/pases/${result.data.id}/editor`)
+      } else {
+        toast.error(result.error)
+      }
+    } finally {
+      setDuplicating(false)
+    }
+  }
+
   const handleConfirmPublish = async () => {
     setPublishing(true)
     try {
@@ -236,6 +269,27 @@ export function EditorPageClient({
         </div>
       </div>
       <div className="hidden md:flex flex-1 min-h-0 flex-col">
+        {!canPublish && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-sm text-amber-800 flex items-center gap-3 shrink-0">
+            <span className="flex-1">
+              {staffOnPublished
+                ? "Este diseño está publicado y no se puede editar directamente. Duplícalo como borrador, edítalo y guárdalo: el dueño lo revisa y lo publica."
+                : "Modo Equipo Cuik: al guardar, el borrador queda listo para que el dueño lo revise y lo publique."}
+            </span>
+            {staffOnPublished && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={duplicating}
+                onClick={handleDuplicate}
+                className="h-7 text-xs"
+              >
+                {duplicating && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                Duplicar como borrador
+              </Button>
+            )}
+          </div>
+        )}
         {promotionLabel && (
           <div className="bg-violet-50 border-b border-violet-200 px-4 py-2 text-sm text-violet-700 flex items-center gap-2 shrink-0">
             <span className="font-medium">Promocion vinculada:</span>

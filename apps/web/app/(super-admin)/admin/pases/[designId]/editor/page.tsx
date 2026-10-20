@@ -1,5 +1,8 @@
 import { db, eq, promotions, solicitudes, tenants } from "@cuik/db"
 import { notFound } from "next/navigation"
+import { NoAccess } from "@/components/admin/admin-access"
+import { currentAdminAccess } from "@/lib/admin-access"
+import { canAccess } from "@/lib/staff-permissions"
 
 export const dynamic = "force-dynamic"
 
@@ -12,6 +15,11 @@ interface EditorPageProps {
 
 export default async function EditorPage({ params }: EditorPageProps) {
   const { designId } = await params
+
+  // Reads the DB directly: check access here too, not only in the middleware.
+  const { access } = await currentAdminAccess()
+  if (!canAccess(access, "designs")) return <NoAccess access={access} />
+  const canPublish = access.kind === "super_admin"
 
   const result = await getDesignById(designId)
 
@@ -73,6 +81,7 @@ export default async function EditorPage({ params }: EditorPageProps) {
       businessType={businessType}
       promotionContext={promotionContext}
       strategicFields={strategicFields}
+      canPublish={canPublish}
     />
   )
 }

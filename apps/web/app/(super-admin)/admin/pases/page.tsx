@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  Copy,
   CreditCard,
   Loader2,
   Paintbrush,
@@ -12,6 +13,9 @@ import {
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
+import { toast } from "sonner"
+import { useAdminAccess } from "@/components/admin/admin-access"
+import { Notice } from "@/components/admin/enterprise"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -32,7 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-import { createDesign, deleteDesign, listDesigns, listTenants } from "./actions"
+import { createDesign, deleteDesign, duplicateDesign, listDesigns, listTenants } from "./actions"
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -45,18 +49,22 @@ interface DesignRow {
     isActive: boolean
     version: number
     updatedAt: Date
+    reviewRequestedAt: Date | null
   }
   tenantName: string
   tenantSlug: string
   promotionType: "stamps" | "discount" | "coupon" | "subscription" | "points" | null
   promotionName: string | null
   promotionActive: boolean | null
+  reviewRequestedByName: string | null
 }
 
 // ── Component ───────────────────────────────────────────────────────
 
 export default function PasesPage() {
   const router = useRouter()
+  const isOwner = useAdminAccess().kind === "super_admin"
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
   const [designs, setDesigns] = useState<DesignRow[]>([])
   const [allTenants, setAllTenants] = useState<
     { id: string; businessName: string; slug: string }[]
@@ -107,6 +115,22 @@ export default function PasesPage() {
       router.push(`/admin/pases/${result.data.id}/editor`)
     }
   }
+
+  const handleDuplicate = async (designId: string) => {
+    setDuplicatingId(designId)
+    try {
+      const result = await duplicateDesign(designId)
+      if (result.success) {
+        router.push(`/admin/pases/${result.data.id}/editor`)
+      } else {
+        toast.error(result.error)
+      }
+    } finally {
+      setDuplicatingId(null)
+    }
+  }
+
+  const awaitingReview = designs.filter((d) => d.design.reviewRequestedAt)
 
   const handleDelete = async (designId: string) => {
     if (!window.confirm("¿Eliminar este diseño?")) return
@@ -237,6 +261,25 @@ export default function PasesPage() {
         </Dialog>
       </div>
 
+      {isOwner && awaitingReview.length > 0 && (
+        <Notice tone="info" className="mb-4">
+          <span className="font-semibold text-ent-fg">
+            {awaitingReview.length === 1
+              ? "1 diseño listo para publicar"
+              : `${awaitingReview.length} diseños listos para publicar`}
+          </span>{" "}
+          — guardados por Equipo Cuik:{" "}
+          {awaitingReview.map((d) => `${d.design.name} (${d.tenantName})`).join(", ")}. Revísalos en
+          el editor y publícalos.
+        </Notice>
+      )}
+      {!isOwner && (
+        <Notice tone="info" className="mb-4">
+          Edita borradores y guárdalos: quedan listos para que el dueño los revise y publique. Para
+          cambiar un diseño publicado, duplícalo como borrador.
+        </Notice>
+      )}
+
       {/* Design list grouped by tenant */}
       {Object.keys(groupedByTenant).length === 0 ? (
         <div className="text-center py-20">
@@ -303,6 +346,18 @@ export default function PasesPage() {
                                   (row.promotionType === "stamps" ? "Sellos" : "Puntos")}
                               </Badge>
                             )}
+                            {row.design.reviewRequestedAt && (
+                              <Badge
+                                className="bg-blue-100 text-blue-700 border-0 text-xs font-semibold"
+                                title={
+                                  row.reviewRequestedByName
+                                    ? `Guardado por ${row.reviewRequestedByName}`
+                                    : undefined
+                                }
+                              >
+                                Listo para publicar
+                              </Badge>
+                            )}
                             {row.promotionActive && (
                               <Badge className="bg-emerald-500 text-white border-0 text-[10px]">
                                 Promo activa
@@ -336,14 +391,34 @@ export default function PasesPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="text-xs text-red-500 hover:text-red-600 hover:bg-red-50"
+                          className="text-xs"
+                          title="Duplicar como borrador"
+                          aria-label="Duplicar como borrador"
+                          disabled={duplicatingId === row.design.id}
                           onClick={(e) => {
                             e.stopPropagation()
-                            handleDelete(row.design.id)
+                            handleDuplicate(row.design.id)
                           }}
                         >
-                          <Trash2 className="w-3 h-3" />
+                          {duplicatingId === row.design.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
                         </Button>
+                        {isOwner && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs text-red-500 hover:text-red-600 hover:bg-red-50"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDelete(row.design.id)
+                            }}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
