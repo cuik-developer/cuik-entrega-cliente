@@ -111,9 +111,9 @@ export async function createDesign(
       fields: initialConfig?.fields ?? null,
       stampsConfig: initialConfig?.stampsConfig ?? null,
       // `is_active` defaults to true and register-client hands out the active
-      // design to new clients, so a staff-created design must start as a
-      // draft (only the owner's publish activates it). Owner behavior unchanged.
-      ...(access.kind === "staff" ? { isActive: false } : {}),
+      // design to new clients, so every new design starts as a draft; only
+      // publishing activates it (owner too, approved 19 Oct 2026).
+      isActive: false,
     })
     .returning({ id: passDesigns.id })
 

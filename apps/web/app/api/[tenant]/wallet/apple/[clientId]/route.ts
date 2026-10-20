@@ -4,6 +4,7 @@ import {
   clients,
   count,
   db,
+  desc,
   eq,
   passAssets,
   passDesigns,
@@ -115,6 +116,9 @@ export async function GET(
             eq(passDesigns.type, "apple_store"),
           ),
         )
+        // Several designs can share the promotion (old versions, drafts):
+        // the published one wins, then the most recently edited.
+        .orderBy(desc(passDesigns.isActive), desc(passDesigns.updatedAt))
         .limit(1)
       design = linked ?? null
     }
