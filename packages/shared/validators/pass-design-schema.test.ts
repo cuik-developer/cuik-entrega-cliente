@@ -3,6 +3,8 @@ import {
   canvasNodeSchema,
   imageNodePropsSchema,
   passDesignColorsSchema,
+  passDesignConfigV2Schema,
+  passDesignSaveV2Schema,
   serializedCanvasSchema,
   shapeNodePropsSchema,
   stampGridNodePropsSchema,
@@ -460,5 +462,157 @@ describe("stampsConfigSchema", () => {
       gridRows: 2,
     })
     expect(result.success).toBe(false)
+  })
+})
+
+// ── passDesignSaveV2Schema (updateDesign) ────────────────────────────
+
+const v2Base = {
+  version: 2,
+  assets: { stripBg: "/defaults/cuik-strip.png", logo: null, stamp: null, icon: null },
+  colors: { backgroundColor: "#1E3A5F", foregroundColor: "#FFFFFF", labelColor: "#CCCCCC" },
+  fields: {
+    headerFields: [{ key: "total", label: "# DE VISITAS", value: "0" }],
+    secondaryFields: [{ key: "client", label: "NOMBRE", value: "{{client.name}}" }],
+    backFields: [{ key: "stamps_b", label: "Visitas", value: "{{stamps.current}}" }],
+  },
+  logoText: "",
+}
+
+describe("passDesignSaveV2Schema", () => {
+  it("accepts Don Clarito's stored config (86/84/101/124, 1 row, special 3)", () => {
+    const r = passDesignSaveV2Schema.safeParse({
+      ...v2Base,
+      stampsConfig: {
+        maxVisits: 5,
+        gridCols: 5,
+        gridRows: 1,
+        stampSize: 86,
+        offsetX: 84,
+        offsetY: 101,
+        gapX: 124,
+        gapY: 73,
+        filledOpacity: 1,
+        emptyOpacity: 0.35,
+        fillOrder: "row",
+        rowOffsets: [],
+        specialPositions: [3],
+        specialStampUrl: null,
+        specialStampSize: null,
+      },
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it("accepts a legacy row with missing keys and the stripVersion marker", () => {
+    const stampsConfig = { maxVisits: 8, gridCols: 4, gridRows: 2, stampSize: 63, stripVersion: 2 }
+    const r = passDesignSaveV2Schema.safeParse({ ...v2Base, stampsConfig })
+    expect(r.success).toBe(true)
+    // passthrough: unknown markers survive
+    if (r.success) expect((r.data.stampsConfig as Record<string, unknown>).stripVersion).toBe(2)
+  })
+
+  it("accepts migrated values scaled by 288/246 (decimals, offsetX after the 64 px crop)", () => {
+    const r = passDesignSaveV2Schema.safeParse({
+      ...v2Base,
+      stampsConfig: {
+        maxVisits: 10,
+        gridCols: 5,
+        gridRows: 2,
+        stampSize: 85.6,
+        offsetX: -12,
+        offsetY: 288,
+        gapX: 234,
+        gapY: 234,
+        rowOffsets: [
+          { x: 0, y: 0 },
+          { x: 59, y: -12 },
+        ],
+        fillOrder: "interleaved",
+      },
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it("accepts a legacy config without fillOrder/rowOffsets/special keys", () => {
+    const r = passDesignSaveV2Schema.safeParse({
+      ...v2Base,
+      stampsConfig: {
+        maxVisits: 8,
+        gridCols: 4,
+        gridRows: 2,
+        stampSize: 74,
+        offsetX: 166,
+        offsetY: 27,
+        gapX: 115,
+        gapY: 85,
+        filledOpacity: 1,
+        emptyOpacity: 0.35,
+      },
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it("rejects NaN, negative size/pitch and out-of-range grids", () => {
+    const base = { maxVisits: 8, gridCols: 4, gridRows: 2 }
+    for (const bad of [
+      { stampSize: Number.NaN },
+      { stampSize: -4 },
+      { gapX: -1 },
+      { gapY: Number.POSITIVE_INFINITY },
+      { gridRows: 0 },
+      { gridCols: 11 },
+      { maxVisits: 0 },
+      { emptyOpacity: 2 },
+    ]) {
+      const r = passDesignSaveV2Schema.safeParse({ ...v2Base, stampsConfig: { ...base, ...bad } })
+      expect(r.success, JSON.stringify(bad)).toBe(false)
+    }
+  })
+
+  it("rejects invalid colours with a clear message", () => {
+    const r = passDesignSaveV2Schema.safeParse({
+      ...v2Base,
+      colors: { ...v2Base.colors, backgroundColor: "#FFF" },
+      stampsConfig: { maxVisits: 8, gridCols: 4, gridRows: 2 },
+    })
+    expect(r.success).toBe(false)
+    if (!r.success) expect(r.error.errors[0].message).toContain("Color de fondo")
+  })
+
+  it("rejects empty or duplicate field keys across sections", () => {
+    const stampsConfig = { maxVisits: 8, gridCols: 4, gridRows: 2 }
+    const empty = passDesignSaveV2Schema.safeParse({
+      ...v2Base,
+      stampsConfig,
+      fields: { ...v2Base.fields, headerFields: [{ key: "", label: "X", value: "1" }] },
+    })
+    expect(empty.success).toBe(false)
+    const dup = passDesignSaveV2Schema.safeParse({
+      ...v2Base,
+      stampsConfig,
+      fields: { ...v2Base.fields, backFields: [{ key: "total", label: "Otra", value: "1" }] },
+    })
+    expect(dup.success).toBe(false)
+  })
+})
+
+describe("passDesignConfigV2Schema caps (750×288 strip)", () => {
+  it("accepts offsetY/gapY up to 288, stampSize up to 200 and an optional googleHero", () => {
+    const r = passDesignConfigV2Schema.safeParse({
+      ...v2Base,
+      assets: { ...v2Base.assets, googleHero: "/api/assets/t/hero.png" },
+      stampsConfig: {
+        maxVisits: 8,
+        gridCols: 4,
+        gridRows: 2,
+        stampSize: 200,
+        offsetX: 0,
+        offsetY: 288,
+        gapX: 750,
+        gapY: 288,
+      },
+    })
+    expect(r.success).toBe(true)
   })
 })

@@ -22,6 +22,7 @@ import type { PassDesignConfigV2 } from "@cuik/shared/types/editor"
 import {
   getConfigVersion,
   passDesignConfigV2Schema,
+  passDesignSaveV2Schema,
 } from "@cuik/shared/validators/pass-design-schema"
 import { sendApnsPush } from "@cuik/wallet/apple"
 import {
@@ -136,6 +137,15 @@ export async function updateDesign(
   }
 
   const { canvasData, colors, stampsConfig, fields } = parsed.data
+
+  // A v2 config is checked before it can reach a live pass. The schema is
+  // lenient with every stored shape; the ORIGINAL object is what gets saved.
+  if (canvasData !== undefined && getConfigVersion(canvasData) === "v2") {
+    const checked = passDesignSaveV2Schema.safeParse(canvasData)
+    if (!checked.success) {
+      return { success: false, error: `No se guardó: ${checked.error.errors[0].message}` }
+    }
+  }
 
   const updateValues: Record<string, unknown> = {
     updatedAt: new Date(),

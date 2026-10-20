@@ -140,6 +140,7 @@ export {
   imageNodePropsSchema,
   passDesignColorsSchema,
   passDesignConfigV2Schema,
+  passDesignSaveV2Schema,
   savePayloadSchema,
   serializedCanvasSchema,
   shapeNodePropsSchema,
