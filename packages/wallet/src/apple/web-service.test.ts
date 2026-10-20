@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { WebServiceDeps } from "../shared/types"
 import {
   APPLE_LOG_MAX_ENTRIES,
@@ -9,6 +9,7 @@ import {
   handleLog,
   handleRegisterDevice,
   handleUnregisterDevice,
+  lastModifiedHeader,
 } from "./web-service"
 
 // ─── Mock Deps Factory ──────────────────────────────────────────────
@@ -285,6 +286,27 @@ describe("handleGetPass", () => {
 // ─── handleGetPass: If-Modified-Since ───────────────────────────────
 
 describe("handleGetPass If-Modified-Since", () => {
+  // The passes below were last updated well before "now".
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date("2026-10-21T00:00:00.000Z"))
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("announces the previous second when the pass changed in the second we read it", async () => {
+    vi.setSystemTime(new Date("2026-10-20T15:04:05.900Z"))
+    const deps = depsWithPass(new Date("2026-10-20T15:04:05.100Z"))
+    const result = await call(deps, { ifModifiedSince: "Tue, 20 Oct 2026 15:00:00 GMT" })
+    expect(result.status).toBe(200)
+    expect(result.headers?.["Last-Modified"]).toBe("Tue, 20 Oct 2026 15:04:04 GMT")
+    // A change later in that same second is then still "modified".
+    const later = depsWithPass(new Date("2026-10-20T15:04:05.950Z"))
+    vi.setSystemTime(new Date("2026-10-20T15:04:07.000Z"))
+    const next = await call(later, { ifModifiedSince: result.headers?.["Last-Modified"] })
+    expect(next.status).toBe(200)
+  })
   function depsWithPass(lastUpdatedAt: Date | null, etag: string | null = null) {
     const getPassInstance = vi.fn().mockResolvedValue({
       authToken: "token",
@@ -401,5 +423,33 @@ describe("handleLog", () => {
   it("handles null body", () => {
     const result = handleLog(null)
     expect(result.status).toBe(200)
+  })
+})
+
+// ─── lastModifiedHeader ─────────────────────────────────────────────
+
+describe("lastModifiedHeader", () => {
+  it("is last_updated_at (whole seconds) when read in a later second", () => {
+    expect(
+      lastModifiedHeader(
+        new Date("2026-10-20T15:04:05.678Z"),
+        new Date("2026-10-20T15:04:06.000Z"),
+      ),
+    ).toBe("Tue, 20 Oct 2026 15:04:05 GMT")
+  })
+
+  it("is the previous second when read in the same second (or before)", () => {
+    expect(
+      lastModifiedHeader(
+        new Date("2026-10-20T15:04:05.100Z"),
+        new Date("2026-10-20T15:04:05.999Z"),
+      ),
+    ).toBe("Tue, 20 Oct 2026 15:04:04 GMT")
+    expect(
+      lastModifiedHeader(
+        new Date("2026-10-20T15:04:09.000Z"),
+        new Date("2026-10-20T15:04:05.000Z"),
+      ),
+    ).toBe("Tue, 20 Oct 2026 15:04:08 GMT")
   })
 })

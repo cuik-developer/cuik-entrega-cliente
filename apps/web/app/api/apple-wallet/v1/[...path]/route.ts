@@ -22,6 +22,7 @@ import {
   handleLog,
   handleRegisterDevice,
   handleUnregisterDevice,
+  lastModifiedHeader,
   verifyAuthToken,
 } from "@cuik/wallet/apple"
 import type {
@@ -515,6 +516,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
 
       // Use pre-verified deps so the handler skips its internal sync check
       const deps = buildPreVerifiedDeps(route.serialNumber)
+      // Before any DB read: bounds the Last-Modified we announce (lastModifiedHeader).
+      const requestStartedAt = new Date()
 
       const result = await handleGetPass(deps, {
         passTypeId: route.passTypeId,
@@ -569,6 +572,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
         appleConfig: appleConfigForPass,
         campaignMessage: passData.campaignMessage ?? null,
         lastUpdatedAt: passData.lastUpdatedAt ?? null,
+        requestStartedAt,
       })
 
       if (!regenerated) {
@@ -598,13 +602,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
       responseHeaders.set("Content-Encoding", "identity")
       responseHeaders.set("Content-Length", String(body.byteLength))
       responseHeaders.set("Cache-Control", "no-store, no-transform")
-      responseHeaders.set("Last-Modified", freshLastUpdated.toUTCString())
+      const lastModified = lastModifiedHeader(freshLastUpdated, requestStartedAt)
+      responseHeaders.set("Last-Modified", lastModified)
       responseHeaders.set("ETag", freshEtag)
 
       console.info(
         `[Wallet:GetPass] serial=${route.serialNumber} status=200`,
         `size=${body.byteLength} etag=${freshEtag}`,
-        `lastModified=${freshLastUpdated.toUTCString()}`,
+        `lastModified=${lastModified}`,
       )
 
       return new Response(body, {
@@ -758,6 +763,8 @@ async function regeneratePass(ctx: {
   campaignMessage: string | null
   /** pass_instances.last_updated_at as read before generating. */
   lastUpdatedAt: Date | null
+  /** Taken before reading the pass; becomes last_updated_at when it was null. */
+  requestStartedAt: Date
 }): Promise<{ buffer: Buffer; etag: string; lastUpdatedAt: Date } | null> {
   try {
     const { clientId, designId, serialNumber, appleConfig, campaignMessage } = ctx
@@ -1036,7 +1043,9 @@ async function regeneratePass(ctx: {
     // had a timestamp gets one. The ETag is derived from that same timestamp
     // and only written while last_updated_at is still the value we read, so a
     // concurrent visit's newer ETag is never overwritten with an older one.
-    const lastUpdatedAt = ctx.lastUpdatedAt ?? new Date()
+    // A first timestamp is the request start (not "now"): a change landing while
+    // we generate is then newer, never hidden behind our Last-Modified.
+    const lastUpdatedAt = ctx.lastUpdatedAt ?? ctx.requestStartedAt
     const etag = generateETag(serialNumber, client.totalVisits, lastUpdatedAt)
     await db
       .update(passInstances)

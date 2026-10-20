@@ -12,4 +12,5 @@ export {
   handleLog,
   handleRegisterDevice,
   handleUnregisterDevice,
+  lastModifiedHeader,
 } from "./web-service"

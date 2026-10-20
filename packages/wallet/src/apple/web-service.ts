@@ -121,6 +121,23 @@ export async function handleGetSerials(
 // ─── GET: Get Updated Pass ──────────────────────────────────────────────
 
 /**
+ * Last-Modified for a pass whose last_updated_at is `lastUpdatedAt`, read at
+ * `observedAt` (taken before the DB read).
+ *
+ * HTTP dates have whole seconds and If-Modified-Since is compared at second
+ * precision, so a later change in the SAME second as `lastUpdatedAt` would
+ * look "not modified". That can only happen if we read the row during that
+ * second; then we announce the previous second, which costs at most one
+ * extra download and never leaves a stale pass on the phone.
+ */
+export function lastModifiedHeader(lastUpdatedAt: Date, observedAt: Date): string {
+  const updatedSec = Math.floor(lastUpdatedAt.getTime() / 1000)
+  const observedSec = Math.floor(observedAt.getTime() / 1000)
+  const sec = updatedSec >= observedSec ? updatedSec - 1 : updatedSec
+  return new Date(sec * 1000).toUTCString()
+}
+
+/**
  * Handle pass retrieval — Apple Wallet calls this to fetch an updated .pkpass.
  *
  * This handler does NOT generate the .pkpass itself (that's the caller's
@@ -144,6 +161,8 @@ export async function handleGetPass(
   },
 ): Promise<WebServiceResponse> {
   const { serialNumber, authHeader, ifNoneMatch, ifModifiedSince } = params
+  // Taken before the DB read: see lastModifiedHeader.
+  const observedAt = new Date()
 
   // Verify auth token
   const token = extractAuthToken(authHeader)
@@ -160,7 +179,7 @@ export async function handleGetPass(
   const notModifiedHeaders: Record<string, string> = {
     ...(passInstance.etag ? { ETag: passInstance.etag } : {}),
     ...(passInstance.lastUpdatedAt
-      ? { "Last-Modified": passInstance.lastUpdatedAt.toUTCString() }
+      ? { "Last-Modified": lastModifiedHeader(passInstance.lastUpdatedAt, observedAt) }
       : {}),
   }
 
