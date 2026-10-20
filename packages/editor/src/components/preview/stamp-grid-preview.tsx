@@ -1,6 +1,7 @@
 "use client"
 
 import { Fragment, useEffect, useRef, useState } from "react"
+import { stampOrigin } from "../../lib/stamp-geometry"
 import type { PassDesignConfigV2 } from "../../types"
 
 // Strip image is 750x288 at @2x (store card strip: 375×144 pt)
@@ -11,12 +12,70 @@ interface StampGridPreviewProps {
   stampsConfig: PassDesignConfigV2["stampsConfig"]
   stampImageUrl: string | null
   filledCount: number
+  /**
+   * Stamps to draw: the promotion's maxVisits, as the server does
+   * (stripMaxVisits). Defaults to the design's own value.
+   */
+  maxVisits?: number
+  /** Completed card with the reward pending: every stamp drawn filled. */
+  completed?: boolean
+}
+
+/**
+ * Gift badge exactly as strip-image.ts giftBadge(): disc of radius
+ * r = max(6, round(size·0.22)) centred at (x + size − 0.9r, max(r, y + 0.9r)),
+ * white stroke max(1.5, 0.16r), 10-point star of radii 0.58r / 0.26r.
+ */
+function badgeGeometry(x: number, y: number, stampSize: number) {
+  const r = Math.max(6, Math.round(stampSize * 0.22))
+  const cx = x + stampSize - r * 0.9
+  const cy = Math.max(r, y + r * 0.9)
+  const stroke = Number(Math.max(1.5, r * 0.16).toFixed(1))
+  const pad = stroke
+  const box = 2 * (r + pad)
+  const c = r + pad
+  const star = Array.from({ length: 10 }, (_, k) => {
+    const radius = k % 2 === 0 ? r * 0.58 : r * 0.26
+    const angle = -Math.PI / 2 + (k * Math.PI) / 5
+    return `${(c + radius * Math.cos(angle)).toFixed(2)},${(c + radius * Math.sin(angle)).toFixed(2)}`
+  }).join(" ")
+  return { r, stroke, box, c, left: cx - c, top: cy - c, star }
+}
+
+/** Gift badge as a sibling of the stamp, so it keeps its own opacity while the stamp is faded. */
+function GiftBadge(props: {
+  x: number
+  y: number
+  stampSize: number
+  scale: { x: number; y: number }
+  filled: boolean
+}) {
+  const b = badgeGeometry(props.x, props.y, props.stampSize)
+  return (
+    <svg
+      aria-hidden="true"
+      className="absolute pointer-events-none"
+      style={{
+        left: b.left * props.scale.x,
+        top: b.top * props.scale.y,
+        width: b.box * props.scale.x,
+        height: b.box * props.scale.y,
+        opacity: props.filled ? 1 : 0.85,
+      }}
+      viewBox={`0 0 ${b.box} ${b.box}`}
+    >
+      <circle cx={b.c} cy={b.c} r={b.r} fill="#FF4810" stroke="#FFFFFF" strokeWidth={b.stroke} />
+      <polygon points={b.star} fill="#FFFFFF" />
+    </svg>
+  )
 }
 
 export function StampGridPreview({
   stampsConfig,
   stampImageUrl,
   filledCount,
+  maxVisits,
+  completed = false,
 }: StampGridPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState({ x: 1, y: 1 })
@@ -32,59 +91,45 @@ export function StampGridPreview({
     return () => observer.disconnect()
   }, [])
 
-  const { gridCols, gridRows, stampSize, filledOpacity, emptyOpacity } = stampsConfig
-  const gridTotal = gridCols * gridRows
-  const totalStamps = Math.min(gridTotal, stampsConfig.maxVisits)
-  const rowOffsets = stampsConfig.rowOffsets ?? []
-  const fillOrder = stampsConfig.fillOrder ?? "row"
-
-  // All coordinates are in @2x space, scaled by container ratio
-  const oX = stampsConfig.offsetX ?? 197
-  const oY = stampsConfig.offsetY ?? 23
-  const gX = stampsConfig.gapX ?? 98
-  const gY = stampsConfig.gapY ?? 73
+  const filledOpacity = stampsConfig.filledOpacity ?? 1
+  const emptyOpacity = stampsConfig.emptyOpacity ?? 0.35
+  // All coordinates are in @2x space (750×288), scaled by the container ratio.
+  // Missing keys of a legacy row use the server fallbacks (strip-layout.ts), see stampOrigin.
+  const stampSize = stampsConfig.stampSize ?? 63
+  // The server draws every visit of the card, even past the grid.
+  const totalStamps = Math.max(0, maxVisits ?? stampsConfig.maxVisits ?? 8)
+  const specialPositions = new Set(stampsConfig.specialPositions ?? [])
+  const specialUrl = stampsConfig.specialStampUrl ?? null
+  // Rounded like the server (strip-layout.ts + strip-image.ts).
+  const specialSize = Math.round(
+    Math.min(
+      200,
+      Math.max(
+        16,
+        stampsConfig.specialStampSize != null
+          ? Math.round(stampsConfig.specialStampSize)
+          : stampSize,
+      ),
+    ),
+  )
+  const specialShift = Math.round((stampSize - specialSize) / 2)
 
   return (
-    <div ref={containerRef} className="absolute inset-0">
+    <div ref={containerRef} className="absolute inset-0 overflow-hidden">
       {Array.from({ length: totalStamps }, (_, i) => {
-        const row = fillOrder === "interleaved" ? i % gridRows : Math.floor(i / gridCols)
-        const col = fillOrder === "interleaved" ? Math.floor(i / gridRows) : i % gridCols
-        const rowOff = rowOffsets[row] ?? { x: 0, y: 0 }
-        const x2 = oX + col * gX + rowOff.x
-        const y2 = oY + row * gY + rowOff.y
-        const isFilled = i < filledCount
+        const { x: x2, y: y2 } = stampOrigin(stampsConfig, i)
+        const isFilled = completed || i < filledCount
         const opacity = isFilled ? filledOpacity : emptyOpacity
-        const isSpecial = (stampsConfig.specialPositions ?? []).includes(i + 1)
-        const specialUrl = stampsConfig.specialStampUrl ?? null
-        const imageUrl = isSpecial && specialUrl ? specialUrl : stampImageUrl
-        const box =
-          isSpecial && specialUrl
-            ? Math.min(200, Math.max(16, stampsConfig.specialStampSize ?? stampSize))
-            : stampSize
-        const shift = (stampSize - box) / 2
-        const badge = Math.max(6, Math.round(stampSize * 0.22))
+        const isSpecial = specialPositions.has(i + 1)
+        const withIcon = isSpecial && specialUrl != null
+        const imageUrl = withIcon ? specialUrl : stampImageUrl
+        const box = withIcon ? specialSize : stampSize
+        const shift = withIcon ? specialShift : 0
         // Same gift badge the server draws (orange disc, white star, top-right corner),
         // as a sibling so it keeps its own opacity while the empty stamp is faded.
         const badgeEl =
-          isSpecial && !specialUrl ? (
-            <svg
-              aria-hidden="true"
-              className="absolute pointer-events-none"
-              style={{
-                left: (x2 + stampSize - badge * 1.9) * scale.x,
-                top: Math.max(0, y2 - badge * 0.1) * scale.y,
-                width: badge * 2 * scale.x,
-                height: badge * 2 * scale.y,
-                opacity: isFilled ? 1 : 0.85,
-              }}
-              viewBox="0 0 20 20"
-            >
-              <circle cx="10" cy="10" r="9" fill="#FF4810" stroke="#FFFFFF" strokeWidth="1.5" />
-              <polygon
-                points="10,4.2 11.4,8.1 15.5,8.1 12.2,10.5 13.5,14.4 10,12 6.5,14.4 7.8,10.5 4.5,8.1 8.6,8.1"
-                fill="#FFFFFF"
-              />
-            </svg>
+          isSpecial && !withIcon ? (
+            <GiftBadge x={x2} y={y2} stampSize={stampSize} scale={scale} filled={isFilled} />
           ) : null
 
         return (

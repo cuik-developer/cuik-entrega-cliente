@@ -202,9 +202,11 @@ export const passDesignConfigV2Schema = z.object({
 // the parsed one, so validation cannot rewrite a live design.
 
 const finite = (label: string) =>
-  z.number({ invalid_type_error: `${label}: debe ser un número` }).finite(`${label}: valor inválido`)
+  z
+    .number({ invalid_type_error: `${label}: debe ser un número` })
+    .finite(`${label}: valor inválido`)
 
-const stampsConfigSaveSchema = z
+export const stampsConfigSaveSchema = z
   .object({
     maxVisits: z
       .number({ invalid_type_error: "Máximo de visitas: debe ser un número" })
