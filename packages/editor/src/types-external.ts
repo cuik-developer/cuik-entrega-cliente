@@ -19,6 +19,11 @@ export interface EditorConfig {
   businessType?: string
   passType: PassType
   promotionType?: PromotionType
+  /**
+   * Visits per card of the linked promotion. The server draws and counts this
+   * many stamps (stripMaxVisits); the design's own maxVisits is only a fallback.
+   */
+  promotionMaxVisits?: number | null
   initialConfig: PassDesignConfigV2
   /** Extra template variables from tenant strategic/custom fields */
   customVariables?: CustomVariable[]
@@ -29,4 +34,12 @@ export interface EditorCallbacks {
   /** Omitted when the user may not publish (Equipo Cuik staff): the button is hidden. */
   onPublish?: () => Promise<void>
   onUploadAsset: (file: File) => Promise<string>
+  /**
+   * "Vista real": the strip PNG the server would build for this (unsaved)
+   * config. Omitted = the button is hidden.
+   */
+  onRenderStrip?: (
+    config: PassDesignConfigV2,
+    sample: { stampsInCycle: number; completed: boolean },
+  ) => Promise<Blob>
 }

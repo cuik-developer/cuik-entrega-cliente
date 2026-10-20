@@ -108,6 +108,8 @@ export function EditorPageClient({
     businessType,
     passType: initialDesign.type,
     promotionType: (promotionContext?.type as "stamps" | "points") ?? "stamps",
+    // The server draws and counts the promotion's visits (stripMaxVisits).
+    promotionMaxVisits: promotionContext?.maxVisits ?? null,
     initialConfig,
     customVariables,
   }
@@ -142,6 +144,24 @@ export function EditorPageClient({
           },
         }
       : {}),
+
+    onRenderStrip: async (configData, sample) => {
+      const response = await fetch(`/api/admin/pass-designs/${initialDesign.id}/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assets: { stripBg: configData.assets.stripBg, stamp: configData.assets.stamp },
+          stampsConfig: configData.stampsConfig,
+          stampsInCycle: sample.stampsInCycle,
+          completed: sample.completed,
+        }),
+      })
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({ error: "Error de servidor" }))
+        throw new Error(body.error ?? "No se pudo generar la franja")
+      }
+      return response.blob()
+    },
 
     onUploadAsset: async (file: File): Promise<string> => {
       const formData = new FormData()
