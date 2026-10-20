@@ -36,10 +36,8 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { href: "/admin/solicitudes", label: "Solicitudes", icon: ClipboardList },
       { href: "/admin/tenants", label: "Tenants", icon: Building2 },
-      { href: "/admin/campanas", label: "Campañas", icon: Megaphone },
       { href: "/admin/metricas", label: "Métricas", icon: TrendingUp },
       { href: "/admin/exportar", label: "Exportar datos", icon: Download },
-      { href: "/admin/reclamaciones", label: "Reclamaciones", icon: BookOpen },
     ],
   },
   {
@@ -54,13 +52,17 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: "Producto",
     items: [
       { href: "/admin/pases", label: "Diseños de pases", icon: Paintbrush },
-      { href: "/admin/planes", label: "Planes", icon: CreditCard },
+      { href: "/admin/campanas", label: "Campañas", icon: Megaphone },
       { href: "/admin/branding", label: "Branding", icon: Palette },
     ],
   },
   {
     title: "Sistema",
-    items: [{ href: "/admin/configuracion", label: "Configuración", icon: Settings }],
+    items: [
+      { href: "/admin/planes", label: "Planes", icon: CreditCard },
+      { href: "/admin/reclamaciones", label: "Reclamaciones", icon: BookOpen },
+      { href: "/admin/configuracion", label: "Configuración", icon: Settings },
+    ],
   },
 ]
 const NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items)
