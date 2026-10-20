@@ -24,6 +24,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ key
     }
     const body = Buffer.concat(chunks)
 
+    // Uploaded files are served from our own origin: never let one run as a
+    // page. A sandboxed, script-free CSP neutralises any HTML/SVG that slipped
+    // in earlier, and SVGs download instead of rendering when opened directly
+    // (they still display inside <img>).
+    const isSvg = /svg/i.test(contentType)
     return new Response(body, {
       status: 200,
       headers: {
@@ -31,6 +36,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ key
         "Content-Length": String(body.length),
         "Cache-Control": "public, max-age=86400, immutable",
         ETag: `"${etag}"`,
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy":
+          "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox",
+        ...(isSvg ? { "Content-Disposition": "attachment" } : {}),
       },
     })
   } catch (error: unknown) {

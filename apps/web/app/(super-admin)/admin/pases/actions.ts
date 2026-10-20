@@ -152,6 +152,14 @@ export async function updateDesign(
       .limit(1)
     if (!target) return { success: false, error: "Diseño no encontrado" }
     if (target.isActive) return { success: false, error: STAFF_ACTIVE_DESIGN_ERROR }
+    // A design that issued passes is re-read by every refresh of those passes
+    // (pass_instances.design_id), active or not: also live, so not a draft.
+    const [inUse] = await db
+      .select({ id: passInstances.id })
+      .from(passInstances)
+      .where(eq(passInstances.designId, designId))
+      .limit(1)
+    if (inUse) return { success: false, error: STAFF_ACTIVE_DESIGN_ERROR }
     updateValues.reviewRequestedAt = new Date()
     updateValues.reviewRequestedBy = session.user.id
   }
