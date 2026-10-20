@@ -124,6 +124,16 @@ export async function createDesign(
   return { success: true, data: { id: inserted.id } }
 }
 
+/**
+ * A v2 config is checked before it can reach a live pass. The schema is
+ * lenient with every stored shape; the ORIGINAL object is what gets saved.
+ */
+function v2SaveError(canvasData: unknown): string | null {
+  if (canvasData === undefined || getConfigVersion(canvasData) !== "v2") return null
+  const checked = passDesignSaveV2Schema.safeParse(canvasData)
+  return checked.success ? null : `No se guardó: ${checked.error.errors[0].message}`
+}
+
 export async function updateDesign(
   designId: string,
   payload: z.infer<typeof updateDesignSchema>,
@@ -139,14 +149,8 @@ export async function updateDesign(
 
   const { canvasData, colors, stampsConfig, fields } = parsed.data
 
-  // A v2 config is checked before it can reach a live pass. The schema is
-  // lenient with every stored shape; the ORIGINAL object is what gets saved.
-  if (canvasData !== undefined && getConfigVersion(canvasData) === "v2") {
-    const checked = passDesignSaveV2Schema.safeParse(canvasData)
-    if (!checked.success) {
-      return { success: false, error: `No se guardó: ${checked.error.errors[0].message}` }
-    }
-  }
+  const invalid = v2SaveError(canvasData)
+  if (invalid) return { success: false, error: invalid }
 
   const updateValues: Record<string, unknown> = {
     updatedAt: new Date(),

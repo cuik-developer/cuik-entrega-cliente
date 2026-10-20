@@ -344,11 +344,8 @@ export function PassEditor({ config, callbacks }: PassEditorProps) {
           <div className="pb-5 shrink-0 flex flex-wrap items-center justify-center gap-3">
             <WalletToggle passType={previewType} onToggle={setPreviewType} />
             {config.promotionType !== "points" && (
-              <div
-                className="flex items-center rounded-full border border-gray-200 bg-white p-0.5 text-xs"
-                role="group"
-                aria-label="Vista"
-              >
+              <fieldset className="m-0 flex items-center rounded-full border border-gray-200 bg-white p-0.5 text-xs">
+                <legend className="sr-only">Vista</legend>
                 <span className="px-2 text-gray-500">Vista:</span>
                 {(
                   [
@@ -370,7 +367,7 @@ export function PassEditor({ config, callbacks }: PassEditorProps) {
                     {label}
                   </button>
                 ))}
-              </div>
+              </fieldset>
             )}
             {callbacks.onRenderStrip && (
               <button
