@@ -22,6 +22,7 @@ type PageState =
   | "loading"
   | "unauthenticated"
   | "ready"
+  | "wrong-account"
   | "expired"
   | "already-accepted"
   | "not-found"
@@ -71,6 +72,10 @@ export default function AcceptInvitationPage() {
 
     if (!session) {
       setPageState("unauthenticated")
+    } else if (session.user.email.trim().toLowerCase() !== result.data.email.trim().toLowerCase()) {
+      // Better Auth only lets the invited address accept; say so up front
+      // instead of failing with "You are not the recipient of the invitation".
+      setPageState("wrong-account")
     } else {
       setPageState("ready")
     }
@@ -80,6 +85,11 @@ export default function AcceptInvitationPage() {
     if (sessionLoading) return
     fetchInvitation()
   }, [sessionLoading, fetchInvitation])
+
+  async function switchAccount() {
+    await authClient.signOut()
+    setPageState("unauthenticated")
+  }
 
   async function handleAccept() {
     setPageState("accepting")
@@ -302,6 +312,41 @@ export default function AcceptInvitationPage() {
               >
                 <CheckCircle2 className="h-4 w-4" />
                 Aceptar invitación
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Signed in with another account */}
+        {pageState === "wrong-account" && invitation && session && (
+          <Card className="border-gray-200/80 shadow-sm">
+            <CardHeader className="text-center">
+              <div
+                className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full border"
+                style={{
+                  backgroundColor: `${brandingColors.primary}10`,
+                  borderColor: `${brandingColors.primary}20`,
+                }}
+              >
+                <Mail className="h-7 w-7" style={{ color: brandingColors.primary }} />
+              </div>
+              <CardTitle className="text-xl font-extrabold text-gray-900">
+                Esta invitación es para otra cuenta
+              </CardTitle>
+              <CardDescription className="text-sm text-gray-500">
+                Tienes la sesión abierta con <strong>{session.user.email}</strong>, pero la
+                invitación de {invitation.organizationName} es para{" "}
+                <strong>{invitation.email}</strong>.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                className="w-full gap-2 text-white font-semibold rounded-xl h-11 shadow-md"
+                style={{ backgroundColor: brandingColors.primary }}
+                onClick={switchAccount}
+              >
+                <LogIn className="h-4 w-4" />
+                Cerrar sesión y continuar
               </Button>
             </CardContent>
           </Card>
