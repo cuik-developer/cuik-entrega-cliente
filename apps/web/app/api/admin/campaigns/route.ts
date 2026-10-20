@@ -1,6 +1,13 @@
 import { z } from "zod"
 import { listAdminCampaigns } from "@/lib/admin/campaign-admin"
-import { errorResponse, requireAuth, requireSuperAdminOr, successResponse } from "@/lib/api-utils"
+import { redactCampaignRowForStaff } from "@/lib/admin/staff-redact"
+import {
+  errorResponse,
+  isStaffSession,
+  requireAuth,
+  requireSuperAdminOr,
+  successResponse,
+} from "@/lib/api-utils"
 
 const ymd = z
   .string()
@@ -42,7 +49,8 @@ export async function GET(request: Request) {
       limit: q.limit,
     })
     return successResponse({
-      items: rows,
+      // Equipo Cuik "campaigns": no raw send errors in the list either.
+      items: isStaffSession(session) ? rows.map(redactCampaignRowForStaff) : rows,
       pagination: {
         page: q.page,
         limit: q.limit,

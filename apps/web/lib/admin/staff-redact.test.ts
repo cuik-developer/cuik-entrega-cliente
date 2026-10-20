@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest"
-import type { AdminCampaignDetail } from "@/lib/admin/campaign-admin"
+import type { AdminCampaignDetail, AdminCampaignRow } from "@/lib/admin/campaign-admin"
 import { isFailed } from "@/lib/admin/campaign-labels"
-import { redactCampaignDetailForStaff, STAFF_CAMPAIGN_ERROR_TEXT } from "@/lib/admin/staff-redact"
+import {
+  redactCampaignDetailForStaff,
+  redactCampaignRowForStaff,
+  STAFF_CAMPAIGN_ERROR_TEXT,
+} from "@/lib/admin/staff-redact"
 
 function detail(overrides: Partial<AdminCampaignDetail> = {}): AdminCampaignDetail {
   return {
@@ -72,5 +76,15 @@ describe("redactCampaignDetailForStaff", () => {
   it("is an allow-list: unknown extra fields never reach staff", () => {
     const withExtra = { ...detail(), secretInternal: "x" } as AdminCampaignDetail
     expect(redactCampaignDetailForStaff(withExtra)).not.toHaveProperty("secretInternal")
+  })
+})
+
+describe("redactCampaignRowForStaff", () => {
+  it("replaces the raw lastError in list rows and keeps the rest", () => {
+    const row: AdminCampaignRow = detail()
+    const redacted = redactCampaignRowForStaff(row)
+    expect(redacted.lastError).toBe(STAFF_CAMPAIGN_ERROR_TEXT)
+    expect(redacted.name).toBe(row.name)
+    expect(redactCampaignRowForStaff({ ...row, lastError: null }).lastError).toBeNull()
   })
 })

@@ -1,4 +1,4 @@
-import type { AdminCampaignDetail } from "@/lib/admin/campaign-admin"
+import type { AdminCampaignDetail, AdminCampaignRow } from "@/lib/admin/campaign-admin"
 import type { PlatformMetrics } from "@/lib/admin/platform-metrics"
 
 /**
@@ -116,4 +116,12 @@ export function redactCampaignDetailForStaff(detail: AdminCampaignDetail) {
     failuresHidden: true as const,
     content: null,
   } satisfies AdminCampaignDetail & { hasError: boolean; failuresHidden: true }
+}
+
+/**
+ * Campaign list row for "campaigns": the raw lastError (the list shows it
+ * too) is replaced by the same generic text as in the detail.
+ */
+export function redactCampaignRowForStaff(row: AdminCampaignRow): AdminCampaignRow {
+  return { ...row, lastError: row.lastError ? STAFF_CAMPAIGN_ERROR_TEXT : null }
 }
