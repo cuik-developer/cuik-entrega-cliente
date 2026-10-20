@@ -6,6 +6,7 @@ import {
   count,
   db,
   eq,
+  isNull,
   passAssets,
   passDesigns,
   passInstances,
@@ -40,8 +41,10 @@ import {
   resolveTemplate,
   validateAppleEnv,
 } from "@cuik/wallet/shared"
+import { clientIp } from "@/lib/client-ip"
 import { formatExpiry } from "@/lib/loyalty/expiration"
 import { nextExpiration } from "@/lib/loyalty/points-lots"
+import { checkRateLimit } from "@/lib/rate-limit"
 import { buildStripImages } from "@/lib/wallet/points-strip"
 import {
   type StampsConfigLike,
@@ -421,6 +424,38 @@ function toResponse(result: WebServiceResponse): Response {
   return new Response(null, { status: result.status, headers })
 }
 
+// ─── Log endpoint limits ────────────────────────────────────────────────
+
+/** POST /v1/log bodies above this are rejected with 413. */
+const LOG_MAX_BODY_BYTES = 16 * 1024
+/** POST /v1/log requests allowed per IP per window. */
+const LOG_RATE_LIMIT = 30
+const LOG_RATE_WINDOW_MS = 10 * 60 * 1000
+
+/**
+ * Read the request body as text, giving up (null) as soon as it exceeds
+ * maxBytes — a declared Content-Length over the cap is rejected unread.
+ */
+async function readCappedText(request: Request, maxBytes: number): Promise<string | null> {
+  const declared = Number(request.headers.get("content-length") ?? "")
+  if (Number.isFinite(declared) && declared > maxBytes) return null
+  if (!request.body) return ""
+  const reader = request.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => {})
+      return null
+    }
+    chunks.push(value)
+  }
+  return Buffer.concat(chunks).toString("utf-8")
+}
+
 // ─── Route Handlers ─────────────────────────────────────────────────────
 
 export async function GET(request: Request, { params }: { params: Promise<{ path: string[] }> }) {
@@ -502,7 +537,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
       // 200 — the handler signals that we need to regenerate the .pkpass
       const passData = (
         result.body as {
-          passInstance: { clientId: string; designId: string; campaignMessage?: string | null }
+          passInstance: {
+            clientId: string
+            designId: string
+            campaignMessage?: string | null
+            lastUpdatedAt?: Date | null
+          }
         }
       )?.passInstance
       if (!passData) {
@@ -522,30 +562,29 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
       }
 
       // Regenerate .pkpass with tenant-specific config
-      const passBuffer = await regeneratePass({
+      const regenerated = await regeneratePass({
         clientId: passData.clientId,
         designId: passData.designId,
         serialNumber: route.serialNumber,
         appleConfig: appleConfigForPass,
         campaignMessage: passData.campaignMessage ?? null,
+        lastUpdatedAt: passData.lastUpdatedAt ?? null,
       })
 
-      if (!passBuffer) {
+      if (!regenerated) {
         console.error(
           `[Wallet:GetPass] serial=${route.serialNumber} status=500 (regeneratePass returned null)`,
         )
         return new Response("Failed to regenerate pass", { status: 500 })
       }
 
-      // Read back the etag + lastUpdatedAt that regeneratePass wrote to the DB
-      const updatedInstance = await db
-        .select({ etag: passInstances.etag, lastUpdatedAt: passInstances.lastUpdatedAt })
-        .from(passInstances)
-        .where(eq(passInstances.serialNumber, route.serialNumber))
-        .limit(1)
-
-      const freshEtag = updatedInstance[0]?.etag ?? generateETag(route.serialNumber, 0, new Date())
-      const freshLastUpdated = updatedInstance[0]?.lastUpdatedAt ?? new Date()
+      // Last-Modified is the last_updated_at read BEFORE generating (never "now"):
+      // the device sends it back as If-Modified-Since and gets a 304 until a
+      // visit/redeem/campaign bumps last_updated_at again. If a change lands
+      // while we generate, its newer timestamp still triggers a fresh fetch.
+      const passBuffer = regenerated.buffer
+      const freshEtag = regenerated.etag
+      const freshLastUpdated = regenerated.lastUpdatedAt
 
       // Convert Node.js Buffer to Uint8Array so the Web Response API
       // transmits raw bytes instead of a UTF-8-mangled string.
@@ -638,12 +677,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ pat
     }
 
     if (route.type === "log") {
+      // Unauthenticated endpoint: limit per IP and cap the body before parsing.
+      if (
+        !checkRateLimit(`apple-log:ip:${clientIp(request)}`, LOG_RATE_LIMIT, LOG_RATE_WINDOW_MS)
+      ) {
+        return new Response(null, { status: 429, headers: { "Cache-Control": "no-store" } })
+      }
+      const text = await readCappedText(request, LOG_MAX_BODY_BYTES)
+      if (text === null) {
+        return new Response(null, { status: 413, headers: { "Cache-Control": "no-store" } })
+      }
       let body: unknown = null
       try {
-        body = await request.json()
+        body = JSON.parse(text)
       } catch {
         // ignore parse errors
       }
+      // handleLog keeps at most 20 entries of 500 characters each.
       const result = handleLog(body)
       return toResponse(result)
     }
@@ -706,7 +756,9 @@ async function regeneratePass(ctx: {
   serialNumber: string
   appleConfig: AppleWalletConfig
   campaignMessage: string | null
-}): Promise<Buffer | null> {
+  /** pass_instances.last_updated_at as read before generating. */
+  lastUpdatedAt: Date | null
+}): Promise<{ buffer: Buffer; etag: string; lastUpdatedAt: Date } | null> {
   try {
     const { clientId, designId, serialNumber, appleConfig, campaignMessage } = ctx
 
@@ -978,15 +1030,27 @@ async function regeneratePass(ctx: {
       return null
     }
 
-    // Update pass_instances with new etag
-    const now = new Date()
-    const etag = generateETag(serialNumber, client.totalVisits, now)
+    // Serving a pass is not a change: keep last_updated_at as it was so
+    // Last-Modified / If-Modified-Since stay stable (it used to be bumped to
+    // "now" on every fetch, so a 304 never happened). Only a pass that never
+    // had a timestamp gets one. The ETag is derived from that same timestamp
+    // and only written while last_updated_at is still the value we read, so a
+    // concurrent visit's newer ETag is never overwritten with an older one.
+    const lastUpdatedAt = ctx.lastUpdatedAt ?? new Date()
+    const etag = generateETag(serialNumber, client.totalVisits, lastUpdatedAt)
     await db
       .update(passInstances)
-      .set({ etag, lastUpdatedAt: now })
-      .where(eq(passInstances.serialNumber, serialNumber))
+      .set(ctx.lastUpdatedAt ? { etag } : { etag, lastUpdatedAt })
+      .where(
+        and(
+          eq(passInstances.serialNumber, serialNumber),
+          ctx.lastUpdatedAt
+            ? eq(passInstances.lastUpdatedAt, ctx.lastUpdatedAt)
+            : isNull(passInstances.lastUpdatedAt),
+        ),
+      )
 
-    return passResult.buffer
+    return { buffer: passResult.buffer, etag, lastUpdatedAt }
   } catch (err) {
     console.error("[Wallet:AppleWSP] regeneratePass error:", err)
     return null

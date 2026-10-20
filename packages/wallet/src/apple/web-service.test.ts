@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest"
 import type { WebServiceDeps } from "../shared/types"
 import {
+  APPLE_LOG_MAX_ENTRIES,
+  APPLE_LOG_MAX_ENTRY_LENGTH,
+  capAppleLogs,
   handleGetPass,
   handleGetSerials,
   handleLog,
@@ -279,12 +282,115 @@ describe("handleGetPass", () => {
   })
 })
 
+// ─── handleGetPass: If-Modified-Since ───────────────────────────────
+
+describe("handleGetPass If-Modified-Since", () => {
+  function depsWithPass(lastUpdatedAt: Date | null, etag: string | null = null) {
+    const getPassInstance = vi.fn().mockResolvedValue({
+      authToken: "token",
+      lastUpdatedAt,
+      etag,
+      clientId: "c1",
+      designId: "d1",
+      campaignMessage: null,
+    })
+    return createMockDeps({ getPassInstance })
+  }
+
+  const call = (
+    deps: WebServiceDeps,
+    headers: { ifModifiedSince?: string; ifNoneMatch?: string },
+  ) =>
+    handleGetPass(deps, {
+      passTypeId: PASS_TYPE_ID,
+      serialNumber: SERIAL,
+      authHeader: VALID_AUTH,
+      ...headers,
+    })
+
+  it("returns 304 when the Last-Modified we sent comes back (ms dropped by the HTTP date)", async () => {
+    const lastUpdated = new Date("2026-10-20T15:04:05.678Z")
+    const deps = depsWithPass(lastUpdated)
+    const result = await call(deps, { ifModifiedSince: lastUpdated.toUTCString() })
+    expect(result.status).toBe(304)
+    expect(result.body).toBeUndefined()
+    expect(result.headers?.["Last-Modified"]).toBe("Tue, 20 Oct 2026 15:04:05 GMT")
+  })
+
+  it("returns 304 when If-Modified-Since is later than last_updated_at", async () => {
+    const deps = depsWithPass(new Date("2026-10-20T15:00:00.000Z"))
+    const result = await call(deps, { ifModifiedSince: "Tue, 20 Oct 2026 16:00:00 GMT" })
+    expect(result.status).toBe(304)
+  })
+
+  it("returns 200 when the pass changed after If-Modified-Since (next second)", async () => {
+    const deps = depsWithPass(new Date("2026-10-20T15:04:06.001Z"))
+    const result = await call(deps, { ifModifiedSince: "Tue, 20 Oct 2026 15:04:05 GMT" })
+    expect(result.status).toBe(200)
+    expect(result.headers?.["Last-Modified"]).toBe("Tue, 20 Oct 2026 15:04:06 GMT")
+  })
+
+  it("200 Last-Modified round-trips into a 304 on the next request", async () => {
+    const deps = depsWithPass(new Date("2026-10-20T15:04:06.999Z"), '"e1"')
+    const first = await call(deps, { ifModifiedSince: "Tue, 20 Oct 2026 15:00:00 GMT" })
+    expect(first.status).toBe(200)
+    const lastModified = first.headers?.["Last-Modified"]
+    expect(lastModified).toBeDefined()
+    const second = await call(deps, { ifModifiedSince: lastModified })
+    expect(second.status).toBe(304)
+    expect(second.headers?.ETag).toBe('"e1"')
+  })
+
+  it("returns 200 for an unparseable If-Modified-Since", async () => {
+    const deps = depsWithPass(new Date("2026-10-20T15:00:00.000Z"))
+    const result = await call(deps, { ifModifiedSince: "not a date" })
+    expect(result.status).toBe(200)
+  })
+
+  it("returns 200 when last_updated_at is null", async () => {
+    const deps = depsWithPass(null)
+    const result = await call(deps, { ifModifiedSince: "Tue, 20 Oct 2026 16:00:00 GMT" })
+    expect(result.status).toBe(200)
+  })
+
+  it("If-None-Match takes precedence: a mismatching ETag returns 200 even if not modified", async () => {
+    const deps = depsWithPass(new Date("2026-10-20T15:00:00.000Z"), '"current"')
+    const result = await call(deps, {
+      ifNoneMatch: '"old"',
+      ifModifiedSince: "Tue, 20 Oct 2026 16:00:00 GMT",
+    })
+    expect(result.status).toBe(200)
+  })
+
+  it("does not regenerate on 304: no passInstance body is returned", async () => {
+    const deps = depsWithPass(new Date("2026-10-20T15:00:00.000Z"))
+    const result = await call(deps, { ifModifiedSince: "Tue, 20 Oct 2026 15:00:00 GMT" })
+    expect(result.status).toBe(304)
+    expect(result.body).toBeUndefined()
+  })
+})
+
 // ─── handleLog ───────────────────────────────────────────────────────
 
 describe("handleLog", () => {
   it("returns 200 always", () => {
     const result = handleLog({ logs: ["error 1", "error 2"] })
     expect(result.status).toBe(200)
+  })
+
+  it("caps entries to 20 and each entry to 500 characters", () => {
+    const logs = Array.from({ length: 50 }, (_, i) => `${i}:${"x".repeat(2000)}`)
+    const capped = capAppleLogs({ logs })
+    expect(capped).toHaveLength(APPLE_LOG_MAX_ENTRIES)
+    expect(capped[0].startsWith("0:")).toBe(true)
+    for (const entry of capped) {
+      expect(entry.length).toBeLessThanOrEqual(APPLE_LOG_MAX_ENTRY_LENGTH + 1)
+    }
+  })
+
+  it("stringifies non-string entries and ignores a non-array logs field", () => {
+    expect(capAppleLogs({ logs: [{ a: 1 }, 2] })).toEqual(['{"a":1}', "2"])
+    expect(capAppleLogs({ logs: "nope" })).toEqual([])
   })
 
   it("handles empty body", () => {

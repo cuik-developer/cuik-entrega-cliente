@@ -169,11 +169,17 @@ export async function handleGetPass(
     return { status: 304, headers: notModifiedHeaders }
   }
 
-  // Check If-Modified-Since for 304 Not Modified
-  // Only applies when the pass has a lastUpdatedAt and the client sent the header
-  if (ifModifiedSince && passInstance.lastUpdatedAt) {
-    const sinceDate = new Date(ifModifiedSince)
-    if (!Number.isNaN(sinceDate.getTime()) && passInstance.lastUpdatedAt <= sinceDate) {
+  // Check If-Modified-Since for 304 Not Modified.
+  // HTTP dates carry whole seconds while last_updated_at keeps milliseconds,
+  // so compare both at second precision: the Last-Modified we sent for this
+  // version round-trips back as an equal If-Modified-Since. As in RFC 9110,
+  // If-Modified-Since is only evaluated when no If-None-Match was sent.
+  if (!ifNoneMatch && ifModifiedSince && passInstance.lastUpdatedAt) {
+    const sinceMs = Date.parse(ifModifiedSince)
+    if (
+      !Number.isNaN(sinceMs) &&
+      Math.floor(passInstance.lastUpdatedAt.getTime() / 1000) <= Math.floor(sinceMs / 1000)
+    ) {
       return { status: 304, headers: notModifiedHeaders }
     }
   }
@@ -182,6 +188,9 @@ export async function handleGetPass(
   // The caller (API route) will use passInstance data to build the .pkpass.
   return {
     status: 200,
+    // Last-Modified mirrors last_updated_at (not "now") so the next
+    // If-Modified-Since from the device round-trips to a 304.
+    headers: notModifiedHeaders,
     body: {
       passInstance: {
         clientId: passInstance.clientId,
@@ -196,17 +205,38 @@ export async function handleGetPass(
 
 // ─── POST: Log ──────────────────────────────────────────────────────────
 
+/** Most log entries we keep from one Apple Wallet log request. */
+export const APPLE_LOG_MAX_ENTRIES = 20
+/** Longest single log entry we keep (characters). */
+export const APPLE_LOG_MAX_ENTRY_LENGTH = 500
+
+/**
+ * Keep at most APPLE_LOG_MAX_ENTRIES entries, each a string of at most
+ * APPLE_LOG_MAX_ENTRY_LENGTH characters. The endpoint is unauthenticated,
+ * so nothing here may let a caller grow our logs without bound.
+ */
+export function capAppleLogs(body: unknown): string[] {
+  const logs =
+    body && typeof body === "object" && "logs" in body ? (body as { logs: unknown }).logs : null
+  if (!Array.isArray(logs)) return []
+  return logs.slice(0, APPLE_LOG_MAX_ENTRIES).map((entry) => {
+    const text = typeof entry === "string" ? entry : (JSON.stringify(entry) ?? String(entry))
+    return text.length > APPLE_LOG_MAX_ENTRY_LENGTH
+      ? `${text.slice(0, APPLE_LOG_MAX_ENTRY_LENGTH)}…`
+      : text
+  })
+}
+
 /**
  * Handle log messages from Apple Wallet.
  *
  * Apple sends error logs here when something goes wrong with pass updates.
- * We log them server-side and always return 200.
+ * We log them server-side (capped, see capAppleLogs) and always return 200.
  */
 export function handleLog(body: unknown): WebServiceResponse {
-  const logs =
-    body && typeof body === "object" && "logs" in body ? (body as { logs: unknown[] }).logs : []
+  const logs = capAppleLogs(body)
 
-  if (Array.isArray(logs) && logs.length > 0) {
+  if (logs.length > 0) {
     console.warn("[Wallet:AppleWSP] Device logs:", JSON.stringify(logs))
   }
 
