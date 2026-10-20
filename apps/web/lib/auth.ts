@@ -1,6 +1,7 @@
 import {
   account,
   db,
+  eq,
   invitation,
   member,
   organization as organizationTable,
@@ -11,9 +12,20 @@ import {
 import { InvitacionCajero, ResetPassword, sendEmail } from "@cuik/email"
 import { betterAuth } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
+import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api"
 import { admin, organization } from "better-auth/plugins"
 import { createAccessControl } from "better-auth/plugins/access"
 import { adminAc, defaultStatements, userAc } from "better-auth/plugins/admin/access"
+import {
+  decideOrganizationRequest,
+  decideSignUp,
+  type GuardDecision,
+  INVITATION_HEADER,
+  isInvitedHttpSignUp,
+  needsRoleForOrganizationPath,
+  SIGN_UP_PATH,
+  updatesOrganizationSlug,
+} from "./auth-guards"
 
 const trustedOrigins = process.env.TRUSTED_ORIGINS?.split(",").map((o) => o.trim()) ?? []
 
@@ -22,6 +34,56 @@ const trustedOrigins = process.env.TRUSTED_ORIGINS?.split(",").map((o) => o.trim
 const adminAccess = createAccessControl(defaultStatements)
 const platformAdminRole = adminAccess.newRole(adminAc.statements)
 const plainUserRole = adminAccess.newRole(userAc.statements)
+
+function enforce(decision: GuardDecision) {
+  if (!decision.allow) {
+    throw new APIError(decision.status, { code: decision.code, message: decision.message })
+  }
+}
+
+async function findInvitation(id: string) {
+  const [row] = await db
+    .select({
+      id: invitation.id,
+      email: invitation.email,
+      status: invitation.status,
+      expiresAt: invitation.expiresAt,
+    })
+    .from(invitation)
+    .where(eq(invitation.id, id))
+    .limit(1)
+  return row ?? null
+}
+
+/**
+ * Guard for HTTP calls to /api/auth/*. Only requests that came through the
+ * router carry `ctx.request`; server-side `auth.api.*` calls from our own code
+ * (solicitud approval, Equipo Cuik, cajeros/actions) skip it and apply their
+ * own rules. Decisions live in lib/auth-guards.ts (unit-tested).
+ */
+const httpGuard = createAuthMiddleware(async (ctx) => {
+  if (!ctx.request) return
+
+  if (ctx.path === SIGN_UP_PATH) {
+    const invitationId = ctx.headers?.get(INVITATION_HEADER)?.trim().slice(0, 128) || null
+    const found = invitationId ? await findInvitation(invitationId) : null
+    enforce(
+      decideSignUp({
+        email: (ctx.body as { email?: unknown } | undefined)?.email,
+        invitationId,
+        invitation: found,
+        now: new Date(),
+      }),
+    )
+    return
+  }
+
+  if (needsRoleForOrganizationPath(ctx.path)) {
+    const current = await getSessionFromCtx(ctx)
+    const role = (current?.user as { role?: string | null } | undefined)?.role
+    enforce(decideOrganizationRequest(ctx.path, role))
+  }
+})
 
 export const auth = betterAuth({
   trustedOrigins,
@@ -37,8 +99,24 @@ export const auth = betterAuth({
       invitation,
     },
   }),
+  hooks: { before: httpGuard },
+  databaseHooks: {
+    user: {
+      create: {
+        // A public sign-up only gets here with a matching invitation (httpGuard):
+        // opening the invite link proved access to the inbox.
+        async before(newUser, ctx) {
+          if (isInvitedHttpSignUp(ctx)) return { data: { ...newUser, emailVerified: true } }
+        },
+      },
+    },
+  },
   emailAndPassword: {
     enabled: true,
+    // The reset link went to that inbox: the address is proven.
+    async onPasswordReset({ user: resetUser }) {
+      await db.update(user).set({ emailVerified: true }).where(eq(user.id, resetUser.id))
+    },
     async sendResetPassword({ user, url }) {
       // Fire-and-forget: don't await to prevent timing attacks
       void sendEmail({
@@ -77,6 +155,23 @@ export const auth = betterAuth({
       // Only super-admins create organizations (tenants come from Solicitudes);
       // otherwise any user could create one and become "owner" of something.
       allowUserToCreateOrganization: async (u) => u.role === "super_admin",
+      // Tenants and organizations are linked by slug: deleting an organization
+      // or changing its slug through Better Auth would orphan the tenant.
+      // Slug changes go through PATCH /api/admin/tenants/[id] instead.
+      disableOrganizationDeletion: true,
+      // Only verified emails accept invitations (an invited sign-up and a
+      // password reset verify the address).
+      requireEmailVerificationOnInvitation: true,
+      organizationHooks: {
+        async beforeUpdateOrganization({ organization: data }) {
+          if (updatesOrganizationSlug(data as Record<string, unknown>)) {
+            throw new APIError("FORBIDDEN", {
+              code: "ORGANIZATION_SLUG_LOCKED",
+              message: "El slug se cambia desde el comercio en el panel de Cuik.",
+            })
+          }
+        },
+      },
       async sendInvitationEmail(data) {
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
         const inviteLink = `${baseUrl}/accept-invitation/${data.id}`

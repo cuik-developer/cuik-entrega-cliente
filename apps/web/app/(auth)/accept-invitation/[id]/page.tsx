@@ -90,7 +90,15 @@ export default function AcceptInvitationPage() {
       })
 
       if (result.error) {
-        toast.error(result.error.message ?? "Error al aceptar la invitación")
+        // Accounts created before invite-only sign-up have an unverified email:
+        // a password reset (link sent to that inbox) verifies it.
+        const unverified = result.error.code?.startsWith("EMAIL_VERIFICATION_REQUIRED")
+        toast.error(
+          unverified
+            ? "Primero confirma tu correo: usa “¿Olvidaste tu contraseña?” en el inicio de sesión y vuelve a abrir la invitación."
+            : (result.error.message ?? "Error al aceptar la invitación"),
+          unverified ? { duration: 10000 } : undefined,
+        )
         setPageState("ready")
         return
       }

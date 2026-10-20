@@ -1,4 +1,4 @@
-import { and, db, eq, ne, plans, tenants } from "@cuik/db"
+import { and, db, eq, ne, organization, plans, tenants } from "@cuik/db"
 import { updateTenantSchema } from "@cuik/shared/validators"
 import type { z } from "zod"
 import { billingOutlookFor } from "@/lib/admin/billing-overview"
@@ -27,7 +27,21 @@ async function validateSlugUniqueness(slug: string, currentSlug: string, tenantI
   if (slugTaken.length > 0) {
     return errorResponse("Slug already taken by another tenant", 409)
   }
+  // The tenant ↔ organization link is the slug: the new one must be free there too.
+  const orgTaken = await db
+    .select({ id: organization.id })
+    .from(organization)
+    .where(eq(organization.slug, slug))
+    .limit(1)
+  if (orgTaken.length > 0) {
+    return errorResponse("Slug already taken by another organization", 409)
+  }
   return null
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  const e = err as { code?: string; cause?: { code?: string } } | null
+  return e?.code === "23505" || e?.cause?.code === "23505"
 }
 
 async function validatePlanExists(planId: string) {
@@ -103,7 +117,27 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
 
     const updateData = buildUpdateData(parsed.data, existing.status)
-    const [updated] = await db.update(tenants).set(updateData).where(eq(tenants.id, id)).returning()
+    const newSlug =
+      parsed.data.slug !== undefined && parsed.data.slug !== existing.slug ? parsed.data.slug : null
+    let updated: typeof existing | undefined
+    try {
+      updated = await db.transaction(async (tx) => {
+        const [row] = await tx.update(tenants).set(updateData).where(eq(tenants.id, id)).returning()
+        // Move the linked organization with it, or members lose the tenant.
+        if (newSlug) {
+          await tx
+            .update(organization)
+            .set({ slug: newSlug })
+            .where(eq(organization.slug, existing.slug))
+        }
+        return row
+      })
+    } catch (err) {
+      if (newSlug && isUniqueViolation(err)) {
+        return errorResponse("Slug already taken", 409)
+      }
+      throw err
+    }
     invalidateTenantSummary(id)
 
     return successResponse(updated)

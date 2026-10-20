@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { authClient } from "@/lib/auth-client"
+import { INVITATION_HEADER } from "@/lib/auth-guards"
 import { CUIK_PRIMARY, darkenColor } from "@/lib/color-utils"
 
 /**
@@ -57,9 +58,10 @@ function validateFormFields(
 }
 
 function useInvitationBranding(callbackUrl: string | null) {
-  const invitationId = callbackUrl?.match(/\/accept-invitation\/(.+)/)?.[1] ?? null
+  const invitationId = callbackUrl?.match(/^\/accept-invitation\/([^/?#]+)/)?.[1] ?? null
   const [branding, setBranding] = useState<TenantBranding | null>(null)
   const [orgName, setOrgName] = useState<string | null>(null)
+  const [invitedEmail, setInvitedEmail] = useState<string | null>(null)
 
   useEffect(() => {
     if (!invitationId) return
@@ -68,6 +70,7 @@ function useInvitationBranding(callbackUrl: string | null) {
         if (result.success) {
           setBranding(result.data.branding)
           setOrgName(result.data.organizationName)
+          setInvitedEmail(result.data.email)
         }
       })
       .catch(() => {
@@ -78,7 +81,7 @@ function useInvitationBranding(callbackUrl: string | null) {
   const primaryColor = branding?.primaryColor ?? CUIK_PRIMARY
   const primaryDark = darkenColor(primaryColor, 0.15)
 
-  return { primaryColor, primaryDark, orgName }
+  return { primaryColor, primaryDark, orgName, invitationId, invitedEmail }
 }
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: registration form with multi-field validation and conditional UI
@@ -87,11 +90,16 @@ function RegisterContent() {
   const searchParams = useSearchParams()
   const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl"))
 
-  const { primaryColor, primaryDark, orgName } = useInvitationBranding(callbackUrl)
+  const { primaryColor, primaryDark, orgName, invitationId, invitedEmail } =
+    useInvitationBranding(callbackUrl)
 
   const [nombre, setNombre] = useState("")
   const [email, setEmail] = useState("")
-  const [emailReadonly] = useState(false) // would be true if pre-filled from invitation
+  // Sign-up only works for the invited address: pre-fill it and lock it.
+  const emailReadonly = invitedEmail !== null
+  useEffect(() => {
+    if (invitedEmail) setEmail(invitedEmail)
+  }, [invitedEmail])
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -107,12 +115,21 @@ function RegisterContent() {
   const passwordValid = hasMinLength && hasUppercase && hasNumber
   const passwordsMatch = password === confirmPassword && confirmPassword.length > 0
   const formValid =
-    nombre.trim() !== "" && email.trim() !== "" && passwordValid && passwordsMatch && acceptTerms
+    invitationId !== null &&
+    nombre.trim() !== "" &&
+    email.trim() !== "" &&
+    passwordValid &&
+    passwordsMatch &&
+    acceptTerms
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!validateFormFields(passwordValid, passwordsMatch, acceptTerms, setError)) return
+    if (!invitationId) {
+      setError("Solo puedes crear una cuenta desde el enlace de una invitación.")
+      return
+    }
 
     setLoading(true)
     setError("")
@@ -122,6 +139,8 @@ function RegisterContent() {
         name: nombre.trim(),
         email: email.trim(),
         password,
+        // The server only accepts sign-ups that present a matching invitation.
+        fetchOptions: { headers: { [INVITATION_HEADER]: invitationId } },
       })
 
       if (result.error) {
@@ -193,7 +212,9 @@ function RegisterContent() {
                 <p>
                   {orgName
                     ? `Has sido invitado a unirte a ${orgName}. Crea tu cuenta para continuar.`
-                    : "Esta invitación fue enviada por el equipo de Cuik."}{" "}
+                    : invitationId
+                      ? "Esta invitación fue enviada por el equipo de Cuik."
+                      : "Para crear una cuenta abre el enlace de invitación que te llegó por correo."}{" "}
                   Si no recibiste una invitación,{" "}
                   <span className="font-semibold cursor-pointer hover:underline">contactanos</span>.
                 </p>
