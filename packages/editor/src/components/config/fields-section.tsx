@@ -1,5 +1,13 @@
 import { Bell } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
+import {
+  APPLE_MAX_HEADER_FIELDS,
+  APPLE_MAX_SECONDARY_AUX_FIELDS,
+  allFieldKeys,
+  duplicateFieldKeys,
+  toFieldKey,
+  uniqueFieldKey,
+} from "../../lib/validate-config"
 import { useEditorStore } from "../../store/editor-store"
 import type { FieldSection, PromotionType } from "../../types"
 import type { CustomVariable } from "../../types-external"
@@ -41,18 +49,10 @@ function isTemplateVariable(value: string): boolean {
   return value.startsWith("{{") && value.endsWith("}}")
 }
 
-/** Auto-generate a field key from the label (lowercase, accents stripped, spaces → _) */
-function toFieldKey(label: string): string {
-  return label
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_|_$/g, "")
-}
-
 const inputClass =
   "w-full px-2 py-1 rounded-md bg-white border border-gray-200 text-gray-800 text-[11px] placeholder:text-gray-400 focus:outline-none focus:border-[#0e70db] focus:ring-1 focus:ring-[#0e70db]/20 transition-colors"
+const inputErrorClass =
+  "w-full px-2 py-1 rounded-md bg-white border border-red-400 text-gray-800 text-[11px] placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-red-300 transition-colors"
 
 function InsertVariableDropdown({
   textareaRef,
@@ -203,10 +203,42 @@ function FieldGroup({
   promotionType: PromotionType
 }) {
   const fields = useEditorStore((s) => s.config.fields[section])
+  const allFields = useEditorStore((s) => s.config.fields)
+  const duplicates = duplicateFieldKeys(allFields)
+  /** Keys used by every OTHER field (the one being edited excluded). */
+  const keysExcept = (index: number) => {
+    const own = fields[index]?.key.trim()
+    const keys = allFieldKeys(allFields)
+    const at = keys.indexOf(own ?? "")
+    return at >= 0 ? [...keys.slice(0, at), ...keys.slice(at + 1)] : keys
+  }
+  // Apple drops a field with an empty or repeated key: fill an empty one on blur.
+  const onKeyBlur = (index: number) => {
+    const field = fields[index]
+    if (field && !field.key.trim()) {
+      updateField(section, index, { key: uniqueFieldKey(field.label, keysExcept(index)) })
+    }
+  }
+  const onLabelChange = (index: number, newLabel: string) => {
+    const field = fields[index]
+    if (!field) return
+    const update: { label: string; key?: string } = { label: newLabel }
+    const autoKey = toFieldKey(field.label)
+    if (!field.key || field.key === autoKey || /^campo(_\d+)?$/.test(field.key)) {
+      update.key = uniqueFieldKey(newLabel, keysExcept(index))
+    }
+    updateField(section, index, update)
+  }
   const updateField = useEditorStore((s) => s.updateField)
   const addField = useEditorStore((s) => s.addField)
   const removeField = useEditorStore((s) => s.removeField)
   const textareaRefs = useRef<Map<number, HTMLTextAreaElement | null>>(new Map())
+  const keyError = (key: string): string | null => {
+    const k = key.trim()
+    if (!k) return "Falta la clave: sin clave, Apple no muestra el campo."
+    if (duplicates.has(k)) return `La clave "${k}" se repite: usa una clave única en todo el pase.`
+    return null
+  }
 
   return (
     <div className="flex flex-col gap-2">
@@ -216,168 +248,160 @@ function FieldGroup({
 
       {fields.map((field, index) => {
         const hasChangeMessage = Boolean(field.changeMessage)
+        const error = keyError(field.key)
         return (
           // biome-ignore lint/suspicious/noArrayIndexKey: fields have no stable ID
-          <div key={index} className="flex items-start gap-1.5">
-            <div
-              className={`flex-1 ${freeText ? "flex flex-col gap-1.5" : "grid grid-cols-3 gap-1.5"}`}
-            >
-              {freeText ? (
-                <>
-                  <div className="grid grid-cols-2 gap-1.5">
+          <div key={index} className="flex flex-col gap-0.5">
+            <div className="flex items-start gap-1.5">
+              <div
+                className={`flex-1 ${freeText ? "flex flex-col gap-1.5" : "grid grid-cols-3 gap-1.5"}`}
+              >
+                {freeText ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <input
+                        type="text"
+                        value={field.key}
+                        onChange={(e) => updateField(section, index, { key: e.target.value })}
+                        onBlur={() => onKeyBlur(index)}
+                        placeholder="Clave"
+                        aria-invalid={error != null}
+                        className={error ? inputErrorClass : inputClass}
+                      />
+                      <input
+                        type="text"
+                        value={field.label}
+                        onChange={(e) => onLabelChange(index, e.target.value)}
+                        placeholder="Titulo"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div className="flex items-start gap-1">
+                      <textarea
+                        ref={(el) => {
+                          textareaRefs.current.set(index, el)
+                        }}
+                        value={field.value}
+                        onChange={(e) => updateField(section, index, { value: e.target.value })}
+                        placeholder="Contenido (puede incluir {{variables}})"
+                        rows={2}
+                        className={`${inputClass} resize-y flex-1`}
+                      />
+                      <InsertVariableDropdown
+                        textareaRef={{ current: textareaRefs.current.get(index) ?? null }}
+                        onInsert={(newValue) => updateField(section, index, { value: newValue })}
+                        customVariables={customVariables}
+                        promotionType={promotionType}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
                     <input
                       type="text"
                       value={field.key}
                       onChange={(e) => updateField(section, index, { key: e.target.value })}
+                      onBlur={() => onKeyBlur(index)}
                       placeholder="Clave"
-                      className={inputClass}
+                      aria-invalid={error != null}
+                      className={error ? inputErrorClass : inputClass}
                     />
                     <input
                       type="text"
                       value={field.label}
-                      onChange={(e) => {
-                        const newLabel = e.target.value
-                        const autoKey = toFieldKey(field.label)
-                        const update: { label: string; key?: string } = { label: newLabel }
-                        if (!field.key || field.key === autoKey) {
-                          update.key = toFieldKey(newLabel)
-                        }
-                        updateField(section, index, update)
-                      }}
-                      placeholder="Titulo"
+                      onChange={(e) => onLabelChange(index, e.target.value)}
+                      placeholder="Label"
                       className={inputClass}
                     />
-                  </div>
-                  <div className="flex items-start gap-1">
-                    <textarea
-                      ref={(el) => {
-                        textareaRefs.current.set(index, el)
-                      }}
-                      value={field.value}
+                    <select
+                      value={isTemplateVariable(field.value) ? field.value : ""}
                       onChange={(e) => updateField(section, index, { value: e.target.value })}
-                      placeholder="Contenido (puede incluir {{variables}})"
-                      rows={2}
-                      className={`${inputClass} resize-y flex-1`}
-                    />
-                    <InsertVariableDropdown
-                      textareaRef={{ current: textareaRefs.current.get(index) ?? null }}
-                      onInsert={(newValue) => updateField(section, index, { value: newValue })}
-                      customVariables={customVariables}
-                      promotionType={promotionType}
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <input
-                    type="text"
-                    value={field.key}
-                    onChange={(e) => updateField(section, index, { key: e.target.value })}
-                    placeholder="Clave"
-                    className={inputClass}
-                  />
-                  <input
-                    type="text"
-                    value={field.label}
-                    onChange={(e) => {
-                      const newLabel = e.target.value
-                      const autoKey = toFieldKey(field.label)
-                      const update: { label: string; key?: string } = { label: newLabel }
-                      if (!field.key || field.key === autoKey) {
-                        update.key = toFieldKey(newLabel)
-                      }
-                      updateField(section, index, update)
-                    }}
-                    placeholder="Label"
-                    className={inputClass}
-                  />
-                  <select
-                    value={isTemplateVariable(field.value) ? field.value : ""}
-                    onChange={(e) => updateField(section, index, { value: e.target.value })}
-                    className={inputClass}
-                  >
-                    <option value="" disabled>
-                      Seleccionar variable
-                    </option>
-                    {Object.entries(templateVariablesFor(promotionType)).map(([key, lbl]) => (
-                      <option key={key} value={key}>
-                        {lbl}
+                      className={inputClass}
+                    >
+                      <option value="" disabled>
+                        Seleccionar variable
                       </option>
-                    ))}
-                    {/* Keep a value from the other program visible so it is not silently lost. */}
-                    {isTemplateVariable(field.value) &&
-                      !(field.value in templateVariablesFor(promotionType)) &&
-                      !(customVariables ?? []).some((cv) => cv.variable === field.value) && (
-                        <option value={field.value}>
-                          {field.value} (no aplica a este programa)
+                      {Object.entries(templateVariablesFor(promotionType)).map(([key, lbl]) => (
+                        <option key={key} value={key}>
+                          {lbl}
                         </option>
-                      )}
-                    {customVariables && customVariables.length > 0 && (
-                      <optgroup label="Campos estrategicos">
-                        {customVariables.map((cv) => (
-                          <option key={cv.variable} value={cv.variable}>
-                            {cv.label}
+                      ))}
+                      {/* Keep a value from the other program visible so it is not silently lost. */}
+                      {isTemplateVariable(field.value) &&
+                        !(field.value in templateVariablesFor(promotionType)) &&
+                        !(customVariables ?? []).some((cv) => cv.variable === field.value) && (
+                          <option value={field.value}>
+                            {field.value} (no aplica a este programa)
                           </option>
-                        ))}
-                      </optgroup>
-                    )}
-                  </select>
-                </>
-              )}
-            </div>
+                        )}
+                      {customVariables && customVariables.length > 0 && (
+                        <optgroup label="Campos estrategicos">
+                          {customVariables.map((cv) => (
+                            <option key={cv.variable} value={cv.variable}>
+                              {cv.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  </>
+                )}
+              </div>
 
-            {showChangeMessage && (
+              {showChangeMessage && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateField(section, index, {
+                      changeMessage: hasChangeMessage ? undefined : "%@",
+                    })
+                  }
+                  className={`mt-0.5 p-1 rounded transition-colors ${
+                    hasChangeMessage
+                      ? "text-[#0e70db] bg-blue-50 hover:bg-blue-100"
+                      : "text-gray-300 hover:text-gray-500 hover:bg-gray-50"
+                  }`}
+                  title={
+                    hasChangeMessage
+                      ? "Notificacion de cambio activa — clic para desactivar"
+                      : "Activar notificacion de cambio"
+                  }
+                  aria-label={
+                    hasChangeMessage
+                      ? "Desactivar notificacion de cambio"
+                      : "Activar notificacion de cambio"
+                  }
+                >
+                  <Bell className="w-3.5 h-3.5" />
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={() =>
-                  updateField(section, index, {
-                    changeMessage: hasChangeMessage ? undefined : "%@",
-                  })
-                }
-                className={`mt-0.5 p-1 rounded transition-colors ${
-                  hasChangeMessage
-                    ? "text-[#0e70db] bg-blue-50 hover:bg-blue-100"
-                    : "text-gray-300 hover:text-gray-500 hover:bg-gray-50"
-                }`}
-                title={
-                  hasChangeMessage
-                    ? "Notificacion de cambio activa — clic para desactivar"
-                    : "Activar notificacion de cambio"
-                }
-                aria-label={
-                  hasChangeMessage
-                    ? "Desactivar notificacion de cambio"
-                    : "Activar notificacion de cambio"
-                }
+                onClick={() => removeField(section, index)}
+                className="mt-0.5 p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                title="Eliminar campo"
+                aria-label="Eliminar campo"
               >
-                <Bell className="w-3.5 h-3.5" />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <title>Delete field</title>
+                  <path d="M3 6h18" />
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                </svg>
               </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => removeField(section, index)}
-              className="mt-0.5 p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-              title="Eliminar campo"
-              aria-label="Eliminar campo"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <title>Delete field</title>
-                <path d="M3 6h18" />
-                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-              </svg>
-            </button>
+            </div>
+            {error && <span className="text-[10px] text-red-600">{error}</span>}
           </div>
         )
       })}
@@ -415,8 +439,26 @@ export function FieldsSection({
   customVariables?: CustomVariable[]
   promotionType?: PromotionType
 }) {
+  const headerCount = useEditorStore((s) => s.config.fields.headerFields.length)
+  const secondaryCount = useEditorStore((s) => s.config.fields.secondaryFields.length)
   return (
     <CollapsibleSection title="Campos">
+      <p className="text-[10px] leading-snug text-gray-500">
+        Cada campo necesita una clave única en todo el pase (Apple descarta los campos sin clave o
+        con clave repetida). En Google todos los campos aparecen en los detalles del pase.
+      </p>
+      {headerCount > APPLE_MAX_HEADER_FIELDS && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          &#9888; Hay {headerCount} campos de encabezado: el iPhone muestra como máximo{" "}
+          {APPLE_MAX_HEADER_FIELDS}.
+        </div>
+      )}
+      {secondaryCount > APPLE_MAX_SECONDARY_AUX_FIELDS && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          &#9888; Hay {secondaryCount} campos secundarios: el iPhone muestra como máximo{" "}
+          {APPLE_MAX_SECONDARY_AUX_FIELDS} debajo de la franja.
+        </div>
+      )}
       <FieldGroup
         section="headerFields"
         label="Header Fields"

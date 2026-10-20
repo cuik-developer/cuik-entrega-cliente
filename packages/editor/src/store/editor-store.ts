@@ -1,6 +1,7 @@
 import { create } from "zustand"
 import { immer } from "zustand/middleware/immer"
 
+import { allFieldKeys, uniqueFieldKey } from "../lib/validate-config"
 import type { AssetKey, EditorStoreV2, PassDesignConfigV2, PassType } from "../types"
 
 // ── Constants ────────────────────────────────────────────────────────
@@ -10,6 +11,7 @@ const DEFAULT_ASSET_LOADING: Record<AssetKey, boolean> = {
   logo: false,
   stamp: false,
   icon: false,
+  googleHero: false,
 }
 
 /** Empty config as initial state before initialize() is called */
@@ -104,7 +106,9 @@ export const useEditorStore = create<EditorStoreV2>()(
 
     addField: (section) => {
       set((state) => {
-        state.config.fields[section].push({ key: "", label: "", value: "" })
+        // Never an empty key: passkit-generator silently drops such a field.
+        const key = uniqueFieldKey("campo", allFieldKeys(state.config.fields))
+        state.config.fields[section].push({ key, label: "", value: "" })
         state.isDirty = true
       })
     },

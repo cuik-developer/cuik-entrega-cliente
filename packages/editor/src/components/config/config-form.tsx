@@ -3,6 +3,7 @@ import type { CustomVariable } from "../../types-external"
 import { BrandingSection } from "./branding-section"
 import { ColorsSection } from "./colors-section"
 import { FieldsSection } from "./fields-section"
+import { GoogleSection } from "./google-section"
 import { StampsSection } from "./stamps-section"
 import { StripSection } from "./strip-section"
 
@@ -11,6 +12,8 @@ interface ConfigFormProps {
   /** Uploads the optional icon for the special stamps and stores its URL in stampsConfig. */
   onUploadSpecialStamp?: (file: File) => void
   promotionType?: PromotionType
+  /** maxVisits of the linked promotion (what the server draws and counts). */
+  promotionMaxVisits?: number | null
   customVariables?: CustomVariable[]
 }
 
@@ -18,6 +21,7 @@ export function ConfigForm({
   onUploadAsset,
   onUploadSpecialStamp,
   promotionType = "stamps",
+  promotionMaxVisits,
   customVariables,
 }: ConfigFormProps) {
   return (
@@ -25,7 +29,11 @@ export function ConfigForm({
       <BrandingSection onUploadAsset={onUploadAsset} />
       <StripSection onUploadAsset={onUploadAsset} />
       {promotionType === "stamps" ? (
-        <StampsSection onUploadAsset={onUploadAsset} onUploadSpecialStamp={onUploadSpecialStamp} />
+        <StampsSection
+          onUploadAsset={onUploadAsset}
+          onUploadSpecialStamp={onUploadSpecialStamp}
+          promotionMaxVisits={promotionMaxVisits}
+        />
       ) : (
         <div className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-3">
           <p className="text-sm text-violet-700">
@@ -33,6 +41,7 @@ export function ConfigForm({
           </p>
         </div>
       )}
+      <GoogleSection onUploadAsset={onUploadAsset} />
       <ColorsSection />
       <FieldsSection customVariables={customVariables} promotionType={promotionType} />
     </div>

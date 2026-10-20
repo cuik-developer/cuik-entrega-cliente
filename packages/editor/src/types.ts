@@ -15,7 +15,7 @@ export type {
 
 // ── V2 editor-specific types ────────────────────────────────────────
 
-export type AssetKey = "stripBg" | "logo" | "stamp" | "icon"
+export type AssetKey = "stripBg" | "logo" | "stamp" | "icon" | "googleHero"
 
 export type FieldSection = "headerFields" | "secondaryFields" | "backFields"
 
@@ -29,7 +29,7 @@ export interface EditorStoreV2 {
 
   // Actions
   initialize: (config: PassDesignConfigV2, passType: PassType) => void
-  updateAsset: (key: AssetKey, url: string) => void
+  updateAsset: (key: AssetKey, url: string | null) => void
   setAssetLoading: (key: AssetKey, loading: boolean) => void
   updateColor: (key: keyof PassDesignConfigV2["colors"], hex: string) => void
   updateStampsConfig: (partial: Partial<PassDesignConfigV2["stampsConfig"]>) => void
