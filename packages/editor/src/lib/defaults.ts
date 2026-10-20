@@ -8,11 +8,31 @@ import type {
 
 // ── V2 default config ───────────────────────────────────────────────
 
+/**
+ * Starting grid of a NEW design, drawn on the 750×288 Apple strip.
+ * The old 750×246 defaults (63 / 197 / 23 / pitch 98 / 73) scaled by
+ * 288/246, re-centred horizontally: 4 columns span 3·115 + 74 = 419 px,
+ * so the left margin is (750 − 419) / 2 ≈ 166. Stored values (pitch):
+ *   stampSize 74 · offsetX 166 · offsetY 27 · gapX 115 · gapY 85
+ * = separations of 41 px (horizontal) and 11 px (vertical).
+ * Existing rows are untouched: the server keeps its own fallbacks.
+ */
+export const NEW_DESIGN_STAMP_GRID = {
+  stampSize: 74,
+  offsetX: 166,
+  offsetY: 27,
+  gapX: 115,
+  gapY: 85,
+} as const
+
+/** Default Cuik strip for new designs, already 750×288 (the 750×246 file stays for old rows). */
+export const NEW_DESIGN_STRIP_URL = "/defaults/cuik-strip-288.png"
+
 export function getDefaultConfigV2(businessName: string): PassDesignConfigV2 {
   return {
     version: 2,
     assets: {
-      stripBg: "/defaults/cuik-strip.png",
+      stripBg: NEW_DESIGN_STRIP_URL,
       logo: "/defaults/cuik-logo.png",
       stamp: "/defaults/cuik-stamp.png",
       icon: "/defaults/cuik-icon.png",
@@ -26,11 +46,7 @@ export function getDefaultConfigV2(businessName: string): PassDesignConfigV2 {
       maxVisits: 8,
       gridCols: 4,
       gridRows: 2,
-      stampSize: 63,
-      offsetX: 197,
-      offsetY: 23,
-      gapX: 98,
-      gapY: 73,
+      ...NEW_DESIGN_STAMP_GRID,
       filledOpacity: 1,
       emptyOpacity: 0.35,
       fillOrder: "row",

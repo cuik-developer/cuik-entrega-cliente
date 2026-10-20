@@ -900,7 +900,7 @@ SA: "Investigar comercio" → Café Aromático, Lima
 │  │          │  │                                   │  │                      │   │
 │  │ Elementos│  │  ┌───────────────────────────┐   │  │ Selección: Sello #3  │   │
 │  │          │  │  │     STRIP AREA             │   │  │                      │   │
-│  │ 🟡 Sello │  │  │     750 × 246 px           │   │  │ Posición X: [120]   │   │
+│  │ 🟡 Sello │  │  │     750 × 288 px           │   │  │ Posición X: [120]   │   │
 │  │ 🖼️ Imagen│  │  │                             │   │  │ Posición Y: [37]    │   │
 │  │ 📝 Texto │  │  │  [🟡] [🟡] [🟡] [🟡]      │   │  │ Tamaño: [86]×[86]   │   │
 │  │ 🔲 Forma │  │  │                             │   │  │ Rotación: [0°]      │   │
@@ -949,12 +949,16 @@ Estas dimensiones son estándar de Apple y NO son editables:
 
 | Asset | @1x | @2x | @3x | Editable |
 |-------|-----|-----|-----|----------|
-| **Strip image** | 375 × 123 px | 750 × 246 px | 1125 × 369 px | SI (es el canvas del editor) |
-| **Logo** | 160 × 50 px max | 320 × 100 px max | 480 × 150 px max | SI (subir imagen) |
+| **Strip image** | 375 × 144 pt | 750 × 288 px | 1125 × 432 px | SI (es el canvas del editor; Cuik mide en 750 × 288) |
+| **Logo** | 160 × 50 pt max | 320 × 100 px max | 480 × 150 px max | SI (subir imagen; se encaja centrado con `contain`) |
 | **Icon** | 29 × 29 px | 58 × 58 px | 87 × 87 px | SI (subir imagen) |
 | **Background** | — | — | — | NO (no aplica a storeCard) |
 
-#### Área Editable: Strip Image (750 × 246 px @2x)
+#### Área Editable: Strip Image (750 × 288 px @2x)
+
+> Hasta octubre de 2026 el strip se generaba a 750 × 246 (guía antigua) y iOS lo escalaba un 17 % y recortaba 64 px por lado. Desde el 13 Oct 2026 es 750 × 288 (store card = 375 × 144 pt). Google Wallet usa su propia franja (hero) de 1032 × 336 px: la imagen `google_hero` del diseño, o el fondo del strip recortado si no hay una.
+>
+> En el editor la grilla se mide en px sobre 750 × 288: **Tamaño del sello**, **Margen izquierdo** (= `offsetX`), **Margen superior** (= `offsetY`), **Separación horizontal** (= `gapX − stampSize`, espacio vacío) y **Separación vertical** (= `gapY − stampSize`). En la base se sigue guardando el paso (`gapX`/`gapY` = borde izquierdo a borde izquierdo).
 
 El strip es donde van los sellos/estampillas. El editor permite:
 
@@ -972,7 +976,7 @@ El estado del canvas se guarda como JSON en `pass_designs.canvas_data`:
 {
   "version": 1,
   "width": 750,
-  "height": 246,
+  "height": 288,
   "background": {
     "type": "image", // "color" | "gradient" | "image"
     "value": "https://minio.cuik.app/assets/{tenant}/strip_bg.png"
