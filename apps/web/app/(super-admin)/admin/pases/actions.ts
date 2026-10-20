@@ -252,7 +252,7 @@ async function syncPassAssets(designId: string, canvasData: unknown) {
         try {
           await db.insert(passAssets).values({
             designId,
-            type: GOOGLE_HERO_ASSET_TYPE as unknown as "strip_bg",
+            type: GOOGLE_HERO_ASSET_TYPE,
             url: v2Config.assets.googleHero,
             metadata: null,
           })

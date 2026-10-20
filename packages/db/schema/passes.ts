@@ -27,6 +27,7 @@ export const assetTypeEnum = pgEnum("asset_type", [
   "strip_bg",
   "stamp",
   "background",
+  "google_hero",
 ])
 
 // --- Tables ---

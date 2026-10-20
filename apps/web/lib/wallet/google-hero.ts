@@ -10,7 +10,7 @@
  * Drizzle enum in packages/db/schema/passes.ts does not list it yet, hence the
  * plain string here.
  */
-export const GOOGLE_HERO_ASSET_TYPE = "google_hero"
+export const GOOGLE_HERO_ASSET_TYPE = "google_hero" as const
 
 /** The asset row Google should use as hero: google_hero first, else strip_bg. */
 export function pickGoogleHeroAsset<T extends { type: string; url: string }>(
