@@ -52,4 +52,24 @@ describe("verifyAuthToken", () => {
   it("returns false for a token of different length", () => {
     expect(verifyAuthToken(SECRET, SERIAL, "short")).toBe(false)
   })
+
+  it("returns false (does not throw) for a non-hex token of the right length", () => {
+    const nonHex = "z".repeat(64)
+    expect(() => verifyAuthToken(SECRET, SERIAL, nonHex)).not.toThrow()
+    expect(verifyAuthToken(SECRET, SERIAL, nonHex)).toBe(false)
+  })
+
+  it("returns false for a token that is hex with one odd character", () => {
+    const token = generateAuthToken(SECRET, SERIAL)
+    expect(verifyAuthToken(SECRET, SERIAL, `${token.slice(0, 63)}g`)).toBe(false)
+  })
+
+  it("returns false for an empty token", () => {
+    expect(verifyAuthToken(SECRET, SERIAL, "")).toBe(false)
+  })
+
+  it("accepts an upper-case hex token", () => {
+    const token = generateAuthToken(SECRET, SERIAL)
+    expect(verifyAuthToken(SECRET, SERIAL, token.toUpperCase())).toBe(true)
+  })
 })

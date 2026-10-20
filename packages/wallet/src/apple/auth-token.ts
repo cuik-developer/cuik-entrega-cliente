@@ -1,5 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto"
 
+const HEX_TOKEN = /^[0-9a-f]+$/i
+
 /**
  * Generate an HMAC-SHA256 authentication token for an Apple Wallet pass.
  *
@@ -25,8 +27,10 @@ export function generateAuthToken(secret: string, serialNumber: string): string 
 export function verifyAuthToken(secret: string, serialNumber: string, token: string): boolean {
   const expected = generateAuthToken(secret, serialNumber)
 
-  // Both must be hex strings of equal length for timingSafeEqual
-  if (expected.length !== token.length) {
+  // Both must be hex strings of equal length for timingSafeEqual. A non-hex
+  // token of the right length would decode to a shorter buffer and make
+  // timingSafeEqual throw, so reject anything that is not exactly hex.
+  if (typeof token !== "string" || token.length !== expected.length || !HEX_TOKEN.test(token)) {
     return false
   }
 
