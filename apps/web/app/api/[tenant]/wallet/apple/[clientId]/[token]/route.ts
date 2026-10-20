@@ -324,19 +324,31 @@ export async function GET(
     const signerKey = decodePemOrDer(appleConfig.signerKeyBase64, "RSA PRIVATE KEY")
     const wwdr = decodePemOrDer(appleConfig.wwdrBase64, "CERTIFICATE")
 
-    // Diagnostic: verify WWDR and signer cert are intact (detect env var corruption)
+    // Diagnostic: the signer cert must belong to this pass type, be unexpired
+    // and be issued by the WWDR cert we bundle.
     try {
-      const crypto = await import("node:crypto")
-      const wwdrHash = crypto.createHash("sha256").update(wwdr).digest("hex").substring(0, 16)
-      const certHash = crypto.createHash("sha256").update(signerCert).digest("hex").substring(0, 16)
-      console.log("[Apple Wallet] WWDR SHA256 prefix:", wwdrHash)
-      console.log("[Apple Wallet] WWDR VALID:", wwdrHash === "e91a1e1e21b6285c")
-      console.log("[Apple Wallet] SIGNER CERT SHA256 prefix:", certHash)
-      console.log("[Apple Wallet] SIGNER CERT VALID:", certHash === "e8f3d3acc7a9e5cd")
-      // Verify WWDR can verify signer cert using X509Certificate
-      const { X509Certificate } = crypto
+      const { X509Certificate } = await import("node:crypto")
       const wwdrX509 = new X509Certificate(wwdr)
       const signerX509 = new X509Certificate(signerCert)
+      const daysLeft = (cert: InstanceType<typeof X509Certificate>) =>
+        Math.floor((Date.parse(cert.validTo) - Date.now()) / 86_400_000)
+      const signerDays = daysLeft(signerX509)
+      const uid = signerX509.subject
+        .split("\n")
+        .find((l) => l.startsWith("UID="))
+        ?.slice(4)
+      console.log(
+        "[Apple Wallet] Signer cert:",
+        uid,
+        "expires",
+        signerX509.validTo,
+        `(${signerDays} days)`,
+      )
+      console.log("[Apple Wallet] WWDR expires", wwdrX509.validTo, `(${daysLeft(wwdrX509)} days)`)
+      console.log(
+        "[Apple Wallet] SIGNER CERT VALID:",
+        signerDays > 0 && uid === appleConfig.passTypeId,
+      )
       console.log("[Apple Wallet] WWDR verifies signer:", signerX509.verify(wwdrX509.publicKey))
     } catch (diagErr) {
       console.error("[Apple Wallet] Diagnostic error:", diagErr)
