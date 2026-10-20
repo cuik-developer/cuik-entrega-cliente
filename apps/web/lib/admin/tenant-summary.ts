@@ -1,4 +1,6 @@
 import { db, sql } from "@cuik/db"
+import { buildPassChurn, type PassChurn } from "@/lib/wallet/pass-churn"
+import { passChurnCounts } from "@/lib/wallet/removed-passes"
 
 /**
  * Counts and health signals the super-admin shows next to a tenant (list and
@@ -10,6 +12,10 @@ export type TenantHealthSummary = {
   visits30d: number
   newClients30d: number
   installed: number
+  /** Clients whose card is removed now (Apple since 0031 + Google), none installed. */
+  removedPasses: number
+  /** Tasa de eliminación de tarjetas (lib/wallet/pass-churn.ts). */
+  churn: PassChurn
 }
 
 export type TenantSummary = {
@@ -26,6 +32,15 @@ export type TenantSummary = {
  * manager reloads them on every search keystroke). Super-admin writes that
  * change what is shown (plan, status) call `invalidateTenantSummary`.
  */
+const EMPTY_HEALTH: TenantHealthSummary = {
+  lastVisitAt: null,
+  visits30d: 0,
+  newClients30d: 0,
+  installed: 0,
+  removedPasses: 0,
+  churn: buildPassChurn(0, 0, 0),
+}
+
 const SUMMARY_TTL_MS = 120_000
 const summaryCache = new Map<
   string,
@@ -64,7 +79,7 @@ export async function enrichTenantRows<T extends { id: string; planId: string | 
         rewardCount: 0,
         returnRate: 0,
         planName: null,
-        health: { lastVisitAt: null, visits30d: 0, newClients30d: 0, installed: 0 },
+        health: EMPTY_HEALTH,
       }),
     }
   })
@@ -79,7 +94,7 @@ async function computeTenantRows<T extends { id: string; planId: string | null }
     sql`, `,
   )
 
-  const [clientCounts, visitCounts, rewardCounts, returnRates, health, planNames] =
+  const [clientCounts, visitCounts, rewardCounts, returnRates, health, planNames, churnCounts] =
     await Promise.all([
       db.execute<{ tenant_id: string; cnt: number }>(
         sql`SELECT tenant_id, count(*)::int AS cnt FROM loyalty.clients WHERE tenant_id IN (${tenantIdList}) GROUP BY tenant_id`,
@@ -125,6 +140,7 @@ async function computeTenantRows<T extends { id: string; planId: string | null }
           )})`,
         )
       })(),
+      passChurnCounts(sql`c."tenant_id" IN (${tenantIdList})`),
     ])
 
   const clientCountMap = new Map(clientCounts.rows.map((r) => [r.tenant_id, Number(r.cnt)]))
@@ -133,15 +149,20 @@ async function computeTenantRows<T extends { id: string; planId: string | null }
   const returnRateMap = new Map(returnRates.rows.map((r) => [r.tenant_id, Number(r.return_rate)]))
   const planNameMap = new Map(planNames.rows.map((r) => [r.id, r.name]))
   const healthMap = new Map<string, TenantHealthSummary>(
-    health.rows.map((r) => [
-      r.tenant_id,
-      {
-        lastVisitAt: r.last_visit_at ? new Date(r.last_visit_at).toISOString() : null,
-        visits30d: Number(r.visits_30d),
-        newClients30d: Number(r.new_clients_30d),
-        installed: Number(r.installed),
-      },
-    ]),
+    health.rows.map((r) => {
+      const ch = churnCounts.get(r.tenant_id) ?? { installed: 0, removed: 0, removed30d: 0 }
+      return [
+        r.tenant_id,
+        {
+          lastVisitAt: r.last_visit_at ? new Date(r.last_visit_at).toISOString() : null,
+          visits30d: Number(r.visits_30d),
+          newClients30d: Number(r.new_clients_30d),
+          installed: Number(r.installed),
+          removedPasses: ch.removed,
+          churn: buildPassChurn(ch.installed, ch.removed, ch.removed30d),
+        },
+      ]
+    }),
   )
 
   return tenantRows.map((t) => ({
@@ -151,11 +172,6 @@ async function computeTenantRows<T extends { id: string; planId: string | null }
     rewardCount: rewardCountMap.get(t.id) ?? 0,
     returnRate: returnRateMap.get(t.id) ?? 0,
     planName: t.planId ? (planNameMap.get(t.planId) ?? null) : null,
-    health: healthMap.get(t.id) ?? {
-      lastVisitAt: null,
-      visits30d: 0,
-      newClients30d: 0,
-      installed: 0,
-    },
+    health: healthMap.get(t.id) ?? EMPTY_HEALTH,
   }))
 }

@@ -87,6 +87,9 @@ export const passInstances = passesSchema.table(
     // yet; "not installed" only when deleted_at is newer than saved_at.
     googleSavedAt: timestamp("google_saved_at"),
     googleDeletedAt: timestamp("google_deleted_at"),
+    // Apple unregister callback (migration 0031): set when the last device
+    // registration for this serial is deleted, cleared when one registers again.
+    appleRemovedAt: timestamp("apple_removed_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [

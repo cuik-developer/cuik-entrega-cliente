@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import type { PlatformMetrics } from "@/lib/admin/platform-metrics"
 
+import { ChurnTable } from "./churn-table"
 import { type Filters, FiltersBar, presetRange } from "./filters-bar"
 import { InsightsPanel } from "./insights-panel"
 import { KpiGrid } from "./kpi-grid"
@@ -143,6 +144,7 @@ export function MetricsDashboard() {
             <PlatformFunnel funnel={data.funnel} />
             <WalletCampaigns wallet={data.wallet} campaigns={data.campaigns} />
           </div>
+          <ChurnTable rows={data.passChurn} />
         </div>
       ) : null}
     </div>

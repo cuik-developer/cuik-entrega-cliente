@@ -58,6 +58,7 @@ import { PromotionFormDialog } from "./promotion-form-dialog"
 import { RegistrationConfigSection } from "./registration-config-section"
 import { TenantBillingSection } from "./tenant-billing-section"
 import { TenantCampaignsSection } from "./tenant-campaigns-section"
+import { TenantChurnLine } from "./tenant-health"
 import { TenantNotesSection } from "./tenant-notes-section"
 import { type CatalogSummaryItem, TenantProgramSummary } from "./tenant-program-summary"
 import {
@@ -622,6 +623,8 @@ export function TenantDetail({
                   </div>
                 ))}
               </div>
+
+              {tenant.health?.churn && <TenantChurnLine churn={tenant.health.churn} />}
 
               {/* Program, service and demo, in one list */}
               <TenantProgramSummary

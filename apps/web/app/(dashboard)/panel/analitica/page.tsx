@@ -24,6 +24,11 @@ import { ALL_LOCATIONS, type LocationOption } from "./_components/location-selec
 import { presetRange } from "./_components/period"
 import { PointsBalanceCard } from "./_components/points-balance-card"
 import { PointsFlowChart } from "./_components/points-flow-chart"
+import {
+  EMPTY_REMOVED_PASSES,
+  RemovedPassesCard,
+  type RemovedPassesData,
+} from "./_components/removed-passes-card"
 import { RetentionHeatmap, type RetentionRow } from "./_components/retention-heatmap"
 import { SegmentsChart } from "./_components/segments-chart"
 import { type TopClientRow, TopClientsTable } from "./_components/top-clients-table"
@@ -84,6 +89,7 @@ export default function AnaliticaPage() {
   const [topClients, setTopClients] = useState<TopClientRow[]>([])
   const [retention, setRetention] = useState<RetentionRow[]>([])
   const [walletDist, setWalletDist] = useState<WalletDistribution>({ apple: 0, google: 0, none: 0 })
+  const [removedPasses, setRemovedPasses] = useState<RemovedPassesData>(EMPTY_REMOVED_PASSES)
   const [heatmap, setHeatmap] = useState<HeatmapData>(EMPTY_HEATMAP)
   const [funnel, setFunnel] = useState<FunnelData>(EMPTY_FUNNEL)
   const [segments, setSegments] = useState<SegmentsData>(EMPTY_SEGMENTS)
@@ -125,6 +131,7 @@ export default function AnaliticaPage() {
           `${base}/heatmap?${range}${locationQuery}`,
           `${base}/funnel`,
           `${base}/segments`,
+          `${base}/removed-passes`,
           // Points widgets only exist for points programs; skip the call otherwise.
           ...(isPoints
             ? [`${base}/points?${range}&granularity=${granularity}${locationQuery}`]
@@ -140,6 +147,7 @@ export default function AnaliticaPage() {
         heatmapJson,
         funnelJson,
         segmentsJson,
+        removedJson,
         pointsJson,
       ] = responses
 
@@ -154,6 +162,7 @@ export default function AnaliticaPage() {
       applyIfOk<HeatmapData>(heatmapJson, EMPTY_HEATMAP, setHeatmap)
       applyIfOk<FunnelData>(funnelJson, EMPTY_FUNNEL, setFunnel)
       applyIfOk<SegmentsData>(segmentsJson, EMPTY_SEGMENTS, setSegments)
+      applyIfOk<RemovedPassesData>(removedJson, EMPTY_REMOVED_PASSES, setRemovedPasses)
       applyIfOk<PointsAnalytics | null>(pointsJson, null, setPoints)
 
       if (!summaryJson.success && !heatmapJson.success && !funnelJson.success) {
@@ -351,6 +360,8 @@ export default function AnaliticaPage() {
             <TopClientsTable clients={topClients} />
             <WalletDistributionChart data={walletDist} />
           </div>
+
+          <RemovedPassesCard data={removedPasses} timezone={tenantTz} />
 
           <RetentionHeatmap data={retention} />
         </div>

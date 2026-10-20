@@ -146,16 +146,29 @@ export function passStatus(p: {
   googleUrl: boolean
   googleSavedAt: Date | null
   googleDeletedAt: Date | null
-}): { status: string; platform: string } {
-  if (!p.hasPass) return { status: "Sin pase", platform: "Sin Wallet" }
+  /** Set when the last Apple device unregistered (tracked since migration 0031). */
+  appleRemovedAt?: Date | null
+}): { status: string; platform: string; removedAt: Date | null } {
+  if (!p.hasPass) return { status: "Sin pase", platform: "Sin Wallet", removedAt: null }
   const googleRemoved =
     p.googleDeletedAt !== null && (p.googleSavedAt === null || p.googleDeletedAt > p.googleSavedAt)
-  if (p.appleInstalled) return { status: "Instalado", platform: "Apple Wallet" }
-  if (p.googleUrl && !googleRemoved) return { status: "Instalado", platform: "Google Wallet" }
-  if (p.googleUrl && googleRemoved) return { status: "Eliminado", platform: "Google Wallet" }
-  // Apple pass generated but no device registered: never installed, or
-  // removed (Apple deletes the registration, so both look the same).
-  return { status: "No instalado", platform: "Sin Wallet" }
+  // Installed beats removed on either platform. Every client gets a Google
+  // link at sign-up, so the bare link (no callback) only counts as installed
+  // when no Apple removal is recorded; a save confirmed by Google always does.
+  const googleLive = p.googleUrl && !googleRemoved
+  const googleConfirmed = googleLive && p.googleSavedAt !== null
+  if (p.appleInstalled) return { status: "Instalado", platform: "Apple Wallet", removedAt: null }
+  if (googleLive && (googleConfirmed || !p.appleRemovedAt))
+    return { status: "Instalado", platform: "Google Wallet", removedAt: null }
+  // Removed on one or both: report the most recent removal.
+  const googleAt = p.googleUrl && googleRemoved ? p.googleDeletedAt : null
+  const appleAt = p.appleRemovedAt ?? null
+  if (appleAt && (!googleAt || appleAt > googleAt))
+    return { status: "Eliminado", platform: "Apple Wallet", removedAt: appleAt }
+  if (googleAt) return { status: "Eliminado", platform: "Google Wallet", removedAt: googleAt }
+  // Apple pass generated but no device registered and no removal recorded:
+  // never installed (or removed before removals were tracked).
+  return { status: "No instalado", platform: "Sin Wallet", removedAt: null }
 }
 
 /* ── Queries ─────────────────────────────────────────────────────── */
@@ -168,6 +181,7 @@ function walletSubquery(tenantId: string) {
          bool_or(pi.google_save_url IS NOT NULL AND pi.google_save_url <> '') AS google_url,
          max(pi.google_saved_at) AS google_saved_at,
          max(pi.google_deleted_at) AS google_deleted_at,
+         max(pi.apple_removed_at) AS apple_removed_at,
          min(ad.created_at) AS apple_installed_at
   FROM passes.pass_instances pi
   LEFT JOIN passes.apple_devices ad ON ad.serial_number = pi.serial_number
@@ -186,7 +200,7 @@ async function queryClients(r: DatasetRequest): Promise<Row[]> {
            c.current_cycle, c.tier, c.points_balance, c.marketing_opt_in, c.birthday::text AS birthday,
            c.created_at, vs.last_visit_at, vs.avg_days, vs.visit_count, vs.avg_points,
            (w.client_id IS NOT NULL) AS has_pass, coalesce(w.apple_installed, false) AS apple_installed,
-           coalesce(w.google_url, false) AS google_url, w.google_saved_at, w.google_deleted_at, w.apple_installed_at,
+           coalesce(w.google_url, false) AS google_url, w.google_saved_at, w.google_deleted_at, w.apple_removed_at, w.apple_installed_at,
            (SELECT string_agg(t.name, '; ' ORDER BY t.name)
               FROM loyalty.client_tag_assignments a JOIN loyalty.client_tags t ON t.id = a.tag_id
              WHERE a.client_id = c.id) AS tags
@@ -211,7 +225,8 @@ async function queryVisits(r: DatasetRequest): Promise<Row[]> {
            c.name, c.last_name, c.email, c.phone, c.dni, c.created_at AS client_created_at,
            l.name AS location_name, u.name AS cashier_name,
            (w.client_id IS NOT NULL) AS has_pass, coalesce(w.apple_installed, false) AS apple_installed,
-           coalesce(w.google_url, false) AS google_url, w.google_saved_at, w.google_deleted_at
+           coalesce(w.google_url, false) AS google_url, w.google_saved_at, w.google_deleted_at,
+           w.apple_removed_at
     FROM loyalty.visits v
     JOIN loyalty.clients c ON c.id = v.client_id
     LEFT JOIN loyalty.locations l ON l.id = v.location_id
@@ -248,6 +263,7 @@ function clientCells(row: Row, r: DatasetRequest, now: Date): Record<string, Cel
     googleUrl: Boolean(row.google_url),
     googleSavedAt: asDate(row.google_saved_at),
     googleDeletedAt: asDate(row.google_deleted_at),
+    appleRemovedAt: asDate(row.apple_removed_at),
   })
   const createdAt = asDate(row.created_at) ?? now
   const segment = computeClientSegment(
@@ -288,7 +304,7 @@ function clientCells(row: Row, r: DatasetRequest, now: Date): Record<string, Cel
     passStatus: pass.status,
     walletPlatform: pass.platform,
     passInstalledAt: pass.status === "Instalado" ? date(installedAt, r.timezone) : "",
-    passRemovedAt: pass.status === "Eliminado" ? date(row.google_deleted_at, r.timezone) : "",
+    passRemovedAt: pass.status === "Eliminado" ? date(pass.removedAt, r.timezone) : "",
   }
 }
 
@@ -299,6 +315,7 @@ function visitCells(row: Row, r: DatasetRequest): Record<string, Cell> {
     googleUrl: Boolean(row.google_url),
     googleSavedAt: asDate(row.google_saved_at),
     googleDeletedAt: asDate(row.google_deleted_at),
+    appleRemovedAt: asDate(row.apple_removed_at),
   })
   return {
     createdAt: date(row.created_at, r.timezone),

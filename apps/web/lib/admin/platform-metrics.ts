@@ -1,5 +1,7 @@
 import { db, sql } from "@cuik/db"
 
+import { buildPassChurn, type PassChurn } from "@/lib/wallet/pass-churn"
+import { passChurnCounts } from "@/lib/wallet/removed-passes"
 import { getInternalTenantIds } from "./internal-tenants"
 
 /**
@@ -54,6 +56,9 @@ export type TenantMetricsRow = {
   health: "good" | "warn" | "bad" | "none"
 }
 
+/** Tasa de eliminación de tarjetas per tenant in scope (current, not period-bound). */
+export type TenantChurnRow = PassChurn & { id: string; name: string; slug: string }
+
 export type Insight = {
   severity: "critical" | "warning" | "info" | "positive"
   text: string
@@ -103,6 +108,8 @@ export type PlatformMetrics = {
     none: number
     installsWeekly: Array<{ week: string; count: number }>
   }
+  /** Sorted by total rate desc (tenants with no pass at the end). */
+  passChurn: TenantChurnRow[]
   campaigns: {
     sent: number
     notifications: number
@@ -345,6 +352,8 @@ export async function computePlatformMetrics(f: MetricsFilters): Promise<Platfor
       `),
     ])
 
+  const churnCounts = await passChurnCounts(sql`c."tenant_id" IN ${scope}`)
+
   const weeklyRes = await db.execute<{ week: string; cnt: Num }>(sql`
     WITH s AS (SELECT id FROM ${scope})
     SELECT to_char(date_trunc('week', ${local("ad.created_at")}), 'YYYY-MM-DD') AS week, count(*)::int AS cnt
@@ -487,6 +496,20 @@ export async function computePlatformMetrics(f: MetricsFilters): Promise<Platfor
       none: n(w.none),
       installsWeekly: weeklyRes.rows.map((r) => ({ week: r.week, count: n(r.cnt) })),
     },
+    passChurn: tenants
+      .map((t) => {
+        const ch = churnCounts.get(t.id) ?? { installed: 0, removed: 0, removed30d: 0 }
+        return {
+          id: t.id,
+          name: t.name,
+          slug: t.slug,
+          ...buildPassChurn(ch.installed, ch.removed, ch.removed30d),
+        }
+      })
+      .sort(
+        (a, b) =>
+          (b.rate ?? -1) - (a.rate ?? -1) || b.removed - a.removed || a.name.localeCompare(b.name),
+      ),
     campaigns: {
       sent: n(cp.sent),
       notifications,

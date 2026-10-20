@@ -1,10 +1,20 @@
 "use client"
 
+import {
+  APPLE_REMOVAL_TRACKING_SINCE_LABEL,
+  CHURN_HELP,
+  CHURN_LABEL,
+  formatChurnRate,
+  type PassChurn,
+} from "@/lib/wallet/pass-churn"
+
 export type TenantHealth = {
   lastVisitAt: string | null
   visits30d: number
   newClients30d: number
   installed: number
+  removedPasses?: number
+  churn?: PassChurn
 }
 
 export type HealthLevel = "good" | "warn" | "bad" | "none"
@@ -58,8 +68,29 @@ export function TenantHealthCell({
         <div className="text-xs text-ent-fg-2">{last}</div>
         <div className="text-[11px] text-ent-fg-3 tabular-nums">
           +{health.newClients30d} nuevos · {health.visits30d} visitas · {health.installed} pases
+          {health.removedPasses ? ` · ${health.removedPasses} eliminadas` : ""}
         </div>
       </div>
+    </div>
+  )
+}
+
+/** "Tasa de eliminación de tarjetas: X% (Y eliminadas de Z)" for the tenant detail. */
+export function TenantChurnLine({ churn }: { churn: PassChurn }) {
+  const base = churn.installed + churn.removed
+  return (
+    <div className="text-[12.5px] text-ent-fg-2" title={CHURN_HELP}>
+      {CHURN_LABEL}:{" "}
+      <strong className="tabular-nums text-ent-fg">{formatChurnRate(churn.rate)}</strong>
+      {base > 0 && (
+        <span className="tabular-nums text-ent-fg-3">
+          {" "}
+          ({churn.removed} eliminadas de {base}) · 30 días: {formatChurnRate(churn.rate30d)}
+        </span>
+      )}
+      <p className="text-[11px] text-ent-fg-3">
+        {CHURN_HELP} Apple: medido desde el {APPLE_REMOVAL_TRACKING_SINCE_LABEL}.
+      </p>
     </div>
   )
 }

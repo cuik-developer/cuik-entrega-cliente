@@ -249,6 +249,11 @@ function buildDeps(): WebServiceDeps {
           target: [appleDevices.deviceLibId, appleDevices.serialNumber],
           set: { pushToken },
         })
+      // The pass is on a device again: clear the removal mark.
+      await db
+        .update(passInstances)
+        .set({ appleRemovedAt: null })
+        .where(eq(passInstances.serialNumber, serialNumber))
     },
 
     deleteDeviceRegistration: async (deviceLibId: string, serialNumber: string) => {
@@ -260,6 +265,18 @@ function buildDeps(): WebServiceDeps {
             eq(appleDevices.serialNumber, serialNumber),
           ),
         )
+      // Last device gone: record when the pass stopped being installed, so a
+      // removed pass is distinguishable from one that was never added.
+      const [remaining] = await db
+        .select({ n: count() })
+        .from(appleDevices)
+        .where(eq(appleDevices.serialNumber, serialNumber))
+      if ((remaining?.n ?? 0) === 0) {
+        await db
+          .update(passInstances)
+          .set({ appleRemovedAt: new Date() })
+          .where(eq(passInstances.serialNumber, serialNumber))
+      }
     },
 
     getSerialsForDevice: async (
