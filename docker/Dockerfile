@@ -21,7 +21,7 @@ WORKDIR /app
 COPY --from=deps /app/ ./
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_OPTIONS="--max-old-space-size=512"
+ENV NODE_OPTIONS="--max-old-space-size=1536"
 RUN cd apps/web && TURBOPACK=0 npx next build
 
 # Stage 3: Production runner
