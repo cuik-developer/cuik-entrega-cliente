@@ -44,6 +44,7 @@ import { z } from "zod"
 
 import { requireSuperAdminOrAction } from "@/lib/admin-access"
 import { apnsClientCertFor } from "@/lib/wallet/apns-client-cert"
+import { GOOGLE_HERO_ASSET_TYPE, pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 import { getDesignById, listDesignsByTenant } from "./queries"
 
@@ -229,7 +230,7 @@ async function syncPassAssets(designId: string, canvasData: unknown) {
       }
 
       const assetRecords = Object.entries(v2Config.assets)
-        .filter(([_, url]) => url != null)
+        .filter(([key, url]) => url != null && key in assetMap)
         .map(([key, url]) => ({
           designId,
           type: assetMap[key] as "logo" | "icon" | "strip_bg" | "stamp" | "background",
@@ -239,6 +240,21 @@ async function syncPassAssets(designId: string, canvasData: unknown) {
 
       if (assetRecords.length > 0) {
         await db.insert(passAssets).values(assetRecords)
+      }
+
+      // Google-only hero, inserted on its own so a database still missing the
+      // enum value (migration 0033) loses only this row, never the Apple assets.
+      if (v2Config.assets.googleHero) {
+        try {
+          await db.insert(passAssets).values({
+            designId,
+            type: GOOGLE_HERO_ASSET_TYPE as unknown as "strip_bg",
+            url: v2Config.assets.googleHero,
+            metadata: null,
+          })
+        } catch (heroError) {
+          console.error("[publishDesign] Could not store the Google hero asset:", heroError)
+        }
       }
     } else {
       await syncV1Assets(designId, canvasData)
@@ -651,7 +667,8 @@ async function propagateGooglePasses(
 
   const logoAsset = assetRows.find((a) => a.type === "logo")
   const iconAsset = assetRows.find((a) => a.type === "icon")
-  const stripBgAsset = assetRows.find((a) => a.type === "strip_bg")
+  // Google-only hero when the design has one, else the strip background (as before).
+  const heroAsset = pickGoogleHeroAsset(assetRows)
 
   const programLogoUrl = logoAsset?.url
     ? resolveUrl(logoAsset.url)
@@ -659,7 +676,7 @@ async function propagateGooglePasses(
       ? resolveUrl(iconAsset.url)
       : undefined
   const wideProgramLogoUrl = programLogoUrl
-  const heroImageUrl = stripBgAsset?.url ? resolveUrl(stripBgAsset.url) : undefined
+  const heroImageUrl = heroAsset?.url ? resolveUrl(heroAsset.url) : undefined
 
   // Get design colors for background color
   const [designColorsRow] = await db

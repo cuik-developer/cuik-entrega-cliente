@@ -27,6 +27,7 @@ import {
   successResponse,
 } from "@/lib/api-utils"
 import { pointsExpiryTemplateVars } from "@/lib/loyalty/points-lots"
+import { pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
 import { googleSaveOrigins } from "@/lib/wallet/google-save-origins"
 import { type StampsConfigLike, stripMaxVisits } from "@/lib/wallet/strip-layout"
 
@@ -173,7 +174,8 @@ export async function POST(
 
     const logoAsset = assetRows.find((a) => a.type === "logo")
     const iconAsset = assetRows.find((a) => a.type === "icon")
-    const stripBgAsset = assetRows.find((a) => a.type === "strip_bg")
+    // Google-only hero when the design has one, else the strip background (as before).
+    const heroAsset = pickGoogleHeroAsset(assetRows)
 
     const programLogoUrl = logoAsset?.url
       ? resolveUrl(logoAsset.url)
@@ -181,7 +183,7 @@ export async function POST(
         ? resolveUrl(iconAsset.url)
         : undefined
     const wideProgramLogoUrl = programLogoUrl
-    const heroImageUrl = stripBgAsset?.url ? resolveUrl(stripBgAsset.url) : undefined
+    const heroImageUrl = heroAsset?.url ? resolveUrl(heroAsset.url) : undefined
 
     // Extract hex background color from design colors
     const designColors = design.colors as { backgroundColor?: string } | null
