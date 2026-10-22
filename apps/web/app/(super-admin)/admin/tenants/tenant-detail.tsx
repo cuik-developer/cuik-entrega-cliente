@@ -49,6 +49,7 @@ import type { SegmentationThresholds } from "@/lib/loyalty/client-segments"
 import { getThresholds } from "@/lib/loyalty/client-segments"
 import { AppleCertWizard } from "./apple-cert-wizard"
 import { CatalogSection } from "./catalog-section"
+import { GoogleNearbyCard } from "./google-nearby-card"
 import {
   type OnboardingChecklist as ChecklistData,
   OnboardingChecklist,
@@ -77,7 +78,7 @@ const SECTIONS: { value: string; label: string; icon: LucideIcon }[] = [
   { value: "registro", label: "Registro", icon: ClipboardList },
   { value: "segmentacion", label: "Segmentación", icon: Users },
   { value: "campanas", label: "Campañas", icon: Megaphone },
-  { value: "apple", label: "Apple", icon: Shield },
+  { value: "apple", label: "Wallet", icon: Shield },
   { value: "facturacion", label: "Facturación", icon: Receipt },
   { value: "notas", label: "Notas", icon: StickyNote },
   { value: "editar", label: "Datos del negocio", icon: Building2 },
@@ -1491,6 +1492,7 @@ export function TenantDetail({
           >
             <div className="p-4 sm:p-6">
               <AppleCertWizard tenantId={tenant.id} tenantSlug={tenant.slug} />
+              <GoogleNearbyCard tenantId={tenant.id} />
             </div>
           </TabsContent>
 

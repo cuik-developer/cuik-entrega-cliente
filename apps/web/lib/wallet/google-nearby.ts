@@ -53,3 +53,65 @@ export async function syncGoogleNearby(
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
 }
+
+export type GoogleNearbyStatus = {
+  /** Google Wallet env configured on this server. */
+  googleEnabled: boolean
+  classId: string | null
+  /** null when Google could not be asked (disabled or request failed). */
+  classExists: boolean | null
+  reviewStatus: string | null
+  /** What Google has stored for the class right now. */
+  googleLocations: GoogleMerchantLocation[]
+  /** What Cuik would send (Geolocalizadas). */
+  configuredLocations: GoogleMerchantLocation[]
+  error: string | null
+}
+
+/**
+ * Read-only check for the super-admin: asks Google which merchant locations
+ * the tenant's loyalty class has, next to the ones configured in Cuik.
+ */
+export async function readGoogleNearbyStatus(
+  tenantName: string,
+  walletConfig: unknown,
+): Promise<GoogleNearbyStatus> {
+  const configuredLocations = googleMerchantLocations(walletConfig)
+  const googleConfig = validateGoogleEnv()
+  const base = {
+    googleEnabled: Boolean(googleConfig),
+    classId: googleConfig ? buildGoogleClassId(googleConfig.issuerId, tenantName) : null,
+    classExists: null,
+    reviewStatus: null,
+    googleLocations: [],
+    configuredLocations,
+    error: null,
+  }
+  if (!googleConfig || !base.classId) return base
+  try {
+    const accessToken = await getGoogleAccessToken(googleConfig)
+    const res = await fetch(
+      `https://walletobjects.googleapis.com/walletobjects/v1/loyaltyClass/${base.classId}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    )
+    if (res.status === 404) return { ...base, classExists: false }
+    if (!res.ok) {
+      const text = await res.text().catch(() => "")
+      return { ...base, error: `Google respondió ${res.status} ${text.slice(0, 200)}` }
+    }
+    const body = (await res.json()) as {
+      reviewStatus?: string
+      merchantLocations?: { latitude?: number; longitude?: number }[]
+    }
+    return {
+      ...base,
+      classExists: true,
+      reviewStatus: body.reviewStatus ?? null,
+      googleLocations: (body.merchantLocations ?? [])
+        .filter((l) => typeof l.latitude === "number" && typeof l.longitude === "number")
+        .map((l) => ({ latitude: l.latitude as number, longitude: l.longitude as number })),
+    }
+  } catch (err) {
+    return { ...base, error: err instanceof Error ? err.message : String(err) }
+  }
+}
