@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest"
 import {
+  activeBonusWindow,
+  bonusWindowsSchema,
   createPromotionSchema,
   describePointsRate,
   expirationPolicySchema,
   pointsForAmount,
   pointsPromotionConfigSchema,
+  stampsPromotionConfigSchema,
 } from "./promotion-schema"
 
 describe("createPromotionSchema", () => {
@@ -162,5 +165,60 @@ describe("describePointsRate", () => {
     expect(describePointsRate({ pointsPerCurrency: 1 })).toBe("1 punto por sol")
     expect(describePointsRate({ pointsPerCurrency: 2 })).toBe("2 puntos por sol")
     expect(describePointsRate({})).toBe("1 punto por sol")
+  })
+})
+
+describe("bonus windows", () => {
+  const weekly = {
+    id: "w1",
+    label: "Lunes de mañana",
+    kind: "weekly",
+    days: [1],
+    start: "08:00",
+    end: "12:00",
+    multiplier: 2,
+  }
+
+  it("accepts weekly and date windows (including 24:00 as end of day)", () => {
+    expect(bonusWindowsSchema.parse([weekly])[0]).toMatchObject({ active: true, date: null })
+    const date = {
+      ...weekly,
+      id: "w2",
+      kind: "date",
+      days: [],
+      date: "2026-10-31",
+      start: "00:00",
+      end: "24:00",
+    }
+    expect(bonusWindowsSchema.parse([date])[0].date).toBe("2026-10-31")
+  })
+
+  it("rejects bad times, empty weekly days, end before start and commas in the label", () => {
+    expect(bonusWindowsSchema.safeParse([{ ...weekly, start: "8:00" }]).success).toBe(false)
+    expect(bonusWindowsSchema.safeParse([{ ...weekly, days: [] }]).success).toBe(false)
+    expect(
+      bonusWindowsSchema.safeParse([{ ...weekly, start: "12:00", end: "08:00" }]).success,
+    ).toBe(false)
+    expect(bonusWindowsSchema.safeParse([{ ...weekly, label: "Lunes, mañana" }]).success).toBe(
+      false,
+    )
+  })
+
+  it("drops invalid stored windows instead of failing the whole config", () => {
+    const config = stampsPromotionConfigSchema.parse({
+      accumulation: { bonusWindows: [weekly, { ...weekly, id: "bad", end: "99:00" }] },
+    })
+    expect(config.accumulation.bonusWindows.map((w) => w.id)).toEqual(["w1"])
+    expect(stampsPromotionConfigSchema.parse({}).accumulation.bonusWindows).toEqual([])
+  })
+
+  it("picks the highest active window at a local moment", () => {
+    const windows = bonusWindowsSchema.parse([weekly, { ...weekly, id: "w3", multiplier: 3 }])
+    expect(
+      activeBonusWindow(windows, { date: "2026-10-26", weekday: 1, minutes: 9 * 60 })?.id,
+    ).toBe("w3")
+    expect(
+      activeBonusWindow(windows, { date: "2026-10-26", weekday: 1, minutes: 12 * 60 }),
+    ).toBeNull()
   })
 })

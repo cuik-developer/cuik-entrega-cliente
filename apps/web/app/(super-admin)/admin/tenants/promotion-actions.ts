@@ -53,6 +53,24 @@ async function requireSuperAdmin() {
   return { session, error: null } as const
 }
 
+/**
+ * The accumulation block to merge. `.partial()` is shallow, so zod fills
+ * `bonusWindows: []` when the caller did not send it; dropping it here keeps
+ * the windows the business set up in its panel when the super-admin form saves.
+ */
+function keepBonusWindows(
+  rawConfig: unknown,
+  parsedAccumulation: unknown,
+): Record<string, unknown> {
+  const parsed = { ...((parsedAccumulation as Record<string, unknown>) ?? {}) }
+  const raw = ((rawConfig as Record<string, unknown> | undefined)?.accumulation ?? {}) as Record<
+    string,
+    unknown
+  >
+  if (!("bonusWindows" in raw)) delete parsed.bonusWindows
+  return parsed
+}
+
 // ── Actions ─────────────────────────────────────────────────────────
 
 export async function getPromotionsByTenant(
@@ -299,7 +317,7 @@ export async function updatePromotion(
           },
           accumulation: {
             ...currentConfig.accumulation,
-            ...((inputConfig.accumulation as Record<string, unknown>) ?? {}),
+            ...keepBonusWindows(input.config, inputConfig.accumulation),
           },
           tiers: {
             ...currentConfig.tiers,
@@ -330,7 +348,7 @@ export async function updatePromotion(
           },
           accumulation: {
             ...currentConfig.accumulation,
-            ...((inputConfig.accumulation as Record<string, unknown>) ?? {}),
+            ...keepBonusWindows(input.config, inputConfig.accumulation),
           },
           tiers: {
             ...currentConfig.tiers,

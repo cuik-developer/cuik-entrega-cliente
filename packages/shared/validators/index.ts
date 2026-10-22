@@ -160,6 +160,10 @@ export {
   platformConfigSchema,
 } from "./platform-config-schema"
 export {
+  activeBonusWindow,
+  type BonusWindow,
+  bonusWindowSchema,
+  bonusWindowsSchema,
   type CreatePromotionInput,
   createPromotionSchema,
   DEFAULT_MILESTONE_MESSAGES,
@@ -168,7 +172,9 @@ export {
   describePointsRate,
   type ExpirationPolicy,
   expirationPolicySchema,
+  type LocalClock,
   type MilestoneMessages,
+  minutesOfClock,
   POINTS_CALC_MODES,
   type PointsCalcMode,
   type PointsPromotionConfig,

@@ -225,6 +225,7 @@ export async function registerVisit(params: {
     const rulesContext: RulesEvaluationContext = {
       visitDate: new Date(),
       visitDateLocal: new Date().toLocaleDateString("en-CA", { timeZone: tenantTz }),
+      timezone: tenantTz,
       clientTotalVisits: client.totalVisits,
       clientBirthday: client.birthday ?? null,
       visitAmount: amount ? Number(amount) : null,

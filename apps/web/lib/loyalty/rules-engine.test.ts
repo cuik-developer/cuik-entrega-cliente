@@ -554,3 +554,126 @@ describe("isBirthdayVisit", () => {
     })
   })
 })
+
+// --- Bonus windows ("hora x2") ---
+
+describe("bonus windows", () => {
+  // Monday 2026-10-26, 09:30 in Lima (UTC-5) = 14:30 UTC.
+  const MONDAY_0930_LIMA = new Date("2026-10-26T14:30:00Z")
+  const mondayMorning = {
+    id: "w1",
+    label: "Lunes de mañana",
+    kind: "weekly" as const,
+    days: [1],
+    date: null,
+    start: "08:00",
+    end: "12:00",
+    multiplier: 3,
+    active: true,
+  }
+
+  it("multiplies stamps inside the window, read in the tenant timezone", () => {
+    const config = makeConfig({
+      accumulation: { ...DEFAULT_STAMPS_CONFIG.accumulation, bonusWindows: [mondayMorning] },
+    })
+    const result = evaluateStampRules(
+      config,
+      makeContext({ visitDate: MONDAY_0930_LIMA, timezone: "America/Lima" }),
+    )
+    expect(result.stampsToEarn).toBe(3)
+    expect(result.bonusReasons).toEqual(["Lunes de mañana (×3)"])
+  })
+
+  it("does not apply when the same instant is outside the window in the tenant timezone", () => {
+    const config = makeConfig({
+      accumulation: { ...DEFAULT_STAMPS_CONFIG.accumulation, bonusWindows: [mondayMorning] },
+    })
+    // 09:30 Lima is 16:30 in Madrid, outside 08:00-12:00.
+    const result = evaluateStampRules(
+      config,
+      makeContext({ visitDate: MONDAY_0930_LIMA, timezone: "Europe/Madrid" }),
+    )
+    expect(result.stampsToEarn).toBe(1)
+  })
+
+  it("treats the end time as exclusive", () => {
+    const config = makeConfig({
+      accumulation: { ...DEFAULT_STAMPS_CONFIG.accumulation, bonusWindows: [mondayMorning] },
+    })
+    const noon = new Date("2026-10-26T17:00:00Z") // 12:00 Lima
+    const result = evaluateStampRules(
+      config,
+      makeContext({ visitDate: noon, timezone: "America/Lima" }),
+    )
+    expect(result.stampsToEarn).toBe(1)
+  })
+
+  it("ignores inactive windows and applies date windows on their day only", () => {
+    const config = makeConfig({
+      accumulation: {
+        ...DEFAULT_STAMPS_CONFIG.accumulation,
+        bonusWindows: [
+          { ...mondayMorning, active: false },
+          {
+            ...mondayMorning,
+            id: "w2",
+            label: "",
+            kind: "date",
+            days: [],
+            date: "2026-10-26",
+            start: "00:00",
+            end: "24:00",
+            multiplier: 2,
+          },
+        ],
+      },
+    })
+    const ctx = makeContext({ visitDate: MONDAY_0930_LIMA, timezone: "America/Lima" })
+    expect(evaluateStampRules(config, ctx).stampsToEarn).toBe(2)
+    expect(evaluateStampRules(config, ctx).bonusReasons).toEqual(["Hora ×2"])
+    const nextDay = makeContext({
+      visitDate: new Date("2026-10-27T14:30:00Z"),
+      timezone: "America/Lima",
+    })
+    expect(evaluateStampRules(config, nextDay).stampsToEarn).toBe(1)
+  })
+
+  it("uses the highest overlapping window and still stacks with the birthday bonus", () => {
+    const config = makeConfig({
+      accumulation: {
+        ...DEFAULT_STAMPS_CONFIG.accumulation,
+        birthdayBonus: 2,
+        bonusWindows: [
+          { ...mondayMorning, multiplier: 2 },
+          { ...mondayMorning, id: "w3" },
+        ],
+      },
+    })
+    const result = evaluateStampRules(
+      config,
+      makeContext({
+        visitDate: MONDAY_0930_LIMA,
+        timezone: "America/Lima",
+        visitDateLocal: "2026-10-26",
+        clientBirthday: "1990-10-26",
+      }),
+    )
+    expect(result.stampsToEarn).toBe(6)
+  })
+
+  it("multiplies points inside the window", () => {
+    const config = {
+      ...DEFAULT_POINTS_CONFIG,
+      accumulation: { ...DEFAULT_POINTS_CONFIG.accumulation, bonusWindows: [mondayMorning] },
+    }
+    const result = evaluatePointsRules(config, {
+      visitDate: MONDAY_0930_LIMA,
+      timezone: "America/Lima",
+      clientTotalVisits: 0,
+      visitAmount: 10,
+      todayVisitCount: 0,
+    })
+    expect(result.basePoints).toBe(10)
+    expect(result.pointsToEarn).toBe(30)
+  })
+})

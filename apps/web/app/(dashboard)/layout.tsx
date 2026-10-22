@@ -15,6 +15,7 @@ import {
   UserCheck,
   Users,
   X,
+  Zap,
 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
@@ -61,6 +62,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: "Programa",
     items: [
       { href: "/panel/mi-pase", label: "Mi pase", icon: CreditCard },
+      { href: "/panel/horas-especiales", label: "Horas especiales", icon: Zap },
       // Only shown to points programs.
       { href: "/panel/premios", label: "Premios", icon: Gift, pointsOnly: true },
     ],

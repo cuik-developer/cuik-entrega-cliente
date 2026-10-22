@@ -13,6 +13,7 @@ import {
   Search,
   Star,
   X,
+  Zap,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -46,6 +47,8 @@ type StampsVisitApiResult = {
   rewardValue?: string | null
   /** Intermediate gift ("escalera") reached or coming up on the next visit. */
   milestone?: { kind: "next" | "reached"; at: number; label: string } | null
+  /** Bonuses the rules engine applied (comma separated), e.g. a "hora x2" window. */
+  bonusApplied?: string | null
 }
 
 type PointsVisitApiResult = {
@@ -69,6 +72,20 @@ type PointsVisitApiResult = {
 }
 
 type VisitApiResult = StampsVisitApiResult | PointsVisitApiResult
+
+const BONUS_LABELS: Record<string, string> = {
+  birthday_bonus: "Cumpleaños",
+  birthday_multiplier: "Cumpleaños",
+  double_stamps_day: "Sello doble",
+}
+
+/** Engine bonus reasons as text for the cashier: "Cumpleaños · Lunes de mañana (×2)". */
+function bonusLabel(raw: string): string {
+  return raw
+    .split(", ")
+    .map((r) => BONUS_LABELS[r] ?? r.replace(/^(\d+(?:\.\d+)?)x_multiplier$/, "×$1"))
+    .join(" · ")
+}
 
 /** "jue 8 oct": the expiry instant is the midnight AFTER the last valid day, so show that day. */
 function formatExpiryLabel(expiresAt: string): string {
@@ -888,7 +905,9 @@ function SuccessStepView({
               <div className="text-white/60 text-xs">Puntos ganados</div>
               <div className="text-3xl font-extrabold">+{result.points.earned}</div>
               {result.bonusApplied && (
-                <div className="text-white/70 text-xs mt-0.5">Bonus: {result.bonusApplied}</div>
+                <div className="text-white/70 text-xs mt-0.5">
+                  Bono: {bonusLabel(result.bonusApplied)}
+                </div>
               )}
             </div>
             <div className="text-right">
@@ -922,6 +941,15 @@ function SuccessStepView({
             </div>
             <StampRow filled={result.stamps.current} total={result.stamps.max} />
           </div>
+
+          {result.bonusApplied && (
+            <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+              <Zap className="w-5 h-5 text-amber-600 flex-shrink-0" />
+              <div className="font-semibold text-amber-900 text-sm">
+                Bono aplicado: {bonusLabel(result.bonusApplied)}
+              </div>
+            </div>
+          )}
 
           {result.milestone?.kind === "reached" && (
             <div className="flex items-center gap-2.5 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">

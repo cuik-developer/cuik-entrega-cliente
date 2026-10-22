@@ -60,6 +60,7 @@ export async function registerPointsVisit(params: PointsVisitParams): Promise<Po
   const rulesContext: PointsRulesContext = {
     visitDate: now,
     visitDateLocal,
+    timezone: params.timezone,
     clientTotalVisits: client.totalVisits,
     clientBirthday: client.birthday ?? null,
     visitAmount: numericAmount,

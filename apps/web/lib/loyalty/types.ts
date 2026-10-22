@@ -22,6 +22,8 @@ export type RulesEvaluationContext = {
   visitDate: Date
   /** "YYYY-MM-DD" of the visit in the tenant timezone; preferred over visitDate for birthday checks. */
   visitDateLocal?: string
+  /** Tenant IANA timezone. Day/hour bonuses read the visit time in it; without it the server clock is used. */
+  timezone?: string
   clientTotalVisits: number
   /** Date, or "YYYY-MM-DD" as the `date` column comes back from Postgres. */
   clientBirthday?: Date | string | null
@@ -162,6 +164,8 @@ export type PointsRulesContext = {
   visitDate: Date
   /** "YYYY-MM-DD" of the visit in the tenant timezone; preferred over visitDate for birthday checks. */
   visitDateLocal?: string
+  /** Tenant IANA timezone. Day/hour bonuses read the visit time in it; without it the server clock is used. */
+  timezone?: string
   clientTotalVisits: number
   /** Date, or "YYYY-MM-DD" as the `date` column comes back from Postgres. */
   clientBirthday?: Date | string | null

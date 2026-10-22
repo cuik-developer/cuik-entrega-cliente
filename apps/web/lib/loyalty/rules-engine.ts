@@ -1,5 +1,10 @@
-import type { PointsPromotionConfig, StampsPromotionConfig } from "@cuik/shared/validators"
-import { pointsForAmount } from "@cuik/shared/validators"
+import type {
+  BonusWindow,
+  LocalClock,
+  PointsPromotionConfig,
+  StampsPromotionConfig,
+} from "@cuik/shared/validators"
+import { activeBonusWindow, pointsForAmount } from "@cuik/shared/validators"
 
 import type {
   PointsRulesContext,
@@ -68,18 +73,22 @@ export function evaluateStampRules(
   let stampsToEarn = 1
   const bonusReasons: string[] = []
 
-  // 4a. Check double stamps days
-  if (config.accumulation.doubleStampsDays.length > 0) {
-    const visitDay = context.visitDate.getDay()
-    const visitHour = context.visitDate.getHours()
-
-    for (const dsd of config.accumulation.doubleStampsDays) {
-      if (dsd.dayOfWeek === visitDay && visitHour >= dsd.startHour && visitHour <= dsd.endHour) {
-        stampsToEarn *= 2
-        bonusReasons.push("double_stamps_day")
-        break
-      }
-    }
+  // 4a. Day/hour bonus: legacy double-stamps days (x2) or a bonus window
+  //     (x2..x5), read in the tenant's local time. The highest one applies,
+  //     they never stack with each other.
+  const clock = localClockAt(context.visitDate, context.timezone)
+  const visitHour = Math.floor(clock.minutes / 60)
+  const legacyDouble = config.accumulation.doubleStampsDays.some(
+    (dsd) =>
+      dsd.dayOfWeek === clock.weekday && visitHour >= dsd.startHour && visitHour <= dsd.endHour,
+  )
+  const stampsWindow = activeBonusWindow(config.accumulation.bonusWindows, clock)
+  if (stampsWindow && stampsWindow.multiplier >= (legacyDouble ? 2 : 0)) {
+    stampsToEarn *= stampsWindow.multiplier
+    bonusReasons.push(bonusWindowReason(stampsWindow))
+  } else if (legacyDouble) {
+    stampsToEarn *= 2
+    bonusReasons.push("double_stamps_day")
   }
 
   // 4b. Check birthday bonus
@@ -153,18 +162,20 @@ export function evaluatePointsRules(
   const bonusReasons: string[] = []
   const basePoints = pointsToEarn
 
-  // 6. Apply day/hour multipliers (first match wins, no stacking)
-  if (config.accumulation.pointsMultipliers.length > 0) {
-    const visitDay = context.visitDate.getDay()
-    const visitHour = context.visitDate.getHours()
-
-    for (const pm of config.accumulation.pointsMultipliers) {
-      if (pm.dayOfWeek === visitDay && visitHour >= pm.startHour && visitHour <= pm.endHour) {
-        pointsToEarn = Math.floor(pointsToEarn * pm.multiplier)
-        bonusReasons.push(`${pm.multiplier}x_multiplier`)
-        break
-      }
-    }
+  // 6. Day/hour multiplier in the tenant's local time: legacy multipliers
+  //    (first match) or a bonus window, whichever is higher. No stacking.
+  const clock = localClockAt(context.visitDate, context.timezone)
+  const visitHour = Math.floor(clock.minutes / 60)
+  const legacy = config.accumulation.pointsMultipliers.find(
+    (pm) => pm.dayOfWeek === clock.weekday && visitHour >= pm.startHour && visitHour <= pm.endHour,
+  )
+  const pointsWindow = activeBonusWindow(config.accumulation.bonusWindows, clock)
+  if (pointsWindow && pointsWindow.multiplier >= (legacy?.multiplier ?? 0)) {
+    pointsToEarn = Math.floor(pointsToEarn * pointsWindow.multiplier)
+    bonusReasons.push(bonusWindowReason(pointsWindow))
+  } else if (legacy) {
+    pointsToEarn = Math.floor(pointsToEarn * legacy.multiplier)
+    bonusReasons.push(`${legacy.multiplier}x_multiplier`)
   }
 
   // 7. Apply birthday multiplier (stacks multiplicatively with day multiplier)
@@ -247,6 +258,53 @@ export function getNextTier(
     name: next.name,
     visitsNeeded: next.minVisits - totalVisits,
   }
+}
+
+// --- Local time helpers ---
+
+const WEEKDAYS: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
+
+/**
+ * Date, weekday and minutes since midnight of `date` in `timeZone`. Without
+ * a timezone (or with an invalid one) it falls back to the server clock.
+ */
+export function localClockAt(date: Date, timeZone?: string): LocalClock {
+  if (timeZone) {
+    try {
+      const parts = Object.fromEntries(
+        new Intl.DateTimeFormat("en-US", {
+          timeZone,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          weekday: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23",
+        })
+          .formatToParts(date)
+          .map((p) => [p.type, p.value]),
+      )
+      return {
+        date: `${parts.year}-${parts.month}-${parts.day}`,
+        weekday: WEEKDAYS[parts.weekday] ?? date.getDay(),
+        minutes: Number(parts.hour) * 60 + Number(parts.minute),
+      }
+    } catch {
+      // Unknown timezone: use the server clock below.
+    }
+  }
+  const p = (n: number) => String(n).padStart(2, "0")
+  return {
+    date: `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`,
+    weekday: date.getDay(),
+    minutes: date.getHours() * 60 + date.getMinutes(),
+  }
+}
+
+/** Reason shown to the cashier: "Lunes de mañana (×2)" or "Hora ×3". */
+function bonusWindowReason(w: BonusWindow): string {
+  return w.label ? `${w.label} (×${w.multiplier})` : `Hora ×${w.multiplier}`
 }
 
 // --- Birthday helpers ---

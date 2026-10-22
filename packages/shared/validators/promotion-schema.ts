@@ -54,6 +54,104 @@ export const expirationPolicySchema = z.preprocess(
 
 export type ExpirationPolicy = z.infer<typeof expirationPolicySchema>
 
+// --- Bonus windows ("hora x2": double or triple stamps / points) ---
+
+const clockTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$|^24:00$/, "Hora inválida")
+
+/** "08:30" -> 510. "24:00" -> 1440 (end of day). */
+export function minutesOfClock(value: string): number {
+  const [h, m] = value.split(":").map(Number)
+  return h * 60 + m
+}
+
+/**
+ * A time window in which each visit earns `multiplier` times the stamps or
+ * points. Weekly windows repeat on `days` (0 = domingo ... 6 = sabado);
+ * date windows apply on one local "YYYY-MM-DD". Times are tenant-local, the
+ * start is inclusive and the end exclusive ("08:00"-"12:00" ends at 11:59).
+ */
+export const bonusWindowSchema = z
+  .object({
+    id: z.string().min(1).max(40),
+    // No commas: the cashier screen splits the applied bonuses on ", ".
+    label: z
+      .string()
+      .trim()
+      .max(60)
+      .regex(/^[^,]*$/, "El nombre no puede llevar comas")
+      .default(""),
+    kind: z.enum(["weekly", "date"]),
+    days: z.array(weekdaySchema).max(7).default([]),
+    date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .default(null),
+    start: clockTimeSchema,
+    end: clockTimeSchema,
+    multiplier: z.number().int().min(2).max(5),
+    active: z.boolean().default(true),
+  })
+  .superRefine((w, ctx) => {
+    if (w.kind === "weekly" && w.days.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["days"],
+        message: "Elige al menos un día",
+      })
+    }
+    if (w.kind === "date" && !w.date) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["date"], message: "Elige la fecha" })
+    }
+    if (minutesOfClock(w.end) <= minutesOfClock(w.start)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["end"],
+        message: "La hora de fin debe ser posterior a la de inicio",
+      })
+    }
+  })
+
+export type BonusWindow = z.infer<typeof bonusWindowSchema>
+
+/** What the panel saves: every window must be valid. */
+export const bonusWindowsSchema = z.array(bonusWindowSchema).max(20)
+
+/**
+ * Windows as stored in a promotion config. Invalid entries are dropped instead
+ * of failing the whole config, so one bad row (manual edit, a future stricter
+ * rule) can never break every scan of the tenant.
+ */
+const storedBonusWindowsSchema = z.preprocess(
+  (raw) =>
+    Array.isArray(raw)
+      ? raw.filter((w) => bonusWindowSchema.safeParse(w).success).slice(0, 20)
+      : [],
+  z.array(bonusWindowSchema),
+)
+
+/** Tenant-local clock reading used to match bonus windows. */
+export type LocalClock = { date: string; weekday: number; minutes: number }
+
+/**
+ * The active window with the highest multiplier at this local moment, or
+ * null. Windows do not stack with each other.
+ */
+export function activeBonusWindow(
+  windows: readonly BonusWindow[] | undefined,
+  clock: LocalClock,
+): BonusWindow | null {
+  let best: BonusWindow | null = null
+  for (const w of windows ?? []) {
+    if (!w.active) continue
+    const onDay = w.kind === "weekly" ? w.days.includes(clock.weekday) : w.date === clock.date
+    if (!onDay) continue
+    if (clock.minutes < minutesOfClock(w.start) || clock.minutes >= minutesOfClock(w.end)) continue
+    if (!best || w.multiplier > best.multiplier) best = w
+  }
+  return best
+}
+
 const tierLevelSchema = z.object({
   name: z.string().min(1).max(50),
   minVisits: z.number().int().min(0),
@@ -78,6 +176,7 @@ const accumulationSchema = z.object({
   bonusOnRegistration: z.number().int().min(0).max(5).default(0),
   doubleStampsDays: z.array(doubleStampsDaySchema).default([]),
   birthdayBonus: z.number().int().min(0).max(5).default(0),
+  bonusWindows: storedBonusWindowsSchema,
   minimumPurchaseAmount: z.number().positive().nullable().default(null),
 })
 
@@ -231,6 +330,7 @@ const pointsAccumulationSchema = z.object({
   pointsMultipliers: z.array(pointsMultiplierSchema).default([]),
   birthdayMultiplier: z.number().positive().min(1).max(10).default(1),
   bonusPointsOnRegistration: z.number().int().min(0).default(0),
+  bonusWindows: storedBonusWindowsSchema,
 })
 
 export const pointsPromotionConfigSchema = z.object({
@@ -295,5 +395,6 @@ export const updatePointsPromotionSchema = z.object({
 // Keep backward-compatible alias — stamps config partial by default
 export const updatePromotionSchema = updateStampsPromotionSchema
 
-export type UpdatePromotionInput = z.infer<typeof updateStampsPromotionSchema>
-export type UpdatePointsPromotionInput = z.infer<typeof updatePointsPromotionSchema>
+/** What callers send: nested defaults (e.g. `bonusWindows`) may be left out. */
+export type UpdatePromotionInput = z.input<typeof updateStampsPromotionSchema>
+export type UpdatePointsPromotionInput = z.input<typeof updatePointsPromotionSchema>
