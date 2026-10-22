@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import { PointsCatalog } from "@/components/cajero/points-catalog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useTenant } from "@/hooks/use-tenant"
@@ -53,15 +54,6 @@ type ClientDetail = {
     availableCatalogItems?: number
     nextExpiration?: { amount: number; expiresAt: string } | null
   }
-}
-
-type CatalogItem = {
-  id: string
-  name: string
-  description: string | null
-  pointsCost: number
-  category: string | null
-  imageUrl: string | null
 }
 
 const LOCATION_STORAGE_KEY = "cuik:cashier:locationId"
@@ -165,9 +157,6 @@ export default function BuscarPage() {
   const [actionMsg, setActionMsg] = useState<string | null>(null)
   // Intermediate gift reached by the visit just registered (cleared on the next action).
   const [giftDue, setGiftDue] = useState<{ at: number; label: string; count: number } | null>(null)
-  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
-  const [confirmItemId, setConfirmItemId] = useState<string | null>(null)
-  const [redeemingItemId, setRedeemingItemId] = useState<string | null>(null)
   // Stamps reward redeem in flight: a double tap must not spend two rewards.
   const [redeemingReward, setRedeemingReward] = useState(false)
   const [purchaseAmount, setPurchaseAmount] = useState("")
@@ -224,25 +213,6 @@ export default function BuscarPage() {
     }
   }, [query, searchClients])
 
-  // Fetch catalog items when a points client is selected
-  useEffect(() => {
-    if (!isPoints || !selected || !tenantSlug) return
-
-    async function fetchCatalog() {
-      try {
-        const res = await fetch(`/api/${tenantSlug}/premios`)
-        const json = await res.json()
-        if (json.success && json.data?.items) {
-          setCatalogItems(json.data.items)
-        }
-      } catch {
-        // silent
-      }
-    }
-
-    fetchCatalog()
-  }, [isPoints, selected, tenantSlug])
-
   const selectClient = async (clientId: string) => {
     try {
       const res = await fetch(`/api/${tenantSlug}/clients/${clientId}`)
@@ -276,7 +246,11 @@ export default function BuscarPage() {
     setSubmitting(true)
 
     try {
-      const bodyPayload: Record<string, unknown> = { qrCode: selected.client.qrCode }
+      // Registered from the client's card, not by scanning: "manual" in the history.
+      const bodyPayload: Record<string, unknown> = {
+        qrCode: selected.client.qrCode,
+        source: "manual",
+      }
       if (requiresAmount && purchaseAmount) {
         bodyPayload.amount = Number.parseFloat(purchaseAmount)
       }
@@ -343,55 +317,6 @@ export default function BuscarPage() {
     }
   }
 
-  function resolveRedeemCatalogMessage(json: Record<string, unknown>): string {
-    const data = json.data as Record<string, unknown> | undefined
-    const code = data?.code as string | undefined
-    switch (code) {
-      case "OK": {
-        const catalogItem = data?.catalogItem as { name?: string } | undefined
-        const points = data?.points as { deducted?: number } | undefined
-        return `Canjeado: ${catalogItem?.name ?? "Premio"} (-${points?.deducted} pts)`
-      }
-      default:
-        return redeemRejectionMessage(code, json.error)
-    }
-  }
-
-  // Two-step redeem: first click asks to confirm, second click redeems. While a
-  // request is in flight every catalog button is disabled, so a double click
-  // cannot spend the points twice (the server also rejects a repeat within seconds).
-  const handleRedeemCatalogItem = async (catalogItemId: string) => {
-    if (!selected?.client.qrCode || redeemingItemId) return
-    if (confirmItemId !== catalogItemId) {
-      setConfirmItemId(catalogItemId)
-      setActionMsg(null)
-      return
-    }
-    setConfirmItemId(null)
-    setRedeemingItemId(catalogItemId)
-    setActionMsg(null)
-
-    try {
-      const res = await fetch(`/api/${tenantSlug}/redeem`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ qrCode: selected.client.qrCode, catalogItemId }),
-      })
-      const json = await res.json()
-
-      const message = resolveRedeemCatalogMessage(json)
-      setActionMsg(message)
-
-      if (json.data?.code === "OK") {
-        await selectClient(selected.client.id)
-      }
-    } catch {
-      setActionMsg(CONNECTION_ERROR)
-    } finally {
-      setRedeemingItemId(null)
-    }
-  }
-
   return (
     <div className="space-y-5">
       {/* Location selector — shown when tenant has multiple locations */}
@@ -418,7 +343,7 @@ export default function BuscarPage() {
         <ClientDetailView
           selected={selected}
           isPoints={isPoints}
-          catalogItems={catalogItems}
+          tenantSlug={tenantSlug ?? ""}
           actionMsg={actionMsg}
           giftDue={giftDue}
           requiresAmount={requiresAmount}
@@ -430,17 +355,15 @@ export default function BuscarPage() {
           handleVisit={handleVisit}
           handleRedeem={handleRedeem}
           redeemingReward={redeemingReward}
-          handleRedeemCatalogItem={handleRedeemCatalogItem}
-          confirmItemId={confirmItemId}
-          setConfirmItemId={setConfirmItemId}
-          redeemingItemId={redeemingItemId}
+          onPointsRedeemed={async () => {
+            setActionMsg(null)
+            await selectClient(selected.client.id)
+          }}
           onReset={() => {
             setSelected(null)
             setActionMsg(null)
             setGiftDue(null)
             setSubmitting(false)
-            setConfirmItemId(null)
-            setCatalogItems([])
             setPurchaseAmount("")
           }}
         />
@@ -591,7 +514,7 @@ function ClientSearchView({
 function ClientDetailView({
   selected,
   isPoints,
-  catalogItems,
+  tenantSlug,
   actionMsg,
   giftDue,
   requiresAmount,
@@ -603,15 +526,12 @@ function ClientDetailView({
   handleVisit,
   handleRedeem,
   redeemingReward,
-  handleRedeemCatalogItem,
-  confirmItemId,
-  setConfirmItemId,
-  redeemingItemId,
+  onPointsRedeemed,
   onReset,
 }: {
   selected: ClientDetail
   isPoints: boolean
-  catalogItems: CatalogItem[]
+  tenantSlug: string
   actionMsg: string | null
   giftDue: { at: number; label: string; count: number } | null
   requiresAmount: boolean
@@ -623,10 +543,7 @@ function ClientDetailView({
   handleVisit: () => void
   handleRedeem: () => void
   redeemingReward: boolean
-  handleRedeemCatalogItem: (id: string) => void
-  confirmItemId: string | null
-  setConfirmItemId: (id: string | null) => void
-  redeemingItemId: string | null
+  onPointsRedeemed: () => Promise<void>
   onReset: () => void
 }) {
   return (
@@ -732,65 +649,14 @@ function ClientDetailView({
         </div>
       )}
 
-      {/* Points: catalog items to redeem */}
-      {isPoints && catalogItems.length > 0 && selected.points && (
-        <div className="space-y-2">
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-            Premios disponibles
-          </div>
-          {catalogItems.map((item) => {
-            const canAfford = (selected.points?.balance ?? 0) >= item.pointsCost
-            return (
-              <div
-                key={item.id}
-                className={`flex items-center gap-3 bg-white rounded-xl border px-4 py-3 ${canAfford ? "border-gray-200" : "border-gray-100 opacity-60"}`}
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-gray-900 text-sm truncate">{item.name}</div>
-                  {item.description && (
-                    <div className="text-xs text-gray-400 truncate">{item.description}</div>
-                  )}
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <Coins className="w-3 h-3 text-amber-500" />
-                    <span className="text-xs font-semibold text-amber-600">
-                      {item.pointsCost} pts
-                    </span>
-                  </div>
-                </div>
-                {confirmItemId === item.id ? (
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-xs h-8 text-gray-500"
-                      onClick={() => setConfirmItemId(null)}
-                      disabled={redeemingItemId !== null}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="bg-amber-600 text-white text-xs h-8"
-                      disabled={redeemingItemId !== null}
-                      onClick={() => handleRedeemCatalogItem(item.id)}
-                    >
-                      Confirmar canje
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    size="sm"
-                    className="bg-amber-500 text-white text-xs h-8 shrink-0"
-                    disabled={!canAfford || redeemingItemId !== null}
-                    onClick={() => handleRedeemCatalogItem(item.id)}
-                  >
-                    {redeemingItemId === item.id ? "Canjeando…" : "Canjear"}
-                  </Button>
-                )}
-              </div>
-            )
-          })}
-        </div>
+      {/* Points: catalog items to redeem (same component as Escanear) */}
+      {isPoints && selected.points && selected.client.qrCode && (
+        <PointsCatalog
+          tenantSlug={tenantSlug}
+          qrCode={selected.client.qrCode}
+          balance={selected.points.balance}
+          onRedeemed={onPointsRedeemed}
+        />
       )}
 
       {actionMsg && (

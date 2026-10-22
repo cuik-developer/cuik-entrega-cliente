@@ -226,34 +226,40 @@ export function WalletSection({ initialData }: { initialData: TenantConfigData }
           )}
         </Panel>
 
-        <Panel>
-          <PanelHeader title="Fecha relevante" />
-          <div className="px-3 py-3 flex items-start justify-between gap-3 text-[12.5px]">
-            <div className="min-w-0">
-              <div className="text-ent-fg">Mostrar la última visita en la pantalla de bloqueo</div>
-              <p className="text-[12px] text-ent-fg-3 mt-0.5">
-                Cuando está activo, el pase muestra la fecha de la última visita en la pantalla de
-                bloqueo del celular, recordándole al cliente que vuelva.
-              </p>
+        {/* Only meaningful when the promotion makes rewards or points expire. */}
+        {initialData.hasExpiration && (
+          <Panel>
+            <PanelHeader title="Recordatorio de vencimiento" />
+            <div className="px-3 py-3 flex items-start justify-between gap-3 text-[12.5px]">
+              <div className="min-w-0">
+                <div className="text-ent-fg">
+                  Recordar en la pantalla de bloqueo cuando algo está por vencer
+                </div>
+                <p className="text-[12px] text-ent-fg-3 mt-0.5">
+                  En iPhone, el pase aparece en la pantalla de bloqueo cerca de la fecha en que
+                  vence el premio pendiente o los puntos del cliente, para que vuelva a tiempo a
+                  usarlos.
+                </p>
+              </div>
+              <FormField
+                control={walletForm.control}
+                name="relevantDateEnabled"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        disabled={readOnly}
+                        aria-label="Fecha relevante"
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
             </div>
-            <FormField
-              control={walletForm.control}
-              name="relevantDateEnabled"
-              render={({ field }) => (
-                <FormItem>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                      disabled={readOnly}
-                      aria-label="Fecha relevante"
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-          </div>
-        </Panel>
+          </Panel>
+        )}
 
         <div className="flex justify-end">
           <Button

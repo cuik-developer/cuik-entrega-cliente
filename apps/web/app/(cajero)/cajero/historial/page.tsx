@@ -11,13 +11,20 @@ type VisitRecord = {
   visitNum: number
   cycleNumber: number
   source: string
+  points?: number | null
+  amount?: string | null
   createdAt: string
+  /** Who registered it; shown when more than one person works the till. */
+  registeredByName?: string | null
   client: {
     id: string
     name: string
     lastName: string | null
   }
 }
+
+// How the visit came in: camera scan, or Buscar / a typed code.
+const SOURCE_LABEL: Record<string, string> = { qr: "QR", manual: "Manual", bonus: "Bono" }
 
 type Pagination = {
   page: number
@@ -27,11 +34,13 @@ type Pagination = {
 }
 
 export default function HistorialPage() {
-  const { tenantSlug, timezone } = useTenant()
+  const { tenantSlug, timezone, promotionType } = useTenant()
+  const isPoints = promotionType === "points"
   const [visits, setVisits] = useState<VisitRecord[]>([])
   const [pagination, setPagination] = useState<Pagination | null>(null)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [showRegisteredBy, setShowRegisteredBy] = useState(false)
 
   const fetchVisits = useCallback(
     async (p: number) => {
@@ -43,6 +52,7 @@ export default function HistorialPage() {
         if (json.success) {
           setVisits(json.data.data || [])
           setPagination(json.data.pagination || null)
+          setShowRegisteredBy(!!json.data.showRegisteredBy)
         }
       } catch {
         // silent
@@ -79,7 +89,7 @@ export default function HistorialPage() {
     <div className="space-y-5">
       <div className="text-center">
         <h1 className="text-xl font-extrabold text-gray-900">Historial</h1>
-        <p className="text-sm text-gray-500 mt-1">Tus visitas registradas.</p>
+        <p className="text-sm text-gray-500 mt-1">Visitas registradas en el comercio.</p>
       </div>
 
       {loading && (
@@ -91,7 +101,7 @@ export default function HistorialPage() {
       {!loading && visits.length === 0 && (
         <div className="text-center py-10">
           <Clock className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-          <p className="text-sm text-gray-400">Aun no has registrado visitas</p>
+          <p className="text-sm text-gray-400">Aún no hay visitas registradas</p>
         </div>
       )}
 
@@ -114,10 +124,20 @@ export default function HistorialPage() {
                   </span>
                   <span className="text-xs text-gray-400">
                     {" "}
-                    · Sello {v.visitNum} (ciclo {v.cycleNumber})
+                    ·{" "}
+                    {isPoints
+                      ? `${v.points != null ? `+${v.points} puntos` : "Puntos"}${v.amount ? ` · S/ ${Number(v.amount).toFixed(2)}` : ""}`
+                      : `Sello ${v.visitNum} (ciclo ${v.cycleNumber})`}
                   </span>
+                  {showRegisteredBy && v.registeredByName && (
+                    <div className="text-xs text-gray-400 truncate">
+                      Registró: {v.registeredByName}
+                    </div>
+                  )}
                 </div>
-                <span className="text-xs text-gray-300 flex-shrink-0 uppercase">{v.source}</span>
+                <span className="text-xs text-gray-300 flex-shrink-0 uppercase">
+                  {SOURCE_LABEL[v.source] ?? v.source}
+                </span>
               </div>
             ))}
           </div>

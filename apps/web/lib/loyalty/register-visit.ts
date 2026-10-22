@@ -44,6 +44,8 @@ export async function registerVisit(params: {
   cashierId: string
   locationId?: string
   amount?: string
+  /** "qr" = camera scan; "manual" = Buscar or a typed code. Default "qr". */
+  source?: "qr" | "manual"
 }): Promise<VisitResult | PointsVisitResult> {
   const { qrCode, tenantId, cashierId, amount } = params
   // Only a location of this tenant is recorded; any other id is dropped and
@@ -181,6 +183,7 @@ export async function registerVisit(params: {
         amount,
         todayVisitCount: todayVisitCountPts,
         timezone: tenantTz,
+        source: params.source,
         tx,
       })
     }
@@ -308,7 +311,7 @@ export async function registerVisit(params: {
         tenantId,
         visitNum,
         cycleNumber,
-        source: "qr",
+        source: params.source ?? "qr",
         registeredBy: cashierId,
         locationId: locationId || null,
         amount: amount || null,

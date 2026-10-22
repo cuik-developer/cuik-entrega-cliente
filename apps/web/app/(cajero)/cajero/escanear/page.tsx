@@ -18,6 +18,7 @@ import {
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import { PointsCatalog } from "@/components/cajero/points-catalog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -99,6 +100,26 @@ function formatExpiryLabel(expiresAt: string): string {
     .toLocaleDateString("es-PE", { weekday: "short", day: "numeric", month: "short" })
     .replace(/\./g, "")
     .replace(",", "")
+}
+
+/** Points balance and next expiry of a client, read by QR (same data as Buscar). */
+async function fetchPointsStatus(
+  tenantSlug: string | null | undefined,
+  qrCode: string,
+): Promise<{
+  balance: number
+  nextExpiration: { amount: number; expiresAt: string } | null
+} | null> {
+  if (!tenantSlug) return null
+  try {
+    const res = await fetch(`/api/${tenantSlug}/clients?qr=${encodeURIComponent(qrCode)}`)
+    const json = await res.json()
+    const points = json.data?.data?.[0]?.points
+    if (typeof points?.balance !== "number") return null
+    return { balance: points.balance, nextExpiration: points.nextExpiration ?? null }
+  } catch {
+    return null
+  }
 }
 
 function isPointsResult(result: VisitApiResult): result is PointsVisitApiResult {
@@ -311,7 +332,7 @@ export default function EscanearPage() {
       setStep("loading")
 
       try {
-        const bodyPayload: Record<string, unknown> = { qrCode }
+        const bodyPayload: Record<string, unknown> = { qrCode, source: sourceRef.current }
         if (amount) {
           bodyPayload.amount = Number.parseFloat(amount)
         }
@@ -346,11 +367,26 @@ export default function EscanearPage() {
   // QR of the client being served (camera or manual): the reward is redeemed for
   // this client, never for one scanned earlier in the session.
   const lastQrRef = useRef("")
+  // How the QR came in: the camera ("qr") or typed by hand ("manual"), for the history.
+  const sourceRef = useRef<"qr" | "manual">("qr")
+
+  // Points balance of the scanned client at the amount step ("solo canjear").
+  const [redeemOnlyBalance, setRedeemOnlyBalance] = useState<number | null>(null)
+  const loadRedeemOnlyBalance = useCallback(
+    async (qrCode: string) => {
+      setRedeemOnlyBalance(null)
+      const status = await fetchPointsStatus(tenantSlug, qrCode)
+      // The cashier may have moved on to another client meanwhile.
+      if (status && lastQrRef.current === qrCode) setRedeemOnlyBalance(status.balance)
+    },
+    [tenantSlug],
+  )
 
   const processQr = useCallback(
-    async (qrCode: string) => {
+    async (qrCode: string, source: "qr" | "manual" = "qr") => {
       if (processingRef.current) return
       processingRef.current = true
+      sourceRef.current = source
 
       if (!qrCode.startsWith("cuik:") && !qrCode.startsWith("MV_")) {
         setErrorMsg("QR no valido — formato incorrecto")
@@ -372,13 +408,23 @@ export default function EscanearPage() {
       if (requiresAmount) {
         setPendingQrCode(qrCode)
         setStep("amount")
+        // Points: the client may come only to redeem, so load the balance now.
+        if (promotionType === "points") loadRedeemOnlyBalance(qrCode)
         return
       }
 
       // For stamps without minimum purchase, submit directly
       await submitVisit(qrCode)
     },
-    [stopCamera, requiresAmount, submitVisit, locations.length, selectedLocationId],
+    [
+      stopCamera,
+      requiresAmount,
+      submitVisit,
+      locations.length,
+      selectedLocationId,
+      promotionType,
+      loadRedeemOnlyBalance,
+    ],
   )
 
   const handleAmountSubmit = () => {
@@ -493,7 +539,7 @@ export default function EscanearPage() {
   const handleManualSubmit = () => {
     if (!manualQr.trim()) return
     lastQrRef.current = manualQr.trim()
-    processQr(manualQr.trim())
+    processQr(manualQr.trim(), "manual")
   }
 
   const reset = () => {
@@ -506,6 +552,37 @@ export default function EscanearPage() {
     setPurchaseAmount("")
     setPendingQrCode("")
     lastQrRef.current = ""
+    sourceRef.current = "qr"
+    setRedeemOnlyBalance(null)
+  }
+
+  // Points client on a result screen: same catalog as Buscar, the balance on
+  // screen follows each redeem.
+  const pointsCatalogFor = (r: VisitApiResult) => {
+    const qrCode = lastQrRef.current || pendingQrCode
+    if (!isPointsResult(r) || !tenantSlug || !qrCode) return null
+    return (
+      <PointsCatalog
+        tenantSlug={tenantSlug}
+        qrCode={qrCode}
+        balance={r.points.balance}
+        onRedeemed={async (newBalance) => {
+          const status = await fetchPointsStatus(tenantSlug, qrCode)
+          setResult((prev) =>
+            prev && isPointsResult(prev)
+              ? {
+                  ...prev,
+                  points: {
+                    ...prev.points,
+                    balance: status?.balance ?? newBalance ?? prev.points.balance,
+                    nextExpiration: status ? status.nextExpiration : prev.points.nextExpiration,
+                  },
+                }
+              : prev,
+          )
+        }}
+      />
+    )
   }
 
   return (
@@ -547,6 +624,16 @@ export default function EscanearPage() {
           setPurchaseAmount={setPurchaseAmount}
           handleAmountSubmit={handleAmountSubmit}
           reset={reset}
+          redeemCatalog={
+            promotionType === "points" && tenantSlug && pendingQrCode ? (
+              <PointsCatalog
+                tenantSlug={tenantSlug}
+                qrCode={pendingQrCode}
+                balance={redeemOnlyBalance}
+                onRedeemed={(newBalance) => setRedeemOnlyBalance(newBalance)}
+              />
+            ) : null
+          }
         />
       )}
 
@@ -561,11 +648,21 @@ export default function EscanearPage() {
       )}
 
       {step === "success" && result && (
-        <SuccessStepView result={result} handleRedeem={handleRedeem} reset={reset} />
+        <SuccessStepView
+          result={result}
+          handleRedeem={handleRedeem}
+          reset={reset}
+          pointsCatalog={pointsCatalogFor(result)}
+        />
       )}
 
       {step === "already" && result && (
-        <AlreadyScannedStepView result={result} handleRedeem={handleRedeem} reset={reset} />
+        <AlreadyScannedStepView
+          result={result}
+          handleRedeem={handleRedeem}
+          reset={reset}
+          pointsCatalog={pointsCatalogFor(result)}
+        />
       )}
 
       {step === "reward" && result && !isPointsResult(result) && (
@@ -791,12 +888,15 @@ function AmountStepView({
   setPurchaseAmount,
   handleAmountSubmit,
   reset,
+  redeemCatalog,
 }: {
   stampsMinAmount: number | null
   purchaseAmount: string
   setPurchaseAmount: (v: string) => void
   handleAmountSubmit: () => void
   reset: () => void
+  /** Points: catalog to redeem without registering a purchase. */
+  redeemCatalog?: React.ReactNode
 }) {
   return (
     <div className="space-y-5 text-center">
@@ -836,6 +936,13 @@ function AmountStepView({
         </Button>
       </div>
 
+      {redeemCatalog && (
+        <div className="space-y-2 pt-2 border-t border-gray-100">
+          <p className="text-xs text-gray-500">¿Solo viene a canjear? Elige el premio:</p>
+          {redeemCatalog}
+        </div>
+      )}
+
       <Button variant="outline" className="w-full h-10 gap-2" onClick={reset}>
         <RotateCcw className="w-4 h-4" />
         Cancelar
@@ -848,10 +955,13 @@ function SuccessStepView({
   result,
   handleRedeem,
   reset,
+  pointsCatalog,
 }: {
   result: VisitApiResult
   handleRedeem: () => Promise<boolean>
   reset: () => void
+  /** Points: catalog to redeem right after the visit. */
+  pointsCatalog?: React.ReactNode
 }) {
   return (
     <div className="space-y-4">
@@ -968,6 +1078,8 @@ function SuccessStepView({
         </>
       )}
 
+      {pointsCatalog}
+
       <Button
         className="w-full h-11 text-white font-semibold gap-2"
         style={{ backgroundColor: "var(--brand-primary)" }}
@@ -984,10 +1096,13 @@ function AlreadyScannedStepView({
   result,
   handleRedeem,
   reset,
+  pointsCatalog,
 }: {
   result: VisitApiResult
   handleRedeem: () => Promise<boolean>
   reset: () => void
+  /** Points: catalog to redeem right after the visit. */
+  pointsCatalog?: React.ReactNode
 }) {
   return (
     <div className="space-y-4">
@@ -1052,6 +1167,8 @@ function AlreadyScannedStepView({
           )}
         </>
       )}
+
+      {pointsCatalog}
 
       <Button
         className="w-full h-11 text-white font-semibold gap-2"

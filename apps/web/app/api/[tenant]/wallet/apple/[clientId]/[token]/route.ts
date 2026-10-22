@@ -1,6 +1,5 @@
 import {
   and,
-  asc,
   clients,
   count,
   db,
@@ -27,6 +26,7 @@ import {
 import { errorResponse, resolveTenant } from "@/lib/api-utils"
 import { pointsExpiryTemplateVars } from "@/lib/loyalty/points-lots"
 import { buildStripImages } from "@/lib/wallet/points-strip"
+import { passRelevantDate } from "@/lib/wallet/relevant-date"
 import {
   type StampsConfigLike,
   safeAssetUrl,
@@ -235,24 +235,13 @@ export async function GET(
       }) ?? []
 
     // Get nearest pending reward expiresAt for relevantDate
-    let relevantDate: Date | undefined
-    if (walletConfig?.relevantDateEnabled && Number(pendingRewards) > 0) {
-      const [nearestReward] = await db
-        .select({ expiresAt: rewards.expiresAt })
-        .from(rewards)
-        .where(
-          and(
-            eq(rewards.clientId, client.id),
-            eq(rewards.tenantId, tenant.id),
-            eq(rewards.status, "pending"),
-          ),
-        )
-        .orderBy(asc(rewards.expiresAt))
-        .limit(1)
-      if (nearestReward?.expiresAt) {
-        relevantDate = nearestReward.expiresAt
-      }
-    }
+    const relevantDate = await passRelevantDate({
+      enabled: walletConfig?.relevantDateEnabled,
+      clientId: client.id,
+      tenantId: tenant.id,
+      promotionType: activePromo?.type,
+      pendingRewards: Number(pendingRewards),
+    })
 
     // 9. Resolve dynamic design fields (if configured)
     const designFields = design.fields as {

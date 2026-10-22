@@ -7,6 +7,8 @@ export const registerVisitSchema = z.object({
     .trim()
     .min(1, "Falta el código QR"),
   locationId: z.string().uuid("Sucursal inválida").optional(),
+  // "qr" = camera scan in Escanear; "manual" = Buscar or a typed code.
+  source: z.enum(["qr", "manual"]).optional(),
   // Typo guard at the till: 100000 instead of 100.00 would give 1000x the points.
   amount: z
     .number({ invalid_type_error: "Ingresa un monto válido" })

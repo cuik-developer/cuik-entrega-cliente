@@ -58,6 +58,7 @@ export type VisitResultCode =
   | "LOCATION_NOT_ALLOWED"
   | "CLIENT_BLOCKED"
   | "CLIENT_ARCHIVED"
+  | "NO_POINTS_EARNED"
 
 export type RedeemResultCode =
   | "OK"

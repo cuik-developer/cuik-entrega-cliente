@@ -29,6 +29,8 @@ type PointsVisitParams = {
   todayVisitCount: number
   /** Tenant timezone, used to decide whether today is the client's birthday. */
   timezone?: string
+  /** "qr" = camera scan; "manual" = Buscar or a typed code. */
+  source?: "qr" | "manual"
   tx: Parameters<Parameters<typeof dbType.transaction>[0]>[0]
 }
 
@@ -90,8 +92,25 @@ export async function registerPointsVisit(params: PointsVisitParams): Promise<Po
     }
   }
 
-  // 4. Insert visit record (points promotions don't have cycles — always cycleNumber 1)
+  // 3b. A purchase too small to earn a single point is not a visit: it would
+  //     use up the day's visit and block a real purchase later.
   const pointsToEarn = rulesResult.pointsToEarn
+  if (pointsToEarn <= 0) {
+    return {
+      code: "NO_POINTS_EARNED",
+      client: {
+        id: client.id,
+        name: client.name,
+        lastName: client.lastName,
+        totalVisits: client.totalVisits,
+        pointsBalance: client.pointsBalance,
+        tier: client.tier,
+      },
+      points: { earned: 0, balance: client.pointsBalance },
+    }
+  }
+
+  // 4. Insert visit record (points promotions don't have cycles — always cycleNumber 1)
   const newTotalVisits = client.totalVisits + 1
   const visitNum = newTotalVisits
 
@@ -103,7 +122,7 @@ export async function registerPointsVisit(params: PointsVisitParams): Promise<Po
       visitNum,
       cycleNumber: 1,
       points: pointsToEarn,
-      source: "qr",
+      source: params.source ?? "qr",
       registeredBy: cashierId,
       locationId: locationId || null,
       amount,

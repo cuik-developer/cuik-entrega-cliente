@@ -19,6 +19,7 @@ describe("cashier messages", () => {
       "CLIENT_ARCHIVED",
       "AMOUNT_REQUIRED",
       "BELOW_MINIMUM_PURCHASE",
+      "NO_POINTS_EARNED",
     ]) {
       expect(visitRejectionMessage(code)).not.toBe(VISIT_FALLBACK)
     }

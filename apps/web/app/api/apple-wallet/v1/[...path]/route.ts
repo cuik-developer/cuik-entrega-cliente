@@ -1,7 +1,6 @@
 import {
   and,
   appleDevices,
-  asc,
   clients,
   count,
   db,
@@ -47,6 +46,7 @@ import { formatExpiry } from "@/lib/loyalty/expiration"
 import { nextExpiration } from "@/lib/loyalty/points-lots"
 import { checkRateLimit } from "@/lib/rate-limit"
 import { buildStripImages } from "@/lib/wallet/points-strip"
+import { passRelevantDate } from "@/lib/wallet/relevant-date"
 import {
   type StampsConfigLike,
   safeAssetUrl,
@@ -911,24 +911,13 @@ async function regeneratePass(ctx: {
       }) ?? []
 
     // Get nearest pending reward expiresAt for relevantDate
-    let relevantDate: Date | undefined
-    if (walletConfig?.relevantDateEnabled && pendingRewards > 0) {
-      const [nearestReward] = await db
-        .select({ expiresAt: rewards.expiresAt })
-        .from(rewards)
-        .where(
-          and(
-            eq(rewards.clientId, client.id),
-            eq(rewards.tenantId, client.tenantId),
-            eq(rewards.status, "pending"),
-          ),
-        )
-        .orderBy(asc(rewards.expiresAt))
-        .limit(1)
-      if (nearestReward?.expiresAt) {
-        relevantDate = nearestReward.expiresAt
-      }
-    }
+    const relevantDate = await passRelevantDate({
+      enabled: walletConfig?.relevantDateEnabled,
+      clientId: client.id,
+      tenantId: client.tenantId,
+      promotionType: activePromo?.type,
+      pendingRewards: Number(pendingRewards),
+    })
 
     const templateContext: TemplateContext = {
       client: {

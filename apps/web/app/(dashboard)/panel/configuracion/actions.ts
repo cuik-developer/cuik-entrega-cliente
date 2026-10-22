@@ -7,6 +7,8 @@ import type {
   WalletConfigLocationsInput,
 } from "@cuik/shared/validators"
 import {
+  pointsPromotionConfigSchema,
+  stampsPromotionConfigSchema,
   tenantConfigSchema,
   walletConfigLocationsSchema,
   walletConfigSchema,
@@ -60,6 +62,26 @@ export type TenantConfigData = {
   planName: string | null
   planId: string | null
   walletConfig: WalletConfig | null
+  /**
+   * The active promotion makes something expire (stamps rewards or points):
+   * only then does the lock-screen "fecha relevante" option do anything.
+   */
+  hasExpiration: boolean
+}
+
+function promotionHasExpiration(
+  type: "stamps" | "points" | null,
+  config: Record<string, unknown> | null,
+): boolean {
+  if (type === "points") {
+    const parsed = pointsPromotionConfigSchema.safeParse(config ?? {})
+    return parsed.success && parsed.data.points.pointsExpiration.mode !== "never"
+  }
+  if (type === "stamps") {
+    const parsed = stampsPromotionConfigSchema.safeParse(config ?? {})
+    return parsed.success && (parsed.data.stamps.rewardExpirationDays ?? 0) > 0
+  }
+  return false
 }
 
 // ── Actions ─────────────────────────────────────────────────────────
@@ -106,6 +128,7 @@ export async function getTenantConfig(): Promise<ActionResult<TenantConfigData |
       data: {
         ...row,
         walletConfig: (row.walletConfig as WalletConfig) ?? null,
+        hasExpiration: promotionHasExpiration(tenant.promotionType, tenant.promotionConfig),
       },
     }
   } catch (err) {

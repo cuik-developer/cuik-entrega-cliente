@@ -14,6 +14,7 @@ const VISIT_MESSAGES: Record<string, string> = {
   CLIENT_ARCHIVED: "Cliente archivado: su pase ya no es válido",
   AMOUNT_REQUIRED: "El monto de compra es obligatorio",
   BELOW_MINIMUM_PURCHASE: "El monto de compra es menor al mínimo requerido",
+  NO_POINTS_EARNED: "Esta compra no alcanza para sumar puntos: no se registró la visita",
 }
 
 const REDEEM_MESSAGES: Record<string, string> = {

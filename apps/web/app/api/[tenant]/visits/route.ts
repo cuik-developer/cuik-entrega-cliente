@@ -1,4 +1,4 @@
-import { and, clients, db, desc, eq, sql, visits } from "@cuik/db"
+import { and, clients, db, desc, eq, member, ne, organization, sql, user, visits } from "@cuik/db"
 import { registerVisitSchema, visitHistorySchema } from "@cuik/shared/validators"
 
 import {
@@ -43,12 +43,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       cashierId: session.user.id,
       locationId: parsed.data.locationId,
       amount: parsed.data.amount?.toString(),
+      source: parsed.data.source,
     })
 
     const status = result.code === "OK" ? 201 : 200
 
     // --- Fire-and-forget wallet update after successful visit (stamps + points) ---
-    if (result.code === "OK" || result.code === "ALREADY_SCANNED_TODAY") {
+    // Only a registered visit changes the pass; a rejected rescan pushes nothing.
+    if (result.code === "OK") {
       const isStamps = "stamps" in result
       triggerWalletUpdate({
         qrCode: parsed.data.qrCode,
@@ -109,21 +111,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     const { page, limit, offset } = parsePagination(url.searchParams)
     const { date, clientId } = queryParsed.data
 
-    // Role-based filtering: cajero sees only own visits
-    const userRole = (session.user as { role?: string }).role ?? "user"
-    const isAdmin = userRole === "admin" || userRole === "super_admin"
-
+    // Every member of the business (cashiers too) sees every visit: it helps
+    // the team check the operation and spot mistakes. Who registered each
+    // one is shown when more than one person works the till.
     const conditions = [eq(visits.tenantId, tenant.id)]
 
-    if (!isAdmin) {
-      conditions.push(eq(visits.registeredBy, session.user.id))
-    }
-
     if (date) {
-      const dayStart = new Date(`${date}T00:00:00.000Z`)
-      const dayEnd = new Date(`${date}T23:59:59.999Z`)
-      conditions.push(sql`${visits.createdAt} >= ${dayStart.toISOString()}`)
-      conditions.push(sql`${visits.createdAt} <= ${dayEnd.toISOString()}`)
+      // The day in the business's own time zone, not UTC: local midnight to
+      // local midnight, as UTC bounds (created_at stores UTC), so the
+      // (tenant_id, created_at) index still applies.
+      const tz = tenant.timezone ?? "America/Lima"
+      conditions.push(
+        sql`${visits.createdAt} >= ((${date}::date)::timestamp AT TIME ZONE ${tz}) AT TIME ZONE 'UTC'`,
+      )
+      conditions.push(
+        sql`${visits.createdAt} < ((${date}::date + 1)::timestamp AT TIME ZONE ${tz}) AT TIME ZONE 'UTC'`,
+      )
     }
 
     if (clientId) {
@@ -143,14 +146,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         visitNum: visits.visitNum,
         cycleNumber: visits.cycleNumber,
         source: visits.source,
+        points: visits.points,
+        amount: visits.amount,
         createdAt: visits.createdAt,
         registeredBy: visits.registeredBy,
+        registeredByName: user.name,
         clientId: visits.clientId,
         clientName: clients.name,
         clientLastName: clients.lastName,
       })
       .from(visits)
       .innerJoin(clients, eq(visits.clientId, clients.id))
+      .leftJoin(user, eq(user.id, visits.registeredBy))
       .where(and(...conditions))
       .orderBy(desc(visits.createdAt))
       .limit(limit)
@@ -161,8 +168,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       visitNum: r.visitNum,
       cycleNumber: r.cycleNumber,
       source: r.source,
+      points: r.points,
+      amount: r.amount,
       createdAt: r.createdAt,
       registeredBy: r.registeredBy,
+      registeredByName: r.registeredByName,
       client: {
         id: r.clientId,
         name: r.clientName,
@@ -170,8 +180,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       },
     }))
 
+    // Cashiers of this business: with two or more, each visit says who registered it.
+    const [{ people }] = await db
+      .select({ people: sql<number>`count(*)::int` })
+      .from(member)
+      .innerJoin(organization, eq(organization.id, member.organizationId))
+      .where(
+        and(
+          eq(organization.slug, tenant.slug), // cashiers are stored as "member" (see tenant-roles-shared)
+          ne(member.role, "owner"),
+          ne(member.role, "admin"),
+        ),
+      )
+
     return successResponse({
       data,
+      showRegisteredBy: people >= 2,
       pagination: paginationMeta(total, page, limit),
     })
   } catch (error) {
