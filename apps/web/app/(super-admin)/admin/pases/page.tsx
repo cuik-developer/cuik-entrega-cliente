@@ -369,9 +369,20 @@ export default function PasesPage() {
                                 Listo para publicar
                               </Badge>
                             )}
-                            {row.promotionActive && (
+                            {/* "Promo activa" only on what clients see; a draft linked to the
+                                active promotion is not live until it is published. */}
+                            {row.promotionActive && row.design.isActive && (
                               <Badge className="bg-emerald-500 text-white border-0 text-[10px]">
                                 Promo activa
+                              </Badge>
+                            )}
+                            {row.promotionActive && !row.design.isActive && (
+                              <Badge
+                                variant="outline"
+                                className="border-gray-200 text-gray-500 text-[10px]"
+                                title="Está vinculado a la promoción activa, pero no es el diseño publicado"
+                              >
+                                Vinculado a la promo activa
                               </Badge>
                             )}
                           </div>

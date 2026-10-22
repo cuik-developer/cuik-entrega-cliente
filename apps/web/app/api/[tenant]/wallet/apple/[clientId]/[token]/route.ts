@@ -112,7 +112,7 @@ export async function GET(
       return errorResponse("Invalid token", 401)
     }
 
-    // 5. Find pass design: prioritize active promotion's linked design, fallback to any published
+    // 5. Find pass design: published first (see below)
     let design: typeof passDesigns.$inferSelect | null = null
 
     // Try: find active promotion → its linked pass design
@@ -122,39 +122,22 @@ export async function GET(
       .where(and(eq(promotions.tenantId, tenant.id), eq(promotions.active, true)))
       .limit(1)
 
-    if (activePromo) {
-      const [linked] = await db
-        .select()
-        .from(passDesigns)
-        .where(
-          and(
-            eq(passDesigns.tenantId, tenant.id),
-            eq(passDesigns.promotionId, activePromo.id),
-            eq(passDesigns.type, "apple_store"),
-          ),
-        )
-        // Several designs can share the promotion (old versions, drafts):
-        // the published one wins, then the most recently edited.
-        .orderBy(desc(passDesigns.isActive), desc(passDesigns.updatedAt))
-        .limit(1)
-      design = linked ?? null
-    }
-
-    // Fallback: any published apple_store design
-    if (!design) {
-      const [published] = await db
-        .select()
-        .from(passDesigns)
-        .where(
-          and(
-            eq(passDesigns.tenantId, tenant.id),
-            eq(passDesigns.isActive, true),
-            eq(passDesigns.type, "apple_store"),
-          ),
-        )
-        .limit(1)
-      design = published ?? null
-    }
+    // What the client sees is the PUBLISHED design, as in registration, Google
+    // and pass updates. Among published designs the one linked to the active
+    // promotion wins; a linked draft is used only when the tenant has not
+    // published any Apple design yet.
+    const candidates = await db
+      .select()
+      .from(passDesigns)
+      .where(and(eq(passDesigns.tenantId, tenant.id), eq(passDesigns.type, "apple_store")))
+      .orderBy(desc(passDesigns.updatedAt))
+    const linkedToPromo = (d: (typeof candidates)[number]) =>
+      activePromo != null && d.promotionId === activePromo.id
+    design =
+      candidates.find((d) => d.isActive && linkedToPromo(d)) ??
+      candidates.find((d) => d.isActive) ??
+      candidates.find(linkedToPromo) ??
+      null
 
     if (!design) return errorResponse("No active pass design found", 404)
 

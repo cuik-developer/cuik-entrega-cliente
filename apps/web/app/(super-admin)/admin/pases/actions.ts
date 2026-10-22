@@ -421,8 +421,16 @@ export async function publishDesign(
     return { success: false, error: "El canvas esta vacio — guarda el diseño antes de publicar" }
   }
 
-  // Validate: the linked promotion must be active to publish this pass
-  if (design.promotionId) {
+  // The published design is linked to the tenant's active promotion, so the
+  // "Promo activa" badge and the stamps count always match what clients see.
+  const [activePromo] = await db
+    .select({ id: promotions.id })
+    .from(promotions)
+    .where(and(eq(promotions.tenantId, design.tenantId), eq(promotions.active, true)))
+    .limit(1)
+
+  // Validate: without an active promotion, the linked one must be active
+  if (!activePromo && design.promotionId) {
     const [promo] = await db
       .select({ active: promotions.active, rewardValue: promotions.rewardValue })
       .from(promotions)
@@ -457,6 +465,7 @@ export async function publishDesign(
     .set({
       isActive: true,
       version: newVersion,
+      ...(activePromo ? { promotionId: activePromo.id } : {}),
       // Published: the "listo para publicar" mark from Equipo Cuik is done.
       reviewRequestedAt: null,
       reviewRequestedBy: null,
