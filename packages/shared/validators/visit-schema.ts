@@ -1,10 +1,18 @@
 import { z } from "zod"
 
+// Messages are shown to the cashier as-is (visits route), so they are in Spanish.
 export const registerVisitSchema = z.object({
-  qrCode: z.string().trim().min(1, "QR code is required"),
-  locationId: z.string().uuid().optional(),
+  qrCode: z
+    .string({ required_error: "Falta el código QR", invalid_type_error: "Código QR inválido" })
+    .trim()
+    .min(1, "Falta el código QR"),
+  locationId: z.string().uuid("Sucursal inválida").optional(),
   // Typo guard at the till: 100000 instead of 100.00 would give 1000x the points.
-  amount: z.number().positive().max(10000, "El monto máximo por compra es S/ 10,000").optional(),
+  amount: z
+    .number({ invalid_type_error: "Ingresa un monto válido" })
+    .positive("El monto debe ser mayor a 0")
+    .max(10000, "El monto máximo por compra es S/ 10,000")
+    .optional(),
 })
 
 export type RegisterVisitInput = z.infer<typeof registerVisitSchema>

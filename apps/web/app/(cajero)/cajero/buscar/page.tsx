@@ -177,7 +177,7 @@ export default function BuscarPage() {
   const [selected, setSelected] = useState<ClientDetail | null>(null)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
   // Intermediate gift reached by the visit just registered (cleared on the next action).
-  const [giftDue, setGiftDue] = useState<{ at: number; label: string } | null>(null)
+  const [giftDue, setGiftDue] = useState<{ at: number; label: string; count: number } | null>(null)
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
   const [confirmItemId, setConfirmItemId] = useState<string | null>(null)
   const [redeemingItemId, setRedeemingItemId] = useState<string | null>(null)
@@ -309,10 +309,15 @@ export default function BuscarPage() {
       setActionMsg(message)
 
       if (code === "OK") {
-        const ms = json.data?.milestone as { kind?: string; at?: number; label?: string } | null
+        const ms = json.data?.milestone as {
+          kind?: string
+          at?: number
+          label?: string
+          count?: number
+        } | null
         setGiftDue(
           ms?.kind === "reached" && typeof ms.at === "number" && ms.label
-            ? { at: ms.at, label: ms.label }
+            ? { at: ms.at, label: ms.label, count: ms.count ?? 1 }
             : null,
         )
         setPurchaseAmount("")
@@ -633,7 +638,7 @@ function ClientDetailView({
   isPoints: boolean
   catalogItems: CatalogItem[]
   actionMsg: string | null
-  giftDue: { at: number; label: string } | null
+  giftDue: { at: number; label: string; count: number } | null
   requiresAmount: boolean
   stampsMinAmount: number | null
   purchaseAmount: string
@@ -719,7 +724,9 @@ function ClientDetailView({
           <Gift className="w-5 h-5 text-emerald-600 flex-shrink-0" />
           <div>
             <div className="font-semibold text-emerald-800 text-sm">
-              Entregar premio de la visita {giftDue.at}
+              {giftDue.count > 1
+                ? "Entregar premios"
+                : `Entregar premio de la visita ${giftDue.at}`}
             </div>
             <div className="text-emerald-700 text-sm">{giftDue.label}</div>
           </div>

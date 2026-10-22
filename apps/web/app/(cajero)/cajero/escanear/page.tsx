@@ -46,7 +46,7 @@ type StampsVisitApiResult = {
   pendingRewards: number
   rewardValue?: string | null
   /** Intermediate gift ("escalera") reached or coming up on the next visit. */
-  milestone?: { kind: "next" | "reached"; at: number; label: string } | null
+  milestone?: { kind: "next" | "reached"; at: number; label: string; count?: number } | null
   /** Bonuses the rules engine applied (comma separated), e.g. a "hora x2" window. */
   bonusApplied?: string | null
 }
@@ -966,7 +966,9 @@ function SuccessStepView({
               <Gift className="w-5 h-5 text-emerald-600 flex-shrink-0" />
               <div>
                 <div className="font-semibold text-emerald-800 text-sm">
-                  Entregar premio de la visita {result.milestone.at}
+                  {(result.milestone.count ?? 1) > 1
+                    ? "Entregar premios"
+                    : `Entregar premio de la visita ${result.milestone.at}`}
                 </div>
                 <div className="text-emerald-700 text-sm">{result.milestone.label}</div>
               </div>

@@ -18,6 +18,8 @@ export type MilestoneNotice = {
   /** Position in the cycle the notice is about (1-based). */
   at: number
   label: string
+  /** How many gifts this notice covers (a x2/x3 visit can cross several). */
+  count: number
   /** Text shown on the pass and pushed to the phone; null when that notice is disabled. */
   message: string | null
 }
@@ -90,6 +92,7 @@ export function milestoneNoticeFor(
       // gift's own message, so allMilestoneMessages recognises it and the
       // next visit clears it like any other milestone notice.
       label: pick.label,
+      count: ordered.length,
       message: renderMilestoneMessage(settings.milestoneMessages.reached, last),
     }
   }
@@ -101,6 +104,7 @@ export function milestoneNoticeFor(
     kind: "next",
     at: next.at,
     label: next.label,
+    count: 1,
     message: renderMilestoneMessage(settings.milestoneMessages.next, next),
   }
 }
