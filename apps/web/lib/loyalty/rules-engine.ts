@@ -69,13 +69,10 @@ export function evaluateStampRules(
     }
   }
 
-  // 4. Calculate stamps to earn
-  let stampsToEarn = 1
-  const bonusReasons: string[] = []
-
-  // 4a. Day/hour bonus: legacy double-stamps days (x2) or a bonus window
-  //     (x2..x5), read in the tenant's local time. The highest one applies,
-  //     they never stack with each other.
+  // 4. Stamps to earn: every bonus that applies to this visit is a candidate
+  //    (bonus window up to x3, legacy double-stamps day x2, birthday bonus),
+  //    read in the tenant's local time. Only the highest one applies: bonuses
+  //    never multiply each other (birthday x2 + hora especial x3 = x3).
   const clock = localClockAt(context.visitDate, context.timezone)
   const visitHour = Math.floor(clock.minutes / 60)
   const legacyDouble = config.accumulation.doubleStampsDays.some(
@@ -83,21 +80,34 @@ export function evaluateStampRules(
       dsd.dayOfWeek === clock.weekday && visitHour >= dsd.startHour && visitHour <= dsd.endHour,
   )
   const stampsWindow = activeBonusWindow(config.accumulation.bonusWindows, clock)
-  if (stampsWindow && stampsWindow.multiplier >= (legacyDouble ? 2 : 0)) {
-    stampsToEarn *= stampsWindow.multiplier
-    bonusReasons.push(bonusWindowReason(stampsWindow))
-  } else if (legacyDouble) {
-    stampsToEarn *= 2
-    bonusReasons.push("double_stamps_day")
-  }
+  const best = highestBonus([
+    isBirthdayVisit(context) && {
+      multiplier: config.accumulation.birthdayBonus,
+      reason: "birthday_bonus",
+    },
+    stampsWindow && {
+      multiplier: stampsWindow.multiplier,
+      reason: bonusWindowReason(stampsWindow),
+    },
+    legacyDouble && { multiplier: 2, reason: "double_stamps_day" },
+  ])
 
-  // 4b. Check birthday bonus
-  if (config.accumulation.birthdayBonus > 0 && isBirthdayVisit(context)) {
-    stampsToEarn *= config.accumulation.birthdayBonus
-    bonusReasons.push("birthday_bonus")
+  return {
+    eligible: true,
+    stampsToEarn: best?.multiplier ?? 1,
+    bonusReasons: best ? [best.reason] : [],
   }
+}
 
-  return { eligible: true, stampsToEarn, bonusReasons }
+type Bonus = { multiplier: number; reason: string }
+
+/** The bonus with the highest multiplier above x1; on a tie the first listed wins (birthday is listed first, so a tie credits the birthday). */
+function highestBonus(candidates: (Bonus | false | null | undefined)[]): Bonus | null {
+  let best: Bonus | null = null
+  for (const c of candidates) {
+    if (c && c.multiplier > 1 && (!best || c.multiplier > best.multiplier)) best = c
+  }
+  return best
 }
 
 /**
@@ -162,26 +172,29 @@ export function evaluatePointsRules(
   const bonusReasons: string[] = []
   const basePoints = pointsToEarn
 
-  // 6. Day/hour multiplier in the tenant's local time: legacy multipliers
-  //    (first match) or a bonus window, whichever is higher. No stacking.
+  // 6. Multiplier in the tenant's local time: bonus window, legacy day/hour
+  //    multiplier (first match) or birthday multiplier. Only the highest one
+  //    applies; they never multiply each other.
   const clock = localClockAt(context.visitDate, context.timezone)
   const visitHour = Math.floor(clock.minutes / 60)
   const legacy = config.accumulation.pointsMultipliers.find(
     (pm) => pm.dayOfWeek === clock.weekday && visitHour >= pm.startHour && visitHour <= pm.endHour,
   )
   const pointsWindow = activeBonusWindow(config.accumulation.bonusWindows, clock)
-  if (pointsWindow && pointsWindow.multiplier >= (legacy?.multiplier ?? 0)) {
-    pointsToEarn = Math.floor(pointsToEarn * pointsWindow.multiplier)
-    bonusReasons.push(bonusWindowReason(pointsWindow))
-  } else if (legacy) {
-    pointsToEarn = Math.floor(pointsToEarn * legacy.multiplier)
-    bonusReasons.push(`${legacy.multiplier}x_multiplier`)
-  }
-
-  // 7. Apply birthday multiplier (stacks multiplicatively with day multiplier)
-  if (config.accumulation.birthdayMultiplier > 1 && isBirthdayVisit(context)) {
-    pointsToEarn = Math.floor(pointsToEarn * config.accumulation.birthdayMultiplier)
-    bonusReasons.push("birthday_multiplier")
+  const best = highestBonus([
+    isBirthdayVisit(context) && {
+      multiplier: config.accumulation.birthdayMultiplier,
+      reason: "birthday_multiplier",
+    },
+    pointsWindow && {
+      multiplier: pointsWindow.multiplier,
+      reason: bonusWindowReason(pointsWindow),
+    },
+    legacy && { multiplier: legacy.multiplier, reason: `${legacy.multiplier}x_multiplier` },
+  ])
+  if (best) {
+    pointsToEarn = Math.floor(pointsToEarn * best.multiplier)
+    bonusReasons.push(best.reason)
   }
 
   return { eligible: true, pointsToEarn, basePoints, bonusReasons }

@@ -292,6 +292,10 @@ export type WalletUpdateParams = {
     classId: string
     accessToken: string
     qrValue: string
+    /** "ID de miembro" on the back. The object update is a full PUT: omitting it wipes it. */
+    clientDni?: string
+    /** Image module of the pass details. Same full-PUT caveat. */
+    imageUrl?: string
   } | null
   // Promotion type — affects loyaltyPoints label in Google Wallet. Defaults to "stamps".
   promotionType?: "stamps" | "points" | "discount" | "coupon" | "subscription"

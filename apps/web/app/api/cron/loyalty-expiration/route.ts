@@ -9,6 +9,7 @@ import {
   getPointsExpiryConfig,
   runPointsExpirationWarning,
 } from "@/lib/loyalty/expire-points"
+import { expireDueRewards } from "@/lib/loyalty/expire-rewards"
 
 /**
  * POST /api/cron/loyalty-expiration[?force=1]
@@ -18,6 +19,8 @@ import {
  *   2. at the configured local hour, pushes the "about to expire" warning.
  * Tenants with policy "never" are skipped entirely. `force=1` ignores the
  * hour check of the warning, for manual runs.
+ * Before that, for every tenant: stamps rewards past their expiry date stop
+ * counting as pending and their passes are redrawn (expireDueRewards).
  */
 export async function POST(request: Request) {
   try {
@@ -25,6 +28,9 @@ export async function POST(request: Request) {
       return errorResponse("Unauthorized", 401)
     }
     const force = new URL(request.url).searchParams.get("force") === "1"
+
+    // Never throws: a failure here must not stop the points run below.
+    const rewardsExpired = await runRewardExpiry()
 
     const rows = await db
       .select({
@@ -93,9 +99,25 @@ export async function POST(request: Request) {
       }
     }
 
-    return successResponse({ tenants: rows.length, expired, warned, skipped, errors })
+    return successResponse({
+      tenants: rows.length,
+      expired,
+      warned,
+      skipped,
+      errors,
+      rewardsExpired,
+    })
   } catch (error) {
     console.error("[POST /api/cron/loyalty-expiration]", error)
     return errorResponse("Internal server error", 500)
+  }
+}
+
+async function runRewardExpiry() {
+  try {
+    return await expireDueRewards()
+  } catch (err) {
+    console.error("[cron/loyalty-expiration] expireDueRewards failed:", err)
+    return { error: err instanceof Error ? err.message : String(err) }
   }
 }

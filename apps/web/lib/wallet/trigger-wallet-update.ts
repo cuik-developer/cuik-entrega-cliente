@@ -4,6 +4,7 @@ import {
   clients,
   db,
   eq,
+  passAssets,
   passDesigns,
   passInstances,
   promotions,
@@ -29,6 +30,7 @@ import { formatExpiry } from "@/lib/loyalty/expiration"
 import { allMilestoneMessages } from "@/lib/loyalty/milestones"
 import { nextExpiration } from "@/lib/loyalty/points-lots"
 import { apnsClientCertFor } from "@/lib/wallet/apns-client-cert"
+import { pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
 import { stripCompleted } from "@/lib/wallet/strip-layout"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 
@@ -257,6 +259,8 @@ export async function triggerWalletUpdate(ctx: {
     classId: string
     accessToken: string
     qrValue: string
+    clientDni?: string
+    imageUrl?: string
   } | null = null
 
   const googleConfig = validateGoogleEnv()
@@ -265,11 +269,15 @@ export async function triggerWalletUpdate(ctx: {
       const accessToken = await getGoogleAccessToken(googleConfig)
       const classId = buildGoogleClassId(googleConfig.issuerId, ctx.tenantName)
 
+      // The object update is a full PUT: resend the DNI ("ID de miembro") and
+      // the details image, or the first visit wipes what registration set.
+      const details = instance.googleObjectId ? await googleObjectDetails(ctx) : {}
       googleParams = {
         issuerId: googleConfig.issuerId,
         classId,
         accessToken,
         qrValue: serialNumber,
+        ...details,
       }
     } catch (err) {
       console.error("[Wallet:Google] Failed to get access token for visit update:", err)
@@ -376,4 +384,37 @@ async function notifyGoogleMilestone(p: {
     `[Wallet:Update] serial=${p.serialNumber} milestone google=${msg.ok ? (msg.notified ? "notified" : "text-only") : "failed"}`,
     msg.ok ? "" : msg.error,
   )
+}
+
+/** DNI and hero image of the Google object, as registration and publish send them. */
+async function googleObjectDetails(ctx: {
+  clientId: string
+  tenantId: string
+}): Promise<{ clientDni?: string; imageUrl?: string }> {
+  const [[client], designs] = await Promise.all([
+    db.select({ dni: clients.dni }).from(clients).where(eq(clients.id, ctx.clientId)).limit(1),
+    db
+      .select({ id: passDesigns.id, type: passDesigns.type })
+      .from(passDesigns)
+      .where(and(eq(passDesigns.tenantId, ctx.tenantId), eq(passDesigns.isActive, true))),
+  ])
+  // Same design choice as register-client and publish: the Google design when
+  // there is one, else the only active design. Never mix two designs' assets.
+  const design = designs.find((d) => d.type === "google_loyalty") ?? designs[0]
+  const assetRows = design
+    ? await db
+        .select({ url: passAssets.url, type: passAssets.type })
+        .from(passAssets)
+        .where(eq(passAssets.designId, design.id))
+    : []
+  const hero = pickGoogleHeroAsset(assetRows)
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? ""
+  return {
+    clientDni: client?.dni ?? undefined,
+    imageUrl: hero?.url
+      ? hero.url.startsWith("http")
+        ? hero.url
+        : `${baseUrl}${hero.url}`
+      : undefined,
+  }
 }

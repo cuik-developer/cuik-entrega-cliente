@@ -29,7 +29,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     const body = await request.json()
     const parsed = registerVisitSchema.safeParse(body)
     if (!parsed.success) {
-      return errorResponse("Validation failed", 400, parsed.error.flatten())
+      // First issue as the message: the cashier sees "El monto máximo…", not "Validation failed".
+      return errorResponse(
+        parsed.error.errors[0]?.message ?? "Validation failed",
+        400,
+        parsed.error.flatten(),
+      )
     }
 
     const result = await registerVisit({

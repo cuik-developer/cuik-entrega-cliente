@@ -1,7 +1,24 @@
-import { and, asc, clients, count, db, desc, eq, or, rewards, sql, tenants, visits } from "@cuik/db"
+import {
+  and,
+  asc,
+  clients,
+  count,
+  db,
+  desc,
+  eq,
+  gt,
+  or,
+  rewards,
+  sql,
+  tenants,
+  visits,
+} from "@cuik/db"
 
 import { updateRewardsRedeemed } from "../analytics/update-visits-daily"
 import type { RedeemResult } from "./types"
+
+/** A second stamps redeem of the same client inside this window is a double tap / retry. */
+export const DUPLICATE_REWARD_REDEEM_WINDOW_SECONDS = 10
 
 export async function redeemReward(params: {
   qrCode: string
@@ -14,11 +31,13 @@ export async function redeemReward(params: {
   let resolvedLocationId: string | null = null
 
   const result = await db.transaction(async (tx) => {
-    // 1. Find client
+    // 1. Find client with FOR UPDATE lock: two redeems of the same client run
+    //    one after the other, so the duplicate check below sees the first one.
     const clientRows = await tx
       .select()
       .from(clients)
       .where(and(eq(clients.qrCode, qrCode), eq(clients.tenantId, tenantId)))
+      .for("update")
       .limit(1)
 
     const client = clientRows[0]
@@ -33,6 +52,41 @@ export async function redeemReward(params: {
         code:
           client.status === "blocked" ? ("CLIENT_BLOCKED" as const) : ("CLIENT_ARCHIVED" as const),
         remainingPendingRewards: 0,
+      }
+    }
+
+    // 1b. Double tap / retry: a reward of this client redeemed seconds ago is
+    //     the same request, not a second redemption (same guard as points).
+    const recent = await tx
+      .select({ id: rewards.id })
+      .from(rewards)
+      .where(
+        and(
+          eq(rewards.clientId, client.id),
+          eq(rewards.tenantId, tenantId),
+          eq(rewards.status, "redeemed"),
+          // JS date, like redeemedAt is written: no dependence on the DB session timezone.
+          gt(
+            rewards.redeemedAt,
+            new Date(Date.now() - DUPLICATE_REWARD_REDEEM_WINDOW_SECONDS * 1000),
+          ),
+        ),
+      )
+      .limit(1)
+    if (recent[0]) {
+      const [pending] = await tx
+        .select({ cnt: count() })
+        .from(rewards)
+        .where(
+          and(
+            eq(rewards.clientId, client.id),
+            eq(rewards.tenantId, tenantId),
+            eq(rewards.status, "pending"),
+          ),
+        )
+      return {
+        code: "DUPLICATE_REDEEM" as const,
+        remainingPendingRewards: pending?.cnt ?? 0,
       }
     }
 

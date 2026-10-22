@@ -60,10 +60,10 @@ describe("milestoneNoticeFor", () => {
     ).toMatchObject({ kind: "reached", at: 4 })
   })
 
-  it("takes the highest milestone when several are crossed at once", () => {
+  it("reports every milestone crossed at once, led by the highest", () => {
     expect(
       milestoneNoticeFor(settings, MAX, { before: 3, after: 9, wrapped: false }),
-    ).toMatchObject({ kind: "reached", at: 8 })
+    ).toMatchObject({ kind: "reached", at: 8, label: "Café (visita 4) y Postre (visita 8)" })
   })
 
   it("never teases the next cycle on the visit that completes the card", () => {
@@ -120,5 +120,45 @@ describe("allMilestoneMessages / describeMilestones", () => {
   it("describes the ladder", () => {
     expect(describeMilestones(settings, MAX)).toBe("4: Café · 8: Postre")
     expect(describeMilestones({ ...settings, milestones: [] }, MAX)).toBeNull()
+  })
+})
+
+describe("milestoneNoticeFor: one visit crossing several gifts", () => {
+  const ladder = {
+    milestones: [
+      { at: 3, label: "Café" },
+      { at: 4, label: "Postre" },
+    ],
+    milestoneMessages: { ...DEFAULT_MILESTONE_MESSAGES },
+  }
+  it("reports both gifts of a x2 visit going 2 -> 4", () => {
+    const n = milestoneNoticeFor(ladder, 6, { before: 2, after: 4, wrapped: false })
+    expect(n).toMatchObject({
+      kind: "reached",
+      at: 4,
+      label: "Café (visita 3) y Postre (visita 4)",
+    })
+  })
+  it("keeps the plain label when only one gift is crossed", () => {
+    const n = milestoneNoticeFor(ladder, 6, { before: 2, after: 3, wrapped: false })
+    expect(n).toMatchObject({ kind: "reached", at: 3, label: "Café" })
+  })
+  it("orders old-cycle gifts before new-cycle ones when the card wraps", () => {
+    const n = milestoneNoticeFor(
+      {
+        ...ladder,
+        milestones: [
+          { at: 1, label: "Galleta" },
+          { at: 4, label: "Postre" },
+        ],
+      },
+      5,
+      { before: 3, after: 1, wrapped: true },
+    )
+    expect(n).toMatchObject({
+      kind: "reached",
+      at: 1,
+      label: "Postre (visita 4) y Galleta (visita 1)",
+    })
   })
 })

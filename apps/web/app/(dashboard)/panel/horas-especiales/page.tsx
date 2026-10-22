@@ -1,4 +1,4 @@
-import { type BonusWindow, bonusWindowSchema } from "@cuik/shared/validators"
+import { BONUS_MAX_MULTIPLIER, type BonusWindow, bonusWindowSchema } from "@cuik/shared/validators"
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
@@ -30,11 +30,13 @@ export default async function HorasEspecialesPage() {
   }
 
   const accumulation = (tenant.promotionConfig?.accumulation ?? {}) as Record<string, unknown>
-  // Same lenient read as the rules engine: a malformed entry is skipped, not fatal.
+  // Same lenient read as the rules engine: a malformed or over-cap entry is
+  // skipped (the till never applies it), so the list shows only what is real.
   const stored = Array.isArray(accumulation.bonusWindows) ? accumulation.bonusWindows : []
+  const max = BONUS_MAX_MULTIPLIER[tenant.promotionType]
   const windows: BonusWindow[] = stored.flatMap((w) => {
     const parsed = bonusWindowSchema.safeParse(w)
-    return parsed.success ? [parsed.data] : []
+    return parsed.success && parsed.data.multiplier <= max ? [parsed.data] : []
   })
 
   const role = tenant.readOnly ? null : await getMemberRole(session.user.id, tenant.organizationId)

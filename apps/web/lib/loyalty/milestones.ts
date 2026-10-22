@@ -50,8 +50,10 @@ export function renderMilestoneMessage(template: string, milestone: StampMilesto
  * add several stamps (bonus) and may complete the cycle, in which case `after`
  * is the position in the NEW cycle and `wrapped` is true.
  *
- * Priority: the highest milestone crossed by this visit ("reached"), otherwise
- * the milestone sitting exactly one visit ahead ("next"). A visit that completes
+ * Priority: the milestones crossed by this visit ("reached"), otherwise the
+ * milestone sitting exactly one visit ahead ("next"). A x2/x3 visit can cross
+ * several gifts at once: all of them are reported in one notice, so none is
+ * forgotten at the till ("Café (visita 3) y Postre (visita 4)"). A visit that completes
  * the cycle never says "next" for the new cycle: the client is busy with the
  * real reward.
  */
@@ -68,16 +70,27 @@ export function milestoneNoticeFor(
     wrapped ? m.at <= after || m.at > before : m.at > before && m.at <= after,
   )
   if (crossed.length > 0) {
-    // When the cycle wrapped, the ones in the new cycle are the most recent.
-    const inNewCycle = wrapped ? crossed.filter((m) => m.at <= after) : []
-    const pick = inNewCycle.at(-1) ?? crossed.at(-1)
-    if (pick) {
-      return {
-        kind: "reached",
-        at: pick.at,
-        label: pick.label,
-        message: renderMilestoneMessage(settings.milestoneMessages.reached, pick),
-      }
+    // In delivery order: when the cycle wrapped, the old cycle's gifts come
+    // first and the new cycle's last (the most recent one leads `at`).
+    const ordered = wrapped
+      ? [...crossed.filter((m) => m.at > before), ...crossed.filter((m) => m.at <= after)]
+      : crossed
+    const last = ordered[ordered.length - 1]
+    const pick: StampMilestone =
+      ordered.length === 1
+        ? last
+        : {
+            at: last.at,
+            label: ordered.map((m) => `${m.label} (visita ${m.at})`).join(" y "),
+          }
+    return {
+      kind: "reached",
+      at: pick.at,
+      // The cashier gets every gift in `label`; the pass text is the last
+      // gift's own message, so allMilestoneMessages recognises it and the
+      // next visit clears it like any other milestone notice.
+      label: pick.label,
+      message: renderMilestoneMessage(settings.milestoneMessages.reached, last),
     }
   }
 

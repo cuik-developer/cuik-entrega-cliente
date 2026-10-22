@@ -83,6 +83,8 @@ async function updateGoogle(
       classId: params.google.classId,
       serialNumber: params.serialNumber,
       clientName: params.clientName,
+      clientDni: params.google.clientDni,
+      imageUrl: params.google.imageUrl,
       stampsInCycle: params.stampsInCycle,
       maxVisits: params.maxVisits,
       totalVisits: params.totalVisits,

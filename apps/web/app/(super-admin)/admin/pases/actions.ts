@@ -783,6 +783,7 @@ async function propagateGooglePasses(
       tier: clients.tier,
       birthday: clients.birthday,
       customData: clients.customData,
+      status: clients.status,
     })
     .from(clients)
     .where(
@@ -793,6 +794,15 @@ async function propagateGooglePasses(
     )
 
   const clientMap = new Map(clientRows.map((c) => [c.id, c]))
+
+  // Archived clients are never pushed (they may come back as they were), and a
+  // deleted client's pass is only refreshed to stay EXPIRED, never re-created.
+  const targets = googleInstances.filter((i) => {
+    const status = clientMap.get(i.clientId)?.status
+    if (status === "archived") return false
+    if (status === "deleted") return !!i.googleObjectId
+    return true
+  })
 
   // Load pending rewards count per client
   const rewardRows = await db
@@ -819,8 +829,8 @@ async function propagateGooglePasses(
   let failCount = 0
   const fields = designFieldsRaw as DesignFieldsRaw
 
-  for (let i = 0; i < googleInstances.length; i += GOOGLE_PROPAGATE_BATCH) {
-    const batch = googleInstances.slice(i, i + GOOGLE_PROPAGATE_BATCH)
+  for (let i = 0; i < targets.length; i += GOOGLE_PROPAGATE_BATCH) {
+    const batch = targets.slice(i, i + GOOGLE_PROPAGATE_BATCH)
 
     const results = await Promise.allSettled(
       batch.map(async (instance) => {
@@ -890,6 +900,8 @@ async function propagateGooglePasses(
           designFields: resolvedDesignFields,
           imageUrl: heroImageUrl,
           promotionType,
+          pointsBalance: client.pointsBalance,
+          expired: client.status === "deleted",
         })
 
         // If this instance had no Google object before, save the new objectId + saveUrl
@@ -927,13 +939,13 @@ async function propagateGooglePasses(
     }
 
     // Small delay between batches to avoid rate limiting
-    if (i + GOOGLE_PROPAGATE_BATCH < googleInstances.length) {
+    if (i + GOOGLE_PROPAGATE_BATCH < targets.length) {
       await new Promise((resolve) => setTimeout(resolve, GOOGLE_PROPAGATE_DELAY_MS))
     }
   }
 
   console.info(
-    `[publishDesign:Google] Propagation complete: ${successCount} succeeded, ${failCount} failed out of ${googleInstances.length} instances`,
+    `[publishDesign:Google] Propagation complete: ${successCount} succeeded, ${failCount} failed out of ${targets.length} instances (${googleInstances.length - targets.length} archived/deleted skipped)`,
   )
 }
 

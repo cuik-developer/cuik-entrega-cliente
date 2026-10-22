@@ -148,6 +148,10 @@ function resolveVisitMessage(
     }
     case "ALREADY_SCANNED_TODAY":
       return "Ya fue escaneado hoy"
+    case "MAX_VISITS_REACHED":
+      return "Ya alcanzó el máximo de visitas de hoy"
+    case "LOCATION_NOT_ALLOWED":
+      return "Esta sucursal no participa en la promoción"
     case "NO_ACTIVE_PROMOTION":
       return "No hay promocion activa en este comercio"
     case "CLIENT_NOT_FOUND":
@@ -177,6 +181,8 @@ export default function BuscarPage() {
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
   const [confirmItemId, setConfirmItemId] = useState<string | null>(null)
   const [redeemingItemId, setRedeemingItemId] = useState<string | null>(null)
+  // Stamps reward redeem in flight: a double tap must not spend two rewards.
+  const [redeemingReward, setRedeemingReward] = useState(false)
   const [purchaseAmount, setPurchaseAmount] = useState("")
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null)
 
@@ -320,7 +326,8 @@ export default function BuscarPage() {
   }
 
   const handleRedeem = async () => {
-    if (!selected?.client.qrCode) return
+    if (!selected?.client.qrCode || redeemingReward) return
+    setRedeemingReward(true)
     setActionMsg(null)
 
     try {
@@ -336,11 +343,15 @@ export default function BuscarPage() {
         await selectClient(selected.client.id)
       } else if (json.data?.code === "NO_PENDING_REWARD") {
         setActionMsg("No tiene premios pendientes")
+      } else if (json.data?.code === "DUPLICATE_REDEEM") {
+        setActionMsg("Ese premio ya se canjeó hace unos segundos")
       } else {
         setActionMsg(json.error || "Error al canjear")
       }
     } catch {
       setActionMsg("Error de conexion")
+    } finally {
+      setRedeemingReward(false)
     }
   }
 
@@ -438,6 +449,7 @@ export default function BuscarPage() {
           locationRequired={locations.length > 0 && !selectedLocationId}
           handleVisit={handleVisit}
           handleRedeem={handleRedeem}
+          redeemingReward={redeemingReward}
           handleRedeemCatalogItem={handleRedeemCatalogItem}
           confirmItemId={confirmItemId}
           setConfirmItemId={setConfirmItemId}
@@ -610,6 +622,7 @@ function ClientDetailView({
   locationRequired,
   handleVisit,
   handleRedeem,
+  redeemingReward,
   handleRedeemCatalogItem,
   confirmItemId,
   setConfirmItemId,
@@ -629,6 +642,7 @@ function ClientDetailView({
   locationRequired: boolean
   handleVisit: () => void
   handleRedeem: () => void
+  redeemingReward: boolean
   handleRedeemCatalogItem: (id: string) => void
   confirmItemId: string | null
   setConfirmItemId: (id: string | null) => void
@@ -729,8 +743,9 @@ function ClientDetailView({
             size="sm"
             className="ml-auto bg-amber-500 text-white text-xs h-8"
             onClick={handleRedeem}
+            disabled={redeemingReward}
           >
-            Canjear
+            {redeemingReward ? "Canjeando…" : "Canjear"}
           </Button>
         </div>
       )}

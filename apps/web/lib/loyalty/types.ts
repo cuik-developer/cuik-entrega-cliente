@@ -62,6 +62,7 @@ export type VisitResultCode =
 export type RedeemResultCode =
   | "OK"
   | "NO_PENDING_REWARD"
+  | "DUPLICATE_REDEEM"
   | "CLIENT_NOT_FOUND"
   | "REWARD_EXPIRED"
   | "CLIENT_BLOCKED"

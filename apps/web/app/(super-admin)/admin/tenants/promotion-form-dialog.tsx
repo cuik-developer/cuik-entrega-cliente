@@ -13,7 +13,7 @@ import {
 } from "@cuik/shared/validators"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Plus, Trash2 } from "lucide-react"
-import { useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { Controller, useFieldArray, useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { z } from "zod"
@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 
-import { createPromotion, updatePromotion } from "./promotion-actions"
+import { countStampsInProgress, createPromotion, updatePromotion } from "./promotion-actions"
 
 // ── Form schema ─────────────────────────────────────────────────────
 
@@ -149,14 +149,25 @@ const formSchema = z
     expAnchor: z.string().nullable(),
   })
   .superRefine((data, ctx) => {
-    if ((data.expMode === "rolling" || data.expMode === "interval") && !data.expDays) {
+    // Expiration is only shown (and sent) for points; stamps must not be
+    // blocked by hidden fields.
+    const checksExpiration = data.type === "points"
+    if (
+      checksExpiration &&
+      (data.expMode === "rolling" || data.expMode === "interval") &&
+      !data.expDays
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Indica cada cuantos dias",
         path: ["expDays"],
       })
     }
-    if (data.expMode === "interval" && !/^\d{4}-\d{2}-\d{2}$/.test(data.expAnchor ?? "")) {
+    if (
+      checksExpiration &&
+      data.expMode === "interval" &&
+      !/^\d{4}-\d{2}-\d{2}$/.test(data.expAnchor ?? "")
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Indica la fecha de inicio del ciclo",
@@ -517,6 +528,27 @@ export function PromotionFormDialog({
 
   const milestoneRows = useFieldArray({ control, name: "milestones" })
   const maxVisitsValue = watch("maxVisits")
+
+  // Clients mid-card when editing a stamps promotion: changing "visitas para
+  // premio" reshuffles their cards, so the form warns before saving.
+  const [inProgress, setInProgress] = useState<number | null>(null)
+  const editingStampsMax = open && isEdit && promotionType === "stamps" ? promotion.maxVisits : null
+  useEffect(() => {
+    setInProgress(null)
+    if (!editingStampsMax) return
+    let cancelled = false
+    countStampsInProgress(tenantId, editingStampsMax).then((r) => {
+      if (!cancelled && r.success) setInProgress(r.data.count)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [tenantId, editingStampsMax])
+  const maxVisitsChanged =
+    !!editingStampsMax &&
+    Number.isFinite(maxVisitsValue) &&
+    !!maxVisitsValue &&
+    maxVisitsValue !== editingStampsMax
   const selectedType = watch("type")
   const hasExpiration = watch("hasExpiration")
   const hasMinimumPurchase = watch("hasMinimumPurchase")
@@ -543,7 +575,6 @@ export function PromotionFormDialog({
           stamps: {
             maxVisitsPerDay: values.maxVisitsPerDay,
             rewardExpirationDays: values.hasExpiration ? values.rewardExpirationDays : null,
-            stampsExpiration: buildExpirationPolicy(values),
             milestones: values.milestones
               .filter((m) => Number.isFinite(m.at))
               .map((m) => ({ at: m.at, label: m.label.trim() }))
@@ -553,14 +584,9 @@ export function PromotionFormDialog({
               reached: values.milestoneReached.trim(),
             },
           },
+          // Only the fields this form edits: the server keeps every other
+          // accumulation setting (horas especiales, birthday bonus…) as it is.
           accumulation: {
-            bonusOnRegistration: 0,
-            doubleStampsDays: [] as {
-              dayOfWeek: number
-              startHour: number
-              endHour: number
-            }[],
-            birthdayBonus: 0,
             minimumPurchaseAmount: values.hasMinimumPurchase ? values.minimumPurchaseAmount : null,
           },
         }
@@ -611,9 +637,7 @@ export function PromotionFormDialog({
             pointsExpiration: buildExpirationPolicy(values),
           },
           accumulation: {
-            pointsMultipliers: [],
             birthdayMultiplier: values.birthdayMultiplier ?? 1,
-            bonusPointsOnRegistration: 0,
           },
         }
 
@@ -711,6 +735,13 @@ export function PromotionFormDialog({
                 />
                 {errors.maxVisits && (
                   <p className="text-sm text-red-600">{errors.maxVisits.message}</p>
+                )}
+                {maxVisitsChanged && !!inProgress && (
+                  <p className="text-xs text-ent-warn">
+                    Hay {inProgress} {inProgress === 1 ? "cliente" : "clientes"} con sellos en
+                    progreso: al cambiar de {promotion?.maxVisits} a {maxVisitsValue} visitas sus
+                    tarjetas se reacomodan (la posición se calcula sobre el nuevo total).
+                  </p>
                 )}
               </div>
 
@@ -1065,78 +1096,109 @@ export function PromotionFormDialog({
             </div>
           )}
 
-          {/* Expiration of points / stamps */}
-          <div className="space-y-3 rounded-[4px] border border-ent-line p-3">
-            <div className="space-y-2">
-              <Label>
-                {selectedType === "points" ? "Vencimiento de puntos" : "Vencimiento de sellos"}
-              </Label>
-              <Controller
-                control={control}
-                name="expMode"
-                render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="never">No vencen</SelectItem>
-                      <SelectItem value="rolling">Cada compra vence a los X dias</SelectItem>
-                      <SelectItem value="weekly">Se reinician un dia fijo de la semana</SelectItem>
-                      <SelectItem value="monthly">Se reinician un dia fijo del mes</SelectItem>
-                      <SelectItem value="interval">Se reinician cada X dias</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-              <p className="text-xs text-ent-fg-3">
-                El corte es al final del dia elegido, en la hora local del comercio.
-              </p>
-            </div>
-
-            {(expMode === "rolling" || expMode === "interval") && (
+          {/* Expiration of points. Stamps expiration stays hidden (and is never
+              sent) until something applies it: migration 0023 is still pending. */}
+          {selectedType === "points" && (
+            <div className="space-y-3 rounded-[4px] border border-ent-line p-3">
               <div className="space-y-2">
-                <Label htmlFor="expDays">
-                  {expMode === "rolling" ? "Dias de vigencia" : "Cada cuantos dias"}
+                <Label>
+                  {selectedType === "points" ? "Vencimiento de puntos" : "Vencimiento de sellos"}
                 </Label>
-                <Input
-                  id="expDays"
-                  type="number"
-                  min={1}
-                  max={730}
-                  placeholder="7"
-                  {...register("expDays", { valueAsNumber: true })}
+                <Controller
+                  control={control}
+                  name="expMode"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="never">No vencen</SelectItem>
+                        <SelectItem value="rolling">Cada compra vence a los X dias</SelectItem>
+                        <SelectItem value="weekly">
+                          Se reinician un dia fijo de la semana
+                        </SelectItem>
+                        <SelectItem value="monthly">Se reinician un dia fijo del mes</SelectItem>
+                        <SelectItem value="interval">Se reinician cada X dias</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 />
-                {errors.expDays && <p className="text-sm text-red-600">{errors.expDays.message}</p>}
+                <p className="text-xs text-ent-fg-3">
+                  El corte es al final del dia elegido, en la hora local del comercio.
+                </p>
               </div>
-            )}
 
-            {expMode === "interval" && (
-              <div className="space-y-2">
-                <Label htmlFor="expAnchor">Fecha de inicio del ciclo</Label>
-                <Input id="expAnchor" type="date" {...register("expAnchor")} />
-                {errors.expAnchor && (
-                  <p className="text-sm text-red-600">{errors.expAnchor.message}</p>
-                )}
-              </div>
-            )}
+              {(expMode === "rolling" || expMode === "interval") && (
+                <div className="space-y-2">
+                  <Label htmlFor="expDays">
+                    {expMode === "rolling" ? "Dias de vigencia" : "Cada cuantos dias"}
+                  </Label>
+                  <Input
+                    id="expDays"
+                    type="number"
+                    min={1}
+                    max={730}
+                    placeholder="7"
+                    {...register("expDays", { valueAsNumber: true })}
+                  />
+                  {errors.expDays && (
+                    <p className="text-sm text-red-600">{errors.expDays.message}</p>
+                  )}
+                </div>
+              )}
 
-            {(expMode === "weekly" || expMode === "monthly") && (
-              <div className="grid grid-cols-2 gap-2">
-                {expMode === "monthly" && (
-                  <div className="space-y-2">
-                    <Label>Semana</Label>
+              {expMode === "interval" && (
+                <div className="space-y-2">
+                  <Label htmlFor="expAnchor">Fecha de inicio del ciclo</Label>
+                  <Input id="expAnchor" type="date" {...register("expAnchor")} />
+                  {errors.expAnchor && (
+                    <p className="text-sm text-red-600">{errors.expAnchor.message}</p>
+                  )}
+                </div>
+              )}
+
+              {(expMode === "weekly" || expMode === "monthly") && (
+                <div className="grid grid-cols-2 gap-2">
+                  {expMode === "monthly" && (
+                    <div className="space-y-2">
+                      <Label>Semana</Label>
+                      <Controller
+                        control={control}
+                        name="expOrdinal"
+                        render={({ field }) => (
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Object.entries(ORDINAL_LABELS).map(([k, label]) => (
+                                <SelectItem key={k} value={k}>
+                                  {label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                    </div>
+                  )}
+                  <div className={expMode === "monthly" ? "space-y-2" : "space-y-2 col-span-2"}>
+                    <Label>Dia</Label>
                     <Controller
                       control={control}
-                      name="expOrdinal"
+                      name="expWeekday"
                       render={({ field }) => (
-                        <Select value={field.value} onValueChange={field.onChange}>
+                        <Select
+                          value={String(field.value)}
+                          onValueChange={(v) => field.onChange(Number(v))}
+                        >
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {Object.entries(ORDINAL_LABELS).map(([k, label]) => (
-                              <SelectItem key={k} value={k}>
+                            {WEEKDAY_LABELS.map((label, i) => (
+                              <SelectItem key={label} value={String(i)}>
                                 {label}
                               </SelectItem>
                             ))}
@@ -1145,41 +1207,17 @@ export function PromotionFormDialog({
                       )}
                     />
                   </div>
-                )}
-                <div className={expMode === "monthly" ? "space-y-2" : "space-y-2 col-span-2"}>
-                  <Label>Dia</Label>
-                  <Controller
-                    control={control}
-                    name="expWeekday"
-                    render={({ field }) => (
-                      <Select
-                        value={String(field.value)}
-                        onValueChange={(v) => field.onChange(Number(v))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {WEEKDAY_LABELS.map((label, i) => (
-                            <SelectItem key={label} value={String(i)}>
-                              {label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
                 </div>
-              </div>
-            )}
+              )}
 
-            {expMode !== "never" && (
-              <p className="text-xs text-ent-fg-3 border-t border-ent-line pt-3">
-                El aviso por push antes del vencimiento lo configura el comercio en Panel &gt;
-                Campanas.
-              </p>
-            )}
-          </div>
+              {expMode !== "never" && (
+                <p className="text-xs text-ent-fg-3 border-t border-ent-line pt-3">
+                  El aviso por push antes del vencimiento lo configura el comercio en Panel &gt;
+                  Campanas.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Minimum purchase amount — stamps only */}
           {selectedType === "stamps" && (

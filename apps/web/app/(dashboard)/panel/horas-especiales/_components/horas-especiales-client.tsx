@@ -1,13 +1,29 @@
 "use client"
 
-import { type BonusWindow, bonusWindowSchema, minutesOfClock } from "@cuik/shared/validators"
-import { Clock, Loader2, Pencil, Plus, Trash2, Zap } from "lucide-react"
+import {
+  activeBonusWindow,
+  type BonusWindow,
+  bonusWindowSchema,
+  minutesOfClock,
+} from "@cuik/shared/validators"
+import { Loader2, Pencil, Plus, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
-import { Badge } from "@/components/ui/badge"
+import {
+  type ChipTone,
+  DataTable,
+  Notice,
+  PageHeader,
+  Panel,
+  PanelHeader,
+  PanelMessage,
+  StatusChip,
+  Td,
+  Th,
+  Tr,
+} from "@/components/admin/enterprise"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -122,6 +138,16 @@ function isPast(w: BonusWindow, clock: ReturnType<typeof nowClock>) {
   return w.kind === "date" && !!w.date && w.date < clock.date
 }
 
+function statusOf(
+  w: BonusWindow,
+  clock: ReturnType<typeof nowClock> | null,
+): { tone: ChipTone; label: string } {
+  if (!w.active) return { tone: "mute", label: "Pausada" }
+  if (clock && isPast(w, clock)) return { tone: "mute", label: "Ya pasó" }
+  if (clock && isLiveNow(w, clock)) return { tone: "ok", label: "Activa ahora" }
+  return { tone: "info", label: "Programada" }
+}
+
 function emptyWindow(timezone: string): BonusWindow {
   return {
     // randomUUID only exists in secure contexts (https / localhost).
@@ -186,120 +212,134 @@ export function HorasEspecialesClient({ initialWindows, promotionType, timezone,
     }
   }
 
-  const live = clock ? windows.find((w) => isLiveNow(w, clock)) : undefined
+  // Same pick as the till: the highest live window, not the first listed.
+  const live = clock ? activeBonusWindow(windows, clock) : null
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
-            <Zap className="w-5 h-5 text-amber-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-extrabold text-foreground">Horas especiales</h1>
-            <p className="text-sm text-muted-foreground">
-              Días y horas en que cada visita suma el doble o el triple de {unit}.
-            </p>
-          </div>
-        </div>
-        {canEdit && (
-          <Button onClick={() => setEditing(emptyWindow(timezone))} disabled={windows.length >= 20}>
-            <Plus className="w-4 h-4 mr-1" /> Nueva hora especial
-          </Button>
-        )}
-      </div>
+    <div className="space-y-3">
+      <PageHeader
+        crumbs={[{ label: "Inicio", href: "/panel" }, { label: "Horas especiales" }]}
+        title="Horas especiales"
+        subtitle={`Días y horas en que cada visita suma el doble o el triple de ${unit}.`}
+        actions={
+          canEdit && (
+            <Button
+              size="sm"
+              className="h-7 text-[12px] gap-1.5"
+              onClick={() => setEditing(emptyWindow(timezone))}
+              disabled={windows.length >= 20}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Nueva hora especial
+            </Button>
+          )
+        }
+      />
 
       {live && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <strong>Activa ahora:</strong> cada visita suma ×{live.multiplier} {unit}
+        <Notice tone="ok">
+          <span className="font-medium text-ent-fg">Activa ahora:</span> cada visita suma ×
+          {live.multiplier} {unit}
           {live.label ? ` (${live.label})` : ""}.
-        </div>
+        </Notice>
       )}
 
-      {windows.length === 0 ? (
-        <Card>
-          <CardContent className="py-10 text-center text-sm text-muted-foreground space-y-2">
-            <p>Todavía no tienes horas especiales.</p>
-            <p>
+      <Panel>
+        <PanelHeader title={`Horas configuradas (${windows.length})`} />
+        {windows.length === 0 ? (
+          <PanelMessage>
+            <span>Todavía no tienes horas especiales.</span>
+            <span>
               Ejemplo: «Lunes de mañana», cada lunes de 8:00 a. m. a 12:00 p. m., ×2 {unit}. Úsalas
               para llenar las horas flojas.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-3">
-          {windows.map((w) => {
-            const now = clock ? isLiveNow(w, clock) : false
-            const past = clock ? isPast(w, clock) : false
-            return (
-              <Card key={w.id} className={!w.active || past ? "opacity-60" : undefined}>
-                <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-                  <div className="space-y-1">
-                    <CardTitle className="text-base flex flex-wrap items-center gap-2">
-                      <span className="rounded-md bg-amber-100 px-2 py-0.5 text-amber-700">
-                        ×{w.multiplier}
-                      </span>
+            </span>
+          </PanelMessage>
+        ) : (
+          <DataTable>
+            <thead>
+              <tr>
+                <Th>Nombre</Th>
+                <Th align="right" className="hidden sm:table-cell">
+                  Bono
+                </Th>
+                <Th>Cuándo</Th>
+                <Th>Estado</Th>
+                {canEdit && <Th align="right">Acciones</Th>}
+              </tr>
+            </thead>
+            <tbody>
+              {windows.map((w) => {
+                const status = statusOf(w, clock)
+                return (
+                  <Tr key={w.id}>
+                    <Td className="font-medium text-ent-fg">
                       {w.label || `${w.multiplier === 2 ? "Doble" : `×${w.multiplier}`} de ${unit}`}
-                      {now && <Badge className="bg-emerald-600">Activa ahora</Badge>}
-                      {past && <Badge variant="secondary">Ya pasó</Badge>}
-                      {!w.active && <Badge variant="secondary">Pausada</Badge>}
-                    </CardTitle>
-                    <CardDescription className="flex items-center gap-1.5 first-letter:uppercase">
-                      <Clock className="w-3.5 h-3.5 shrink-0" />
+                    </Td>
+                    <Td align="right" className="hidden sm:table-cell font-semibold text-ent-fg">
+                      ×{w.multiplier}
+                    </Td>
+                    <Td className="whitespace-normal text-ent-fg-2 first-letter:uppercase">
                       {describeWhen(w)}
-                    </CardDescription>
-                  </div>
-                  {canEdit && (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Switch
-                        checked={w.active}
-                        disabled={saving}
-                        aria-label={w.active ? "Pausar" : "Activar"}
-                        onCheckedChange={(active) =>
-                          persist(
-                            windows.map((x) => (x.id === w.id ? { ...x, active } : x)),
-                            active ? "Hora especial activada" : "Hora especial pausada",
-                          )
-                        }
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Editar"
-                        onClick={() =>
-                          setEditing({ ...w, date: w.date ?? nowClock(timezone).date })
-                        }
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Eliminar"
-                        disabled={saving}
-                        onClick={() =>
-                          persist(
-                            windows.filter((x) => x.id !== w.id),
-                            "Hora especial eliminada",
-                          )
-                        }
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  )}
-                </CardHeader>
-              </Card>
-            )
-          })}
-        </div>
-      )}
+                    </Td>
+                    <Td>
+                      <StatusChip tone={status.tone}>{status.label}</StatusChip>
+                    </Td>
+                    {canEdit && (
+                      <Td align="right">
+                        <div className="inline-flex items-center gap-1">
+                          <Switch
+                            checked={w.active}
+                            disabled={saving}
+                            aria-label={w.active ? "Pausar" : "Activar"}
+                            onCheckedChange={(active) =>
+                              persist(
+                                windows.map((x) => (x.id === w.id ? { ...x, active } : x)),
+                                active ? "Hora especial activada" : "Hora especial pausada",
+                              )
+                            }
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            aria-label="Editar"
+                            onClick={() =>
+                              setEditing({ ...w, date: w.date ?? nowClock(timezone).date })
+                            }
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            aria-label="Eliminar"
+                            disabled={saving}
+                            onClick={() =>
+                              persist(
+                                windows.filter((x) => x.id !== w.id),
+                                "Hora especial eliminada",
+                              )
+                            }
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </Td>
+                    )}
+                  </Tr>
+                )
+              })}
+            </tbody>
+          </DataTable>
+        )}
+      </Panel>
 
-      <p className="text-xs text-muted-foreground">
+      <Notice tone="info">
         Se aplica con la hora de tu local ({timezone}). Si dos horas especiales coinciden, vale la
-        más alta. El cajero ve el bono al escanear. Para avisar a tus clientes, crea un envío en
-        Campañas.
-      </p>
+        más alta, y nunca se multiplica con el bono de cumpleaños: vale el mayor. El cajero ve el
+        bono al escanear. Para avisar a tus clientes, crea un envío en Campañas.
+      </Notice>
 
       <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
         {editing && (

@@ -255,7 +255,7 @@ describe("evaluateStampRules", () => {
   })
 
   describe("combined rules", () => {
-    it("applies double stamps AND birthday bonus (multiplicative)", () => {
+    it("applies only the highest of double stamps and birthday bonus (no stacking)", () => {
       const config = makeConfig({
         accumulation: {
           ...DEFAULT_STAMPS_CONFIG.accumulation,
@@ -272,10 +272,9 @@ describe("evaluateStampRules", () => {
           clientBirthday: new Date("1990-03-15T12:00:00"),
         }),
       )
-      // 1 * 2 (double) * 3 (birthday) = 6
-      expect(result.stampsToEarn).toBe(6)
-      expect(result.bonusReasons).toContain("double_stamps_day")
-      expect(result.bonusReasons).toContain("birthday_bonus")
+      // max(2 double, 3 birthday) = 3
+      expect(result.stampsToEarn).toBe(3)
+      expect(result.bonusReasons).toEqual(["birthday_bonus"])
     })
 
     it("checks max visits before other rules", () => {
@@ -638,7 +637,7 @@ describe("bonus windows", () => {
     expect(evaluateStampRules(config, nextDay).stampsToEarn).toBe(1)
   })
 
-  it("uses the highest overlapping window and still stacks with the birthday bonus", () => {
+  it("uses the highest overlapping window and never stacks it with the birthday bonus", () => {
     const config = makeConfig({
       accumulation: {
         ...DEFAULT_STAMPS_CONFIG.accumulation,
@@ -658,7 +657,52 @@ describe("bonus windows", () => {
         clientBirthday: "1990-10-26",
       }),
     )
-    expect(result.stampsToEarn).toBe(6)
+    // birthday x2 + hora especial x3 = x3
+    expect(result.stampsToEarn).toBe(3)
+    expect(result.bonusReasons).toEqual(["Lunes de mañana (×3)"])
+  })
+
+  it("birthday wins when it is higher than the window", () => {
+    const config = makeConfig({
+      accumulation: {
+        ...DEFAULT_STAMPS_CONFIG.accumulation,
+        birthdayBonus: 3,
+        bonusWindows: [{ ...mondayMorning, multiplier: 2 }],
+      },
+    })
+    const result = evaluateStampRules(
+      config,
+      makeContext({
+        visitDate: MONDAY_0930_LIMA,
+        timezone: "America/Lima",
+        visitDateLocal: "2026-10-26",
+        clientBirthday: "1990-10-26",
+      }),
+    )
+    expect(result.stampsToEarn).toBe(3)
+    expect(result.bonusReasons).toEqual(["birthday_bonus"])
+  })
+
+  it("points: birthday and window never multiply each other", () => {
+    const config = {
+      ...DEFAULT_POINTS_CONFIG,
+      accumulation: {
+        ...DEFAULT_POINTS_CONFIG.accumulation,
+        birthdayMultiplier: 2,
+        bonusWindows: [{ ...mondayMorning, multiplier: 5 }],
+      },
+    }
+    const result = evaluatePointsRules(config, {
+      visitDate: MONDAY_0930_LIMA,
+      timezone: "America/Lima",
+      visitDateLocal: "2026-10-26",
+      clientBirthday: "1990-10-26",
+      clientTotalVisits: 0,
+      visitAmount: 10,
+      todayVisitCount: 0,
+    })
+    expect(result.pointsToEarn).toBe(50)
+    expect(result.bonusReasons).toEqual(["Lunes de mañana (×5)"])
   })
 
   it("multiplies points inside the window", () => {

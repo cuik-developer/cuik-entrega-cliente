@@ -6,6 +6,7 @@ import {
   db,
   desc,
   eq,
+  inArray,
   ne,
   passAssets,
   passDesigns,
@@ -17,6 +18,7 @@ import {
 import {
   type CreatePromotionInput,
   createPromotionSchema,
+  type ExpirationPolicy,
   pointsPromotionConfigSchema,
   stampsPromotionConfigSchema,
   type UpdatePointsPromotionInput,
@@ -54,21 +56,96 @@ async function requireSuperAdmin() {
 }
 
 /**
- * The accumulation block to merge. `.partial()` is shallow, so zod fills
- * `bonusWindows: []` when the caller did not send it; dropping it here keeps
- * the windows the business set up in its panel when the super-admin form saves.
+ * The keys of one config block the caller actually sent. `.partial()` is
+ * shallow, so zod fills every missing key of a sent block with its default
+ * (`bonusWindows: []`, `birthdayBonus: 0`, `milestones: []`…); keeping only
+ * what came in the raw input means a save never wipes settings that another
+ * screen (the merchant's horas especiales, a seed, SQL) put there.
  */
-function keepBonusWindows(
-  rawConfig: unknown,
-  parsedAccumulation: unknown,
-): Record<string, unknown> {
-  const parsed = { ...((parsedAccumulation as Record<string, unknown>) ?? {}) }
-  const raw = ((rawConfig as Record<string, unknown> | undefined)?.accumulation ?? {}) as Record<
-    string,
-    unknown
-  >
-  if (!("bonusWindows" in raw)) delete parsed.bonusWindows
-  return parsed
+function onlySent(rawBlock: unknown, parsedBlock: unknown): Record<string, unknown> {
+  const parsed = (parsedBlock ?? {}) as Record<string, unknown>
+  const raw = rawBlock && typeof rawBlock === "object" ? (rawBlock as Record<string, unknown>) : {}
+  // A key sent as `undefined` was not really sent (zod would fill its default).
+  return Object.fromEntries(Object.entries(parsed).filter(([key]) => raw[key] !== undefined))
+}
+
+/**
+ * Deep-merge of a promotion config: each block only takes the keys the caller
+ * actually sent (see onlySent), so defaults never overwrite stored data.
+ */
+function mergePromotionConfig(
+  existingConfig: unknown,
+  isPoints: boolean,
+  rawInput: unknown,
+  parsedInput: unknown,
+) {
+  const raw = (rawInput ?? {}) as Record<string, unknown>
+  const inputConfig = parsedInput as Record<string, unknown>
+  const block = (key: string) => onlySent(raw[key], inputConfig[key])
+  const currentConfig = isPoints
+    ? pointsPromotionConfigSchema.parse(existingConfig ?? {})
+    : stampsPromotionConfigSchema.parse(existingConfig ?? {})
+  const typeKey = isPoints ? "points" : "stamps"
+  return {
+    ...currentConfig,
+    ...inputConfig,
+    [typeKey]: {
+      ...(currentConfig as unknown as Record<string, Record<string, unknown>>)[typeKey],
+      ...block(typeKey),
+    },
+    accumulation: { ...currentConfig.accumulation, ...block("accumulation") },
+    tiers: { ...currentConfig.tiers, ...block("tiers") },
+    locationRestrictions: {
+      ...currentConfig.locationRestrictions,
+      ...block("locationRestrictions"),
+    },
+  }
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
+
+/**
+ * Locks every promotion of the promotion's tenant, always in id order, and
+ * returns the promotion itself. Two activations of the same tenant then queue
+ * up instead of deadlocking (each holding one row and waiting for the other),
+ * and a merchant save of the same row (horas especiales) waits too.
+ */
+async function lockTenantPromotions(tx: Tx, promotionId: string) {
+  const [ref] = await tx
+    .select({ tenantId: promotions.tenantId })
+    .from(promotions)
+    .where(eq(promotions.id, promotionId))
+  if (!ref) return null
+  await tx
+    .select({ id: promotions.id })
+    .from(promotions)
+    .where(eq(promotions.tenantId, ref.tenantId))
+    .orderBy(promotions.id)
+    .for("update")
+  const [existing] = await tx.select().from(promotions).where(eq(promotions.id, promotionId))
+  return existing ?? null
+}
+
+/** Turns off every other promotion of the tenant (rows already locked). */
+async function deactivateOthers(tx: Tx, tenantId: string, keepId: string) {
+  await tx
+    .update(promotions)
+    .set({ active: false })
+    .where(and(eq(promotions.tenantId, tenantId), ne(promotions.id, keepId)))
+}
+
+async function restampTenantLots(tx: Tx, tenantId: string, policy: ExpirationPolicy) {
+  const [tenant] = await tx
+    .select({ timezone: tenants.timezone })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1)
+  const { updated } = await restampOpenLots(tx, {
+    tenantId,
+    policy,
+    timezone: tenant?.timezone ?? "America/Lima",
+  })
+  return updated
 }
 
 // ── Actions ─────────────────────────────────────────────────────────
@@ -119,24 +196,8 @@ export async function createPromotion(
       })
       .returning({ id: promotions.id })
 
-    // A new points promotion born with an expiration policy: date the tenant's
-    // existing open lots too, otherwise points earned before it would never expire.
-    if (parsed.data.type === "points") {
-      const policy = pointsPromotionConfigSchema.parse(parsed.data.config ?? {}).points
-        .pointsExpiration
-      if (policy.mode !== "never") {
-        const [tz] = await db
-          .select({ timezone: tenants.timezone })
-          .from(tenants)
-          .where(eq(tenants.id, tenantId))
-          .limit(1)
-        await restampOpenLots(db, {
-          tenantId,
-          policy,
-          timezone: tz?.timezone ?? "America/Lima",
-        })
-      }
-    }
+    // Created inactive, so the tenant's points lots are left alone: they take
+    // this promotion's expiration policy when it is activated.
 
     // Auto-create a draft pass design linked to this promotion
     try {
@@ -287,117 +348,69 @@ export async function updatePromotion(
   if (error) return { success: false, error }
 
   try {
-    const [existing] = await db.select().from(promotions).where(eq(promotions.id, promotionId))
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one transaction validates, merges, activates, clears stale milestone texts and re-stamps points lots
+    return await db.transaction(async (tx): Promise<ActionResult<{ id: string }>> => {
+      // Read under a row lock: the merchant panel (horas especiales) writes the
+      // same config, and a merge built from a stale read would undo its save.
+      const existing = await lockTenantPromotions(tx, promotionId)
 
-    if (!existing) {
-      return { success: false, error: "Promocion no encontrada" }
-    }
-
-    const isPoints = existing.type === "points"
-
-    // Validate with the correct schema based on promotion type
-    const schema = isPoints ? updatePointsPromotionSchema : updatePromotionSchema
-    const parsed = schema.safeParse(input)
-    if (!parsed.success) {
-      return { success: false, error: parsed.error.errors[0].message }
-    }
-
-    // Deep-merge config if provided
-    let mergedConfig = existing.config
-    if (parsed.data.config) {
-      if (isPoints) {
-        const currentConfig = pointsPromotionConfigSchema.parse(existing.config ?? {})
-        const inputConfig = parsed.data.config as Record<string, unknown>
-        mergedConfig = {
-          ...currentConfig,
-          ...inputConfig,
-          points: {
-            ...currentConfig.points,
-            ...((inputConfig.points as Record<string, unknown>) ?? {}),
-          },
-          accumulation: {
-            ...currentConfig.accumulation,
-            ...keepBonusWindows(input.config, inputConfig.accumulation),
-          },
-          tiers: {
-            ...currentConfig.tiers,
-            ...((inputConfig.tiers as Record<string, unknown>) ?? {}),
-          },
-          locationRestrictions: {
-            ...currentConfig.locationRestrictions,
-            ...((inputConfig.locationRestrictions as Record<string, unknown>) ?? {}),
-          },
-        }
-      } else {
-        const currentConfig = stampsPromotionConfigSchema.parse(existing.config ?? {})
-        const inputConfig = parsed.data.config as Record<string, unknown>
-        // `.partial()` is shallow: a partial `stamps` block comes back from zod
-        // with defaults filled in (milestones: [], default messages). Only let
-        // those keys through when the caller actually sent them.
-        const rawStamps = ((input.config as Record<string, unknown> | undefined)?.stamps ??
-          {}) as Record<string, unknown>
-        const inputStamps = { ...((inputConfig.stamps as Record<string, unknown>) ?? {}) }
-        if (!("milestones" in rawStamps)) delete inputStamps.milestones
-        if (!("milestoneMessages" in rawStamps)) delete inputStamps.milestoneMessages
-        mergedConfig = {
-          ...currentConfig,
-          ...inputConfig,
-          stamps: {
-            ...currentConfig.stamps,
-            ...inputStamps,
-          },
-          accumulation: {
-            ...currentConfig.accumulation,
-            ...keepBonusWindows(input.config, inputConfig.accumulation),
-          },
-          tiers: {
-            ...currentConfig.tiers,
-            ...((inputConfig.tiers as Record<string, unknown>) ?? {}),
-          },
-          locationRestrictions: {
-            ...currentConfig.locationRestrictions,
-            ...((inputConfig.locationRestrictions as Record<string, unknown>) ?? {}),
-          },
-        }
+      if (!existing) {
+        return { success: false, error: "Promocion no encontrada" }
       }
-    }
 
-    const updateData: Record<string, unknown> = {}
-    if (parsed.data.maxVisits !== undefined) updateData.maxVisits = parsed.data.maxVisits
-    if (parsed.data.rewardValue !== undefined) updateData.rewardValue = parsed.data.rewardValue
-    if (parsed.data.active !== undefined) updateData.active = parsed.data.active
-    if (parsed.data.config) updateData.config = mergedConfig
+      const isPoints = existing.type === "points"
 
-    // Points expiration policy changed: re-stamp the tenant's open lots so the
-    // new rule applies from today (never retroactively). Same transaction as
-    // the promotion update: either both land or neither.
-    const before = isPoints
-      ? pointsPromotionConfigSchema.parse(existing.config ?? {}).points.pointsExpiration
-      : null
-    const after =
-      isPoints && parsed.data.config
+      // Validate with the correct schema based on promotion type
+      const schema = isPoints ? updatePointsPromotionSchema : updatePromotionSchema
+      const parsed = schema.safeParse(input)
+      if (!parsed.success) {
+        return { success: false, error: parsed.error.errors[0].message }
+      }
+
+      const mergedConfig = parsed.data.config
+        ? mergePromotionConfig(existing.config, isPoints, input.config, parsed.data.config)
+        : existing.config
+
+      const activating = parsed.data.active === true && !existing.active
+
+      const updateData: Record<string, unknown> = {}
+      if (parsed.data.maxVisits !== undefined) updateData.maxVisits = parsed.data.maxVisits
+      if (parsed.data.rewardValue !== undefined) updateData.rewardValue = parsed.data.rewardValue
+      if (parsed.data.active !== undefined) updateData.active = parsed.data.active
+      if (parsed.data.config) updateData.config = mergedConfig
+
+      // Points lots follow the policy of the ACTIVE promotion only (that is
+      // what the expiration cron applies). Re-stamp when the active one
+      // changes its policy or a points promotion becomes the active one; an
+      // inactive draft never touches the tenant's points.
+      const before = isPoints
+        ? pointsPromotionConfigSchema.parse(existing.config ?? {}).points.pointsExpiration
+        : null
+      const after = isPoints
         ? pointsPromotionConfigSchema.parse(mergedConfig ?? {}).points.pointsExpiration
         : null
-    const policyChanged = after !== null && JSON.stringify(before) !== JSON.stringify(after)
+      const policyChanged = JSON.stringify(before) !== JSON.stringify(after)
+      const activeAfter = parsed.data.active ?? existing.active
+      const restampPolicy = after && activeAfter && (activating || policyChanged) ? after : null
 
-    // Stamps: milestone notices sitting on passes were rendered with the old
-    // config. A later visit only clears a text it can recognise with the
-    // current config, so wipe the ones that stop matching here.
-    const staleMilestoneTexts: string[] = []
-    if (!isPoints && (parsed.data.config || parsed.data.maxVisits !== undefined)) {
-      const oldCfg = stampsPromotionConfigSchema.safeParse(existing.config ?? {})
-      const newCfg = stampsPromotionConfigSchema.safeParse(mergedConfig ?? {})
-      const oldMax = existing.maxVisits ?? 0
-      const newMax = parsed.data.maxVisits ?? oldMax
-      if (oldCfg.success && oldMax > 0) {
-        const keep = newCfg.success ? allMilestoneMessages(newCfg.data.stamps, newMax) : new Set()
-        for (const text of allMilestoneMessages(oldCfg.data.stamps, oldMax)) {
-          if (!keep.has(text)) staleMilestoneTexts.push(text)
+      // Stamps: milestone notices sitting on passes were rendered with the old
+      // config. A later visit only clears a text it can recognise with the
+      // current config, so wipe the ones that stop matching here.
+      const staleMilestoneTexts: string[] = []
+      if (!isPoints && (parsed.data.config || parsed.data.maxVisits !== undefined)) {
+        const oldCfg = stampsPromotionConfigSchema.safeParse(existing.config ?? {})
+        const newCfg = stampsPromotionConfigSchema.safeParse(mergedConfig ?? {})
+        const oldMax = existing.maxVisits ?? 0
+        const newMax = parsed.data.maxVisits ?? oldMax
+        if (oldCfg.success && oldMax > 0) {
+          const keep = newCfg.success ? allMilestoneMessages(newCfg.data.stamps, newMax) : new Set()
+          for (const text of allMilestoneMessages(oldCfg.data.stamps, oldMax)) {
+            if (!keep.has(text)) staleMilestoneTexts.push(text)
+          }
         }
       }
-    }
 
-    await db.transaction(async (tx) => {
+      if (activating) await deactivateOthers(tx, existing.tenantId, promotionId)
       await tx.update(promotions).set(updateData).where(eq(promotions.id, promotionId))
       if (staleMilestoneTexts.length > 0) {
         await tx
@@ -413,26 +426,15 @@ export async function updatePromotion(
             ),
           )
       }
-      if (policyChanged && after) {
-        const [tenant] = await tx
-          .select({ timezone: tenants.timezone })
-          .from(tenants)
-          .where(eq(tenants.id, existing.tenantId))
-          .limit(1)
-        const { updated } = await restampOpenLots(tx, {
-          tenantId: existing.tenantId,
-          policy: after,
-          timezone: tenant?.timezone ?? "America/Lima",
-        })
+      if (restampPolicy) {
+        const updated = await restampTenantLots(tx, existing.tenantId, restampPolicy)
         console.info(
-          `[updatePromotion] points expiration ${before?.mode} -> ${after.mode}, re-stamped ${updated} open lots (tenant ${existing.tenantId})`,
+          `[updatePromotion] points expiration ${before?.mode} -> ${restampPolicy.mode}, re-stamped ${updated} open lots (tenant ${existing.tenantId})`,
         )
       }
+
+      return { success: true, data: { id: promotionId } }
     })
-
-    // Data refresh handled by parent component
-
-    return { success: true, data: { id: promotionId } }
   } catch (err) {
     console.error("[updatePromotion]", err)
     return { success: false, error: "Error al actualizar la promocion" }
@@ -447,29 +449,69 @@ export async function togglePromotionActive(
   if (error) return { success: false, error }
 
   try {
-    const [existing] = await db.select().from(promotions).where(eq(promotions.id, promotionId))
+    return await db.transaction(async (tx): Promise<ActionResult<{ id: string }>> => {
+      const existing = await lockTenantPromotions(tx, promotionId)
 
-    if (!existing) {
-      return { success: false, error: "Promocion no encontrada" }
-    }
+      if (!existing) {
+        return { success: false, error: "Promocion no encontrada" }
+      }
 
-    if (active) {
-      // Deactivate all other promotions for this tenant
-      await db
-        .update(promotions)
-        .set({ active: false })
-        .where(and(eq(promotions.tenantId, existing.tenantId), ne(promotions.id, promotionId)))
-      // Activate this one
-      await db.update(promotions).set({ active: true }).where(eq(promotions.id, promotionId))
-    } else {
-      // Just deactivate
-      await db.update(promotions).set({ active: false }).where(eq(promotions.id, promotionId))
-    }
+      if (!active) {
+        await tx.update(promotions).set({ active: false }).where(eq(promotions.id, promotionId))
+        return { success: true, data: { id: promotionId } }
+      }
 
-    return { success: true, data: { id: promotionId } }
+      // One active promotion per tenant: everything else goes off in the same
+      // transaction, so there is never a moment with two.
+      await deactivateOthers(tx, existing.tenantId, promotionId)
+      await tx.update(promotions).set({ active: true }).where(eq(promotions.id, promotionId))
+
+      // Points lots follow the new active promotion's policy from now on.
+      if (existing.type === "points" && !existing.active) {
+        const policy = pointsPromotionConfigSchema.parse(existing.config ?? {}).points
+          .pointsExpiration
+        const updated = await restampTenantLots(tx, existing.tenantId, policy)
+        console.info(
+          `[togglePromotionActive] activated points promotion (${policy.mode}), re-stamped ${updated} open lots (tenant ${existing.tenantId})`,
+        )
+      }
+
+      return { success: true, data: { id: promotionId } }
+    })
   } catch (err) {
     console.error("[togglePromotionActive]", err)
     return { success: false, error: "Error al cambiar estado de la promocion" }
+  }
+}
+
+/**
+ * Clients of the tenant sitting mid-card with the current "visitas para
+ * premio": the promotion form warns that changing it reshuffles their cards.
+ */
+export async function countStampsInProgress(
+  tenantId: string,
+  maxVisits: number,
+): Promise<ActionResult<{ count: number }>> {
+  const { error } = await requireSuperAdmin()
+  if (error) return { success: false, error }
+  if (!Number.isInteger(maxVisits) || maxVisits < 1) return { success: true, data: { count: 0 } }
+
+  try {
+    const [row] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(clients)
+      .where(
+        and(
+          eq(clients.tenantId, tenantId),
+          // Only clients that still see their card (archived/deleted are hidden).
+          inArray(clients.status, ["active", "inactive", "blocked"]),
+          sql`${clients.totalVisits} % ${maxVisits} <> 0`,
+        ),
+      )
+    return { success: true, data: { count: row?.count ?? 0 } }
+  } catch (err) {
+    console.error("[countStampsInProgress]", err)
+    return { success: false, error: "Error al contar clientes" }
   }
 }
 

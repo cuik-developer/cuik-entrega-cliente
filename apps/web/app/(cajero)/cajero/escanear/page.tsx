@@ -224,6 +224,14 @@ function handleVisitResult(
     case "ALREADY_SCANNED_TODAY":
       setStep("already")
       break
+    case "MAX_VISITS_REACHED":
+      setErrorMsg("Ya alcanzó el máximo de visitas de hoy")
+      setStep("error")
+      break
+    case "LOCATION_NOT_ALLOWED":
+      setErrorMsg("Esta sucursal no participa en la promoción")
+      setStep("error")
+      break
     case "CLIENT_NOT_FOUND":
       setErrorMsg("Cliente no encontrado en este comercio")
       setStep("error")
@@ -501,7 +509,9 @@ export default function EscanearPage() {
         toast.error(
           json.data?.code === "NO_PENDING_REWARD"
             ? "Este cliente no tiene premios pendientes"
-            : "No se pudo canjear. Intenta de nuevo",
+            : json.data?.code === "DUPLICATE_REDEEM"
+              ? "Ese premio ya se canjeó hace unos segundos"
+              : "No se pudo canjear. Intenta de nuevo",
         )
       }
     } catch {

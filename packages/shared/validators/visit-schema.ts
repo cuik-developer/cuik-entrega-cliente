@@ -3,7 +3,8 @@ import { z } from "zod"
 export const registerVisitSchema = z.object({
   qrCode: z.string().trim().min(1, "QR code is required"),
   locationId: z.string().uuid().optional(),
-  amount: z.number().positive().optional(),
+  // Typo guard at the till: 100000 instead of 100.00 would give 1000x the points.
+  amount: z.number().positive().max(10000, "El monto máximo por compra es S/ 10,000").optional(),
 })
 
 export type RegisterVisitInput = z.infer<typeof registerVisitSchema>
