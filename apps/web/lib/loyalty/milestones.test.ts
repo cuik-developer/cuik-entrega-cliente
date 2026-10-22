@@ -137,6 +137,7 @@ describe("milestoneNoticeFor: one visit crossing several gifts", () => {
       kind: "reached",
       at: 4,
       label: "Café (visita 3) y Postre (visita 4)",
+      count: 2,
     })
   })
   it("keeps the plain label when only one gift is crossed", () => {

@@ -22,6 +22,11 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useTenant } from "@/hooks/use-tenant"
+import {
+  CONNECTION_ERROR,
+  redeemRejectionMessage,
+  visitRejectionMessage,
+} from "@/lib/loyalty/cashier-messages"
 
 type LocationOption = {
   id: string
@@ -224,40 +229,9 @@ function handleVisitResult(
     case "ALREADY_SCANNED_TODAY":
       setStep("already")
       break
-    case "MAX_VISITS_REACHED":
-      setErrorMsg("Ya alcanzó el máximo de visitas de hoy")
-      setStep("error")
-      break
-    case "LOCATION_NOT_ALLOWED":
-      setErrorMsg("Esta sucursal no participa en la promoción")
-      setStep("error")
-      break
-    case "CLIENT_NOT_FOUND":
-      setErrorMsg("Cliente no encontrado en este comercio")
-      setStep("error")
-      break
-    case "NO_ACTIVE_PROMOTION":
-      setErrorMsg("No hay promocion activa en este comercio")
-      setStep("error")
-      break
-    case "CLIENT_BLOCKED":
-      setErrorMsg("Cliente bloqueado: no puede registrar visitas ni canjear")
-      setStep("error")
-      break
-    case "CLIENT_ARCHIVED":
-      setErrorMsg("Cliente archivado: su pase ya no es válido")
-      setStep("error")
-      break
-    case "AMOUNT_REQUIRED":
-      setErrorMsg("El monto de compra es obligatorio para este tipo de promocion")
-      setStep("error")
-      break
-    case "BELOW_MINIMUM_PURCHASE":
-      setErrorMsg("El monto de compra es menor al minimo requerido")
-      setStep("error")
-      break
     default:
-      setErrorMsg("Respuesta inesperada del servidor")
+      // Every rejection, worded exactly like Buscar (lib/loyalty/cashier-messages).
+      setErrorMsg(visitRejectionMessage(data.code))
       setStep("error")
   }
 }
@@ -354,7 +328,7 @@ export default function EscanearPage() {
         const json = await res.json()
 
         if (!res.ok && !json.data) {
-          setErrorMsg(json.error || "Error al registrar visita")
+          setErrorMsg(visitRejectionMessage(json.data?.code, json.error))
           setStep("error")
           return
         }
@@ -362,7 +336,7 @@ export default function EscanearPage() {
         const data: VisitApiResult = json.data
         handleVisitResult(data, setResult, setStep, setErrorMsg)
       } catch {
-        setErrorMsg("Error de conexion — intenta de nuevo")
+        setErrorMsg(CONNECTION_ERROR)
         setStep("error")
       }
     },
@@ -506,16 +480,10 @@ export default function EscanearPage() {
         }
         toast.success("Premio canjeado")
       } else {
-        toast.error(
-          json.data?.code === "NO_PENDING_REWARD"
-            ? "Este cliente no tiene premios pendientes"
-            : json.data?.code === "DUPLICATE_REDEEM"
-              ? "Ese premio ya se canjeó hace unos segundos"
-              : "No se pudo canjear. Intenta de nuevo",
-        )
+        toast.error(redeemRejectionMessage(json.data?.code, json.error))
       }
     } catch {
-      toast.error("Error de conexión. Intenta de nuevo")
+      toast.error(CONNECTION_ERROR)
     } finally {
       redeemingRef.current = false
     }

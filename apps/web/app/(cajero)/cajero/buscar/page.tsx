@@ -16,6 +16,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useTenant } from "@/hooks/use-tenant"
 import { bonusLabel } from "@/lib/loyalty/bonus-label"
+import {
+  CONNECTION_ERROR,
+  redeemRejectionMessage,
+  visitRejectionMessage,
+} from "@/lib/loyalty/cashier-messages"
 import { expiryPhrase } from "@/lib/loyalty/expiry-label"
 
 type LocationOption = {
@@ -146,26 +151,8 @@ function resolveVisitMessage(
       }
       return `Visita registrada!${bonus}`
     }
-    case "ALREADY_SCANNED_TODAY":
-      return "Ya fue escaneado hoy"
-    case "MAX_VISITS_REACHED":
-      return "Ya alcanzó el máximo de visitas de hoy"
-    case "LOCATION_NOT_ALLOWED":
-      return "Esta sucursal no participa en la promoción"
-    case "NO_ACTIVE_PROMOTION":
-      return "No hay promocion activa en este comercio"
-    case "CLIENT_NOT_FOUND":
-      return "Cliente no encontrado"
-    case "CLIENT_BLOCKED":
-      return "Cliente bloqueado: no puede registrar visitas"
-    case "CLIENT_ARCHIVED":
-      return "Cliente archivado: su pase ya no es válido"
-    case "AMOUNT_REQUIRED":
-      return "El monto de compra es obligatorio"
-    case "BELOW_MINIMUM_PURCHASE":
-      return "El monto es menor al minimo requerido"
     default:
-      return (json.error as string) || "Error al registrar"
+      return visitRejectionMessage(code, json.error)
   }
 }
 
@@ -324,7 +311,7 @@ export default function BuscarPage() {
         await selectClient(selected.client.id)
       }
     } catch {
-      setActionMsg("Error de conexion")
+      setActionMsg(CONNECTION_ERROR)
     } finally {
       setSubmitting(false)
     }
@@ -346,15 +333,11 @@ export default function BuscarPage() {
       if (json.data?.code === "OK") {
         setActionMsg("Premio canjeado!")
         await selectClient(selected.client.id)
-      } else if (json.data?.code === "NO_PENDING_REWARD") {
-        setActionMsg("No tiene premios pendientes")
-      } else if (json.data?.code === "DUPLICATE_REDEEM") {
-        setActionMsg("Ese premio ya se canjeó hace unos segundos")
       } else {
-        setActionMsg(json.error || "Error al canjear")
+        setActionMsg(redeemRejectionMessage(json.data?.code, json.error))
       }
     } catch {
-      setActionMsg("Error de conexion")
+      setActionMsg(CONNECTION_ERROR)
     } finally {
       setRedeemingReward(false)
     }
@@ -369,16 +352,8 @@ export default function BuscarPage() {
         const points = data?.points as { deducted?: number } | undefined
         return `Canjeado: ${catalogItem?.name ?? "Premio"} (-${points?.deducted} pts)`
       }
-      case "INSUFFICIENT_POINTS":
-        return "Puntos insuficientes"
-      case "CATALOG_ITEM_NOT_FOUND":
-        return "Premio no encontrado"
-      case "CATALOG_ITEM_INACTIVE":
-        return "Premio no disponible"
-      case "DUPLICATE_REDEEM":
-        return "Este premio ya se canjeó hace un momento"
       default:
-        return (json.error as string) || "Error al canjear"
+        return redeemRejectionMessage(code, json.error)
     }
   }
 
@@ -411,7 +386,7 @@ export default function BuscarPage() {
         await selectClient(selected.client.id)
       }
     } catch {
-      setActionMsg("Error de conexion")
+      setActionMsg(CONNECTION_ERROR)
     } finally {
       setRedeemingItemId(null)
     }
