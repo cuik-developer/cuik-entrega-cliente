@@ -58,7 +58,8 @@ export function WalletSection({ initialData }: { initialData: TenantConfigData }
     startWalletTransition(async () => {
       const result = await saveWalletConfig(data)
       if (result.success) {
-        toast.success("Configuracion de wallet guardada")
+        if (result.data.googleWarning) toast.warning(result.data.googleWarning)
+        else toast.success("Configuracion de wallet guardada")
       } else {
         toast.error(result.error)
       }

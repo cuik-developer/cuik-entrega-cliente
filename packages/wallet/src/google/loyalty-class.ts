@@ -6,6 +6,12 @@ const LOYALTY_CLASS_API_BASE = "https://walletobjects.googleapis.com/walletobjec
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
+/**
+ * A place where Google Wallet may show its "nearby" notification for the
+ * passes of a class. Google decides radius, timing and text (max 10 per class).
+ */
+export type GoogleMerchantLocation = { latitude: number; longitude: number }
+
 export type EnsureLoyaltyClassParams = {
   accessToken: string
   issuerId: string
@@ -22,6 +28,8 @@ export type EnsureLoyaltyClassParams = {
    * (no callback) when the app is not served over HTTPS.
    */
   callbackUrl?: string
+  /** Nearby-notification locations; omitted or empty = none. */
+  merchantLocations?: GoogleMerchantLocation[]
 }
 
 export type EnsureLoyaltyClassResult =
@@ -138,6 +146,10 @@ export async function ensureLoyaltyClass(
     classPayload.callbackOptions = { url: callbackUrl }
   }
 
+  if (params.merchantLocations?.length) {
+    classPayload.merchantLocations = params.merchantLocations.slice(0, 10)
+  }
+
   try {
     const postResponse = await fetch(LOYALTY_CLASS_API_BASE, {
       method: "POST",
@@ -184,6 +196,8 @@ export type UpdateLoyaltyClassParams = {
   wideProgramLogoUrl?: string
   /** See EnsureLoyaltyClassParams.callbackUrl. PUT replaces the class, so it must be re-sent. */
   callbackUrl?: string
+  /** PUT replaces the class: locations not sent here are removed. */
+  merchantLocations?: GoogleMerchantLocation[]
 }
 
 export type UpdateLoyaltyClassResult =
@@ -241,6 +255,10 @@ export async function updateLoyaltyClass(
     classPayload.callbackOptions = { url: callbackUrl }
   }
 
+  if (params.merchantLocations?.length) {
+    classPayload.merchantLocations = params.merchantLocations.slice(0, 10)
+  }
+
   try {
     const putResponse = await fetch(`${LOYALTY_CLASS_API_BASE}/${classId}`, {
       method: "PUT",
@@ -268,6 +286,52 @@ export async function updateLoyaltyClass(
       ok: false,
       error: `[Wallet:Google] PUT loyalty class error: ${message}`,
     }
+  }
+}
+
+// ─── Merchant Locations ──────────────────────────────────────────────────
+
+export type SetClassMerchantLocationsParams = {
+  accessToken: string
+  classId: string
+  /** Full list to keep; an empty list removes the nearby notifications. */
+  merchantLocations: GoogleMerchantLocation[]
+}
+
+export type SetClassMerchantLocationsResult =
+  | { ok: true }
+  | { ok: false; error: string; status?: number }
+
+/**
+ * Replace only the `merchantLocations` of an existing class (PATCH), leaving
+ * its look untouched. A class that does not exist yet answers 404.
+ */
+export async function setClassMerchantLocations(
+  params: SetClassMerchantLocationsParams,
+): Promise<SetClassMerchantLocationsResult> {
+  try {
+    const response = await fetch(`${LOYALTY_CLASS_API_BASE}/${params.classId}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${params.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      // Google rejects writes carrying APPROVED: use UNDER_REVIEW (see registerCallbackUrl).
+      body: JSON.stringify({
+        merchantLocations: params.merchantLocations.slice(0, 10),
+        reviewStatus: "UNDER_REVIEW",
+      }),
+    })
+    if (response.ok) return { ok: true }
+    const errorText = await response.text().catch(() => "Unknown error")
+    return {
+      ok: false,
+      error: `[Wallet:Google] PATCH merchantLocations failed: ${response.status} ${errorText}`,
+      status: response.status,
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { ok: false, error: `[Wallet:Google] PATCH merchantLocations error: ${message}` }
   }
 }
 

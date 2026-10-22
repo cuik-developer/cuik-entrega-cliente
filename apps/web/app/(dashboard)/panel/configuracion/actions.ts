@@ -6,13 +6,18 @@ import type {
   WalletConfig,
   WalletConfigLocationsInput,
 } from "@cuik/shared/validators"
-import { tenantConfigSchema, walletConfigLocationsSchema } from "@cuik/shared/validators"
+import {
+  tenantConfigSchema,
+  walletConfigLocationsSchema,
+  walletConfigSchema,
+} from "@cuik/shared/validators"
 import { revalidatePath } from "next/cache"
 import { headers } from "next/headers"
 
 import { auth } from "@/lib/auth"
 import { getTenantForUser } from "@/lib/tenant-context"
 import { getMemberRole, isTenantAdmin } from "@/lib/tenant-roles"
+import { syncGoogleNearby } from "@/lib/wallet/google-nearby"
 
 /**
  * The tenant of a caller allowed to change its settings (owner or admin).
@@ -156,7 +161,7 @@ export async function saveTenantConfig(data: TenantConfigInput): Promise<ActionR
 
 export async function saveWalletConfig(
   data: WalletConfigLocationsInput,
-): Promise<ActionResult<void>> {
+): Promise<ActionResult<{ googleWarning: string | null }>> {
   const headersList = await headers()
   const session = await auth.api.getSession({ headers: headersList })
 
@@ -175,6 +180,13 @@ export async function saveWalletConfig(
       return { success: false, error: tenantError }
     }
 
+    const [before] = await db
+      .select({ walletConfig: tenants.walletConfig })
+      .from(tenants)
+      .where(eq(tenants.id, tenant.tenantId))
+      .limit(1)
+    const locationsBefore = walletConfigSchema.safeParse(before?.walletConfig ?? {}).data?.locations
+
     const result = await db
       .update(tenants)
       .set({
@@ -190,7 +202,19 @@ export async function saveWalletConfig(
 
     revalidatePath("/panel/campanas/geolocalizadas")
 
-    return { success: true, data: undefined }
+    // Android nearby notifications use the same locations: update the Google
+    // class only when the list actually changed (an empty list clears it).
+    let googleWarning: string | null = null
+    if (JSON.stringify(locationsBefore ?? []) !== JSON.stringify(parsed.data.locations)) {
+      const sync = await syncGoogleNearby(tenant.tenantName, walletConfigSchema.parse(parsed.data))
+      if (!sync.ok) {
+        console.error("[saveWalletConfig] Google nearby sync failed:", sync.error)
+        googleWarning =
+          "Se guardó, pero no se pudo actualizar Google Wallet. Intenta guardar de nuevo en unos minutos."
+      }
+    }
+
+    return { success: true, data: { googleWarning } }
   } catch (err) {
     console.error("[saveWalletConfig]", err)
     return { success: false, error: "Error al guardar configuracion de wallet" }

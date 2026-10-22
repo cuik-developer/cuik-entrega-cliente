@@ -45,6 +45,7 @@ import { z } from "zod"
 import { requireSuperAdminOrAction } from "@/lib/admin-access"
 import { apnsClientCertFor } from "@/lib/wallet/apns-client-cert"
 import { GOOGLE_HERO_ASSET_TYPE, pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
+import { googleMerchantLocations } from "@/lib/wallet/google-nearby"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 import { getDesignById, listDesignsByTenant } from "./queries"
 
@@ -632,9 +633,9 @@ async function propagateGooglePasses(
     serviceAccountJson: { client_email: string; private_key: string }
   },
 ) {
-  // 1. Get tenant name for classId
+  // 1. Get tenant name for classId (and wallet config for Android nearby locations)
   const [tenant] = await db
-    .select({ name: tenants.name })
+    .select({ name: tenants.name, walletConfig: tenants.walletConfig })
     .from(tenants)
     .where(eq(tenants.id, tenantId))
     .limit(1)
@@ -698,6 +699,8 @@ async function propagateGooglePasses(
   // 3. Get access token + ensure loyalty class
   const accessToken = await getGoogleAccessToken(googleConfig)
   const classId = buildGoogleClassId(googleConfig.issuerId, tenant.name)
+  // PUT replaces the whole class: re-send the nearby locations (empty when off).
+  const merchantLocations = googleMerchantLocations(tenant.walletConfig)
 
   const classResult = await ensureLoyaltyClass({
     accessToken,
@@ -709,6 +712,7 @@ async function propagateGooglePasses(
     hexBackgroundColor,
     heroImageUrl,
     wideProgramLogoUrl,
+    merchantLocations,
   })
 
   if (!classResult.ok) {
@@ -726,6 +730,7 @@ async function propagateGooglePasses(
     hexBackgroundColor,
     heroImageUrl,
     wideProgramLogoUrl,
+    merchantLocations,
   })
 
   if (!updateResult.ok) {
