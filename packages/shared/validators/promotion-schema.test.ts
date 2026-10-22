@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   activeBonusWindow,
   bonusWindowsSchema,
+  bonusWindowsSchemaFor,
   createPromotionSchema,
   describePointsRate,
   expirationPolicySchema,
@@ -210,6 +211,26 @@ describe("bonus windows", () => {
     })
     expect(config.accumulation.bonusWindows.map((w) => w.id)).toEqual(["w1"])
     expect(stampsPromotionConfigSchema.parse({}).accumulation.bonusWindows).toEqual([])
+  })
+
+  it("caps stamps windows at x3 and points windows at x10", () => {
+    expect(bonusWindowsSchemaFor("stamps").safeParse([{ ...weekly, multiplier: 3 }]).success).toBe(
+      true,
+    )
+    expect(bonusWindowsSchemaFor("stamps").safeParse([{ ...weekly, multiplier: 4 }]).success).toBe(
+      false,
+    )
+    expect(bonusWindowsSchemaFor("points").safeParse([{ ...weekly, multiplier: 10 }]).success).toBe(
+      true,
+    )
+    const stamps = stampsPromotionConfigSchema.parse({
+      accumulation: { bonusWindows: [{ ...weekly, multiplier: 5 }] },
+    })
+    expect(stamps.accumulation.bonusWindows).toEqual([])
+    const points = pointsPromotionConfigSchema.parse({
+      accumulation: { bonusWindows: [{ ...weekly, multiplier: 10 }] },
+    })
+    expect(points.accumulation.bonusWindows).toHaveLength(1)
   })
 
   it("picks the highest active window at a local moment", () => {

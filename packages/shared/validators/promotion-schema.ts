@@ -89,7 +89,7 @@ export const bonusWindowSchema = z
       .default(null),
     start: clockTimeSchema,
     end: clockTimeSchema,
-    multiplier: z.number().int().min(2).max(5),
+    multiplier: z.number().int().min(2).max(10),
     active: z.boolean().default(true),
   })
   .superRefine((w, ctx) => {
@@ -117,18 +117,44 @@ export type BonusWindow = z.infer<typeof bonusWindowSchema>
 /** What the panel saves: every window must be valid. */
 export const bonusWindowsSchema = z.array(bonusWindowSchema).max(20)
 
+/** Highest multiplier per program: x3 keeps a short stamps card from filling in one scan. */
+export const BONUS_MAX_MULTIPLIER = { stamps: 3, points: 10 } as const
+
+/** `bonusWindowsSchema` plus the multiplier cap of the promotion type. */
+export function bonusWindowsSchemaFor(type: "stamps" | "points") {
+  const max = BONUS_MAX_MULTIPLIER[type]
+  return bonusWindowsSchema.superRefine((list, ctx) => {
+    list.forEach((w, i) => {
+      if (w.multiplier > max) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [i, "multiplier"],
+          message: `Máximo ×${max} para ${type === "stamps" ? "sellos" : "puntos"}`,
+        })
+      }
+    })
+  })
+}
+
 /**
  * Windows as stored in a promotion config. Invalid entries are dropped instead
  * of failing the whole config, so one bad row (manual edit, a future stricter
  * rule) can never break every scan of the tenant.
  */
-const storedBonusWindowsSchema = z.preprocess(
-  (raw) =>
-    Array.isArray(raw)
-      ? raw.filter((w) => bonusWindowSchema.safeParse(w).success).slice(0, 20)
-      : [],
-  z.array(bonusWindowSchema),
-)
+function storedBonusWindowsSchema(maxMultiplier: number) {
+  return z.preprocess(
+    (raw) =>
+      Array.isArray(raw)
+        ? raw
+            .filter((w) => {
+              const parsed = bonusWindowSchema.safeParse(w)
+              return parsed.success && parsed.data.multiplier <= maxMultiplier
+            })
+            .slice(0, 20)
+        : [],
+    z.array(bonusWindowSchema),
+  )
+}
 
 /** Tenant-local clock reading used to match bonus windows. */
 export type LocalClock = { date: string; weekday: number; minutes: number }
@@ -176,7 +202,7 @@ const accumulationSchema = z.object({
   bonusOnRegistration: z.number().int().min(0).max(5).default(0),
   doubleStampsDays: z.array(doubleStampsDaySchema).default([]),
   birthdayBonus: z.number().int().min(0).max(5).default(0),
-  bonusWindows: storedBonusWindowsSchema,
+  bonusWindows: storedBonusWindowsSchema(BONUS_MAX_MULTIPLIER.stamps),
   minimumPurchaseAmount: z.number().positive().nullable().default(null),
 })
 
@@ -330,7 +356,7 @@ const pointsAccumulationSchema = z.object({
   pointsMultipliers: z.array(pointsMultiplierSchema).default([]),
   birthdayMultiplier: z.number().positive().min(1).max(10).default(1),
   bonusPointsOnRegistration: z.number().int().min(0).default(0),
-  bonusWindows: storedBonusWindowsSchema,
+  bonusWindows: storedBonusWindowsSchema(BONUS_MAX_MULTIPLIER.points),
 })
 
 export const pointsPromotionConfigSchema = z.object({

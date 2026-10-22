@@ -47,7 +47,8 @@ const WEEKDAYS = [
   { value: 6, short: "S", label: "sábado" },
   { value: 0, short: "D", label: "domingo" },
 ]
-const MULTIPLIERS = [2, 3, 4, 5]
+// Same caps as BONUS_MAX_MULTIPLIER: stamps up to x3, points up to x10.
+const MULTIPLIERS = { stamps: [2, 3], points: [2, 3, 4, 5, 10] } as const
 const p2 = (n: number) => String(n).padStart(2, "0")
 // Every half hour; "24:00" closes the day.
 const TIMES = Array.from(
@@ -331,7 +332,7 @@ export function HorasEspecialesClient({ initialWindows, promotionType, timezone,
                   onValueChange={(v) => v && setEditing({ ...editing, multiplier: Number(v) })}
                   className="justify-start"
                 >
-                  {MULTIPLIERS.map((m) => (
+                  {MULTIPLIERS[promotionType].map((m) => (
                     <ToggleGroupItem key={m} value={String(m)} className="px-4">
                       ×{m}
                     </ToggleGroupItem>

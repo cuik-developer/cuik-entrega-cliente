@@ -4,6 +4,7 @@ import { and, db, eq, promotions } from "@cuik/db"
 import {
   type BonusWindow,
   bonusWindowsSchema,
+  bonusWindowsSchemaFor,
   pointsPromotionConfigSchema,
   stampsPromotionConfigSchema,
 } from "@cuik/shared/validators"
@@ -42,29 +43,37 @@ export async function saveBonusWindows(input: unknown): Promise<ActionResult<Bon
   }
 
   try {
-    const saved = await db.transaction(async (tx) => {
-      const [promo] = await tx
-        .select({ id: promotions.id, type: promotions.type, config: promotions.config })
-        .from(promotions)
-        .where(and(eq(promotions.tenantId, tenant.tenantId), eq(promotions.active, true)))
-        .limit(1)
-        .for("update")
-      if (!promo) return null
+    const saved = await db.transaction(
+      async (tx): Promise<{ error: string } | { windows: BonusWindow[] }> => {
+        const [promo] = await tx
+          .select({ id: promotions.id, type: promotions.type, config: promotions.config })
+          .from(promotions)
+          .where(and(eq(promotions.tenantId, tenant.tenantId), eq(promotions.active, true)))
+          .limit(1)
+          .for("update")
+        if (!promo) return { error: "No hay una promoción activa" }
+        const typeCheck = bonusWindowsSchemaFor(
+          promo.type === "points" ? "points" : "stamps",
+        ).safeParse(parsed.data)
+        if (!typeCheck.success) {
+          return { error: typeCheck.error.errors[0]?.message ?? "Datos inválidos" }
+        }
 
-      const schema =
-        promo.type === "points" ? pointsPromotionConfigSchema : stampsPromotionConfigSchema
-      const current = schema.parse(promo.config ?? {})
-      const next = {
-        ...current,
-        accumulation: { ...current.accumulation, bonusWindows: parsed.data },
-      }
-      await tx.update(promotions).set({ config: next }).where(eq(promotions.id, promo.id))
-      return parsed.data
-    })
+        const schema =
+          promo.type === "points" ? pointsPromotionConfigSchema : stampsPromotionConfigSchema
+        const current = schema.parse(promo.config ?? {})
+        const next = {
+          ...current,
+          accumulation: { ...current.accumulation, bonusWindows: parsed.data },
+        }
+        await tx.update(promotions).set({ config: next }).where(eq(promotions.id, promo.id))
+        return { windows: parsed.data }
+      },
+    )
 
-    if (!saved) return { success: false, error: "No hay una promoción activa" }
+    if ("error" in saved) return { success: false, error: saved.error }
     revalidatePath("/panel/horas-especiales")
-    return { success: true, data: saved }
+    return { success: true, data: saved.windows }
   } catch (err) {
     console.error("[saveBonusWindows]", err)
     return { success: false, error: "No se pudieron guardar las horas especiales" }

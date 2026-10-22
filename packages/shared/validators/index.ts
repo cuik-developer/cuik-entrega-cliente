@@ -161,9 +161,11 @@ export {
 } from "./platform-config-schema"
 export {
   activeBonusWindow,
+  BONUS_MAX_MULTIPLIER,
   type BonusWindow,
   bonusWindowSchema,
   bonusWindowsSchema,
+  bonusWindowsSchemaFor,
   type CreatePromotionInput,
   createPromotionSchema,
   DEFAULT_MILESTONE_MESSAGES,
