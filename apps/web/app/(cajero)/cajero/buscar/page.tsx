@@ -15,6 +15,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useTenant } from "@/hooks/use-tenant"
+import { bonusLabel } from "@/lib/loyalty/bonus-label"
 import { expiryPhrase } from "@/lib/loyalty/expiry-label"
 
 type LocationOption = {
@@ -128,6 +129,11 @@ function resolveVisitMessage(
   const data = json.data as Record<string, unknown> | undefined
   switch (code) {
     case "OK": {
+      // "hora x2", birthday...: tell the cashier why the visit counted more.
+      const bonus =
+        typeof data?.bonusApplied === "string" && data.bonusApplied
+          ? ` · Bono aplicado: ${bonusLabel(data.bonusApplied)}`
+          : ""
       if (isPoints && data?.points) {
         const pts = data.points as {
           earned: number
@@ -136,9 +142,9 @@ function resolveVisitMessage(
         }
         const base = `Visita registrada! +${pts.earned} puntos (Balance: ${pts.balance})`
         const phrase = expiryPhrase(pts.nextExpiration, pts.balance)
-        return phrase ? `${base} · ${phrase}` : base
+        return (phrase ? `${base} · ${phrase}` : base) + bonus
       }
-      return "Visita registrada!"
+      return `Visita registrada!${bonus}`
     }
     case "ALREADY_SCANNED_TODAY":
       return "Ya fue escaneado hoy"
