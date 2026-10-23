@@ -5,12 +5,14 @@ import { useCallback, useEffect, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { useTenant } from "@/hooks/use-tenant"
+import { visitOriginLabel } from "@/lib/loyalty/visit-origin"
 
 type VisitRecord = {
   id: string
   visitNum: number
   cycleNumber: number
   source: string
+  bonusKind?: string | null
   points?: number | null
   amount?: string | null
   createdAt: string
@@ -22,9 +24,6 @@ type VisitRecord = {
     lastName: string | null
   }
 }
-
-// How the visit came in: camera scan, or Buscar / a typed code.
-const SOURCE_LABEL: Record<string, string> = { qr: "QR", manual: "Manual", bonus: "Bono" }
 
 type Pagination = {
   page: number
@@ -135,8 +134,8 @@ export default function HistorialPage() {
                     </div>
                   )}
                 </div>
-                <span className="text-xs text-gray-300 flex-shrink-0 uppercase">
-                  {SOURCE_LABEL[v.source] ?? v.source}
+                <span className="text-xs text-gray-400 flex-shrink-0 text-right">
+                  {visitOriginLabel(v.source, v.bonusKind ?? null)}
                 </span>
               </div>
             ))}

@@ -4,6 +4,7 @@ import type { PointsPromotionConfig } from "@cuik/shared/validators"
 import { insertEarnLot, nextExpiration } from "./points-lots"
 import { computeTier, evaluatePointsRules } from "./rules-engine"
 import type { PointsRulesContext, PointsVisitResult, VisitResultCode } from "./types"
+import { visitBonusKind } from "./visit-origin"
 
 type PointsVisitParams = {
   client: {
@@ -123,6 +124,7 @@ export async function registerPointsVisit(params: PointsVisitParams): Promise<Po
       cycleNumber: 1,
       points: pointsToEarn,
       source: params.source ?? "qr",
+      bonusKind: visitBonusKind(rulesResult.bonusReasons),
       registeredBy: cashierId,
       locationId: locationId || null,
       amount,

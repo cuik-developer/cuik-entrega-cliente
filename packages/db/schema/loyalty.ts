@@ -106,6 +106,8 @@ export const visits = loyaltySchema.table(
     cycleNumber: integer("cycle_number").notNull(),
     points: integer("points").default(0),
     source: visitSourceEnum("source").default("qr").notNull(),
+    // Bonus the engine applied: "birthday" | "special_hour"; null = none.
+    bonusKind: text("bonus_kind"),
     registeredBy: text("registered_by").references(() => authUsers.id),
     amount: numeric("amount", { precision: 10, scale: 2 }),
     locationId: uuid("location_id"),

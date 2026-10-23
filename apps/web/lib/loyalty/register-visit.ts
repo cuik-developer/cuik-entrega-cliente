@@ -23,6 +23,7 @@ import type {
   VisitResult,
   VisitResultCode,
 } from "./types"
+import { visitBonusKind } from "./visit-origin"
 
 /** `locationId` when it is a location of `tenantId`, otherwise undefined. */
 async function tenantLocationId(
@@ -312,6 +313,7 @@ export async function registerVisit(params: {
         visitNum,
         cycleNumber,
         source: params.source ?? "qr",
+        bonusKind: visitBonusKind(rulesResult.bonusReasons),
         registeredBy: cashierId,
         locationId: locationId || null,
         amount: amount || null,

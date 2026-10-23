@@ -7,6 +7,7 @@ import {
   SEGMENT_LABELS,
   type SegmentationThresholds,
 } from "@/lib/loyalty/client-segments"
+import { visitOriginLabel } from "@/lib/loyalty/visit-origin"
 import {
   ALL_TIME,
   type ClientStatusFilter,
@@ -103,7 +104,6 @@ const STATUS_LABEL: Record<string, string> = {
   archived: "Archivado",
   deleted: "Eliminado",
 }
-const SOURCE_LABEL: Record<string, string> = { qr: "QR", manual: "Manual", bonus: "Bono" }
 const TX_LABEL: Record<string, string> = {
   earn: "Ganados",
   redeem: "Canjeados",
@@ -221,7 +221,7 @@ async function queryClients(r: DatasetRequest): Promise<Row[]> {
 
 async function queryVisits(r: DatasetRequest): Promise<Row[]> {
   const res = await db.execute<Row>(sql`
-    SELECT v.created_at, v.visit_num, v.cycle_number, v.points, v.source, v.amount,
+    SELECT v.created_at, v.visit_num, v.cycle_number, v.points, v.source, v.bonus_kind, v.amount,
            c.name, c.last_name, c.email, c.phone, c.dni, c.created_at AS client_created_at,
            l.name AS location_name, u.name AS cashier_name,
            (w.client_id IS NOT NULL) AS has_pass, coalesce(w.apple_installed, false) AS apple_installed,
@@ -317,15 +317,17 @@ function visitCells(row: Row, r: DatasetRequest): Record<string, Cell> {
     googleDeletedAt: asDate(row.google_deleted_at),
     appleRemovedAt: asDate(row.apple_removed_at),
   })
+  const registrationBonus = str(row.source) === "bonus"
   return {
     createdAt: date(row.created_at, r.timezone),
     visitNum: num(row.visit_num),
     cycleNumber: num(row.cycle_number),
     points: num(row.points),
-    amount: num(row.amount),
-    source: SOURCE_LABEL[str(row.source)] ?? str(row.source),
-    locationName: str(row.location_name),
-    cashierName: str(row.cashier_name),
+    // The registration bonus is not a till visit: no amount, local or cashier.
+    amount: registrationBonus ? "—" : num(row.amount),
+    source: visitOriginLabel(str(row.source), row.bonus_kind == null ? null : str(row.bonus_kind)),
+    locationName: registrationBonus ? "—" : str(row.location_name),
+    cashierName: registrationBonus ? "Automático (registro del cliente)" : str(row.cashier_name),
     name: str(row.name),
     lastName: str(row.last_name),
     email: str(row.email),
