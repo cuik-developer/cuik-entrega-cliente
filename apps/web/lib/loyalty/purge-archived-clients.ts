@@ -7,6 +7,7 @@ import {
   eq,
   gt,
   lte,
+  passInstances,
   pointsTransactions,
   sql,
   tenants,
@@ -82,6 +83,14 @@ export async function purgeArchivedClients(params?: {
           .update(pointsTransactions)
           .set({ remaining: 0 })
           .where(and(eq(pointsTransactions.clientId, c.id), gt(pointsTransactions.remaining, 0)))
+
+        // The stored campaign text is re-rendered with the new name ("Hola
+        // {{client.name}}" → "Hola Cliente eliminado"): a changed value fires
+        // Apple's changeMessage, so the last update would notify. Drop it.
+        await tx
+          .update(passInstances)
+          .set({ campaignMessage: null })
+          .where(eq(passInstances.clientId, c.id))
 
         await tx
           .update(clients)

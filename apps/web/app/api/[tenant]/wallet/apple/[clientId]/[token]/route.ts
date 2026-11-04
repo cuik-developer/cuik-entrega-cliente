@@ -24,6 +24,7 @@ import {
   type TemplateContext,
 } from "@cuik/wallet/shared"
 import { errorResponse, resolveTenant } from "@/lib/api-utils"
+import { isSilentClient } from "@/lib/loyalty/archive"
 import { pointsExpiryTemplateVars } from "@/lib/loyalty/points-lots"
 import { buildStripImages } from "@/lib/wallet/points-strip"
 import { passRelevantDate } from "@/lib/wallet/relevant-date"
@@ -104,6 +105,8 @@ export async function GET(
 
     const client = clientRows[0]
     if (!client) return errorResponse("Client not found", 404)
+    // Archived / deleted: the pass stopped working; never issue a new one.
+    if (isSilentClient(client.status)) return errorResponse("Client not found", 404)
     if (!client.qrCode) return errorResponse("Client has no QR code", 400)
 
     // 4. Verify auth token (timing-safe HMAC comparison)

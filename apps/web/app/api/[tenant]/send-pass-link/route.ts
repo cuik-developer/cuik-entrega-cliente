@@ -3,6 +3,7 @@ import { AccesoPase, sendEmail } from "@cuik/email"
 import { z } from "zod"
 import { errorResponse, resolveTenant, successResponse } from "@/lib/api-utils"
 import { generateClientToken } from "@/lib/client-token"
+import { isSilentClient } from "@/lib/loyalty/archive"
 import { checkRateLimit } from "@/lib/rate-limit"
 
 const bodySchema = z.object({
@@ -37,7 +38,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
 
     // Find client by normalized email + tenant
     const clientRows = await db
-      .select({ id: clients.id, name: clients.name })
+      .select({ id: clients.id, name: clients.name, status: clients.status })
       .from(clients)
       .where(
         sql`LOWER(${clients.email}) = ${normalizedEmail} AND ${clients.tenantId} = ${tenant.id}`,
@@ -46,7 +47,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
 
     const client = clientRows[0]
 
-    if (!client) {
+    // Archived / deleted: no email at all, same answer as an unknown address.
+    if (!client || isSilentClient(client.status)) {
       // Log for debugging but return success to prevent email enumeration
       console.log("[send-pass-link] No client found for email in tenant", {
         email: normalizedEmail,

@@ -43,6 +43,7 @@ import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
 import { requireSuperAdminOrAction } from "@/lib/admin-access"
+import { isSilentClient } from "@/lib/loyalty/archive"
 import { apnsClientCertFor } from "@/lib/wallet/apns-client-cert"
 import { GOOGLE_HERO_ASSET_TYPE, pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
 import { googleMerchantLocations } from "@/lib/wallet/google-nearby"
@@ -329,14 +330,34 @@ async function migratePassInstances(
       .select({
         serialNumber: passInstances.serialNumber,
         currentDesignId: passInstances.designId,
+        clientStatus: clients.status,
       })
       .from(passInstances)
       .innerJoin(passDesigns, eq(passInstances.designId, passDesigns.id))
+      .leftJoin(clients, eq(clients.id, passInstances.clientId))
       .where(and(eq(passDesigns.tenantId, design.tenantId), eq(passDesigns.type, design.type)))
 
     if (tenantInstances.length === 0) return
 
-    const serialNumbers = tenantInstances.map((i) => i.serialNumber)
+    const inSerials = (serials: string[]) =>
+      sql`${passInstances.serialNumber} IN (${sql.join(
+        serials.map((s) => sql`${s}`),
+        sql`, `,
+      )})`
+    // Archived / deleted clients get no communication: their passes move to
+    // the new design (a restored client picks it up on the next update) but
+    // are neither marked changed nor pushed, so the phone never refetches.
+    const silentSerials = tenantInstances
+      .filter((i) => isSilentClient(i.clientStatus))
+      .map((i) => i.serialNumber)
+    const serialNumbers = tenantInstances
+      .filter((i) => !isSilentClient(i.clientStatus))
+      .map((i) => i.serialNumber)
+
+    if (silentSerials.length > 0) {
+      await db.update(passInstances).set({ designId }).where(inSerials(silentSerials))
+    }
+    if (serialNumbers.length === 0) return
 
     const now = new Date()
     await db
@@ -346,12 +367,7 @@ async function migratePassInstances(
         etag: sql`md5(${passInstances.serialNumber} || ${now.toISOString()})`,
         lastUpdatedAt: now,
       })
-      .where(
-        sql`${passInstances.serialNumber} IN (${sql.join(
-          serialNumbers.map((s) => sql`${s}`),
-          sql`, `,
-        )})`,
-      )
+      .where(inSerials(serialNumbers))
 
     await sendApnsNotifications(serialNumbers, design)
 

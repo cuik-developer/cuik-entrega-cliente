@@ -1,4 +1,4 @@
-import { and, clientNotes, clients, db, eq } from "@cuik/db"
+import { and, clientNotes, clients, db, eq, passInstances } from "@cuik/db"
 import { z } from "zod"
 import {
   errorResponse,
@@ -139,11 +139,19 @@ export async function PATCH(
         createdBy: session.user.id,
         content: reason ? `${action}. Motivo: ${reason}` : action,
       })
+      // No later pass download may show (and notify) the last campaign text.
+      if (status === "archived") {
+        await tx
+          .update(passInstances)
+          .set({ campaignMessage: null })
+          .where(eq(passInstances.clientId, id))
+      }
     })
 
     // Archiving leaves the pass as it is on the phone: it simply stops updating
-    // (visits and redemptions are rejected, campaigns exclude the client). The
-    // last update that expires it happens when the purge anonymizes the client.
+    // (visits and redemptions are rejected, campaigns, design pushes and the
+    // pass-link email exclude the client). The last update that expires it
+    // happens when the purge anonymizes the client, without any message.
     return successResponse({ id, status, changed: true })
   } catch (error) {
     console.error("[PATCH /api/[tenant]/clients/[id]]", error)

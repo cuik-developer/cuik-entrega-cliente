@@ -26,6 +26,7 @@ import {
   resolveTenant,
   successResponse,
 } from "@/lib/api-utils"
+import { isSilentClient } from "@/lib/loyalty/archive"
 import { pointsExpiryTemplateVars } from "@/lib/loyalty/points-lots"
 import { pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
 import { googleSaveOrigins } from "@/lib/wallet/google-save-origins"
@@ -66,6 +67,8 @@ export async function POST(
 
     const client = clientRows[0]
     if (!client) return errorResponse("Client not found", 404)
+    // Archived / deleted: the pass stopped working; never issue a new one.
+    if (isSilentClient(client.status)) return errorResponse("Client not found", 404)
     if (!client.qrCode) return errorResponse("Client has no QR code", 400)
 
     // 4. Find active pass design (include colors for Google styling)
