@@ -13,6 +13,12 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { PointsCatalog } from "@/components/cajero/points-catalog"
+import {
+  CashOutOffer,
+  type CashOutOfferView,
+  type UndoableRedemption,
+  UndoRedemption,
+} from "@/components/cajero/stamps-cash-out"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useTenant } from "@/hooks/use-tenant"
@@ -49,6 +55,10 @@ type ClientDetail = {
   pendingRewards: number
   promotion: { id: string; type: string; rewardValue: string | null } | null
   nextMilestone?: { at: number; label: string } | null
+  /** Early cash-out the client can take now ("escalera canjeable"). */
+  cashOut?: CashOutOfferView | null
+  /** Last stamps redemption while it can still be undone. */
+  lastRedemption?: UndoableRedemption | null
   points?: {
     balance: number
     availableCatalogItems?: number
@@ -359,6 +369,11 @@ export default function BuscarPage() {
             setActionMsg(null)
             await selectClient(selected.client.id)
           }}
+          onStampsChanged={async (message) => {
+            setActionMsg(message)
+            setGiftDue(null)
+            await selectClient(selected.client.id)
+          }}
           onReset={() => {
             setSelected(null)
             setActionMsg(null)
@@ -527,6 +542,7 @@ function ClientDetailView({
   handleRedeem,
   redeemingReward,
   onPointsRedeemed,
+  onStampsChanged,
   onReset,
 }: {
   selected: ClientDetail
@@ -544,6 +560,8 @@ function ClientDetailView({
   handleRedeem: () => void
   redeemingReward: boolean
   onPointsRedeemed: () => Promise<void>
+  /** After an early cash-out or an undo: show `message` and reload the client. */
+  onStampsChanged: (message: string) => Promise<void>
   onReset: () => void
 }) {
   return (
@@ -647,6 +665,27 @@ function ClientDetailView({
             {redeemingReward ? "Canjeando…" : "Canjear"}
           </Button>
         </div>
+      )}
+
+      {/* Stamps: early cash-out ("escalera canjeable"), same panel as Escanear */}
+      {!isPoints && selected.cashOut && selected.client.qrCode && (
+        <CashOutOffer
+          tenantSlug={tenantSlug}
+          qrCode={selected.client.qrCode}
+          offer={selected.cashOut}
+          maxVisits={selected.stamps.max ?? 0}
+          finalReward={selected.promotion?.rewardValue ?? null}
+          onCashedOut={(done) => onStampsChanged(`Cobrado: ${done.label}`)}
+        />
+      )}
+
+      {/* Stamps: undo the last redemption right after it (same as Escanear) */}
+      {!isPoints && selected.lastRedemption && (
+        <UndoRedemption
+          tenantSlug={tenantSlug}
+          redemption={selected.lastRedemption}
+          onUndone={() => onStampsChanged("Canje anulado")}
+        />
       )}
 
       {/* Points: catalog items to redeem (same component as Escanear) */}

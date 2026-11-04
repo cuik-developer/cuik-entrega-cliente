@@ -44,6 +44,7 @@ import { z } from "zod"
 
 import { requireSuperAdminOrAction } from "@/lib/admin-access"
 import { isSilentClient } from "@/lib/loyalty/archive"
+import { stampsInCycleOf } from "@/lib/loyalty/stamps"
 import { apnsClientCertFor } from "@/lib/wallet/apns-client-cert"
 import { GOOGLE_HERO_ASSET_TYPE, pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
 import { googleMerchantLocations } from "@/lib/wallet/google-nearby"
@@ -795,6 +796,7 @@ async function propagateGooglePasses(
       phone: clients.phone,
       email: clients.email,
       totalVisits: clients.totalVisits,
+      stampsCashed: clients.stampsCashed,
       pointsBalance: clients.pointsBalance,
       tier: clients.tier,
       birthday: clients.birthday,
@@ -853,7 +855,7 @@ async function propagateGooglePasses(
         const client = clientMap.get(instance.clientId)
         if (!client) return { ok: false, error: "Client not found" }
 
-        const stampsInCycle = client.totalVisits % maxVisits
+        const stampsInCycle = stampsInCycleOf(client, maxVisits)
         const hasReward = (pendingRewardsMap.get(instance.clientId) ?? 0) > 0
 
         // Resolve template fields per client

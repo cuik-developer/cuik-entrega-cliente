@@ -61,6 +61,8 @@ type RewardRow = {
   status: string
   rewardType: string | null
   cycleNumber: number
+  /** "final" = full card; "milestone" = early cash-out. */
+  kind: string
 }
 
 type NoteRow = { id: string; at: Date; content: string; author: string | null }
@@ -128,6 +130,19 @@ function pointsRedeemEvent(r: PointsRedeemRow & { type?: string }): TimelineEven
 /** One reward can produce up to two events: earned, then redeemed or expired. */
 function rewardEvents(r: RewardRow): TimelineEvent[] {
   const name = r.rewardType ?? "Premio"
+  // Early cash-out: earned and redeemed in the same moment; undone ones are left
+  // to the audit note written by the undo.
+  if (r.kind === "milestone") {
+    if (r.status !== "redeemed" || !r.redeemedAt) return []
+    return [
+      {
+        id: `reward-redeemed-${r.id}`,
+        type: "reward_redeemed",
+        at: r.redeemedAt.toISOString(),
+        title: `Cobró antes de completar la tarjeta: ${name}`,
+      },
+    ]
+  }
   const out: TimelineEvent[] = [
     {
       id: `reward-earned-${r.id}`,
@@ -260,6 +275,7 @@ export async function getClientTimeline(params: {
           status: rewards.status,
           rewardType: rewards.rewardType,
           cycleNumber: rewards.cycleNumber,
+          kind: rewards.kind,
         })
         .from(rewards)
         .where(sql`${rewards.clientId} = ${clientId} AND ${rewards.tenantId} = ${tenantId}`)

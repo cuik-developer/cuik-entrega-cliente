@@ -19,6 +19,12 @@ import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { PointsCatalog } from "@/components/cajero/points-catalog"
+import {
+  CashOutOffer,
+  type CashOutOfferView,
+  type UndoableRedemption,
+  UndoRedemption,
+} from "@/components/cajero/stamps-cash-out"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -52,7 +58,14 @@ type StampsVisitApiResult = {
   pendingRewards: number
   rewardValue?: string | null
   /** Intermediate gift ("escalera") reached or coming up on the next visit. */
-  milestone?: { kind: "next" | "reached"; at: number; label: string; count?: number } | null
+  milestone?: {
+    kind: "next" | "reached" | "available"
+    at: number
+    label: string
+    count?: number
+  } | null
+  /** Early cash-out the client can take now ("escalera canjeable"). */
+  cashOut?: CashOutOfferView | null
   /** Bonuses the rules engine applied (comma separated), e.g. a "hora x2" window. */
   bonusApplied?: string | null
 }
@@ -117,6 +130,27 @@ async function fetchPointsStatus(
     const points = json.data?.data?.[0]?.points
     if (typeof points?.balance !== "number") return null
     return { balance: points.balance, nextExpiration: points.nextExpiration ?? null }
+  } catch {
+    return null
+  }
+}
+
+/** Stamps card of a client, read by QR (same data as Buscar), after a cash-out undo. */
+async function fetchStampsStatus(
+  tenantSlug: string | null | undefined,
+  qrCode: string,
+): Promise<{ current: number; pendingRewards: number; cashOut: CashOutOfferView | null } | null> {
+  if (!tenantSlug) return null
+  try {
+    const res = await fetch(`/api/${tenantSlug}/clients?qr=${encodeURIComponent(qrCode)}`)
+    const json = await res.json()
+    const status = json.data?.data?.[0]
+    if (typeof status?.stamps?.current !== "number") return null
+    return {
+      current: status.stamps.current,
+      pendingRewards: typeof status.pendingRewards === "number" ? status.pendingRewards : 0,
+      cashOut: status.cashOut ?? null,
+    }
   } catch {
     return null
   }
@@ -370,6 +404,9 @@ export default function EscanearPage() {
   // How the QR came in: the camera ("qr") or typed by hand ("manual"), for the history.
   const sourceRef = useRef<"qr" | "manual">("qr")
 
+  // Last stamps redemption made on this screen, while it can still be undone.
+  const [undoable, setUndoable] = useState<UndoableRedemption | null>(null)
+
   // Points balance of the scanned client at the amount step ("solo canjear").
   const [redeemOnlyBalance, setRedeemOnlyBalance] = useState<number | null>(null)
   const loadRedeemOnlyBalance = useCallback(
@@ -525,6 +562,13 @@ export default function EscanearPage() {
           )
         }
         toast.success("Premio canjeado")
+        if (json.data.reward?.id) {
+          setUndoable({
+            id: json.data.reward.id,
+            kind: "final",
+            label: json.data.reward.rewardType ?? null,
+          })
+        }
       } else {
         toast.error(redeemRejectionMessage(json.data?.code, json.error))
       }
@@ -554,6 +598,7 @@ export default function EscanearPage() {
     lastQrRef.current = ""
     sourceRef.current = "qr"
     setRedeemOnlyBalance(null)
+    setUndoable(null)
   }
 
   // Points client on a result screen: same catalog as Buscar, the balance on
@@ -582,6 +627,63 @@ export default function EscanearPage() {
           )
         }}
       />
+    )
+  }
+
+  // Stamps client on a result screen: cash-out offer and undo (same panels as Buscar).
+  const stampsExtrasFor = (r: VisitApiResult) => {
+    const qrCode = lastQrRef.current || pendingQrCode
+    if (isPointsResult(r) || !tenantSlug || !qrCode) return null
+    return (
+      <>
+        {r.cashOut && (
+          <CashOutOffer
+            tenantSlug={tenantSlug}
+            qrCode={qrCode}
+            offer={r.cashOut}
+            maxVisits={r.stamps.max}
+            finalReward={r.rewardValue ?? null}
+            onCashedOut={(done) => {
+              setResult((prev) =>
+                prev && !isPointsResult(prev)
+                  ? {
+                      ...prev,
+                      stamps: { ...prev.stamps, current: done.stampsAfter },
+                      cashOut: null,
+                      milestone: null,
+                    }
+                  : prev,
+              )
+              setUndoable({ id: done.rewardId, kind: "milestone", label: done.label })
+              toast.success(`Cobrado: ${done.label}`)
+            }}
+          />
+        )}
+        {undoable && (
+          <UndoRedemption
+            tenantSlug={tenantSlug}
+            redemption={undoable}
+            onUndone={async () => {
+              setUndoable(null)
+              toast.success("Canje anulado")
+              const status = await fetchStampsStatus(tenantSlug, qrCode)
+              // The cashier may have moved on to another client meanwhile.
+              if (status && (lastQrRef.current || pendingQrCode) === qrCode) {
+                setResult((prev) =>
+                  prev && !isPointsResult(prev)
+                    ? {
+                        ...prev,
+                        stamps: { ...prev.stamps, current: status.current },
+                        pendingRewards: status.pendingRewards,
+                        cashOut: status.cashOut,
+                      }
+                    : prev,
+                )
+              }
+            }}
+          />
+        )}
+      </>
     )
   }
 
@@ -653,6 +755,7 @@ export default function EscanearPage() {
           handleRedeem={handleRedeem}
           reset={reset}
           pointsCatalog={pointsCatalogFor(result)}
+          stampsExtras={stampsExtrasFor(result)}
         />
       )}
 
@@ -662,11 +765,17 @@ export default function EscanearPage() {
           handleRedeem={handleRedeem}
           reset={reset}
           pointsCatalog={pointsCatalogFor(result)}
+          stampsExtras={stampsExtrasFor(result)}
         />
       )}
 
       {step === "reward" && result && !isPointsResult(result) && (
-        <RewardStepView result={result} handleRedeem={handleRedeem} reset={reset} />
+        <RewardStepView
+          result={result}
+          handleRedeem={handleRedeem}
+          reset={reset}
+          onRedeemed={() => setStep("success")}
+        />
       )}
 
       {step === "error" && (
@@ -956,12 +1065,15 @@ function SuccessStepView({
   handleRedeem,
   reset,
   pointsCatalog,
+  stampsExtras,
 }: {
   result: VisitApiResult
   handleRedeem: () => Promise<boolean>
   reset: () => void
   /** Points: catalog to redeem right after the visit. */
   pointsCatalog?: React.ReactNode
+  /** Stamps: early cash-out offer and undo of the last redemption. */
+  stampsExtras?: React.ReactNode
 }) {
   return (
     <div className="space-y-4">
@@ -1078,6 +1190,8 @@ function SuccessStepView({
         </>
       )}
 
+      {stampsExtras}
+
       {pointsCatalog}
 
       <Button
@@ -1097,12 +1211,15 @@ function AlreadyScannedStepView({
   handleRedeem,
   reset,
   pointsCatalog,
+  stampsExtras,
 }: {
   result: VisitApiResult
   handleRedeem: () => Promise<boolean>
   reset: () => void
   /** Points: catalog to redeem right after the visit. */
   pointsCatalog?: React.ReactNode
+  /** Stamps: early cash-out offer and undo of the last redemption. */
+  stampsExtras?: React.ReactNode
 }) {
   return (
     <div className="space-y-4">
@@ -1168,6 +1285,8 @@ function AlreadyScannedStepView({
         </>
       )}
 
+      {stampsExtras}
+
       {pointsCatalog}
 
       <Button
@@ -1186,10 +1305,13 @@ function RewardStepView({
   result,
   handleRedeem,
   reset,
+  onRedeemed,
 }: {
   result: StampsVisitApiResult
   handleRedeem: () => Promise<boolean>
   reset: () => void
+  /** After the reward is redeemed: back to the result screen (where it can be undone). */
+  onRedeemed: () => void
 }) {
   return (
     <div className="flex flex-col items-center text-center gap-5 py-8">
@@ -1213,7 +1335,7 @@ function RewardStepView({
           className="w-full h-11 bg-amber-500 hover:bg-amber-600 text-white font-semibold gap-2"
           onClick={async () => {
             // A second tap while the first redeem is in flight does nothing.
-            if (await handleRedeem()) reset()
+            if (await handleRedeem()) onRedeemed()
           }}
         >
           <CheckCircle2 className="w-4 h-4" /> Confirmar canje

@@ -46,7 +46,7 @@ describe("computeAnalyticsSummary", () => {
       rows: [{ newClients: 20 }],
     })
     mockExecute.mockResolvedValueOnce({
-      rows: [{ totalCreated: 30, totalRedeemed: 10 }],
+      rows: [{ totalCreated: 30, totalRedeemed: 10, finalRedeemed: 10 }],
     })
     mockExecute.mockResolvedValueOnce({
       rows: [
@@ -104,7 +104,7 @@ describe("computeAnalyticsSummary", () => {
       rows: [{ newClients: 5 }],
     })
     mockExecute.mockResolvedValueOnce({
-      rows: [{ totalCreated: 10, totalRedeemed: 3 }],
+      rows: [{ totalCreated: 10, totalRedeemed: 3, finalRedeemed: 3 }],
     })
     mockExecute.mockResolvedValueOnce({
       rows: [
@@ -126,7 +126,7 @@ describe("computeAnalyticsSummary", () => {
     })
     mockExecute.mockResolvedValueOnce({ rows: [{ newClients: 2 }] })
     mockExecute.mockResolvedValueOnce({
-      rows: [{ totalCreated: 0, totalRedeemed: 0 }],
+      rows: [{ totalCreated: 0, totalRedeemed: 0, finalRedeemed: 0 }],
     })
     mockExecute.mockResolvedValueOnce({ rows: [] })
 
@@ -138,13 +138,33 @@ describe("computeAnalyticsSummary", () => {
     expect(result.redemptionRate).toBe(0)
   })
 
+  it("keeps early cash-outs out of the redemption rate but counts them as redeemed", async () => {
+    mockExecute.mockResolvedValueOnce({
+      rows: [{ totalVisits: 10, uniqueClients: 5 }],
+    })
+    mockExecute.mockResolvedValueOnce({ rows: [{ newClients: 2 }] })
+    // 10 full cards (5 redeemed) + 3 early cash-outs (always redeemed).
+    mockExecute.mockResolvedValueOnce({
+      rows: [{ totalCreated: 10, totalRedeemed: 8, finalRedeemed: 5 }],
+    })
+    mockExecute.mockResolvedValueOnce({ rows: [] })
+
+    const result = await computeAnalyticsSummary("tenant-1", {
+      from: "2025-01-01",
+      to: "2025-01-31",
+    })
+
+    expect(result.redemptionRate).toBe(50)
+    expect(result.rewardsRedeemed).toBe(8)
+  })
+
   it("computes avgVisitsPerClient correctly", async () => {
     mockExecute.mockResolvedValueOnce({
       rows: [{ totalVisits: 200, uniqueClients: 40 }],
     })
     mockExecute.mockResolvedValueOnce({ rows: [{ newClients: 10 }] })
     mockExecute.mockResolvedValueOnce({
-      rows: [{ totalCreated: 20, totalRedeemed: 5 }],
+      rows: [{ totalCreated: 20, totalRedeemed: 5, finalRedeemed: 5 }],
     })
     mockExecute.mockResolvedValueOnce({ rows: [] })
 
@@ -162,7 +182,7 @@ describe("computeAnalyticsSummary", () => {
     })
     mockExecute.mockResolvedValueOnce({ rows: [{ newClients: 0 }] })
     mockExecute.mockResolvedValueOnce({
-      rows: [{ totalCreated: 0, totalRedeemed: 0 }],
+      rows: [{ totalCreated: 0, totalRedeemed: 0, finalRedeemed: 0 }],
     })
     mockExecute.mockResolvedValueOnce({ rows: [] })
 

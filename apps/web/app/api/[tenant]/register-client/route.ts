@@ -31,6 +31,7 @@ import { resolvePassFields, type TemplateContext, validateGoogleEnv } from "@cui
 import { errorResponse, resolveTenant, successResponse } from "@/lib/api-utils"
 import { clientIp } from "@/lib/client-ip"
 import { insertEarnLot } from "@/lib/loyalty/points-lots"
+import { stampsInCycleOf } from "@/lib/loyalty/stamps"
 import { checkRateLimit, HOUR_MS, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit"
 import { TURNSTILE_FAILED_MESSAGE, verifyTurnstile } from "@/lib/turnstile"
 import { pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
@@ -253,7 +254,8 @@ async function applyMarketingBonus(ctx: {
   if (promotion.type === "stamps" && config.stampsBonus > 0) {
     // Insert bonus visit records
     const maxVisits = promotion.maxVisits ?? 10
-    const currentCycleVisits = client.totalVisits % maxVisits
+    // A client being registered has cashed nothing yet.
+    const currentCycleVisits = stampsInCycleOf({ ...client, stampsCashed: 0 }, maxVisits)
 
     for (let i = 0; i < config.stampsBonus; i++) {
       const visitNum = currentCycleVisits + i + 1
@@ -360,6 +362,7 @@ async function generateGoogleWalletUrl(ctx: {
     birthday: string | null
     tier: string | null
     totalVisits: number
+    stampsCashed: number
     pointsBalance: number
     customData: unknown
   }
@@ -409,7 +412,7 @@ async function generateGoogleWalletUrl(ctx: {
       .where(and(eq(promotions.tenantId, tenant.id), eq(promotions.active, true)))
       .limit(1)
 
-    const stampsInCycle = client.totalVisits % maxVisits
+    const stampsInCycle = stampsInCycleOf(client, maxVisits)
     const resolvedDesignFields = resolveDesignFieldsForClient(
       googleDesign.fields,
       client,
@@ -533,6 +536,7 @@ async function generateWalletUrls(ctx: {
     birthday: string | null
     tier: string | null
     totalVisits: number
+    stampsCashed: number
     pointsBalance: number
     customData: unknown
   }

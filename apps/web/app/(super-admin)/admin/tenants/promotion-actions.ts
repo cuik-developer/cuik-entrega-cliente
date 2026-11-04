@@ -505,7 +505,8 @@ export async function countStampsInProgress(
           eq(clients.tenantId, tenantId),
           // Only clients that still see their card (archived/deleted are hidden).
           inArray(clients.status, ["active", "inactive", "blocked"]),
-          sql`${clients.totalVisits} % ${maxVisits} <> 0`,
+          // Card position = (lifetime visits - stamps cashed early) mod maxVisits (lib/loyalty/stamps.ts).
+          sql`(${clients.totalVisits} - ${clients.stampsCashed}) % ${maxVisits} <> 0`,
         ),
       )
     return { success: true, data: { count: row?.count ?? 0 } }

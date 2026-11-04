@@ -28,6 +28,7 @@ import {
 } from "@/lib/api-utils"
 import { isSilentClient } from "@/lib/loyalty/archive"
 import { pointsExpiryTemplateVars } from "@/lib/loyalty/points-lots"
+import { stampsInCycleOf } from "@/lib/loyalty/stamps"
 import { pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
 import { googleSaveOrigins } from "@/lib/wallet/google-save-origins"
 import { type StampsConfigLike, stripMaxVisits } from "@/lib/wallet/strip-layout"
@@ -97,7 +98,7 @@ export async function POST(
     const stampsConfig = design.stampsConfig as StampsConfigLike | null
     // Same rule as the Apple routes: the promotion counts the visits, the design only draws them.
     const maxVisits = stripMaxVisits(activePromotion, stampsConfig)
-    const stampsInCycle = client.totalVisits % maxVisits
+    const stampsInCycle = stampsInCycleOf(client, maxVisits)
 
     // Check pending rewards
     const pendingRewardRows = await db

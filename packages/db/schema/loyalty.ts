@@ -31,7 +31,12 @@ export const clientStatusEnum = pgEnum("client_status", [
   "deleted",
 ])
 
-export const rewardStatusEnum = pgEnum("reward_status", ["pending", "redeemed", "expired"])
+export const rewardStatusEnum = pgEnum("reward_status", [
+  "pending",
+  "redeemed",
+  "expired",
+  "voided",
+])
 
 export const visitSourceEnum = pgEnum("visit_source", ["qr", "manual", "bonus"])
 
@@ -70,6 +75,8 @@ export const clients = loyaltySchema.table(
     currentCycle: integer("current_cycle").default(1).notNull(),
     tier: text("tier"),
     pointsBalance: integer("points_balance").default(0).notNull(),
+    /** Stamps spent by early cash-outs; the card runs on totalVisits - stampsCashed. */
+    stampsCashed: integer("stamps_cashed").default(0).notNull(),
     marketingOptIn: boolean("marketing_opt_in").default(false).notNull(),
     birthday: date("birthday"),
     /** Set when an admin archives the client; the purge cron anonymizes 30 days later. */
@@ -131,12 +138,22 @@ export const rewards = loyaltySchema.table(
       .references(() => tenants.id),
     cycleNumber: integer("cycle_number").notNull(),
     rewardType: text("reward_type"),
+    /** "final" = full card; "milestone" = early cash-out at an intermediate stamp. */
+    kind: text("kind").default("final").notNull(),
+    /** Milestone position (e.g. 5) when kind = "milestone". */
+    milestoneAt: integer("milestone_at"),
+    /** Stamps the client had when cashing out early (e.g. 7). */
+    stampsAtRedeem: integer("stamps_at_redeem"),
+    /** Who redeemed it (user id); needed to allow undoing it. */
+    redeemedBy: text("redeemed_by"),
+    voidedAt: timestamp("voided_at"),
     status: rewardStatusEnum("status").default("pending").notNull(),
     redeemedAt: timestamp("redeemed_at"),
     expiresAt: timestamp("expires_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
+    index("rewards_tenant_kind_idx").on(table.tenantId, table.kind, table.status),
     index("rewards_client_status_pending_idx")
       .on(table.clientId, table.status)
       .where(sql`status = 'pending'`),

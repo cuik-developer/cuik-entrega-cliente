@@ -1,5 +1,8 @@
 import { and, clients, count, db, eq, promotions, rewards } from "@cuik/db"
+import { stampsPromotionConfigSchema } from "@cuik/shared/validators"
 
+import { cashOutNoticeFor } from "@/lib/loyalty/milestones"
+import { stampsInCycleOf } from "@/lib/loyalty/stamps"
 import { triggerWalletUpdate } from "./trigger-wallet-update"
 
 /**
@@ -15,13 +18,14 @@ export async function refreshStampsPass(qrCode: string, tenantId: string, tenant
         name: clients.name,
         lastName: clients.lastName,
         totalVisits: clients.totalVisits,
+        stampsCashed: clients.stampsCashed,
         pointsBalance: clients.pointsBalance,
       })
       .from(clients)
       .where(and(eq(clients.qrCode, qrCode), eq(clients.tenantId, tenantId)))
       .limit(1),
     db
-      .select({ maxVisits: promotions.maxVisits })
+      .select({ maxVisits: promotions.maxVisits, config: promotions.config })
       .from(promotions)
       .where(
         and(
@@ -48,19 +52,24 @@ export async function refreshStampsPass(qrCode: string, tenantId: string, tenant
     )
   const pendingRewards = Number(pending?.cnt ?? 0)
   const maxVisits = promotion.maxVisits
+  const stampsInCycle = stampsInCycleOf(client, maxVisits)
+  const config = stampsPromotionConfigSchema.safeParse(promotion.config ?? {})
   await triggerWalletUpdate({
     qrCode,
     clientId: client.id,
     clientName: `${client.name}${client.lastName ? ` ${client.lastName}` : ""}`,
     tenantId,
     tenantName,
-    stampsInCycle: maxVisits > 0 ? client.totalVisits % maxVisits : 0,
+    stampsInCycle,
     maxVisits,
     totalVisits: client.totalVisits,
     pendingRewards,
     pointsBalance: client.pointsBalance,
-    // null drops a milestone / "Tarjeta completa" notice ("Pídelo en caja")
-    // and keeps a real campaign message (see nextPassMessage).
-    milestoneMessage: null,
+    // The early cash-out text when it can still be taken (after an undo, for
+    // example); otherwise null, which drops a milestone / "Tarjeta completa"
+    // notice and keeps a real campaign message (see nextPassMessage).
+    milestoneMessage: config.success
+      ? cashOutNoticeFor(config.data.stamps, maxVisits, stampsInCycle)
+      : null,
   })
 }

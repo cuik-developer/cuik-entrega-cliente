@@ -3,7 +3,9 @@ import {
   clients,
   count,
   db,
+  desc,
   eq,
+  gt,
   promotions,
   rewardCatalog,
   rewards,
@@ -18,12 +20,58 @@ import {
 } from "@cuik/shared/validators"
 import type { SegmentationThresholds } from "./client-segments"
 import { computeClientSegment } from "./client-segments"
-import { activeMilestones } from "./milestones"
+import { activeMilestones, cashOutOfferFor } from "./milestones"
 import { nextExpiration } from "./points-lots"
 import { computeTier, getNextTier } from "./rules-engine"
+import { stampsInCycleOf } from "./stamps"
 import type { ClientStatus } from "./types"
+import { withinVoidWindow } from "./void-redemption"
 
 /** Intermediate gift ("escalera") waiting exactly one visit ahead, for the cashier screens. */
+/**
+ * The client's last stamps redemption while it can still be undone (inside the
+ * window and with no visit since), so Buscar can offer "Anular canje".
+ */
+async function voidableRedemption(
+  clientId: string,
+  tenantId: string,
+): Promise<ClientStatus["lastRedemption"]> {
+  const [last] = await db
+    .select({
+      id: rewards.id,
+      kind: rewards.kind,
+      label: rewards.rewardType,
+      redeemedAt: rewards.redeemedAt,
+      redeemedBy: rewards.redeemedBy,
+      voidedAt: rewards.voidedAt,
+    })
+    .from(rewards)
+    .where(
+      and(
+        eq(rewards.clientId, clientId),
+        eq(rewards.tenantId, tenantId),
+        eq(rewards.status, "redeemed"),
+      ),
+    )
+    .orderBy(desc(rewards.redeemedAt))
+    .limit(1)
+  // Same conditions as voidRedemption: a till redemption, not undone before, in the window.
+  if (!last?.redeemedAt || !last.redeemedBy || last.voidedAt) return null
+  if (!withinVoidWindow(last.redeemedAt)) return null
+  const [later] = await db
+    .select({ id: visits.id })
+    .from(visits)
+    .where(and(eq(visits.clientId, clientId), gt(visits.createdAt, last.redeemedAt)))
+    .limit(1)
+  if (later) return null
+  return {
+    id: last.id,
+    kind: last.kind === "milestone" ? "milestone" : "final",
+    label: last.label,
+    redeemedAt: last.redeemedAt,
+  }
+}
+
 function nextGiftFor(
   isPoints: boolean,
   config: StampsPromotionConfig | PointsPromotionConfig | null,
@@ -32,7 +80,10 @@ function nextGiftFor(
 ): { at: number; label: string } | null {
   if (isPoints || !config || !("stamps" in config) || !maxVisits || stampsInCycle === null)
     return null
-  const hit = activeMilestones(config.stamps, maxVisits).find((m) => m.at === stampsInCycle + 1)
+  // The early cash-out is optional and recorded at the till: never shown as "next gift".
+  const hit = activeMilestones(config.stamps, maxVisits).find(
+    (m) => !m.redeemable && m.at === stampsInCycle + 1,
+  )
   return hit ? { at: hit.at, label: hit.label } : null
 }
 
@@ -118,9 +169,14 @@ export async function getClientStatus(params: {
 
   // 8. Calculate stamps (only relevant for stamps promotions)
   const stampsInCycle =
-    !isPoints && promotion?.maxVisits ? client.totalVisits % promotion.maxVisits : null
+    !isPoints && promotion?.maxVisits ? stampsInCycleOf(client, promotion.maxVisits) : null
   const stampsMax = !isPoints ? (promotion?.maxVisits ?? null) : null
   const nextMilestone = nextGiftFor(isPoints, config, promotion?.maxVisits ?? null, stampsInCycle)
+  const cashOut =
+    config && "stamps" in config && promotion?.maxVisits && stampsInCycle !== null
+      ? cashOutOfferFor(config.stamps, promotion.maxVisits, stampsInCycle)
+      : null
+  const lastRedemption = isPoints ? null : await voidableRedemption(client.id, tenantId)
 
   // 9. For points promotions, count available catalog items
   let pointsData: ClientStatus["points"]
@@ -208,6 +264,8 @@ export async function getClientStatus(params: {
         }
       : null,
     nextMilestone,
+    cashOut,
+    lastRedemption,
     tierInfo: currentTier
       ? {
           current: currentTier.name,

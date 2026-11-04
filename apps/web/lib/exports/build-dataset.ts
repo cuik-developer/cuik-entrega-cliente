@@ -104,6 +104,16 @@ const STATUS_LABEL: Record<string, string> = {
   archived: "Archivado",
   deleted: "Eliminado",
 }
+const REWARD_STATUS_LABEL: Record<string, string> = {
+  pending: "Pendiente",
+  redeemed: "Canjeado",
+  expired: "Vencido",
+  voided: "Anulado",
+}
+const REWARD_KIND_LABEL: Record<string, string> = {
+  final: "Tarjeta completa",
+  milestone: "Cobro anticipado",
+}
 const TX_LABEL: Record<string, string> = {
   earn: "Ganados",
   redeem: "Canjeados",
@@ -252,6 +262,20 @@ async function queryPoints(r: DatasetRequest): Promise<Row[]> {
   return res.rows
 }
 
+async function queryRewards(r: DatasetRequest): Promise<Row[]> {
+  const res = await db.execute<Row>(sql`
+    SELECT rw.created_at, rw.kind, rw.reward_type, rw.status, rw.stamps_at_redeem, rw.redeemed_at, rw.voided_at,
+           rw.cycle_number, u.name AS redeemed_by_name,
+           c.name, c.last_name, c.email, c.phone, c.dni
+    FROM loyalty.rewards rw
+    JOIN loyalty.clients c ON c.id = rw.client_id
+    LEFT JOIN "user" u ON u.id = rw.redeemed_by
+    WHERE rw.tenant_id = ${r.tenantId}::uuid
+      AND ${localDay("rw.created_at", r.timezone)} BETWEEN ${r.from}::date AND ${r.to}::date
+    ORDER BY rw.created_at, rw.id`)
+  return res.rows
+}
+
 /* ── Row → cells ─────────────────────────────────────────────────── */
 
 function clientCells(row: Row, r: DatasetRequest, now: Date): Record<string, Cell> {
@@ -355,6 +379,25 @@ function pointCells(row: Row, r: DatasetRequest): Record<string, Cell> {
   }
 }
 
+function rewardCells(row: Row, r: DatasetRequest): Record<string, Cell> {
+  return {
+    createdAt: date(row.created_at, r.timezone),
+    kind: REWARD_KIND_LABEL[str(row.kind)] ?? str(row.kind),
+    label: str(row.reward_type),
+    status: REWARD_STATUS_LABEL[str(row.status)] ?? str(row.status),
+    stampsAtRedeem: num(row.stamps_at_redeem),
+    redeemedAt: date(row.redeemed_at, r.timezone),
+    redeemedBy: str(row.redeemed_by_name),
+    voidedAt: date(row.voided_at, r.timezone),
+    cycleNumber: num(row.cycle_number),
+    name: str(row.name),
+    lastName: str(row.last_name),
+    email: str(row.email),
+    phone: str(row.phone),
+    dni: str(row.dni),
+  }
+}
+
 /* ── Workbook ────────────────────────────────────────────────────── */
 
 export function pickColumns(def: DatasetDef, keys: string[], program: ProgramType | null) {
@@ -381,7 +424,11 @@ function validateRequest(def: DatasetDef, r: DatasetRequest): void {
     throw new DatasetError("Ninguna de las columnas pedidas existe para este conjunto")
   }
   if (def.program && r.program && def.program !== r.program) {
-    throw new DatasetError("Este comercio no tiene programa de puntos")
+    throw new DatasetError(
+      def.program === "points"
+        ? "Este comercio no tiene programa de puntos"
+        : "Este comercio no tiene programa de sellos",
+    )
   }
   if (!def.dated) return
   if (!(r.from && r.to)) throw new DatasetError("Rango de fechas requerido")
@@ -412,6 +459,7 @@ const FILE_BASENAME: Record<string, string> = {
   clients: "clientes",
   visits: "visitas",
   points: "puntos",
+  rewards: "premios",
 }
 
 export async function buildDatasetXlsx(r: DatasetRequest): Promise<DatasetResult> {
@@ -426,6 +474,8 @@ export async function buildDatasetXlsx(r: DatasetRequest): Promise<DatasetResult
     cells = (await queryClients(r)).map((row) => clientCells(row, r, now))
   } else if (def.key === "visits") {
     cells = (await queryVisits(r)).map((row) => visitCells(row, r))
+  } else if (def.key === "rewards") {
+    cells = (await queryRewards(r)).map((row) => rewardCells(row, r))
   } else {
     cells = (await queryPoints(r)).map((row) => pointCells(row, r))
   }

@@ -14,9 +14,10 @@ import {
 import { pointsPromotionConfigSchema, stampsPromotionConfigSchema } from "@cuik/shared/validators"
 
 import { updateRewardsRedeemed, updateVisitsDaily } from "../analytics/update-visits-daily"
-import { milestoneNoticeFor } from "./milestones"
+import { cashOutOfferFor, milestoneNoticeFor } from "./milestones"
 import { registerPointsVisit } from "./register-points-visit"
 import { computeTier, evaluateStampRules } from "./rules-engine"
+import { effectiveVisits } from "./stamps"
 import type {
   PointsVisitResult,
   RulesEvaluationContext,
@@ -240,7 +241,7 @@ export async function registerVisit(params: {
 
     if (!rulesResult.eligible) {
       // Return client info for UI display even on rejection
-      const stampsInCycle = client.totalVisits % promotion.maxVisits
+      const stampsInCycle = effectiveVisits(client) % promotion.maxVisits
       const tierResult = computeTier(config, client.totalVisits)
 
       const pendingCount = await tx
@@ -274,6 +275,8 @@ export async function registerVisit(params: {
         cycleComplete: false,
         pendingRewards: pendingCount[0]?.cnt ?? 0,
         rewardValue: promotion.rewardValue,
+        // A client already scanned today can still cash out early.
+        cashOut: cashOutOfferFor(config.stamps, promotion.maxVisits, stampsInCycle),
       }
     }
 
@@ -281,11 +284,14 @@ export async function registerVisit(params: {
     const stampsToEarn = rulesResult.stampsToEarn
     const newTotalVisits = client.totalVisits + stampsToEarn
 
-    // Handle stamp accumulation — stampsToEarn may complete a cycle or even span multiple
-    const stampsInCycleBefore = client.totalVisits % promotion.maxVisits
-    const stampsInCycleAfter = newTotalVisits % promotion.maxVisits
-    const cyclesBefore = Math.floor(client.totalVisits / promotion.maxVisits)
-    const cyclesAfter = Math.floor(newTotalVisits / promotion.maxVisits)
+    // Handle stamp accumulation — stampsToEarn may complete a cycle or even span multiple.
+    // The card runs on effective stamps: lifetime visits minus stamps spent on early cash-outs.
+    const effectiveBefore = effectiveVisits(client)
+    const effectiveAfter = effectiveBefore + stampsToEarn
+    const stampsInCycleBefore = effectiveBefore % promotion.maxVisits
+    const stampsInCycleAfter = effectiveAfter % promotion.maxVisits
+    const cyclesBefore = Math.floor(effectiveBefore / promotion.maxVisits)
+    const cyclesAfter = Math.floor(effectiveAfter / promotion.maxVisits)
     const cyclesCompleted = cyclesAfter - cyclesBefore
     const cycleComplete = cyclesCompleted > 0
 
@@ -400,6 +406,8 @@ export async function registerVisit(params: {
       bonusApplied:
         rulesResult.bonusReasons.length > 0 ? rulesResult.bonusReasons.join(", ") : null,
       milestone,
+      // Early cash-out the client can take now (null when the program has none or it is out of the window).
+      cashOut: cashOutOfferFor(config.stamps, promotion.maxVisits, stampsInCycleAfter),
     }
   })
 

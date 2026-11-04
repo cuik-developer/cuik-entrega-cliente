@@ -246,7 +246,7 @@ export async function computeSignals(params: {
   } else {
     const res = await db.execute<{ earned: number; pending: number }>(sql`
       SELECT
-        (SELECT COUNT(*)::int FROM loyalty.rewards r WHERE r.tenant_id = ${tenantId} AND ${within("r.created_at", period)}) AS earned,
+        (SELECT COUNT(*)::int FROM loyalty.rewards r WHERE r.tenant_id = ${tenantId} AND r.kind = 'final' AND r.status <> 'voided' AND ${within("r.created_at", period)}) AS earned,
         (SELECT COUNT(*)::int FROM loyalty.rewards r
            JOIN loyalty.clients c ON c.id = r.client_id AND c.status IN ('active', 'inactive')
            WHERE r.tenant_id = ${tenantId} AND r.status = 'pending') AS pending`)

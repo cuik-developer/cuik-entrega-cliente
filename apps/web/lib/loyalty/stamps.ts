@@ -2,36 +2,38 @@
  * Stamp arithmetic in ONE place.
  *
  * `total_visits` is a lifetime counter (tiers, segments and analytics depend
- * on it) and never goes down. Expired stamps are counted separately in
- * `clients.stamps_expired`; what drives the card is the difference:
+ * on it) and never goes down. Stamps spent on an early cash-out ("escalera
+ * canjeable": S/ 5 at stamp 5 instead of waiting for the full card) are
+ * counted in `clients.stamps_cashed`; what drives the card is the difference:
  *
- *   effective = totalVisits - stampsExpired
+ *   effective = totalVisits - stampsCashed
  *   stampsInCycle = effective % maxVisits
  *   cyclesCompleted = floor(effective / maxVisits)
  *
- * Every place that used to compute `totalVisits % maxVisits` must go through
- * these helpers so the card, the till and the pass agree.
+ * Every place that computes the card position must go through these helpers
+ * so the till, the passes and the reports agree. `stampsCashed` is required on
+ * purpose: a query that forgets to select it does not compile.
  */
 
 export type StampCounters = {
   totalVisits: number
-  /** Stamps removed by expiration. Missing/null (legacy rows) means 0. */
-  stampsExpired?: number | null
+  /** Stamps spent on early cash-outs (0 for programs without one). */
+  stampsCashed: number
 }
 
-/** Visits that still count towards a reward (lifetime visits minus expired stamps). */
+/** Visits that still count towards the card (lifetime visits minus cashed stamps). */
 export function effectiveVisits(c: StampCounters): number {
-  return Math.max(0, c.totalVisits - (c.stampsExpired ?? 0))
+  return Math.max(0, c.totalVisits - (c.stampsCashed ?? 0))
 }
 
 /** Position in the current cycle, 0 .. maxVisits-1. */
-export function stampsInCycle(c: StampCounters, maxVisits: number): number {
+export function stampsInCycleOf(c: StampCounters, maxVisits: number): number {
   if (maxVisits <= 0) return 0
   return effectiveVisits(c) % maxVisits
 }
 
 /** Reward cycles completed so far. */
-export function cyclesCompleted(c: StampCounters, maxVisits: number): number {
+export function cyclesCompletedOf(c: StampCounters, maxVisits: number): number {
   if (maxVisits <= 0) return 0
   return Math.floor(effectiveVisits(c) / maxVisits)
 }

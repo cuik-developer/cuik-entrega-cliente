@@ -74,7 +74,10 @@ export async function computeAnalyticsSummary(
   const rewardsAgg = await db.execute(
     sql`
       SELECT
-        COUNT(*)::int AS "totalCreated",
+        -- The rate is about full-card rewards; an early cash-out is created already
+        -- redeemed and would push it to 100 %. It still counts as a redemption.
+        COUNT(*) FILTER (WHERE "kind" = 'final' AND "status" <> 'voided')::int AS "totalCreated",
+        COUNT(*) FILTER (WHERE "kind" = 'final' AND "status" = 'redeemed')::int AS "finalRedeemed",
         COUNT(*) FILTER (WHERE "status" = 'redeemed')::int AS "totalRedeemed"
       FROM loyalty.rewards
       WHERE "tenant_id" = ${tenantId}
@@ -85,12 +88,14 @@ export async function computeAnalyticsSummary(
 
   const rewardsRows = rewardsAgg.rows as Array<{
     totalCreated: number
+    finalRedeemed: number
     totalRedeemed: number
   }>
   const totalCreated = rewardsRows[0]?.totalCreated ?? 0
   const totalRedeemed = rewardsRows[0]?.totalRedeemed ?? 0
+  const finalRedeemed = rewardsRows[0]?.finalRedeemed ?? 0
   const redemptionRate =
-    totalCreated > 0 ? Number(((totalRedeemed / totalCreated) * 100).toFixed(2)) : 0
+    totalCreated > 0 ? Number(((finalRedeemed / totalCreated) * 100).toFixed(2)) : 0
 
   // 4. Average visits per client
   const avgVisitsPerClient =

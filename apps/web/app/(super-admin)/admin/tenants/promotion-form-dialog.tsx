@@ -43,9 +43,10 @@ import { countStampsInProgress, createPromotion, updatePromotion } from "./promo
 
 type MilestoneFormData = {
   maxVisits: number | null
-  milestones: { at: number; label: string }[]
+  milestones: { at: number; label: string; redeemable?: boolean }[]
   milestoneNext: string
   milestoneReached: string
+  milestoneCashOut: string
 }
 
 /** Hitos are optional; once there is one, the row and both messages must be complete. */
@@ -61,6 +62,10 @@ function validateMilestones(data: MilestoneFormData, ctx: z.RefinementCtx) {
   else if (next && reached && next.toLowerCase() === reached.toLowerCase())
     issue(["milestoneReached"], "Debe ser distinto al aviso previo (si no, el telefono no avisa)")
   if (!next && !reached) issue(["milestoneReached"], "Deja al menos un aviso, o quita los hitos")
+  if (data.milestoneCashOut.trim().length > 200)
+    issue(["milestoneCashOut"], "Maximo 200 caracteres")
+  const redeemable = data.milestones.filter((m) => m.redeemable).length
+  if (redeemable > 1) issue(["milestones"], "Solo un premio puede ser canjeable con reinicio")
   const seen = new Set<number>()
   data.milestones.forEach((m, i) => {
     const atError = milestoneAtError(m.at, data.maxVisits, seen)
@@ -112,10 +117,17 @@ const formSchema = z
     // Lenient here (inputs may be unmounted while the values linger); the real
     // checks run in superRefine only for stamps promotions with hitos.
     milestones: z
-      .array(z.object({ at: z.number().or(z.nan()), label: z.string() }))
+      .array(
+        z.object({
+          at: z.number().or(z.nan()),
+          label: z.string(),
+          redeemable: z.boolean().optional(),
+        }),
+      )
       .max(10, "Maximo 10 hitos"),
     milestoneNext: z.string(),
     milestoneReached: z.string(),
+    milestoneCashOut: z.string(),
     // Points fields
     calcMode: z.enum(["per_currency", "currency_per_point"]).default("per_currency"),
     pointsPerCurrency: z
@@ -237,17 +249,19 @@ function extractStampsConfigValues(config: unknown): {
   maxVisitsPerDay: number
   rewardExpirationDays: number | null
   minimumPurchaseAmount: number | null
-  milestones: { at: number; label: string }[]
+  milestones: { at: number; label: string; redeemable: boolean }[]
   milestoneNext: string
   milestoneReached: string
+  milestoneCashOut: string
 } {
   const defaults = {
     maxVisitsPerDay: 1,
     rewardExpirationDays: null as number | null,
     minimumPurchaseAmount: null as number | null,
-    milestones: [] as { at: number; label: string }[],
+    milestones: [] as { at: number; label: string; redeemable: boolean }[],
     milestoneNext: DEFAULT_MILESTONE_MESSAGES.next as string,
     milestoneReached: DEFAULT_MILESTONE_MESSAGES.reached as string,
+    milestoneCashOut: DEFAULT_MILESTONE_MESSAGES.cashOut as string,
   }
 
   if (!config || typeof config !== "object") return defaults
@@ -272,14 +286,19 @@ function extractStampsConfigValues(config: unknown): {
             typeof (m as { at?: unknown }).at === "number" &&
             typeof (m as { label?: unknown }).label === "string",
         )
-        .map((m) => ({ at: m.at, label: m.label }))
+        .map((m) => ({
+          at: m.at,
+          label: m.label,
+          redeemable: (m as { redeemable?: unknown }).redeemable === true,
+        }))
         .sort((a, b) => a.at - b.at)
     }
     const msgs = stamps.milestoneMessages as Record<string, unknown> | undefined
     if (msgs) {
-      if (typeof msgs.next === "string" && msgs.next.trim()) defaults.milestoneNext = msgs.next
-      if (typeof msgs.reached === "string" && msgs.reached.trim())
-        defaults.milestoneReached = msgs.reached
+      // A stored empty text means "do not send": keep it, do not bring the default back.
+      if (typeof msgs.next === "string") defaults.milestoneNext = msgs.next
+      if (typeof msgs.reached === "string") defaults.milestoneReached = msgs.reached
+      if (typeof msgs.cashOut === "string") defaults.milestoneCashOut = msgs.cashOut
     }
   }
 
@@ -471,6 +490,7 @@ export function PromotionFormDialog({
             milestones: [],
             milestoneNext: DEFAULT_MILESTONE_MESSAGES.next,
             milestoneReached: DEFAULT_MILESTONE_MESSAGES.reached,
+            milestoneCashOut: DEFAULT_MILESTONE_MESSAGES.cashOut,
             calcMode: pointsConfig?.calcMode ?? "per_currency",
             pointsPerCurrency: pointsConfig?.pointsPerCurrency ?? 1,
             solesPerPoint: pointsConfig?.solesPerPoint ?? null,
@@ -493,6 +513,7 @@ export function PromotionFormDialog({
             milestones: stampsConfig?.milestones ?? [],
             milestoneNext: stampsConfig?.milestoneNext ?? DEFAULT_MILESTONE_MESSAGES.next,
             milestoneReached: stampsConfig?.milestoneReached ?? DEFAULT_MILESTONE_MESSAGES.reached,
+            milestoneCashOut: stampsConfig?.milestoneCashOut ?? DEFAULT_MILESTONE_MESSAGES.cashOut,
             calcMode: "per_currency",
             pointsPerCurrency: 1,
             solesPerPoint: null,
@@ -515,6 +536,7 @@ export function PromotionFormDialog({
           milestones: [],
           milestoneNext: DEFAULT_MILESTONE_MESSAGES.next,
           milestoneReached: DEFAULT_MILESTONE_MESSAGES.reached,
+          milestoneCashOut: DEFAULT_MILESTONE_MESSAGES.cashOut,
           calcMode: "per_currency",
           pointsPerCurrency: 1,
           solesPerPoint: null,
@@ -527,6 +549,7 @@ export function PromotionFormDialog({
   })
 
   const milestoneRows = useFieldArray({ control, name: "milestones" })
+  const hasRedeemableMilestone = (watch("milestones") ?? []).some((m) => m.redeemable)
   const maxVisitsValue = watch("maxVisits")
 
   // Clients mid-card when editing a stamps promotion: changing "visitas para
@@ -577,11 +600,12 @@ export function PromotionFormDialog({
             rewardExpirationDays: values.hasExpiration ? values.rewardExpirationDays : null,
             milestones: values.milestones
               .filter((m) => Number.isFinite(m.at))
-              .map((m) => ({ at: m.at, label: m.label.trim() }))
+              .map((m) => ({ at: m.at, label: m.label.trim(), redeemable: !!m.redeemable }))
               .sort((a, b) => a.at - b.at),
             milestoneMessages: {
               next: values.milestoneNext.trim(),
               reached: values.milestoneReached.trim(),
+              cashOut: values.milestoneCashOut.trim(),
             },
           },
           // Only the fields this form edits: the server keeps every other
@@ -772,6 +796,11 @@ export function PromotionFormDialog({
                       un postre en la 8. El comercio los entrega en caja: el pase avisa al cliente
                       una visita antes y en la visita del premio, y el cajero lo ve al escanear.
                     </p>
+                    <p className="text-xs text-ent-fg-3 mt-1">
+                      Canjeable con reinicio (uno por programa): desde esa visita el cliente puede
+                      cobrar ese premio en lugar de esperar la tarjeta completa. Al cobrarlo se le
+                      restan esos sellos (con 7 sellos y un premio en la 5, queda en 2).
+                    </p>
                   </div>
                   <Button
                     type="button"
@@ -779,7 +808,7 @@ export function PromotionFormDialog({
                     variant="outline"
                     className="h-7 text-[12px] gap-1 shrink-0"
                     disabled={milestoneRows.fields.length >= 10}
-                    onClick={() => milestoneRows.append({ at: NaN, label: "" })}
+                    onClick={() => milestoneRows.append({ at: NaN, label: "", redeemable: false })}
                   >
                     <Plus className="w-3 h-3" /> Agregar hito
                   </Button>
@@ -814,6 +843,14 @@ export function PromotionFormDialog({
                             maxLength={80}
                             {...register(`milestones.${i}.label`)}
                           />
+                          <label className="mt-1 flex items-center gap-1.5 text-xs text-ent-fg-2">
+                            <input
+                              type="checkbox"
+                              className="h-3.5 w-3.5"
+                              {...register(`milestones.${i}.redeemable`)}
+                            />
+                            Canjeable con reinicio
+                          </label>
                           {errors.milestones?.[i]?.label && (
                             <p className="text-xs text-red-600 mt-1">
                               {errors.milestones[i]?.label?.message}
@@ -858,6 +895,23 @@ export function PromotionFormDialog({
                           <p className="text-xs text-red-600">{errors.milestoneReached.message}</p>
                         )}
                       </div>
+                      {hasRedeemableMilestone && (
+                        <div className="space-y-1">
+                          <Label htmlFor="milestoneCashOut" className="text-xs">
+                            Aviso mientras puede cobrar el premio canjeable
+                          </Label>
+                          <Input
+                            id="milestoneCashOut"
+                            maxLength={200}
+                            {...register("milestoneCashOut")}
+                          />
+                          {errors.milestoneCashOut && (
+                            <p className="text-xs text-red-600">
+                              {errors.milestoneCashOut.message}
+                            </p>
+                          )}
+                        </div>
+                      )}
                       <p className="text-xs text-ent-fg-3">
                         Variables: <code>{"{premio}"}</code> y <code>{"{visita}"}</code>. El aviso
                         llega al telefono del cliente como notificacion del pase (Apple y Google).

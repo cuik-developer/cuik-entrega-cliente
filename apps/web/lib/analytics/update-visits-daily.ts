@@ -69,3 +69,23 @@ export async function updateRewardsRedeemed(
       },
     })
 }
+
+/**
+ * Takes back one redeemed reward from the day it was redeemed (a redemption
+ * undone at the till). Never below zero; the nightly aggregate recomputes the
+ * day from the rewards table anyway.
+ */
+export async function undoRewardRedeemed(
+  tenantId: string,
+  locationId: string,
+  redeemedAt: Date,
+  tenantTimezone: string,
+) {
+  const dateStr = redeemedAt.toLocaleDateString("en-CA", { timeZone: tenantTimezone })
+  await db
+    .update(visitsDaily)
+    .set({ rewardsRedeemed: sql`GREATEST(${visitsDaily.rewardsRedeemed} - 1, 0)` })
+    .where(
+      sql`${visitsDaily.tenantId} = ${tenantId} AND ${visitsDaily.locationId} = ${locationId} AND ${visitsDaily.date} = ${dateStr}`,
+    )
+}

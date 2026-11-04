@@ -65,6 +65,8 @@ export async function redeemReward(params: {
           eq(rewards.clientId, client.id),
           eq(rewards.tenantId, tenantId),
           eq(rewards.status, "redeemed"),
+          // An early cash-out just before is a different action, not a double tap.
+          eq(rewards.kind, "final"),
           // JS date, like redeemedAt is written: no dependence on the DB session timezone.
           gt(
             rewards.redeemedAt,
@@ -134,6 +136,7 @@ export async function redeemReward(params: {
       .set({
         status: "redeemed",
         redeemedAt: now,
+        redeemedBy: params.cashierId,
       })
       .where(eq(rewards.id, reward.id))
 

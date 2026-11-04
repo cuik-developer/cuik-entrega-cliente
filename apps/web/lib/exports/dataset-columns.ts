@@ -3,7 +3,7 @@
  * picker) and the server builder. Client-safe: no database imports here.
  */
 
-export type DatasetKey = "clients" | "visits" | "points"
+export type DatasetKey = "clients" | "visits" | "points" | "rewards"
 
 /** Loyalty program of the tenant; null while unknown or without an active program. */
 export type ProgramType = "stamps" | "points"
@@ -144,6 +144,26 @@ export const DATASETS: DatasetDef[] = [
       { key: "expiresAt", label: "Vencen el", width: 14, group: "Movimiento" },
       { key: "remaining", label: "Restantes del lote", width: 16, group: "Movimiento" },
       { key: "locationName", label: "Local", width: 18, group: "Movimiento" },
+      ...CLIENT_IDENTITY,
+    ],
+  },
+  {
+    key: "rewards",
+    label: "Premios",
+    description:
+      "Una fila por premio de sellos: el de la tarjeta completa o el cobrado antes (escalera canjeable), con su estado.",
+    dated: true,
+    program: "stamps",
+    columns: [
+      { key: "createdAt", label: "Fecha", width: 18, group: "Premio" },
+      { key: "kind", label: "Tipo", width: 18, group: "Premio" },
+      { key: "label", label: "Premio", width: 24, group: "Premio" },
+      { key: "status", label: "Estado", width: 12, group: "Premio" },
+      { key: "stampsAtRedeem", label: "Sellos al cobrar", width: 16, group: "Premio" },
+      { key: "redeemedAt", label: "Canjeado el", width: 18, group: "Premio" },
+      { key: "redeemedBy", label: "Canjeado por", width: 20, group: "Premio" },
+      { key: "voidedAt", label: "Anulado el", width: 18, group: "Premio" },
+      { key: "cycleNumber", label: "Ciclo", width: 8, group: "Premio" },
       ...CLIENT_IDENTITY,
     ],
   },

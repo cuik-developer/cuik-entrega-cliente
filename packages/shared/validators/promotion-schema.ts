@@ -218,6 +218,13 @@ const accumulationSchema = z.object({
 const stampMilestoneSchema = z.object({
   at: z.number().int().min(1).max(49),
   label: z.string().trim().min(1).max(80),
+  /**
+   * Early cash-out ("escalera canjeable"): from this stamp until the card is
+   * full, the client may take this reward instead of waiting. Taking it spends
+   * `at` stamps (7 stamps at a milestone of 5 leave 2). It IS recorded as a
+   * reward. At most one per program.
+   */
+  redeemable: z.boolean().default(false),
 })
 
 export const DEFAULT_MILESTONE_MESSAGES = {
@@ -225,12 +232,15 @@ export const DEFAULT_MILESTONE_MESSAGES = {
   next: "Tu próxima visita tiene premio: {premio}",
   /** Sent on the visit that reaches the milestone. */
   reached: "¡Hoy tienes un premio: {premio}! Pídelo en caja",
+  /** Sent on later visits while an early cash-out is still available. */
+  cashOut: "Puedes cobrar {premio} en caja o seguir acumulando",
 } as const
 
 /** An empty template disables that notice (the cashier banner still shows). */
 const milestoneMessagesSchema = z.object({
   next: z.string().trim().max(200).default(DEFAULT_MILESTONE_MESSAGES.next),
   reached: z.string().trim().max(200).default(DEFAULT_MILESTONE_MESSAGES.reached),
+  cashOut: z.string().trim().max(200).default(DEFAULT_MILESTONE_MESSAGES.cashOut),
 })
 
 const stampsBlockSchema = z.object({
@@ -243,6 +253,9 @@ const stampsBlockSchema = z.object({
     .default([])
     .refine((list) => new Set(list.map((m) => m.at)).size === list.length, {
       message: "Cada visita puede tener un solo hito",
+    })
+    .refine((list) => list.filter((m) => m.redeemable).length <= 1, {
+      message: "Solo un premio puede ser canjeable con reinicio",
     }),
   milestoneMessages: milestoneMessagesSchema.default({}),
 })

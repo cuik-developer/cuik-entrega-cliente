@@ -13,6 +13,7 @@ import {
 import type { TemplateContext } from "@cuik/wallet/shared"
 import { formatBirthday } from "@/lib/birthday"
 import { pointsExpiryTemplateVars } from "@/lib/loyalty/points-lots"
+import { stampsInCycleOf } from "@/lib/loyalty/stamps"
 
 /**
  * Builds one TemplateContext per client so campaign messages can be resolved
@@ -61,6 +62,7 @@ export async function buildClientTemplateContexts(
       birthday: clients.birthday,
       tier: clients.tier,
       totalVisits: clients.totalVisits,
+      stampsCashed: clients.stampsCashed,
       pointsBalance: clients.pointsBalance,
       customData: clients.customData,
     })
@@ -75,7 +77,7 @@ export async function buildClientTemplateContexts(
   const pendingByClient = new Map(pendingRows.map((r) => [r.clientId, Number(r.cnt)]))
 
   for (const c of clientRows) {
-    const stampsInCycle = maxVisits > 0 ? c.totalVisits % maxVisits : 0
+    const stampsInCycle = stampsInCycleOf(c, maxVisits)
     const expiry = isPoints
       ? await pointsExpiryTemplateVars(db, c.id, timezone)
       : { expiring: "", expiresAt: "" }

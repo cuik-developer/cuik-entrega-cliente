@@ -44,6 +44,7 @@ import {
 import { clientIp } from "@/lib/client-ip"
 import { formatExpiry } from "@/lib/loyalty/expiration"
 import { nextExpiration } from "@/lib/loyalty/points-lots"
+import { stampsInCycleOf } from "@/lib/loyalty/stamps"
 import { checkRateLimit } from "@/lib/rate-limit"
 import { buildStripImages } from "@/lib/wallet/points-strip"
 import { passRelevantDate } from "@/lib/wallet/relevant-date"
@@ -807,7 +808,7 @@ async function regeneratePass(ctx: {
     const stampsConfig = design.stampsConfig as StampsConfigLike | null
     // Visits per card: the promotion's (what visits count against), else the design's.
     const maxVisits = stripMaxVisits(activePromo, stampsConfig)
-    const stampsInCycle = client.totalVisits % maxVisits
+    const stampsInCycle = stampsInCycleOf(client, maxVisits)
     // A completed card whose reward is still pending is drawn full, not empty.
     const pendingRewardRows = await db
       .select({ cnt: count() })

@@ -30,6 +30,16 @@ import {
 } from "./period"
 
 /**
+ * Stamps on the card right now, as the pass shows it: lifetime visits minus
+ * stamps spent on early cash-outs, modulo the card length (lib/loyalty/stamps.ts).
+ */
+function cardPositionSql(stampsTarget: number | null) {
+  return stampsTarget && stampsTarget > 0
+    ? sql`((c.total_visits - c.stamps_cashed) % ${stampsTarget})::int`
+    : sql`0`
+}
+
+/**
  * One engine for the weekly and monthly reports (the monthly one carries the
  * all-time section). Everything is computed in the tenant's timezone from the
  * raw tables, the same way the Dashboard and Analítica do, so the email never
@@ -308,7 +318,7 @@ export async function computeReport(params: {
     )
     SELECT c.id, c.name, c.last_name, c.total_visits, c.points_balance, c.created_at,
       pv.period_visits, pv.amount, stats.last_visit_at, stats.avg_days,
-      (SELECT COUNT(*)::int FROM loyalty.visits v3 WHERE v3.client_id = c.id AND v3.cycle_number = c.current_cycle) AS cycle_visits,
+      ${cardPositionSql(stampsTarget)} AS cycle_visits,
       EXISTS (SELECT 1 FROM loyalty.rewards r WHERE r.client_id = c.id AND r.status = 'pending') AS pending_reward
     FROM loyalty.clients c
     JOIN pv ON pv.client_id = c.id
@@ -572,7 +582,7 @@ export async function computeCumulative(params: {
     SELECT c.id, c.name, c.last_name, c.points_balance,
       (SELECT COUNT(*)::int FROM loyalty.visits v WHERE v.client_id = c.id AND v.source <> 'bonus' AND ${upTo("v.created_at")}) AS total_visits,
       (SELECT MAX(v.created_at) FROM loyalty.visits v WHERE v.client_id = c.id AND v.source <> 'bonus' AND ${upTo("v.created_at")}) AS last_visit_at,
-      (SELECT COUNT(*)::int FROM loyalty.visits v3 WHERE v3.client_id = c.id AND v3.cycle_number = c.current_cycle) AS cycle_visits
+      ${cardPositionSql(stampsTarget)} AS cycle_visits
     FROM loyalty.clients c
     WHERE c.tenant_id = ${tenantId} AND c.status IN ('active', 'inactive')
     ORDER BY total_visits DESC, c.name ASC LIMIT 20`)
@@ -773,7 +783,7 @@ async function progressFor(
     cycle_visits: number
   }>(sql`
     SELECT c.id, c.total_visits, c.points_balance,
-      (SELECT COUNT(*)::int FROM loyalty.visits v WHERE v.client_id = c.id AND v.cycle_number = c.current_cycle) AS cycle_visits
+      ${cardPositionSql(stampsTarget)} AS cycle_visits
     FROM loyalty.clients c
     WHERE c.tenant_id = ${tenantId} AND c.id = ANY(${`{${ids.join(",")}}`}::uuid[])`)
   for (const r of res.rows) {

@@ -1,4 +1,4 @@
-import type { MilestoneNotice } from "./milestones"
+import type { CashOutOffer, MilestoneNotice } from "./milestones"
 
 // Loyalty business logic types
 // Canonical types come from @cuik/shared (Zod inferred)
@@ -97,6 +97,8 @@ export type VisitResult = {
   bonusApplied?: string | null
   /** Intermediate gift ("escalera") this visit reaches or announces; null otherwise. */
   milestone?: MilestoneNotice | null
+  /** Early cash-out the client can take now; null when none is available. */
+  cashOut?: CashOutOffer | null
 }
 
 export type RedeemResult = {
@@ -143,6 +145,15 @@ export type ClientStatus = {
   } | null
   /** Intermediate gift ("escalera") the client gets on their next visit, if any. */
   nextMilestone?: { at: number; label: string } | null
+  /** Early cash-out the client can take now; null when none is available. */
+  cashOut?: CashOutOffer | null
+  /** Last stamps redemption while it can still be undone; null otherwise. */
+  lastRedemption?: {
+    id: string
+    kind: "final" | "milestone"
+    label: string | null
+    redeemedAt: Date
+  } | null
   tierInfo?: {
     current: string
     nextTier: string | null

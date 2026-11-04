@@ -48,3 +48,32 @@ export function redeemRejectionMessage(code: unknown, serverError?: unknown): st
   if (typeof code === "string" && REDEEM_MESSAGES[code]) return REDEEM_MESSAGES[code]
   return typeof serverError === "string" && serverError ? serverError : REDEEM_FALLBACK
 }
+
+const CASH_OUT_MESSAGES: Record<string, string> = {
+  NOT_AVAILABLE: "Este cliente no tiene un premio anticipado para cobrar",
+}
+
+const VOID_MESSAGES: Record<string, string> = {
+  NOT_FOUND: "No se encontró ese canje",
+  NOT_REDEEMED: "Ese canje ya fue anulado",
+  WINDOW_PASSED: "Pasaron más de 15 minutos: pide a un administrador que lo corrija",
+  VISITS_AFTER: "El cliente registró visitas después del canje: ya no se puede anular",
+  FORBIDDEN: "Solo quien hizo el canje o un administrador puede anularlo",
+  NOT_VOIDABLE: "Este canje no se puede anular desde la caja",
+  ALREADY_VOIDED: "Este premio ya se anuló una vez: pide a un administrador que lo revise",
+  CLIENT_ARCHIVED: "Cliente archivado: su pase ya no es válido",
+}
+
+export const VOID_FALLBACK = "No se pudo anular el canje. Intenta de nuevo"
+
+/** Message for an early cash-out ("escalera canjeable") that did not go through. */
+export function cashOutRejectionMessage(code: unknown, serverError?: unknown): string {
+  if (typeof code === "string" && CASH_OUT_MESSAGES[code]) return CASH_OUT_MESSAGES[code]
+  return redeemRejectionMessage(code, serverError)
+}
+
+/** Message for an undo of a redemption that did not go through. */
+export function voidRejectionMessage(code: unknown, serverError?: unknown): string {
+  if (typeof code === "string" && VOID_MESSAGES[code]) return VOID_MESSAGES[code]
+  return typeof serverError === "string" && serverError ? serverError : VOID_FALLBACK
+}
