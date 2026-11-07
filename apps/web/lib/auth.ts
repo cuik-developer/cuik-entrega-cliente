@@ -6,6 +6,7 @@ import {
   member,
   organization as organizationTable,
   session,
+  twoFactor as twoFactorTable,
   user,
   verification,
 } from "@cuik/db"
@@ -13,7 +14,7 @@ import { InvitacionCajero, ResetPassword, sendEmail } from "@cuik/email"
 import { betterAuth } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api"
-import { admin, organization } from "better-auth/plugins"
+import { admin, organization, twoFactor } from "better-auth/plugins"
 import { createAccessControl } from "better-auth/plugins/access"
 import { adminAc, defaultStatements, userAc } from "better-auth/plugins/admin/access"
 import {
@@ -97,6 +98,7 @@ export const auth = betterAuth({
       organization: organizationTable,
       member,
       invitation,
+      twoFactor: twoFactorTable,
     },
   }),
   hooks: { before: httpGuard },
@@ -154,6 +156,15 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    // Equipo Cuik and the owner sign in with an authenticator app (lib/two-factor.ts).
+    // No otpOptions.sendOTP: codes by email stay off. 5 wrong codes lock the
+    // second step for 15 minutes; a trusted device skips it for 30 days.
+    twoFactor({
+      issuer: "Cuik",
+      backupCodeOptions: { amount: 10, length: 10 },
+      trustDeviceMaxAge: 60 * 60 * 24 * 30,
+      accountLockout: { enabled: true, maxFailedAttempts: 5, durationSeconds: 15 * 60 },
+    }),
     organization({
       // Only super-admins create organizations (tenants come from Solicitudes);
       // otherwise any user could create one and become "owner" of something.

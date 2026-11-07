@@ -1,4 +1,4 @@
-import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core"
+import { boolean, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core"
 
 // Better Auth tables — live in public schema, managed by Better Auth
 // Full definitions needed for drizzle adapter schema mapping
@@ -17,7 +17,26 @@ export const user = pgTable("user", {
   banExpires: timestamp("ban_expires"),
   /** Equipo Cuik (role "staff"): super-admin areas this person may use. Null/empty = none. */
   staffPermissions: text("staff_permissions").array(),
+  /** Authenticator app linked (Better Auth two-factor plugin). Mandatory for the Cuik team. */
+  twoFactorEnabled: boolean("two_factor_enabled").default(false),
 })
+
+/** Better Auth two-factor plugin: encrypted TOTP secret and backup codes, one row per user. */
+export const twoFactor = pgTable(
+  "two_factor",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    verified: boolean("verified").default(true),
+    failedVerificationCount: integer("failed_verification_count").default(0),
+    lockedUntil: timestamp("locked_until"),
+  },
+  (t) => [index("two_factor_user_idx").on(t.userId)],
+)
 
 /** @deprecated Use `user` instead — kept for FK references in other schemas */
 export const authUsers = user

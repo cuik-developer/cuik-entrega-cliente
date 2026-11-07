@@ -105,7 +105,7 @@ import { deleteDesign, publishDesign, updateDesign } from "./actions"
 const DESIGN = "11111111-1111-4111-8111-111111111111"
 
 function asStaff(permissions: string[]) {
-  mockGetSession.mockResolvedValue({ user: { id: "diego", role: "staff" }, session: {} })
+  mockGetSession.mockResolvedValue({ user: { id: "diego", role: "staff", twoFactorEnabled: true }, session: {} })
   // First select of every action: getStaffPermissions.
   selectQueue.push([{ role: "staff", permissions }])
 }
@@ -151,6 +151,14 @@ describe("pass design actions for Equipo Cuik", () => {
     expect(res.success).toBe(false)
   })
 
+  it("the team without its authenticator app is refused before any check", async () => {
+    mockGetSession.mockResolvedValue({ user: { id: "diego", role: "staff" }, session: {} })
+    selectQueue.push([{ role: "staff", permissions: ["designs", "designs_publish"] }])
+    const res = await updateDesign(DESIGN, { colors: {} })
+    expect(res).toEqual({ success: false, error: expect.stringContaining("dos pasos") })
+    expect(updates).toHaveLength(0)
+  })
+
   it("staff without designs cannot save", async () => {
     asStaff(["metrics"])
     const res = await updateDesign(DESIGN, { colors: {} })
@@ -159,7 +167,7 @@ describe("pass design actions for Equipo Cuik", () => {
   })
 
   it("the owner still reaches publish (and saves without a review mark)", async () => {
-    mockGetSession.mockResolvedValue({ user: { id: "owner", role: "super_admin" }, session: {} })
+    mockGetSession.mockResolvedValue({ user: { id: "owner", role: "super_admin", twoFactorEnabled: true }, session: {} })
     mockGetDesignById.mockResolvedValue(null)
     expect(await publishDesign(DESIGN)).toEqual({ success: false, error: "Diseño no encontrado" })
     expect(mockGetDesignById).toHaveBeenCalledWith(DESIGN)
@@ -271,14 +279,14 @@ describe('pass design actions with "Publicar diseños"', () => {
   })
 
   it("the owner deletes the active design when it issued no passes", async () => {
-    mockGetSession.mockResolvedValue({ user: { id: "owner", role: "super_admin" }, session: {} })
+    mockGetSession.mockResolvedValue({ user: { id: "owner", role: "super_admin", twoFactorEnabled: true }, session: {} })
     selectQueue.push([{ isActive: true, name: "Activo", tenantId: "t1" }], [])
     expect(await deleteDesign(DESIGN)).toEqual({ success: true, data: { id: DESIGN } })
     expect(deletes).toHaveLength(2)
   })
 
   it("not even the owner deletes a design that issued passes", async () => {
-    mockGetSession.mockResolvedValue({ user: { id: "owner", role: "super_admin" }, session: {} })
+    mockGetSession.mockResolvedValue({ user: { id: "owner", role: "super_admin", twoFactorEnabled: true }, session: {} })
     selectQueue.push([{ isActive: true, name: "Activo", tenantId: "t1" }], [{ id: "instance-1" }])
     const res = await deleteDesign(DESIGN)
     expect(res.success).toBe(false)

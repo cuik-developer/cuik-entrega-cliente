@@ -12,6 +12,7 @@ import {
 } from "@cuik/db"
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { twoFactorPending } from "@/lib/two-factor"
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -128,7 +129,8 @@ async function seedAllowedFor(request: Request): Promise<boolean> {
   const res = await db.execute<{ n: number }>(sql`SELECT count(*)::int AS n FROM public."user"`)
   if (Number(res.rows[0]?.n ?? 0) === 0) return true
   const session = await auth.api.getSession({ headers: request.headers })
-  return (session?.user as { role?: string } | undefined)?.role === "super_admin"
+  const u = session?.user as { role?: string; twoFactorEnabled?: boolean | null } | undefined
+  return u?.role === "super_admin" && !twoFactorPending(u)
 }
 
 // DEV ONLY — seed endpoint (pnpm db:seed calls it)

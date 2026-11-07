@@ -22,6 +22,7 @@ import { type TurnstileHandle, TurnstileWidget } from "@/components/turnstile-wi
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { authClient } from "@/lib/auth-client"
+import { TWO_FACTOR_VERIFY_PATH } from "@/lib/two-factor"
 
 const BUSINESS_TYPES = [
   "Cafetería",
@@ -102,6 +103,16 @@ function LoginContent() {
         setError(result.error.message ?? "Error al iniciar sesión")
         toast.error(result.error.message ?? "Error al iniciar sesión")
         setLoading(false)
+        return
+      }
+
+      // Cuik team with 2FA: the password was accepted, the app code comes next.
+      if ((result.data as { twoFactorRedirect?: boolean } | null)?.twoFactorRedirect) {
+        router.push(
+          callbackUrl
+            ? `${TWO_FACTOR_VERIFY_PATH}?callbackUrl=${encodeURIComponent(callbackUrl)}`
+            : TWO_FACTOR_VERIFY_PATH,
+        )
         return
       }
 

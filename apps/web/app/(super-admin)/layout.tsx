@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { currentAdminAccess } from "@/lib/admin-access"
+import { TWO_FACTOR_SETUP_PATH, twoFactorPending } from "@/lib/two-factor"
 import { SuperAdminShell } from "./super-admin-shell"
 
 /**
@@ -11,5 +12,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   const { session, access } = await currentAdminAccess()
   if (!session) redirect("/login")
   if (access.kind === "none") redirect("/")
+  // The team signs in with an authenticator app: nobody uses the admin without it.
+  if (twoFactorPending(session.user)) redirect(TWO_FACTOR_SETUP_PATH)
   return <SuperAdminShell access={access}>{children}</SuperAdminShell>
 }

@@ -2,6 +2,7 @@ import { headers } from "next/headers"
 import { adminAccessOf } from "@/lib/api-utils"
 import { auth } from "@/lib/auth"
 import { type AdminAccess, canAccess, type StaffPermission } from "@/lib/staff-permissions"
+import { TWO_FACTOR_PENDING_ERROR, twoFactorPending } from "@/lib/two-factor"
 
 /**
  * Server-side access checks for super-admin server actions and server
@@ -32,6 +33,8 @@ export async function requireSuperAdminOrAction(
 > {
   const { session, access } = await currentAdminAccess()
   if (!session) return { session: null, access, error: "No autenticado" }
+  if (twoFactorPending(session.user))
+    return { session: null, access, error: TWO_FACTOR_PENDING_ERROR }
   if (canAccess(access, permission ?? null)) return { session, access, error: null }
   return {
     session: null,

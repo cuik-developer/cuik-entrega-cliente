@@ -32,6 +32,7 @@ import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
 import { allMilestoneMessages } from "@/lib/loyalty/milestones"
 import { restampOpenLots } from "@/lib/loyalty/points-lots"
+import { TWO_FACTOR_PENDING_ERROR, twoFactorPending } from "@/lib/two-factor"
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -50,6 +51,10 @@ async function requireSuperAdmin() {
   const role = session.user.role ?? "user"
   if (role !== "super_admin") {
     return { session: null, error: "No autorizado — se requiere super_admin" } as const
+  }
+  // Server Actions skip the layout redirect: the 2FA gate is repeated here.
+  if (twoFactorPending(session.user)) {
+    return { session: null, error: TWO_FACTOR_PENDING_ERROR } as const
   }
 
   return { session, error: null } as const

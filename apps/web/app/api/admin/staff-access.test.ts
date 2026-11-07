@@ -46,8 +46,11 @@ import { GET as getCampaigns } from "./campaigns/route"
 import { GET as getFinance } from "./finance/route"
 import { GET as getMetrics } from "./metrics/route"
 
-function as(role: string, permissions: string[] | null, dbRole = role) {
-  mockGetSession.mockResolvedValue({ user: { id: "u1", role }, session: { id: "s1" } })
+function as(role: string, permissions: string[] | null, dbRole = role, twoFactorEnabled = true) {
+  mockGetSession.mockResolvedValue({
+    user: { id: "u1", role, twoFactorEnabled },
+    session: { id: "s1" },
+  })
   mockUserRow.mockReturnValue({ role: dbRole, permissions })
 }
 
@@ -85,6 +88,15 @@ describe("super-admin APIs with Equipo Cuik staff", () => {
     const res = await getCampaigns(req("/api/admin/campaigns"))
     expect(res.status).toBe(200)
     expect(mockListCampaigns).toHaveBeenCalledOnce()
+  })
+
+  it("refuses the team without its authenticator app, permissions or not", async () => {
+    as("staff", ["campaigns"], "staff", false)
+    expect((await getCampaigns(req("/api/admin/campaigns"))).status).toBe(403)
+    as("super_admin", null, "super_admin", false)
+    expect((await getFinance(req("/api/admin/finance"))).status).toBe(403)
+    expect(mockListCampaigns).not.toHaveBeenCalled()
+    expect(mockLoadFinance).not.toHaveBeenCalled()
   })
 
   it("trusts the DB, not the session, for the role (revoked staff → 403)", async () => {

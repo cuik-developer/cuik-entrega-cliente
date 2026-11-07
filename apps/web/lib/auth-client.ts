@@ -1,8 +1,13 @@
-import { adminClient, organizationClient } from "better-auth/client/plugins"
+import { adminClient, organizationClient, twoFactorClient } from "better-auth/client/plugins"
 import { createAuthClient } from "better-auth/react"
 
 export const authClient = createAuthClient({
-  plugins: [organizationClient(), adminClient()],
+  plugins: [
+    organizationClient(),
+    adminClient(),
+    // The login page handles the redirect itself (keeps callbackUrl): no auto-navigation here.
+    twoFactorClient({ onTwoFactorRedirect() {} }),
+  ],
 })
 
 export const { signIn, signUp, signOut, useSession } = authClient

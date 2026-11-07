@@ -37,6 +37,7 @@ import {
   inviteStaff,
   listStaff,
   resendStaffInvite,
+  resetStaffTwoFactor,
   revokeStaff,
   type StaffMember,
   updateStaffPermissions,
@@ -194,6 +195,27 @@ export function EquipoClient() {
     }
   }
 
+  async function handleResetTwoFactor(m: StaffMember) {
+    if (
+      !window.confirm(
+        `¿Reiniciar la verificación en dos pasos de ${m.name}? Se cierran sus sesiones y la próxima vez que entre enlazará su app de nuevo.`,
+      )
+    ) {
+      return
+    }
+    setBusyId(m.id)
+    try {
+      const r = await resetStaffTwoFactor({ userId: m.id })
+      if (!r.success) toast.error(r.error)
+      else {
+        toast.success(`2FA de ${m.name} reiniciada`)
+        load()
+      }
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   async function handleResend(m: StaffMember) {
     setBusyId(m.id)
     try {
@@ -251,6 +273,7 @@ export function EquipoClient() {
                 <Th>Nombre</Th>
                 <Th>Email</Th>
                 <Th>Permisos</Th>
+                <Th>2FA</Th>
                 <Th>Alta</Th>
                 <Th align="right">Acciones</Th>
               </tr>
@@ -264,6 +287,15 @@ export function EquipoClient() {
                     {m.permissions.length > 0
                       ? m.permissions.map((p) => STAFF_PERMISSION_LABELS[p]).join(" · ")
                       : "Sin permisos"}
+                  </Td>
+                  <Td>
+                    {m.twoFactorEnabled ? (
+                      <StatusChip tone="ok">Activa</StatusChip>
+                    ) : (
+                      <StatusChip tone="warn" title="Se activa en su próximo ingreso">
+                        Pendiente
+                      </StatusChip>
+                    )}
                   </Td>
                   <Td className="text-ent-fg-2">{fmtDate(m.createdAt)}</Td>
                   <Td align="right">
@@ -289,6 +321,18 @@ export function EquipoClient() {
                       >
                         Reenviar enlace
                       </Button>
+                      {m.twoFactorEnabled && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 text-[11.5px]"
+                          disabled={busyId === m.id}
+                          onClick={() => handleResetTwoFactor(m)}
+                          title="Perdió el teléfono: enlazará su app de nuevo al entrar"
+                        >
+                          Reiniciar 2FA
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="outline"

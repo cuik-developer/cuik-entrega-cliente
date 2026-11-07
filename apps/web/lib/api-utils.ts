@@ -7,6 +7,7 @@ import {
   normalizeStaffPermissions,
   type StaffPermission,
 } from "@/lib/staff-permissions"
+import { twoFactorPending } from "@/lib/two-factor"
 
 // --- Response helpers ---
 
@@ -42,10 +43,15 @@ export async function requireAuth(request: Request) {
 }
 
 export function requireRole(
-  session: { user: { role?: string }; saViewTenantId?: string | null },
+  session: {
+    user: { role?: string; twoFactorEnabled?: boolean | null }
+    saViewTenantId?: string | null
+  },
   role: string,
 ) {
   const userRole = session.user.role ?? "user"
+  // The Cuik team without its authenticator app gets nothing, not even reads.
+  if (twoFactorPending(session.user)) return errorResponse("Two-factor setup required", 403)
   if (userRole === role) return null
   // A super-admin viewing a tenant passes "admin" checks (read-only, see above).
   if (role === "admin" && userRole === "super_admin" && session.saViewTenantId) return null
@@ -67,8 +73,9 @@ export async function getStaffPermissions(userId: string): Promise<StaffPermissi
 
 /** Super-admin access of a session: owner, staff with their permissions, or none. */
 export async function adminAccessOf(session: {
-  user: { id: string; role?: string | null }
+  user: { id: string; role?: string | null; twoFactorEnabled?: boolean | null }
 }): Promise<AdminAccess> {
+  if (twoFactorPending(session.user)) return { kind: "none" }
   const role = session.user.role ?? "user"
   if (role === "super_admin") return { kind: "super_admin" }
   if (role === "staff")

@@ -5,6 +5,7 @@ import { walletConfigSchema } from "@cuik/shared/validators"
 import { headers } from "next/headers"
 
 import { auth } from "@/lib/auth"
+import { TWO_FACTOR_PENDING_ERROR, twoFactorPending } from "@/lib/two-factor"
 import {
   type GoogleNearbyStatus,
   readGoogleNearbyStatus,
@@ -19,6 +20,8 @@ async function requireSuperAdmin() {
   if ((session.user.role ?? "user") !== "super_admin") {
     return "No autorizado — se requiere super_admin"
   }
+  // Server Actions skip the layout redirect: the 2FA gate is repeated here.
+  if (twoFactorPending(session.user)) return TWO_FACTOR_PENDING_ERROR
   return null
 }
 

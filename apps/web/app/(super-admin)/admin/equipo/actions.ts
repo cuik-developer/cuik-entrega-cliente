@@ -1,6 +1,17 @@
 "use server"
 
-import { and, db, eq, or, session as sessionTable, sql, user } from "@cuik/db"
+import {
+  and,
+  db,
+  eq,
+  like,
+  or,
+  session as sessionTable,
+  sql,
+  twoFactor,
+  user,
+  verification,
+} from "@cuik/db"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { requireSuperAdminOrAction } from "@/lib/admin-access"
@@ -29,6 +40,8 @@ export type StaffMember = {
   permissions: StaffPermission[]
   createdAt: Date
   revoked: boolean
+  /** Authenticator app linked (mandatory for the team; set at first sign-in). */
+  twoFactorEnabled: boolean
 }
 
 const permissionsSchema = z
@@ -79,6 +92,7 @@ export async function listStaff(): Promise<ActionResult<StaffMember[]>> {
       role: user.role,
       permissions: user.staffPermissions,
       createdAt: user.createdAt,
+      twoFactorEnabled: user.twoFactorEnabled,
     })
     .from(user)
     .where(or(eq(user.role, "staff"), eq(user.banReason, REVOKED_REASON)))
@@ -93,6 +107,7 @@ export async function listStaff(): Promise<ActionResult<StaffMember[]>> {
       permissions: normalizeStaffPermissions(r.permissions),
       createdAt: r.createdAt,
       revoked: r.role !== "staff",
+      twoFactorEnabled: Boolean(r.twoFactorEnabled),
     })),
   }
 }
@@ -214,6 +229,47 @@ export async function revokeStaff(input: { userId: string }): Promise<ActionResu
     })
     .where(and(eq(user.id, target.id), eq(user.role, "staff")))
   await db.delete(sessionTable).where(eq(sessionTable.userId, target.id))
+  revalidatePath("/admin/equipo")
+  return { success: true, data: null }
+}
+
+/**
+ * Lost phone: drop the member's authenticator link and backup codes and end
+ * their sessions. Their next sign-in asks for the password only and then
+ * forces a fresh 2FA setup (super-admin layout), so the account is never
+ * left without it.
+ */
+export async function resetStaffTwoFactor(input: { userId: string }): Promise<ActionResult<null>> {
+  const { error } = await requireOwner()
+  if (error) return { success: false, error }
+
+  const id = userIdSchema.safeParse(input.userId)
+  if (!id.success) return { success: false, error: "Persona no encontrada" }
+  const target = await findStaffUser(id.data)
+  if (!target) return { success: false, error: "Persona no encontrada en Equipo Cuik" }
+
+  await db.transaction(async (tx) => {
+    await tx.delete(twoFactor).where(eq(twoFactor.userId, target.id))
+    await tx
+      .update(user)
+      .set({ twoFactorEnabled: false, updatedAt: new Date() })
+      .where(eq(user.id, target.id))
+    await tx.delete(sessionTable).where(eq(sessionTable.userId, target.id))
+    // Better Auth keeps "trusted device" tokens (30 days) and half-done
+    // sign-ins in `verification`, keyed by the user id: the lost phone's
+    // browser must not skip the second step after the new enrolment.
+    await tx
+      .delete(verification)
+      .where(
+        and(
+          eq(verification.value, target.id),
+          or(
+            like(verification.identifier, "trust-device-%"),
+            like(verification.identifier, "2fa-%"),
+          ),
+        ),
+      )
+  })
   revalidatePath("/admin/equipo")
   return { success: true, data: null }
 }
