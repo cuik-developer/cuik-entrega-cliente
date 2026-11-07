@@ -75,6 +75,8 @@ function getNestedValue(obj: unknown, path: string): unknown {
   return path.split(".").reduce((current, key) => {
     if (current === null || current === undefined) return undefined
     if (typeof current !== "object") return undefined
+    // Own data only: "{{constructor}}" or "{{client.__proto__}}" resolve to nothing.
+    if (!Object.hasOwn(current, key)) return undefined
     return (current as Record<string, unknown>)[key]
   }, obj as unknown)
 }

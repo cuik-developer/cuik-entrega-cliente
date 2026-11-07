@@ -1,11 +1,25 @@
 import { z } from "zod"
 
-export const segmentConditionSchema = z.object({
-  field: z.enum(["totalVisits", "lastVisitAt", "tier", "createdAt", "status"]),
-  operator: z.enum(["eq", "gte", "lte", "between"]),
-  value: z.union([z.string(), z.number()]),
-  valueTo: z.union([z.string(), z.number()]).optional(),
-})
+const DATE_FIELDS = new Set(["lastVisitAt", "createdAt"])
+// isRealDate (below) is a function declaration, so it is available here.
+const isYmd = (v: unknown) => typeof v === "string" && isRealDate(v)
+
+export const segmentConditionSchema = z
+  .object({
+    field: z.enum(["totalVisits", "lastVisitAt", "tier", "createdAt", "status"]),
+    operator: z.enum(["eq", "gte", "lte", "between"]),
+    value: z.union([z.string().max(100), z.number()]),
+    valueTo: z.union([z.string().max(100), z.number()]).optional(),
+  })
+  // Date fields are cast with ::date in SQL: anything else would be a 500.
+  .refine((c) => !DATE_FIELDS.has(c.field) || isYmd(c.value), {
+    message: "La fecha debe tener el formato AAAA-MM-DD",
+    path: ["value"],
+  })
+  .refine((c) => !DATE_FIELDS.has(c.field) || c.operator !== "between" || isYmd(c.valueTo), {
+    message: "La fecha final debe tener el formato AAAA-MM-DD",
+    path: ["valueTo"],
+  })
 
 export type SegmentConditionInput = z.infer<typeof segmentConditionSchema>
 

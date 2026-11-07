@@ -43,7 +43,14 @@ export async function POST(request: Request) {
       const tz = tenant.timezone ?? "America/Lima"
       // At sendHour the greeting is created and sent; on the later hours of the
       // same day only a failed send is retried (up to 3 attempts in total).
-      const hour = hourLocal(tz)
+      // An unknown zone throws: that tenant is skipped, the others still run.
+      let hour: number
+      try {
+        hour = hourLocal(tz)
+      } catch {
+        skipped.push({ tenant: tenant.slug, reason: "bad_timezone" })
+        continue
+      }
       if (!force && hour < config.sendHour) {
         skipped.push({ tenant: tenant.slug, reason: "not_the_hour" })
         continue

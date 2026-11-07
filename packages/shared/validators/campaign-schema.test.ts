@@ -232,3 +232,17 @@ describe("campaignListSchema", () => {
     expect(result.success).toBe(false)
   })
 })
+
+describe("segmentConditionSchema date fields", () => {
+  const cond = (c: Record<string, unknown>) =>
+    segmentFilterSchema.safeParse({ conditions: [c] }).success
+  it("accepts YYYY-MM-DD and rejects anything else (it is cast ::date in SQL)", () => {
+    expect(cond({ field: "createdAt", operator: "gte", value: "2026-11-01" })).toBe(true)
+    expect(cond({ field: "lastVisitAt", operator: "eq", value: "ayer" })).toBe(false)
+    expect(cond({ field: "createdAt", operator: "gte", value: "2026-13-45" })).toBe(false)
+    expect(
+      cond({ field: "createdAt", operator: "between", value: "2026-11-01", valueTo: "x" }),
+    ).toBe(false)
+    expect(cond({ field: "totalVisits", operator: "gte", value: 3 })).toBe(true)
+  })
+})

@@ -283,10 +283,12 @@ const saveColorSchema = (key: keyof typeof COLOR_LABELS) =>
 
 const saveFieldSchema = z
   .object({
-    key: z.string(),
-    label: z.string(),
-    value: z.string(),
-    changeMessage: z.string().optional(),
+    // Apple shows ~1 line per label/value; an oversized text breaks pass
+    // regeneration for every client of the tenant, so it is capped on save.
+    key: z.string().max(60),
+    label: z.string().max(100),
+    value: z.string().max(300),
+    changeMessage: z.string().max(150).optional(),
   })
   .passthrough()
 

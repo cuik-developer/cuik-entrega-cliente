@@ -169,11 +169,13 @@ export function parsePagination(
   const defaultPage = defaults?.page ?? 1
   const defaultLimit = defaults?.limit ?? 20
 
-  const page = Math.max(1, Number.parseInt(searchParams.get("page") ?? String(defaultPage), 10))
-  const limit = Math.min(
-    100,
-    Math.max(1, Number.parseInt(searchParams.get("limit") ?? String(defaultLimit), 10)),
-  )
+  // "abc" or "" would turn into NaN and reach LIMIT/OFFSET as an SQL error.
+  const int = (raw: string | null, fallback: number) => {
+    const n = Number.parseInt(raw ?? "", 10)
+    return Number.isFinite(n) ? n : fallback
+  }
+  const page = Math.max(1, int(searchParams.get("page"), defaultPage))
+  const limit = Math.min(100, Math.max(1, int(searchParams.get("limit"), defaultLimit)))
 
   return { page, limit, offset: (page - 1) * limit }
 }

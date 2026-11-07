@@ -15,3 +15,13 @@ describe("resolveTemplate", () => {
     expect(resolveTemplate("Hola {{client.name}}", base)).toBe("Hola Ana")
   })
 })
+
+describe("resolveTemplate prototype safety", () => {
+  it("resolves own data only", () => {
+    const ctx = { client: { name: "Ana" }, tenant: { name: "Demo" } } as never
+    expect(
+      resolveTemplate("{{constructor}}|{{client.constructor}}|{{client.__proto__}}", ctx),
+    ).toBe("||")
+    expect(resolveTemplate("{{client.name}}", ctx)).toBe("Ana")
+  })
+})

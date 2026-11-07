@@ -1,15 +1,16 @@
 import { z } from "zod"
 
 /**
- * Reward photo: an absolute URL or a relative asset path as returned by the
- * upload routes (`/api/assets/tenants/<id>/assets/<uuid>.png`).
+ * Reward photo: only a file uploaded to Cuik, as returned by the upload routes
+ * (`/api/assets/tenants/<id>/assets/<uuid>.png`). An external site could swap
+ * the picture under the public premios page, so other hosts are refused.
  */
 export const catalogImageUrlSchema = z
   .string()
   .trim()
   .max(500)
-  .refine((v) => /^https?:\/\/\S+$/.test(v) || /^\/api\/assets\/[\w\-./]+$/.test(v), {
-    message: "URL de imagen inválida",
+  .refine((v) => /^\/api\/assets\/[\w\-./]+$/.test(v) && !v.includes(".."), {
+    message: "Sube la foto desde el panel; no se aceptan imágenes de otros sitios",
   })
 
 export const createCatalogItemSchema = z.object({

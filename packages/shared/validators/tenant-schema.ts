@@ -42,7 +42,26 @@ export const updateTenantSchema = createTenantSchema.partial().extend({
     .optional()
     .or(z.literal("")),
   contactEmail: z.string().trim().email("Email inválido").optional().or(z.literal("")),
-  timezone: z.string().trim().min(1).optional(),
+  // A zone Intl does not know would break every report of the tenant and the
+  // birthday cron, so it is checked here (Intl.supportedValuesOf is not on
+  // every runtime; constructing a formatter throws on unknown zones).
+  timezone: z
+    .string()
+    .trim()
+    .min(1)
+    .max(64)
+    .refine(
+      (tz) => {
+        try {
+          new Intl.DateTimeFormat("en-US", { timeZone: tz })
+          return true
+        } catch {
+          return false
+        }
+      },
+      { message: "Zona horaria inválida (usa un nombre IANA, p. ej. America/Lima)" },
+    )
+    .optional(),
   segmentationConfig: segmentationConfigSchema,
 })
 

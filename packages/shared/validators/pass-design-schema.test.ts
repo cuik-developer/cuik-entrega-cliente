@@ -616,3 +616,17 @@ describe("passDesignConfigV2Schema caps (750×288 strip)", () => {
     expect(r.success).toBe(true)
   })
 })
+
+describe("passDesignSaveV2Schema field length caps", () => {
+  it("refuses a field text long enough to break pass regeneration", () => {
+    const stampsConfig = { maxVisits: 8, gridCols: 4, gridRows: 2, stampSize: 63 }
+    const fields = {
+      ...v2Base.fields,
+      headerFields: [{ key: "total", label: "# DE VISITAS", value: "x".repeat(301) }],
+    }
+    expect(passDesignSaveV2Schema.safeParse({ ...v2Base, stampsConfig, fields }).success).toBe(
+      false,
+    )
+    expect(passDesignSaveV2Schema.safeParse({ ...v2Base, stampsConfig }).success).toBe(true)
+  })
+})

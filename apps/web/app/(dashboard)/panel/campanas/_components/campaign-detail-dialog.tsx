@@ -28,6 +28,7 @@ import {
   type CampaignStatus,
   type CampaignType,
 } from "@/lib/admin/campaign-labels"
+import { csvCell } from "@/lib/csv"
 import { formatDateTime } from "@/lib/format-date"
 
 interface Recipient {
@@ -74,9 +75,7 @@ function generateCsv(_campaign: CampaignInfo, recipients: Recipient[], timezone:
     r.visitedAt ? formatDateTime(r.visitedAt, timezone) : "",
   ])
 
-  const csvContent = [headers, ...rows]
-    .map((row) => row.map((cell) => `"${cell}"`).join(","))
-    .join("\n")
+  const csvContent = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n")
 
   return BOM + csvContent
 }
