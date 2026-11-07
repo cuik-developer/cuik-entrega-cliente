@@ -53,7 +53,10 @@ export async function listDemoTenants(): Promise<DemoTenant[]> {
     })
     .from(promotions)
     .where(and(inArray(promotions.tenantId, ids), eq(promotions.active, true)))
-  const promoOf = new Map(promos.map((p) => [p.tenantId, p]))
+    .orderBy(desc(promotions.createdAt))
+  // Newest active promotion per demo (the list is newest first, keep the first seen).
+  const promoOf = new Map<string, (typeof promos)[number]>()
+  for (const p of promos) if (!promoOf.has(p.tenantId)) promoOf.set(p.tenantId, p)
   return rows.map((t) => {
     const p = promoOf.get(t.id)
     const program = p?.type === "stamps" || p?.type === "points" ? p.type : null

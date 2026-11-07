@@ -11,6 +11,7 @@ const m = vi.hoisted(() => ({
   trigger: vi.fn(),
   record: vi.fn(),
   inserts: [] as { table: unknown; values: Record<string, unknown> }[],
+  updates: [] as Record<string, unknown>[],
 }))
 
 vi.mock("@/lib/admin-access", () => ({ requireSuperAdminOrAction: m.guard }))
@@ -30,6 +31,12 @@ vi.mock("@cuik/db", () => {
   return {
     db: {
       select: () => chain,
+      update: () => ({
+        set: (values: Record<string, unknown>) => {
+          m.updates.push(values)
+          return { where: async () => undefined }
+        },
+      }),
       insert: (table: unknown) => ({
         values: (values: Record<string, unknown>) => {
           m.inserts.push({ table, values })
@@ -58,6 +65,7 @@ describe("simulator actions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     m.inserts.length = 0
+    m.updates.length = 0
     m.guard.mockResolvedValue({ session: SESSION, access: { kind: "staff" }, error: null })
     m.demoTenant.mockResolvedValue(DEMO)
     m.demoClientState.mockResolvedValue(CLIENT)
@@ -118,6 +126,26 @@ describe("simulator actions", () => {
     m.demoTenant.mockResolvedValue({ ...DEMO, program: "points" })
     expect((await simulateVisit({ tenantId: T, clientId: C })).success).toBe(false)
     expect(m.registerVisit).not.toHaveBeenCalled()
+  })
+
+  it("caps the purchase amount like the cashier", async () => {
+    m.demoTenant.mockResolvedValue({ ...DEMO, program: "points" })
+    const res = await simulateVisit({ tenantId: T, clientId: C, amount: 50000 })
+    expect(res.success).toBe(false)
+    expect(m.registerVisit).not.toHaveBeenCalled()
+  })
+
+  it("a test campaign that reached nobody is cancelled, not left as a draft", async () => {
+    m.executeCampaign.mockResolvedValue({
+      status: "failed",
+      targetCount: 1,
+      sentCount: 0,
+      skippedCount: 0,
+      errors: ["APNs caído"],
+    })
+    const res = await simulateCampaign({ tenantId: T, clientId: C, message: "Hola" })
+    expect(res.success).toBe(false)
+    expect(m.updates).toEqual([{ status: "cancelled" }])
   })
 
   it("sends a one-client campaign through the campaign engine", async () => {

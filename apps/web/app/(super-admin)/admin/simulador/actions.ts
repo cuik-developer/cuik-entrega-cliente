@@ -54,8 +54,16 @@ const visitInput = z.object({
   tenantId: z.string().uuid(),
   clientId: z.string().uuid(),
   /** Points programs only: the purchase amount in soles. */
-  amount: z.number().positive().max(100000).optional(),
+  /** Same cap as the cashier (visit-schema): S/ 10,000 per purchase. */
+  amount: z.number().positive().max(10000, "El monto máximo por compra es S/ 10,000").optional(),
 })
+
+function visitMessage(cardComplete: boolean, stamps: string | null, points: number | null) {
+  if (cardComplete) return "Tarjeta completa: el pase ya muestra el premio."
+  if (stamps) return `Visita registrada · sello ${stamps}. Pase actualizado.`
+  if (points !== null) return `Visita registrada · ${points} puntos. Pase actualizado.`
+  return "Visita registrada. Pase actualizado."
+}
 
 /**
  * Same path as the cashier (registerVisit + the wallet refresh the visits
@@ -68,7 +76,9 @@ export async function simulateVisit(
   const guard = await requireSimulator()
   if (guard.error !== null) return { success: false, error: guard.error }
   const parsed = visitInput.safeParse(input)
-  if (!parsed.success) return { success: false, error: "Datos inválidos" }
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message ?? "Datos inválidos" }
+  }
   const { tenantId, clientId, amount } = parsed.data
 
   const tenant = await demoTenant(tenantId)
@@ -142,10 +152,7 @@ export async function simulateVisit(
     detail: { stamps, points, amount: amount ?? null },
   })
 
-  let message = "Visita registrada. Pase actualizado."
-  if (st?.cycleComplete) message = "Tarjeta completa: el pase ya muestra el premio."
-  else if (stamps) message = `Visita registrada · sello ${stamps}. Pase actualizado.`
-  else if (points !== null) message = `Visita registrada · ${points} puntos. Pase actualizado.`
+  const message = visitMessage(Boolean(st?.cycleComplete), stamps, points)
   return { success: true, data: { message, state: await demoClientState(tenant, clientId) } }
 }
 
@@ -214,6 +221,12 @@ export async function simulateCampaign(
     detail: { status: result.status, sent: result.sentCount, target: result.targetCount, message },
   })
   if (result.status === "failed") {
+    // Nothing went out: close it so the test draft cannot be re-sent from the demo panel.
+    await db
+      .update(campaigns)
+      .set({ status: "cancelled" })
+      .where(eq(campaigns.id, campaign.id))
+      .catch((err) => console.error("[simulateCampaign] cancel failed draft", err))
     return {
       success: false,
       error: `No se pudo enviar: ${result.errors[0] ?? "error desconocido"}`,

@@ -61,6 +61,7 @@ function actionLabel(row: ProductChangeRow): string {
     case "visit_registered":
       return typeof d.stamps === "string" ? `Registró visita (${d.stamps})` : "Registró visita"
     case "campaign_sent":
+      if (d.status === "failed") return "Campaña fallida"
       return typeof d.sent === "number" ? `Envió campaña (${d.sent})` : "Envió campaña"
     default:
       return row.action

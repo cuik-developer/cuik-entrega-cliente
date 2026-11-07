@@ -3,7 +3,7 @@
 import { Loader2, Megaphone, Search, Stamp } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useCallback, useEffect, useState, useTransition } from "react"
+import { useCallback, useEffect, useRef, useState, useTransition } from "react"
 import { toast } from "sonner"
 import {
   DataTable,
@@ -53,6 +53,7 @@ function recentAction(r: Recent): string {
     return "Registró visita"
   }
   if (r.action === "campaign_sent") {
+    if (d.status === "failed") return "Campaña fallida · no se envió"
     return typeof d.sent === "number" ? `Envió campaña · ${d.sent} recibida(s)` : "Envió campaña"
   }
   return r.action
@@ -133,11 +134,16 @@ export function SimulatorClient({
   const [message, setMessage] = useState("")
   const [busy, setBusy] = useState<"visit" | "campaign" | null>(null)
   const [, startTransition] = useTransition()
+  // Answers that arrive after the demo or the client changed are dropped.
+  const tenantRef = useRef(tenantId)
+  tenantRef.current = tenantId
+  const pickRef = useRef<string | null>(null)
 
   const loadClients = useCallback(
     async (q: string) => {
       if (!tenantId) return
       const r = await findDemoClients(tenantId, q)
+      if (tenantRef.current !== tenantId) return
       if (r.success) setClients(r.data)
       else {
         setClients([])
@@ -149,17 +155,24 @@ export function SimulatorClient({
 
   // New demo: start over with its newest clients.
   useEffect(() => {
+    pickRef.current = null
     setClientId(null)
     setState(null)
     setClients(null)
     setQuery("")
+    setAmount("")
+    setToAll(false)
     void loadClients("")
   }, [loadClients])
 
   async function pick(id: string) {
+    const forTenant = tenantId
+    pickRef.current = id
     setClientId(id)
     setState(null)
-    const r = await getDemoClient(tenantId, id)
+    setAmount("")
+    const r = await getDemoClient(forTenant, id)
+    if (tenantRef.current !== forTenant || pickRef.current !== id) return
     if (r.success) setState(r.data)
     else toast.error(r.error)
   }
@@ -337,7 +350,8 @@ export function SimulatorClient({
               <div className="px-3 py-2.5 border-t border-ent-line space-y-2">
                 {silent && (
                   <div className="text-[12px] text-ent-warn">
-                    Cliente archivado: la visita se registra, pero su pase no recibe avisos.
+                    Cliente archivado: como en el cajero, no se le registran visitas ni recibe
+                    campañas. Restáuralo desde el panel de la demo para probar con él.
                   </div>
                 )}
                 <div className="flex items-center gap-2 flex-wrap">
@@ -356,7 +370,7 @@ export function SimulatorClient({
                     type="button"
                     size="sm"
                     className="h-7 text-[12px] gap-1.5"
-                    disabled={busy !== null}
+                    disabled={busy !== null || silent}
                     onClick={() => void visit()}
                   >
                     {busy === "visit" ? (
