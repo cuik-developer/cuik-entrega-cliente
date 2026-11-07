@@ -6,13 +6,21 @@ import { type AdminAccess, canAccess, type StaffPermission } from "@/lib/staff-p
  * branding. Written after the change succeeded and never allowed to fail it.
  */
 
-export type ProductChangeArea = "designs" | "branding"
-export type ProductChangeAction = "created" | "saved" | "published" | "duplicated" | "deleted"
+export type ProductChangeArea = "designs" | "branding" | "simulator"
+export type ProductChangeAction =
+  | "created"
+  | "saved"
+  | "published"
+  | "duplicated"
+  | "deleted"
+  | "visit_registered"
+  | "campaign_sent"
 
 /** Which staff permission lets a member read each area of the history. */
 const AREA_PERMISSION: Record<ProductChangeArea, StaffPermission> = {
   designs: "designs",
   branding: "branding",
+  simulator: "simulator",
 }
 
 export const PRODUCT_CHANGE_AREAS = Object.keys(AREA_PERMISSION) as ProductChangeArea[]

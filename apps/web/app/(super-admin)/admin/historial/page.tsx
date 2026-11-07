@@ -26,6 +26,7 @@ export const dynamic = "force-dynamic"
 const AREA_LABEL: Record<ProductChangeArea, string> = {
   designs: "Diseño de pase",
   branding: "Branding",
+  simulator: "Simulador",
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -57,6 +58,10 @@ function actionLabel(row: ProductChangeRow): string {
       return "Duplicó"
     case "deleted":
       return "Eliminó"
+    case "visit_registered":
+      return typeof d.stamps === "string" ? `Registró visita (${d.stamps})` : "Registró visita"
+    case "campaign_sent":
+      return typeof d.sent === "number" ? `Envió campaña (${d.sent})` : "Envió campaña"
     default:
       return row.action
   }
@@ -147,7 +152,7 @@ export default async function HistorialPage({ searchParams }: { searchParams: Pr
       <PageHeader
         crumbs={[{ label: "Producto" }, { label: "Historial" }]}
         title="Historial"
-        subtitle="Cada cambio en diseños de pases y branding: quién, cuándo y sobre qué."
+        subtitle="Cada cambio en diseños de pases, branding y el simulador de demos: quién, cuándo y sobre qué."
       />
       <Panel>
         <Toolbar>

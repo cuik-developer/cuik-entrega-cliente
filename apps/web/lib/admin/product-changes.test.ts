@@ -7,7 +7,11 @@ import { historyAreasFor } from "./product-changes"
 
 describe("historyAreasFor", () => {
   it("shows each Equipo Cuik member only the areas they hold", () => {
-    expect(historyAreasFor(accessFor("super_admin", null))).toEqual(["designs", "branding"])
+    expect(historyAreasFor(accessFor("super_admin", null))).toEqual([
+      "designs",
+      "branding",
+      "simulator",
+    ])
     expect(historyAreasFor(accessFor("staff", ["designs_publish"]))).toEqual(["designs"])
     expect(historyAreasFor(accessFor("staff", ["branding", "metrics"]))).toEqual(["branding"])
     expect(historyAreasFor(accessFor("staff", ["metrics"]))).toEqual([])

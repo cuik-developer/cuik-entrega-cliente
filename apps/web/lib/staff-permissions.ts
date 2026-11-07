@@ -13,6 +13,7 @@ export const STAFF_PERMISSIONS = [
   "campaigns",
   "tenants_view",
   "metrics",
+  "simulator",
 ] as const
 
 export type StaffPermission = (typeof STAFF_PERMISSIONS)[number]
@@ -24,6 +25,7 @@ export const STAFF_PERMISSION_LABELS: Record<StaffPermission, string> = {
   campaigns: "Campañas",
   tenants_view: "Tenants (solo lectura)",
   metrics: "Métricas",
+  simulator: "Simulador (demos)",
 }
 
 export const STAFF_PERMISSION_DESCRIPTIONS: Record<StaffPermission, string> = {
@@ -35,6 +37,8 @@ export const STAFF_PERMISSION_DESCRIPTIONS: Record<StaffPermission, string> = {
   campaigns: "Ver las campañas y su detalle, sin datos de clientes. No envía ni reintenta.",
   tenants_view: "Ver la lista y la ficha de cada comercio, sin datos de clientes ni facturación.",
   metrics: "Ver las métricas agregadas de la plataforma, sin ingresos ni exportaciones.",
+  simulator:
+    "Registrar visitas y enviar campañas de prueba solo en las demos internas (Sistema › Configuración). Las notificaciones llegan de verdad a los teléfonos con pases de esas demos.",
 }
 
 const PERMISSION_SET: ReadonlySet<string> = new Set(STAFF_PERMISSIONS)
@@ -96,7 +100,8 @@ export const STAFF_SECTIONS: ReadonlyArray<{ prefix: string; permission: Section
   { prefix: "/admin/tenants", permission: "tenants_view" },
   { prefix: "/admin/metricas", permission: "metrics" },
   // Producto › Historial: each member sees only the areas they hold.
-  { prefix: "/admin/historial", permission: ["designs", "branding"] },
+  { prefix: "/admin/historial", permission: ["designs", "branding", "simulator"] },
+  { prefix: "/admin/simulador", permission: "simulator" },
 ]
 
 function matchesPrefix(pathname: string, prefix: string): boolean {

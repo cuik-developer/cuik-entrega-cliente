@@ -4,6 +4,7 @@ import {
   ClipboardList,
   CreditCard,
   Download,
+  FlaskConical,
   Handshake,
   Heart,
   History,
@@ -66,6 +67,10 @@ export const ADMIN_MODULES: AdminModule[] = [
           { href: "/admin/pases", label: "Diseños de pases", icon: Paintbrush },
           { href: "/admin/branding", label: "Branding", icon: Palette },
         ],
+      },
+      {
+        title: "Demos",
+        items: [{ href: "/admin/simulador", label: "Simulador", icon: FlaskConical }],
       },
     ],
   },
