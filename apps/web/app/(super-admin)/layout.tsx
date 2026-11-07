@@ -11,8 +11,9 @@ import { SuperAdminShell } from "./super-admin-shell"
 export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const { session, access } = await currentAdminAccess()
   if (!session) redirect("/login")
-  if (access.kind === "none") redirect("/")
-  // The team signs in with an authenticator app: nobody uses the admin without it.
+  // The team signs in with an authenticator app: nobody uses the admin without
+  // it. Checked BEFORE the access kind, which is "none" while 2FA is pending.
   if (twoFactorPending(session.user)) redirect(TWO_FACTOR_SETUP_PATH)
+  if (access.kind === "none") redirect("/")
   return <SuperAdminShell access={access}>{children}</SuperAdminShell>
 }
