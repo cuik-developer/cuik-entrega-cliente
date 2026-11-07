@@ -111,7 +111,7 @@ function OwnerTenantPage() {
     <div className="space-y-2">
       <Crumbs
         items={[
-          { label: "Inicio", href: "/admin/tenants" },
+          { label: "Inicio", href: "/admin" },
           { label: "Tenants", href: "/admin/tenants" },
           { label: tenant?.name ?? "Tenant" },
         ]}

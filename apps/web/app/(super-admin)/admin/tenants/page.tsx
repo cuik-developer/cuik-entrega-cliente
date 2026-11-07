@@ -177,7 +177,7 @@ function TenantsPageInner() {
   return (
     <div className="space-y-3">
       <PageHeader
-        crumbs={[{ label: "Inicio", href: "/admin/tenants" }, { label: "Tenants" }]}
+        crumbs={[{ label: "Inicio", href: "/admin" }, { label: "Tenants" }]}
         title="Tenants"
         subtitle="Todos los comercios de la plataforma"
         actions={

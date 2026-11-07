@@ -67,7 +67,7 @@ export default function ExportPage() {
   return (
     <div className="space-y-3">
       <PageHeader
-        crumbs={[{ label: "Inicio", href: "/admin/tenants" }, { label: "Exportar datos" }]}
+        crumbs={[{ label: "Inicio", href: "/admin" }, { label: "Exportar datos" }]}
         title="Exportar datos"
         subtitle="Descarga en Excel los clientes, las visitas o los movimientos de puntos de un tenant, con las columnas que elijas."
       />

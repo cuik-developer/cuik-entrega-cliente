@@ -108,7 +108,7 @@ export function permissionForAdminPath(pathname: string): SectionPermission | nu
   return STAFF_SECTIONS.find((s) => matchesPrefix(pathname, s.prefix))?.permission ?? null
 }
 
-/** Whether `access` may open the super-admin page at `pathname`. "/admin" itself is a redirect. */
+/** Whether `access` may open the super-admin page at `pathname`. "/admin" (the module launcher) is open to every staff member. */
 export function canOpenAdminPath(access: AdminAccess, pathname: string): boolean {
   if (access.kind === "super_admin") return true
   if (access.kind !== "staff") return false

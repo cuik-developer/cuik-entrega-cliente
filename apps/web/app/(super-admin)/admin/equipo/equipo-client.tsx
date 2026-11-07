@@ -212,7 +212,7 @@ export function EquipoClient() {
   return (
     <div className="space-y-3">
       <PageHeader
-        crumbs={[{ label: "Inicio", href: "/admin/tenants" }, { label: "Equipo Cuik" }]}
+        crumbs={[{ label: "Inicio", href: "/admin" }, { label: "Equipo Cuik" }]}
         title="Equipo Cuik"
         subtitle="Personas que te ayudan en el super-admin, cada una solo con las secciones que le des."
         actions={
