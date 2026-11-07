@@ -1,4 +1,4 @@
-import { db, desc, eq, passAssets, passDesigns, promotions, tenants, user } from "@cuik/db"
+import { db, desc, eq, passAssets, passDesigns, promotions, sql, tenants, user } from "@cuik/db"
 
 export async function getDesignById(id: string) {
   const results = await db.select().from(passDesigns).where(eq(passDesigns.id, id)).limit(1)
@@ -21,6 +21,10 @@ export async function listDesignsByTenant(tenantId?: string) {
       promotionName: promotions.rewardValue,
       promotionActive: promotions.active,
       reviewRequestedByName: user.name,
+      // Second join on "user" without an alias helper: who published it.
+      publishedByName: sql<
+        string | null
+      >`(SELECT u.name FROM "user" u WHERE u.id = ${passDesigns.publishedBy})`,
     })
     .from(passDesigns)
     .innerJoin(tenants, eq(passDesigns.tenantId, tenants.id))

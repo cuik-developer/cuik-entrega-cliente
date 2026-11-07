@@ -14,7 +14,7 @@ import {
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { useAdminAccess } from "@/components/admin/admin-access"
+import { useAdminAccess, useCan } from "@/components/admin/admin-access"
 import { Notice } from "@/components/admin/enterprise"
 
 import { Badge } from "@/components/ui/badge"
@@ -50,6 +50,7 @@ interface DesignRow {
     version: number
     updatedAt: Date
     reviewRequestedAt: Date | null
+    publishedAt: Date | null
   }
   tenantName: string
   tenantSlug: string
@@ -57,6 +58,7 @@ interface DesignRow {
   promotionName: string | null
   promotionActive: boolean | null
   reviewRequestedByName: string | null
+  publishedByName: string | null
 }
 
 // ── Component ───────────────────────────────────────────────────────
@@ -64,6 +66,8 @@ interface DesignRow {
 export default function PasesPage() {
   const router = useRouter()
   const isOwner = useAdminAccess().kind === "super_admin"
+  // Owner, or Equipo Cuik with "Publicar diseños".
+  const canPublish = useCan("designs_publish")
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
   const [designs, setDesigns] = useState<DesignRow[]>([])
   const [allTenants, setAllTenants] = useState<
@@ -145,7 +149,12 @@ export default function PasesPage() {
 
   const handleDelete = async (designId: string) => {
     if (!window.confirm("¿Eliminar este diseño?")) return
-    await deleteDesign(designId)
+    try {
+      const result = await deleteDesign(designId)
+      if (!result.success) toast.error(result.error)
+    } catch {
+      toast.error("No se pudo eliminar el diseño")
+    }
     fetchDesigns()
   }
 
@@ -272,7 +281,7 @@ export default function PasesPage() {
         </Dialog>
       </div>
 
-      {isOwner && awaitingReview.length > 0 && (
+      {canPublish && awaitingReview.length > 0 && (
         <Notice tone="info" className="mb-4">
           <span className="font-semibold text-ent-fg">
             {awaitingReview.length === 1
@@ -284,10 +293,16 @@ export default function PasesPage() {
           el editor y publícalos.
         </Notice>
       )}
-      {!isOwner && (
+      {!isOwner && !canPublish && (
         <Notice tone="info" className="mb-4">
           Edita borradores y guárdalos: quedan listos para que el dueño los revise y publique. Para
           cambiar un diseño publicado, duplícalo como borrador.
+        </Notice>
+      )}
+      {!isOwner && canPublish && (
+        <Notice tone="info" className="mb-4">
+          Puedes publicar y editar diseños publicados. Al publicar o guardar un diseño publicado se
+          actualizan los pases de todos los clientes del comercio.
         </Notice>
       )}
 
@@ -389,6 +404,18 @@ export default function PasesPage() {
                         </div>
                       </div>
 
+                      {row.design.isActive && row.design.publishedAt && (
+                        <p className="text-xs text-ent-fg-3 mb-1">
+                          Publicado
+                          {row.publishedByName ? ` por ${row.publishedByName}` : ""} ·{" "}
+                          {new Date(row.design.publishedAt).toLocaleDateString("es-PE", {
+                            day: "2-digit",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      )}
                       <div className="flex items-center justify-between text-xs text-gray-400">
                         <span>v{row.design.version}</span>
                         <span>
@@ -428,7 +455,8 @@ export default function PasesPage() {
                             <Copy className="w-3 h-3" />
                           )}
                         </Button>
-                        {isOwner && (
+                        {/* Staff with "Publicar diseños" deletes drafts only (checked on the server too). */}
+                        {canPublish && (isOwner || !row.design.isActive) && (
                           <Button
                             variant="outline"
                             size="sm"

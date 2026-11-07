@@ -19,7 +19,7 @@ export default async function EditorPage({ params }: EditorPageProps) {
   // Reads the DB directly: check access here too, not only in the middleware.
   const { access } = await currentAdminAccess()
   if (!canAccess(access, "designs")) return <NoAccess access={access} />
-  const canPublish = access.kind === "super_admin"
+  const canPublish = canAccess(access, "designs_publish")
 
   const result = await getDesignById(designId)
 

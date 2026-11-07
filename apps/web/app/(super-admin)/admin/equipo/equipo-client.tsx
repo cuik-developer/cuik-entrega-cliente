@@ -69,13 +69,18 @@ function PermissionChecks({
             <Checkbox
               id={id}
               checked={checked}
-              onCheckedChange={(c) =>
-                onChange(
-                  c === true
-                    ? STAFF_PERMISSIONS.filter((x) => x === p || value.includes(x))
-                    : value.filter((x) => x !== p),
-                )
-              }
+              onCheckedChange={(c) => {
+                // Publishing includes working on designs: the two move together.
+                const next = new Set(value)
+                if (c === true) {
+                  next.add(p)
+                  if (p === "designs_publish") next.add("designs")
+                } else {
+                  next.delete(p)
+                  if (p === "designs") next.delete("designs_publish")
+                }
+                onChange(STAFF_PERMISSIONS.filter((x) => next.has(x)))
+              }}
               className="mt-0.5"
             />
             <Label

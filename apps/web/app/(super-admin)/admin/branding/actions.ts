@@ -6,7 +6,7 @@ import type { TenantBranding } from "@cuik/shared/validators"
 import { tenantBrandingInputSchema, tenantBrandingSchema } from "@cuik/shared/validators"
 import { getConfigVersion } from "@cuik/shared/validators/pass-design-schema"
 import { revalidatePath } from "next/cache"
-
+import { recordProductChange } from "@/lib/admin/product-changes"
 import { requireSuperAdminOrAction } from "@/lib/admin-access"
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -57,8 +57,8 @@ export async function saveBranding(
   tenantId: string,
   config: TenantBranding,
 ): Promise<ActionResult<void>> {
-  const { error } = await requireBranding()
-  if (error) return { success: false, error }
+  const guard = await requireBranding()
+  if (guard.error !== null) return { success: false, error: guard.error }
 
   // Writes are strict: logo/icon must be our own /api/assets/... files.
   const parsed = tenantBrandingInputSchema.safeParse(config)
@@ -74,11 +74,20 @@ export async function saveBranding(
         updatedAt: new Date(),
       })
       .where(eq(tenants.id, tenantId))
-      .returning({ id: tenants.id })
+      .returning({ id: tenants.id, name: tenants.name })
 
     if (result.length === 0) {
       return { success: false, error: "Tenant no encontrado" }
     }
+
+    await recordProductChange({
+      actor: guard.session,
+      tenantId,
+      area: "branding",
+      action: "saved",
+      targetId: tenantId,
+      targetName: result[0].name,
+    })
 
     revalidatePath("/admin/branding")
 

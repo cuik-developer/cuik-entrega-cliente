@@ -41,10 +41,11 @@ import {
 } from "@cuik/wallet/shared"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
-
+import { recordProductChange } from "@/lib/admin/product-changes"
 import { requireSuperAdminOrAction } from "@/lib/admin-access"
 import { isSilentClient } from "@/lib/loyalty/archive"
 import { stampsInCycleOf } from "@/lib/loyalty/stamps"
+import { canAccess } from "@/lib/staff-permissions"
 import { apnsClientCertFor } from "@/lib/wallet/apns-client-cert"
 import { GOOGLE_HERO_ASSET_TYPE, pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
 import { googleMerchantLocations } from "@/lib/wallet/google-nearby"
@@ -56,14 +57,22 @@ import { getDesignById, listDesignsByTenant } from "./queries"
 type ActionResult<T> = { success: true; data: T } | { success: false; error: string }
 
 const STAFF_ACTIVE_DESIGN_ERROR =
-  "Este diseño está publicado: duplícalo como borrador para editarlo. Solo el dueño publica."
+  'Este diseño está publicado: duplícalo como borrador para editarlo. Publica quien tiene "Publicar diseños".'
+const STAFF_DELETE_LIVE_ERROR =
+  "No se puede eliminar un diseño publicado o que ya emitió pases. Solo el dueño puede hacerlo."
+const DELETE_IN_USE_ERROR =
+  "Este diseño ya emitió pases: los clientes que lo tienen dependen de él, no se puede eliminar."
+
+/** Rolls back a publish whose design vanished (deleted meanwhile). */
+class DesignGoneError extends Error {}
 
 // ── Auth helper for server actions ──────────────────────────────────
 
 // Equipo Cuik staff with "designs" may list, create, duplicate and save
-// drafts; publishing and deleting stay owner-only (no permission = owner).
-const requireSuperAdmin = () => requireSuperAdminOrAction()
+// drafts; "designs_publish" adds publishing, editing live designs and
+// deleting drafts (no permission = owner).
 const requireDesigns = () => requireSuperAdminOrAction("designs")
+const requirePublish = () => requireSuperAdminOrAction("designs_publish")
 
 // ── Schemas ─────────────────────────────────────────────────────────
 
@@ -95,8 +104,8 @@ const updateDesignSchema = z.object({
 export async function createDesign(
   input: z.infer<typeof createDesignSchema>,
 ): Promise<ActionResult<{ id: string }>> {
-  const { error, access } = await requireDesigns()
-  if (error) return { success: false, error }
+  const guard = await requireDesigns()
+  if (guard.error !== null) return { success: false, error: guard.error }
 
   const parsed = createDesignSchema.safeParse(input)
   if (!parsed.success) {
@@ -122,6 +131,14 @@ export async function createDesign(
     })
     .returning({ id: passDesigns.id })
 
+  await recordProductChange({
+    actor: guard.session,
+    tenantId,
+    area: "designs",
+    action: "created",
+    targetId: inserted.id,
+    targetName: name,
+  })
   revalidatePath("/admin/pases")
 
   return { success: true, data: { id: inserted.id } }
@@ -135,6 +152,27 @@ function v2SaveError(canvasData: unknown): string | null {
   if (canvasData === undefined || getConfigVersion(canvasData) !== "v2") return null
   const checked = passDesignSaveV2Schema.safeParse(canvasData)
   return checked.success ? null : `No se guardó: ${checked.error.errors[0].message}`
+}
+
+/** Columns a save writes: a v2 canvas carries its own colors/stamps/fields. */
+function contentValues(input: {
+  canvasData: unknown
+  colors: unknown
+  stampsConfig: unknown
+  fields: unknown
+}): Record<string, unknown> {
+  const { canvasData, colors, stampsConfig, fields } = input
+  if (canvasData !== undefined && getConfigVersion(canvasData) === "v2") {
+    const v2 = canvasData as PassDesignConfigV2
+    return { canvasData, colors: v2.colors, stampsConfig: v2.stampsConfig, fields: v2.fields }
+  }
+  // v1 path (or no canvas): use the separate columns as provided
+  const values: Record<string, unknown> = {}
+  if (canvasData !== undefined) values.canvasData = canvasData
+  if (colors !== undefined) values.colors = colors
+  if (stampsConfig !== undefined) values.stampsConfig = stampsConfig
+  if (fields !== undefined) values.fields = fields
+  return values
 }
 
 export async function updateDesign(
@@ -159,10 +197,11 @@ export async function updateDesign(
     updatedAt: new Date(),
   }
 
-  // Staff saves drafts only: the colors/fields of an active design are read
-  // live when passes regenerate, so editing it would publish without review.
-  // Their save marks the draft "listo para publicar" for the owner.
-  if (access.kind === "staff") {
+  // Staff without "designs_publish" saves drafts only: the colors/fields of an
+  // active design are read live when passes regenerate, so editing it would
+  // publish without review. Their save marks the draft "listo para publicar".
+  const reviewedSave = access.kind === "staff" && !canAccess(access, "designs_publish")
+  if (reviewedSave) {
     const [target] = await db
       .select({ isActive: passDesigns.isActive })
       .from(passDesigns)
@@ -182,36 +221,39 @@ export async function updateDesign(
     updateValues.reviewRequestedBy = session.user.id
   }
 
-  // If canvasData is a v2 config, denormalize colors/stamps/fields from it
-  if (canvasData !== undefined) {
-    updateValues.canvasData = canvasData
-    const configVersion = getConfigVersion(canvasData)
-    if (configVersion === "v2") {
-      const v2 = canvasData as PassDesignConfigV2
-      updateValues.colors = v2.colors
-      updateValues.stampsConfig = v2.stampsConfig
-      updateValues.fields = v2.fields
-    } else {
-      // v1 path: use separate columns as provided
-      if (colors !== undefined) updateValues.colors = colors
-      if (stampsConfig !== undefined) updateValues.stampsConfig = stampsConfig
-      if (fields !== undefined) updateValues.fields = fields
-    }
-  } else {
-    if (colors !== undefined) updateValues.colors = colors
-    if (stampsConfig !== undefined) updateValues.stampsConfig = stampsConfig
-    if (fields !== undefined) updateValues.fields = fields
-  }
+  Object.assign(updateValues, contentValues({ canvasData, colors, stampsConfig, fields }))
 
-  await db
+  const [saved] = await db
     .update(passDesigns)
     .set(updateValues)
     .where(
-      access.kind === "staff"
+      reviewedSave
         ? // Re-checked in the write: a publish between the read and here keeps it out.
           and(eq(passDesigns.id, designId), eq(passDesigns.isActive, false))
         : eq(passDesigns.id, designId),
     )
+    .returning({
+      tenantId: passDesigns.tenantId,
+      name: passDesigns.name,
+      isActive: passDesigns.isActive,
+    })
+  if (!saved) {
+    return {
+      success: false,
+      error: reviewedSave ? STAFF_ACTIVE_DESIGN_ERROR : "Diseño no encontrado",
+    }
+  }
+
+  await recordProductChange({
+    actor: session,
+    tenantId: saved.tenantId,
+    area: "designs",
+    action: "saved",
+    targetId: designId,
+    targetName: saved.name,
+    // Saving a published design changes what clients see on the next refresh.
+    detail: { live: saved.isActive },
+  })
 
   revalidatePath(`/admin/pases/${designId}/editor`)
   revalidatePath("/admin/pases")
@@ -424,8 +466,9 @@ async function sendApnsNotifications(
 export async function publishDesign(
   designId: string,
 ): Promise<ActionResult<{ id: string; version: number }>> {
-  const { error } = await requireSuperAdmin()
-  if (error) return { success: false, error }
+  const guard = await requirePublish()
+  if (guard.error !== null) return { success: false, error: guard.error }
+  const { session } = guard
 
   const result = await getDesignById(designId)
   if (!result) {
@@ -462,33 +505,63 @@ export async function publishDesign(
     }
   }
 
-  // Deactivate current active design for same tenant + type
-  await db
-    .update(passDesigns)
-    .set({ isActive: false, updatedAt: new Date() })
-    .where(
-      and(
-        eq(passDesigns.tenantId, design.tenantId),
-        eq(passDesigns.type, design.type),
-        eq(passDesigns.isActive, true),
-      ),
-    )
-
-  // Activate this design and bump version
   const newVersion = design.version + 1
 
-  await db
-    .update(passDesigns)
-    .set({
-      isActive: true,
-      version: newVersion,
-      ...(activePromo ? { promotionId: activePromo.id } : {}),
-      // Published: the "listo para publicar" mark from Equipo Cuik is done.
-      reviewRequestedAt: null,
-      reviewRequestedBy: null,
-      updatedAt: new Date(),
+  // One transaction, serialized per tenant: two people publishing at once
+  // would otherwise both deactivate the old design and leave two active.
+  try {
+    await db.transaction(async (tx) => {
+      await tx
+        .select({ id: tenants.id })
+        .from(tenants)
+        .where(eq(tenants.id, design.tenantId))
+        .for("update")
+
+      // Deactivate current active design for same tenant + type
+      await tx
+        .update(passDesigns)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(
+          and(
+            eq(passDesigns.tenantId, design.tenantId),
+            eq(passDesigns.type, design.type),
+            eq(passDesigns.isActive, true),
+          ),
+        )
+
+      // Activate this design and bump version
+      const activated = await tx
+        .update(passDesigns)
+        .set({
+          isActive: true,
+          version: newVersion,
+          ...(activePromo ? { promotionId: activePromo.id } : {}),
+          // Published: the "listo para publicar" mark from Equipo Cuik is done.
+          reviewRequestedAt: null,
+          reviewRequestedBy: null,
+          publishedAt: new Date(),
+          publishedBy: session.user.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(passDesigns.id, designId))
+        .returning({ id: passDesigns.id })
+      // Deleted between the read and here: undo the deactivation too.
+      if (activated.length === 0) throw new DesignGoneError()
     })
-    .where(eq(passDesigns.id, designId))
+  } catch (err) {
+    if (err instanceof DesignGoneError) return { success: false, error: "Diseño no encontrado" }
+    throw err
+  }
+
+  await recordProductChange({
+    actor: session,
+    tenantId: design.tenantId,
+    area: "designs",
+    action: "published",
+    targetId: designId,
+    targetName: design.name,
+    detail: { version: newVersion, type: design.type },
+  })
 
   // Sync assets and update instances (extracted to reduce complexity)
   await syncPassAssets(designId, design.canvasData)
@@ -511,15 +584,49 @@ export async function publishDesign(
 }
 
 export async function deleteDesign(designId: string): Promise<ActionResult<{ id: string }>> {
-  const { error } = await requireSuperAdmin()
-  if (error) return { success: false, error }
+  const guard = await requirePublish()
+  if (guard.error !== null) return { success: false, error: guard.error }
+  const { session, access } = guard
+  const isStaff = access.kind === "staff"
 
-  // Delete associated assets first
-  await db.delete(passAssets).where(eq(passAssets.designId, designId))
+  // Staff deletes drafts only. Nobody deletes a design that issued passes:
+  // pass_instances keep pointing at it (FK), and those clients' passes are
+  // rebuilt from it. The row is locked so a publish cannot land in between.
+  const outcome = await db.transaction(async (tx) => {
+    const [target] = await tx
+      .select({
+        isActive: passDesigns.isActive,
+        name: passDesigns.name,
+        tenantId: passDesigns.tenantId,
+      })
+      .from(passDesigns)
+      .where(eq(passDesigns.id, designId))
+      .for("update")
+    if (!target) return { error: "Diseño no encontrado" } as const
+    if (isStaff && target.isActive) return { error: STAFF_DELETE_LIVE_ERROR } as const
+    const [inUse] = await tx
+      .select({ id: passInstances.id })
+      .from(passInstances)
+      .where(eq(passInstances.designId, designId))
+      .limit(1)
+    if (inUse) return { error: isStaff ? STAFF_DELETE_LIVE_ERROR : DELETE_IN_USE_ERROR } as const
 
-  // Delete the design
-  await db.delete(passDesigns).where(eq(passDesigns.id, designId))
+    // Delete associated assets first
+    await tx.delete(passAssets).where(eq(passAssets.designId, designId))
+    await tx.delete(passDesigns).where(eq(passDesigns.id, designId))
+    return { error: null, target } as const
+  })
+  if (outcome.error !== null) return { success: false, error: outcome.error }
 
+  await recordProductChange({
+    actor: session,
+    tenantId: outcome.target.tenantId,
+    area: "designs",
+    action: "deleted",
+    targetId: designId,
+    targetName: outcome.target.name,
+    detail: { wasActive: outcome.target.isActive },
+  })
   revalidatePath("/admin/pases")
 
   return { success: true, data: { id: designId } }
@@ -531,8 +638,8 @@ export async function deleteDesign(designId: string): Promise<ActionResult<{ id:
  * Assets are referenced from `canvasData` and synced on publish.
  */
 export async function duplicateDesign(designId: string): Promise<ActionResult<{ id: string }>> {
-  const { error } = await requireDesigns()
-  if (error) return { success: false, error }
+  const guard = await requireDesigns()
+  if (guard.error !== null) return { success: false, error: guard.error }
   if (!z.string().uuid().safeParse(designId).success) {
     return { success: false, error: "Diseño no encontrado" }
   }
@@ -556,11 +663,20 @@ export async function duplicateDesign(designId: string): Promise<ActionResult<{ 
     })
     .returning({ id: passDesigns.id })
 
+  await recordProductChange({
+    actor: guard.session,
+    tenantId: source.tenantId,
+    area: "designs",
+    action: "duplicated",
+    targetId: inserted.id,
+    targetName: `${source.name} (borrador)`.slice(0, 100),
+    detail: { fromId: source.id, fromName: source.name },
+  })
   revalidatePath("/admin/pases")
   return { success: true, data: { id: inserted.id } }
 }
 
-/** Drafts an Equipo Cuik member saved and the owner has not published yet (owner only). */
+/** Drafts an Equipo Cuik member saved that nobody published yet (owner and "Publicar diseños"). */
 export async function listDesignsAwaitingReview(): Promise<
   ActionResult<
     {
@@ -572,7 +688,7 @@ export async function listDesignsAwaitingReview(): Promise<
     }[]
   >
 > {
-  const { error } = await requireSuperAdmin()
+  const { error } = await requirePublish()
   if (error) return { success: false, error }
 
   const rows = await db

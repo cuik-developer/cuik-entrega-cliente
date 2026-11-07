@@ -7,6 +7,7 @@ import {
   CreditCard,
   Download,
   Handshake,
+  History,
   LayoutDashboard,
   LogOut,
   type LucideIcon,
@@ -63,6 +64,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/admin/pases", label: "Diseños de pases", icon: Paintbrush },
       { href: "/admin/campanas", label: "Campañas", icon: Megaphone },
       { href: "/admin/branding", label: "Branding", icon: Palette },
+      { href: "/admin/historial", label: "Historial", icon: History },
     ],
   },
   {

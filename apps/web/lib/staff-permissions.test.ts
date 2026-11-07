@@ -15,6 +15,9 @@ describe("normalizeStaffPermissions", () => {
       "metrics",
     ])
   })
+  it("brings designs along with designs_publish", () => {
+    expect(normalizeStaffPermissions(["designs_publish"])).toEqual(["designs", "designs_publish"])
+  })
   it("treats null and non-arrays as no permission", () => {
     expect(normalizeStaffPermissions(null)).toEqual([])
     expect(normalizeStaffPermissions("designs")).toEqual([])
@@ -73,5 +76,16 @@ describe("admin paths", () => {
     expect(adminLandingHref(accessFor("staff", ["branding", "metrics"]))).toBe("/admin/metricas")
     expect(adminLandingHref(accessFor("staff", []))).toBeNull()
     expect(adminLandingHref(accessFor("super_admin", null))).toBe("/admin/tenants")
+  })
+})
+
+describe("Producto › Historial", () => {
+  it("opens with designs or branding, never with other areas", () => {
+    expect(canOpenAdminPath(accessFor("staff", ["designs"]), "/admin/historial")).toBe(true)
+    expect(canOpenAdminPath(accessFor("staff", ["branding"]), "/admin/historial")).toBe(true)
+    expect(canOpenAdminPath(accessFor("staff", ["metrics", "campaigns"]), "/admin/historial")).toBe(
+      false,
+    )
+    expect(canOpenAdminPath(accessFor("super_admin", null), "/admin/historial")).toBe(true)
   })
 })

@@ -8,6 +8,7 @@
 
 export const STAFF_PERMISSIONS = [
   "designs",
+  "designs_publish",
   "branding",
   "campaigns",
   "tenants_view",
@@ -18,6 +19,7 @@ export type StaffPermission = (typeof STAFF_PERMISSIONS)[number]
 
 export const STAFF_PERMISSION_LABELS: Record<StaffPermission, string> = {
   designs: "Diseños de pases",
+  designs_publish: "Publicar diseños",
   branding: "Branding",
   campaigns: "Campañas",
   tenants_view: "Tenants (solo lectura)",
@@ -25,7 +27,10 @@ export const STAFF_PERMISSION_LABELS: Record<StaffPermission, string> = {
 }
 
 export const STAFF_PERMISSION_DESCRIPTIONS: Record<StaffPermission, string> = {
-  designs: "Ver y editar diseños y guardar borradores. No publica: el dueño revisa y publica.",
+  designs:
+    'Ver y editar diseños y guardar borradores. Sin "Publicar diseños", el dueño revisa y publica.',
+  designs_publish:
+    "Publicar, editar diseños publicados y eliminar borradores. Publicar actualiza los pases de todos los clientes del comercio.",
   branding: "Editar y guardar el branding de los comercios.",
   campaigns: "Ver las campañas y su detalle, sin datos de clientes. No envía ni reintenta.",
   tenants_view: "Ver la lista y la ficha de cada comercio, sin datos de clientes ni facturación.",
@@ -38,10 +43,14 @@ export function isStaffPermission(value: unknown): value is StaffPermission {
   return typeof value === "string" && PERMISSION_SET.has(value)
 }
 
-/** Known permission keys only, deduplicated, in canonical order. Anything else → []. */
+/**
+ * Known permission keys only, deduplicated, in canonical order. Anything else → [].
+ * Publishing designs includes working on them: "designs_publish" brings "designs".
+ */
 export function normalizeStaffPermissions(raw: unknown): StaffPermission[] {
   if (!Array.isArray(raw)) return []
-  const given = new Set(raw.filter(isStaffPermission))
+  const given = new Set<StaffPermission>(raw.filter(isStaffPermission))
+  if (given.has("designs_publish")) given.add("designs")
   return STAFF_PERMISSIONS.filter((p) => given.has(p))
 }
 
@@ -77,13 +86,17 @@ export function canAccess(
  * other /admin path is owner-only (finanzas, prospectos, solicitudes, exportar,
  * reclamaciones, planes, configuración, office, equipo…).
  */
-export const STAFF_SECTIONS: ReadonlyArray<{ prefix: string; permission: StaffPermission }> = [
+type SectionPermission = StaffPermission | readonly StaffPermission[]
+
+export const STAFF_SECTIONS: ReadonlyArray<{ prefix: string; permission: SectionPermission }> = [
   { prefix: "/admin/pases", permission: "designs" },
   { prefix: "/admin/editor", permission: "designs" },
   { prefix: "/admin/branding", permission: "branding" },
   { prefix: "/admin/campanas", permission: "campaigns" },
   { prefix: "/admin/tenants", permission: "tenants_view" },
   { prefix: "/admin/metricas", permission: "metrics" },
+  // Producto › Historial: each member sees only the areas they hold.
+  { prefix: "/admin/historial", permission: ["designs", "branding"] },
 ]
 
 function matchesPrefix(pathname: string, prefix: string): boolean {
@@ -91,7 +104,7 @@ function matchesPrefix(pathname: string, prefix: string): boolean {
 }
 
 /** Permission that opens `pathname` to staff, or null when it is owner-only. */
-export function permissionForAdminPath(pathname: string): StaffPermission | null {
+export function permissionForAdminPath(pathname: string): SectionPermission | null {
   return STAFF_SECTIONS.find((s) => matchesPrefix(pathname, s.prefix))?.permission ?? null
 }
 
@@ -100,8 +113,7 @@ export function canOpenAdminPath(access: AdminAccess, pathname: string): boolean
   if (access.kind === "super_admin") return true
   if (access.kind !== "staff") return false
   if (pathname === "/admin") return true
-  const permission = permissionForAdminPath(pathname)
-  return permission !== null && access.permissions.includes(permission)
+  return canAccess(access, permissionForAdminPath(pathname))
 }
 
 /** Landing page for staff: the first section they hold, in menu order. */

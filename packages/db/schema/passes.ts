@@ -54,6 +54,9 @@ export const passDesigns = passesSchema.table(
     reviewRequestedBy: text("review_requested_by").references(() => user.id, {
       onDelete: "set null",
     }),
+    /** Last publish: when and by whom (owner or Equipo Cuik with "Publicar diseños"). */
+    publishedAt: timestamp("published_at"),
+    publishedBy: text("published_by").references(() => user.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

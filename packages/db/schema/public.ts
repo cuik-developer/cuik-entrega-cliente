@@ -246,3 +246,27 @@ export const complaints = pgTable(
     index("complaints_created_idx").on(table.createdAt),
   ],
 )
+
+// Product change log (Producto › Historial, migration 0037): who changed which
+// pass design or branding, and when. Append-only; names are snapshots so the
+// entry survives a revoked member or a deleted design.
+export const productChanges = pgTable(
+  "product_changes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "set null" }),
+    tenantName: text("tenant_name"),
+    actorId: text("actor_id").references(() => user.id, { onDelete: "set null" }),
+    actorName: text("actor_name"),
+    area: text("area").notNull(), // "designs" | "branding"
+    action: text("action").notNull(), // created | saved | published | duplicated | deleted
+    targetId: text("target_id"),
+    targetName: text("target_name"),
+    detail: jsonb("detail"), // e.g. { version: 4, passesUpdated: 120 }
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("product_changes_created_idx").on(t.createdAt),
+    index("product_changes_tenant_created_idx").on(t.tenantId, t.createdAt),
+  ],
+)
