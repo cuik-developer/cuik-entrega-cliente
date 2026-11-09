@@ -83,8 +83,14 @@ export async function simulateVisit(
 
   const tenant = await demoTenant(tenantId)
   if (!tenant) return { success: false, error: NOT_A_DEMO_ERROR }
-  if (tenant.program === "points" && amount === undefined) {
-    return { success: false, error: "Ingresa el monto de la compra para sumar puntos." }
+  if (tenant.requiresAmount && amount === undefined) {
+    return {
+      success: false,
+      error:
+        tenant.program === "points"
+          ? "Ingresa el monto de la compra para sumar puntos."
+          : "Ingresa el monto de la compra para calcular el cashback.",
+    }
   }
   const before = await demoClientState(tenant, clientId)
   if (!before?.qrCode) return { success: false, error: "Cliente no encontrado" }
@@ -132,7 +138,7 @@ export async function simulateVisit(
           ? cardCompleteNotice(tenantRow?.automations, {
               clientName: result.client.name,
               tenantName,
-              reward: st.rewardValue,
+              reward: st.cashback?.rewardLabel ?? st.rewardValue,
             })
           : null) ??
         st.milestone?.message ??

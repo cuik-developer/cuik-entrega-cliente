@@ -29,6 +29,11 @@ const STAMPS_VARIABLES: Record<string, string> = {
   "{{stamps.max}}": "Sellos para premio",
   "{{stamps.remaining}}": "Sellos restantes",
   "{{rewards.pending}}": "Premios pendientes",
+  // Cashback reward (resolve to "" on a program that gives a gift instead).
+  "{{cashback.balance}}": "Cashback acumulado en la tarjeta",
+  "{{cashback.pending}}": "Cashback por canjear en caja",
+  "{{cashback.total}}": "Cashback total (tarjeta + por canjear)",
+  "{{cashback.percent}}": "Porcentaje de cashback",
 }
 const POINTS_VARIABLES: Record<string, string> = {
   "{{points.balance}}": "Balance de puntos",

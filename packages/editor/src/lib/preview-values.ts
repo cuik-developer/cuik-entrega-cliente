@@ -37,6 +37,11 @@ export function resolvePreviewValue(value: string, s: PreviewState): string {
     "{{stamps.total}}": s.promotionType === "points" ? "12" : String(current + s.maxVisits),
     "{{points.balance}}": "325",
     "{{rewards.pending}}": s.completed ? "1" : "0",
+    // Cashback reward: a completed card has its amount waiting at the till.
+    "{{cashback.balance}}": s.completed ? "S/ 0.00" : "S/ 12.50",
+    "{{cashback.pending}}": s.completed ? "S/ 25.00" : "S/ 0.00",
+    "{{cashback.total}}": s.completed ? "S/ 25.00" : "S/ 12.50",
+    "{{cashback.percent}}": "5 %",
     "{{tenant.name}}": s.tenantName,
   }
 

@@ -44,6 +44,8 @@ import { z } from "zod"
 import { recordProductChange } from "@/lib/admin/product-changes"
 import { requireSuperAdminOrAction } from "@/lib/admin-access"
 import { isSilentClient } from "@/lib/loyalty/archive"
+import { cashbackTemplateVars } from "@/lib/loyalty/cashback"
+import { activeCashbackSettings } from "@/lib/loyalty/cashback-db"
 import { stampsInCycleOf } from "@/lib/loyalty/stamps"
 import { canAccess } from "@/lib/staff-permissions"
 import { apnsClientCertFor } from "@/lib/wallet/apns-client-cert"
@@ -913,6 +915,7 @@ async function propagateGooglePasses(
       email: clients.email,
       totalVisits: clients.totalVisits,
       stampsCashed: clients.stampsCashed,
+      cashbackBalance: clients.cashbackBalance,
       pointsBalance: clients.pointsBalance,
       tier: clients.tier,
       birthday: clients.birthday,
@@ -943,6 +946,7 @@ async function propagateGooglePasses(
     .select({
       clientId: rewards.clientId,
       count: sql<number>`count(*)::int`,
+      cashback: sql<string>`COALESCE(SUM(${rewards.cashbackAmount}), 0)::text`,
     })
     .from(rewards)
     .where(
@@ -957,6 +961,10 @@ async function propagateGooglePasses(
     .groupBy(rewards.clientId)
 
   const pendingRewardsMap = new Map(rewardRows.map((r) => [r.clientId, r.count]))
+  const pendingCashbackMap = new Map(rewardRows.map((r) => [r.clientId, r.cashback]))
+  // Cashback reward of the active stamps program: {{cashback.*}} per client.
+  const cashbackSettings =
+    promotionType === "stamps" ? await activeCashbackSettings(tenantId) : null
 
   // 6. Batch upsert: 5 at a time with Promise.allSettled
   let successCount = 0
@@ -1011,6 +1019,13 @@ async function propagateGooglePasses(
             rewards: {
               pending: pendingRewardsMap.get(instance.clientId) ?? 0,
             },
+            cashback: cashbackSettings
+              ? cashbackTemplateVars(
+                  cashbackSettings,
+                  client.cashbackBalance,
+                  pendingCashbackMap.get(instance.clientId) ?? 0,
+                )
+              : undefined,
             tenant: {
               name: tenant.name,
             },

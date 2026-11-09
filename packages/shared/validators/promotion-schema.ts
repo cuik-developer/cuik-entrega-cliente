@@ -58,6 +58,10 @@ export type ExpirationPolicy = z.infer<typeof expirationPolicySchema>
 
 const clockTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$|^24:00$/, "Hora inválida")
 
+/** What a bonus window multiplies when the stamps reward is cashback. */
+export const BONUS_APPLIES = ["stamps", "cashback", "both"] as const
+export type BonusApplies = (typeof BONUS_APPLIES)[number]
+
 /** "08:30" -> 510. "24:00" -> 1440 (end of day). */
 export function minutesOfClock(value: string): number {
   const [h, m] = value.split(":").map(Number)
@@ -90,6 +94,13 @@ export const bonusWindowSchema = z
     start: clockTimeSchema,
     end: clockTimeSchema,
     multiplier: z.number().int().min(2).max(10),
+    /**
+     * What the multiplier applies to in a stamps program whose reward is
+     * cashback: the stamps of the visit, the cashback of that purchase, or
+     * both. Ignored by points programs and by stamps programs with a gift
+     * reward (there it always multiplies the stamps).
+     */
+    applies: z.enum(BONUS_APPLIES).default("stamps"),
     active: z.boolean().default(true),
   })
   .superRefine((w, ctx) => {
@@ -243,25 +254,93 @@ const milestoneMessagesSchema = z.object({
   cashOut: z.string().trim().max(200).default(DEFAULT_MILESTONE_MESSAGES.cashOut),
 })
 
-const stampsBlockSchema = z.object({
-  maxVisitsPerDay: z.number().int().min(1).max(10).default(1),
-  rewardExpirationDays: z.number().int().min(1).nullable().default(null),
-  stampsExpiration: expirationPolicySchema.default({ mode: "never" }),
-  milestones: z
-    .array(stampMilestoneSchema)
-    .max(10)
-    .default([])
-    .refine((list) => new Set(list.map((m) => m.at)).size === list.length, {
-      message: "Cada visita puede tener un solo hito",
-    })
-    .refine((list) => list.filter((m) => m.redeemable).length <= 1, {
-      message: "Solo un premio puede ser canjeable con reinicio",
-    }),
-  milestoneMessages: milestoneMessagesSchema.default({}),
+// --- Reward of the full card: a gift, or cashback ---
+
+/** How the reward of a completed stamps card is given. */
+export const STAMPS_REWARD_MODES = ["gift", "cashback"] as const
+export type StampsRewardMode = (typeof STAMPS_REWARD_MODES)[number]
+
+/** Steps the cashback of one purchase can be rounded to, in soles. */
+export const CASHBACK_ROUND_STEPS = [0.01, 0.1, 0.5, 1] as const
+
+/**
+ * Cashback as the reward of the card: every stamp keeps `percent` of its
+ * purchase, the card of N stamps is "the last N purchases", and completing it
+ * pays the accumulated amount at the till. The purchase amount is required
+ * for every stamp in this mode.
+ */
+export const cashbackSettingsSchema = z.object({
+  /** Percentage of each purchase kept as cashback (5 = 5 %). */
+  percent: z.number().min(0.5, "Mínimo 0.5 %").max(50, "Máximo 50 %"),
+  /** The cashback of one purchase is rounded to this step (S/ 0.10 by default). */
+  roundTo: z
+    .number()
+    .refine((n): n is (typeof CASHBACK_ROUND_STEPS)[number] =>
+      (CASHBACK_ROUND_STEPS as readonly number[]).includes(n),
+    )
+    .default(0.1),
+  /** Cap on the cashback of one purchase, in soles; null = no cap. */
+  maxPerPurchase: z.number().positive().max(10000).nullable().default(null),
 })
+
+export type CashbackSettings = z.infer<typeof cashbackSettingsSchema>
+
+export const DEFAULT_CASHBACK_SETTINGS: CashbackSettings = {
+  percent: 5,
+  roundTo: 0.1,
+  maxPerPurchase: null,
+}
+
+const stampsBlockSchema = z
+  .object({
+    maxVisitsPerDay: z.number().int().min(1).max(10).default(1),
+    rewardExpirationDays: z.number().int().min(1).nullable().default(null),
+    stampsExpiration: expirationPolicySchema.default({ mode: "never" }),
+    /** "gift" = the text in `rewardValue` is handed over; "cashback" = the accumulated amount. */
+    rewardMode: z.enum(STAMPS_REWARD_MODES).default("gift"),
+    /** Settings of the cashback reward; read only when rewardMode = "cashback". */
+    cashback: cashbackSettingsSchema.nullable().default(null),
+    milestones: z
+      .array(stampMilestoneSchema)
+      .max(10)
+      .default([])
+      .refine((list) => new Set(list.map((m) => m.at)).size === list.length, {
+        message: "Cada visita puede tener un solo hito",
+      })
+      .refine((list) => list.filter((m) => m.redeemable).length <= 1, {
+        message: "Solo un premio puede ser canjeable con reinicio",
+      }),
+    milestoneMessages: milestoneMessagesSchema.default({}),
+  })
+  .superRefine((stamps, ctx) => {
+    if (stamps.rewardMode !== "cashback") return
+    if (!stamps.cashback) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["cashback"],
+        message: "Indica el porcentaje de cashback",
+      })
+    }
+    // Two ways of cashing the same card would confuse the till and the client.
+    if (stamps.milestones.some((m) => m.redeemable)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["milestones"],
+        message: "Un programa con cashback no puede tener un premio canjeable con reinicio",
+      })
+    }
+  })
 
 export type StampMilestone = z.infer<typeof stampMilestoneSchema>
 export type MilestoneMessages = z.infer<typeof milestoneMessagesSchema>
+
+/** The cashback settings of a stamps block when its reward is cashback, else null. */
+export function cashbackSettingsOf(
+  stamps: { rewardMode?: string | null; cashback?: CashbackSettings | null } | null | undefined,
+): CashbackSettings | null {
+  if (!stamps || stamps.rewardMode !== "cashback" || !stamps.cashback) return null
+  return stamps.cashback
+}
 
 // --- Main config schema ---
 

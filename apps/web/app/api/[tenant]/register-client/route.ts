@@ -15,9 +15,11 @@ import {
 import type { RegistrationConfig } from "@cuik/shared/validators"
 import {
   buildRegistrationSchema,
+  cashbackSettingsOf,
   pointsPromotionConfigSchema,
   registerClientSchema,
   registrationConfigSchema,
+  stampsPromotionConfigSchema,
 } from "@cuik/shared/validators"
 import { generateAuthToken } from "@cuik/wallet/apple"
 import {
@@ -30,6 +32,7 @@ import {
 import { resolvePassFields, type TemplateContext, validateGoogleEnv } from "@cuik/wallet/shared"
 import { errorResponse, resolveTenant, successResponse } from "@/lib/api-utils"
 import { clientIp } from "@/lib/client-ip"
+import { cashbackTemplateVars } from "@/lib/loyalty/cashback"
 import { insertEarnLot } from "@/lib/loyalty/points-lots"
 import { stampsInCycleOf } from "@/lib/loyalty/stamps"
 import { checkRateLimit, HOUR_MS, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit"
@@ -407,10 +410,16 @@ async function generateGoogleWalletUrl(ctx: {
     })
 
     const [activePromotion] = await db
-      .select({ type: promotions.type })
+      .select({ type: promotions.type, config: promotions.config })
       .from(promotions)
       .where(and(eq(promotions.tenantId, tenant.id), eq(promotions.active, true)))
       .limit(1)
+    // Cashback reward: a new client starts at S/ 0.00 ({{cashback.*}} on the pass).
+    const stampsCfg =
+      activePromotion?.type === "stamps"
+        ? stampsPromotionConfigSchema.safeParse(activePromotion.config ?? {})
+        : null
+    const cashbackSettings = stampsCfg?.success ? cashbackSettingsOf(stampsCfg.data.stamps) : null
 
     const stampsInCycle = stampsInCycleOf(client, maxVisits)
     const resolvedDesignFields = resolveDesignFieldsForClient(
@@ -419,6 +428,7 @@ async function generateGoogleWalletUrl(ctx: {
       { current: stampsInCycle, max: maxVisits, total: client.totalVisits },
       0,
       tenant.name,
+      cashbackSettings ? cashbackTemplateVars(cashbackSettings, 0, 0) : undefined,
     )
 
     const upsertResult = await upsertLoyaltyObject({
@@ -478,6 +488,7 @@ function resolveDesignFieldsForClient(
   stamps: { current: number; max: number; total: number },
   pendingRewards: number,
   tenantName: string,
+  cashback?: TemplateContext["cashback"],
 ): ReturnType<typeof resolvePassFields> | undefined {
   const fields = fieldsRaw as {
     headerFields?: Array<{ key: string; label: string; value: string }>
@@ -514,6 +525,7 @@ function resolveDesignFieldsForClient(
     },
     points: { balance: client.pointsBalance },
     rewards: { pending: pendingRewards },
+    cashback,
     tenant: { name: tenantName },
   }
   return resolvePassFields(fields, templateContext)

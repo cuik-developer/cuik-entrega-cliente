@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useTenant } from "@/hooks/use-tenant"
+import { cashbackPercentOf } from "@/lib/loyalty/cashback"
 
 type Variable = { variable: string; label: string }
 
@@ -23,6 +24,12 @@ const STAMPS: Variable[] = [
   { variable: "{{stamps.remaining}}", label: "Sellos restantes" },
   { variable: "{{rewards.pending}}", label: "Premios pendientes" },
 ]
+/** Stamps programs whose reward is cashback. */
+const CASHBACK: Variable[] = [
+  { variable: "{{cashback.balance}}", label: "Cashback acumulado" },
+  { variable: "{{cashback.pending}}", label: "Cashback por canjear" },
+  { variable: "{{cashback.total}}", label: "Cashback total" },
+]
 const POINTS: Variable[] = [
   { variable: "{{points.balance}}", label: "Balance de puntos" },
   { variable: "{{points.expiring}}", label: "Puntos por vencer" },
@@ -35,13 +42,17 @@ const TAIL: Variable[] = [{ variable: "{{tenant.name}}", label: "Nombre del come
  * "Balance de puntos" (it would render 0) and a points tenant never sees
  * the stamp counters. Unknown type → both, to be safe.
  */
-export function campaignVariablesFor(promotionType: "stamps" | "points" | null): Variable[] {
+export function campaignVariablesFor(
+  promotionType: "stamps" | "points" | null,
+  cashbackReward = false,
+): Variable[] {
+  const stamps = cashbackReward ? [...STAMPS, ...CASHBACK] : STAMPS
   const specific =
     promotionType === "points"
       ? POINTS
       : promotionType === "stamps"
-        ? STAMPS
-        : [...STAMPS, ...POINTS]
+        ? stamps
+        : [...stamps, ...POINTS]
   return [...COMMON, ...specific, ...TAIL]
 }
 
@@ -51,8 +62,11 @@ interface VariableInsertButtonProps {
 }
 
 export function VariableInsertButton({ textareaRef, onInsert }: VariableInsertButtonProps) {
-  const { promotionType } = useTenant()
-  const variables = campaignVariablesFor(promotionType)
+  const { promotionType, promotionConfig } = useTenant()
+  const variables = campaignVariablesFor(
+    promotionType,
+    promotionType === "stamps" && cashbackPercentOf(promotionConfig) !== null,
+  )
 
   function handleInsert(variable: string) {
     const textarea = textareaRef.current

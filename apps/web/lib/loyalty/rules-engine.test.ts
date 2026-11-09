@@ -568,6 +568,7 @@ describe("bonus windows", () => {
     start: "08:00",
     end: "12:00",
     multiplier: 3,
+    applies: "stamps" as const,
     active: true,
   }
 

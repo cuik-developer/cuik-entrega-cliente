@@ -61,6 +61,7 @@ import { TenantBillingSection } from "./tenant-billing-section"
 import { TenantCampaignsSection } from "./tenant-campaigns-section"
 import { TenantChurnLine } from "./tenant-health"
 import { TenantNotesSection } from "./tenant-notes-section"
+import { TenantPhasesSection } from "./tenant-phases-section"
 import { type CatalogSummaryItem, TenantProgramSummary } from "./tenant-program-summary"
 import {
   type ApiTenant,
@@ -636,6 +637,9 @@ export function TenantDetail({
                 onOpenTab={setActiveTab}
                 onSaved={onActionComplete}
               />
+
+              {/* Stages of the program: where each change of strategy began */}
+              <TenantPhasesSection tenantId={tenant.id} />
 
               {/* Onboarding checklist */}
               {checklist && (

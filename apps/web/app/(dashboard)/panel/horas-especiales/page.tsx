@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 
 import { PanelMessage } from "@/components/admin/enterprise"
 import { auth } from "@/lib/auth"
+import { cashbackPercentOf } from "@/lib/loyalty/cashback"
 import { getTenantForUser } from "@/lib/tenant-context"
 import { getMemberRole, isTenantAdmin } from "@/lib/tenant-roles"
 
@@ -40,11 +41,15 @@ export default async function HorasEspecialesPage() {
   })
 
   const role = tenant.readOnly ? null : await getMemberRole(session.user.id, tenant.organizationId)
+  // Stamps program paying cashback: each window chooses what it multiplies.
+  const cashbackReward =
+    tenant.promotionType === "stamps" && cashbackPercentOf(tenant.promotionConfig) !== null
 
   return (
     <HorasEspecialesClient
       initialWindows={windows}
       promotionType={tenant.promotionType}
+      cashbackReward={cashbackReward}
       timezone={tenant.timezone}
       canEdit={!tenant.readOnly && isTenantAdmin(role)}
     />

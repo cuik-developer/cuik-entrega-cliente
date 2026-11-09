@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import { CashbackSummary, type CashbackView } from "@/components/cajero/cashback-summary"
 import { PointsCatalog } from "@/components/cajero/points-catalog"
 import {
   CashOutOffer,
@@ -23,9 +24,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useTenant } from "@/hooks/use-tenant"
 import { bonusLabel } from "@/lib/loyalty/bonus-label"
+import { cashbackPercentOf, formatSoles } from "@/lib/loyalty/cashback"
 import {
   CONNECTION_ERROR,
   redeemRejectionMessage,
+  redeemSuccessMessage,
   visitRejectionMessage,
 } from "@/lib/loyalty/cashier-messages"
 import { expiryPhrase } from "@/lib/loyalty/expiry-label"
@@ -57,6 +60,8 @@ type ClientDetail = {
   nextMilestone?: { at: number; label: string } | null
   /** Early cash-out the client can take now ("escalera canjeable"). */
   cashOut?: CashOutOfferView | null
+  /** Cashback on the card and pending; null when the reward is a gift. */
+  cashback?: CashbackView | null
   /** Last stamps redemption while it can still be undone. */
   lastRedemption?: UndoableRedemption | null
   points?: {
@@ -151,6 +156,18 @@ function resolveVisitMessage(
         const phrase = expiryPhrase(pts.nextExpiration, pts.balance)
         return (phrase ? `${base} · ${phrase}` : base) + bonus
       }
+      // Cashback reward: what this purchase earned and what the card holds now.
+      const cb = data?.cashback as {
+        earned: number
+        balance: number
+        rewardAmount: number | null
+      } | null
+      if (cb) {
+        if (cb.rewardAmount) {
+          return `Tarjeta completa! ${formatSoles(cb.rewardAmount)} de cashback para descontar${bonus}`
+        }
+        return `Visita registrada! +${formatSoles(cb.earned)} de cashback (acumulado ${formatSoles(cb.balance)})${bonus}`
+      }
       return `Visita registrada!${bonus}`
     }
     default:
@@ -183,12 +200,14 @@ export default function BuscarPage() {
 
   const isPoints = promotionType === "points"
 
-  // Determine if the current promotion requires a purchase amount
+  // Determine if the current promotion requires a purchase amount (points,
+  // stamps with a minimum, or a cashback reward: same rule as Escanear).
   const stampsMinAmount = !isPoints
     ? (((promotionConfig?.accumulation as Record<string, unknown> | undefined)
         ?.minimumPurchaseAmount as number | null) ?? null)
     : null
-  const requiresAmount = isPoints || stampsMinAmount !== null
+  const cashbackPercent = !isPoints ? cashbackPercentOf(promotionConfig) : null
+  const requiresAmount = isPoints || stampsMinAmount !== null || cashbackPercent !== null
 
   const searchClients = useCallback(
     async (term: string) => {
@@ -315,7 +334,7 @@ export default function BuscarPage() {
       const json = await res.json()
 
       if (json.data?.code === "OK") {
-        setActionMsg("Premio canjeado!")
+        setActionMsg(redeemSuccessMessage(json.data.reward?.cashbackAmount))
         await selectClient(selected.client.id)
       } else {
         setActionMsg(redeemRejectionMessage(json.data?.code, json.error))
@@ -358,6 +377,7 @@ export default function BuscarPage() {
           giftDue={giftDue}
           requiresAmount={requiresAmount}
           stampsMinAmount={stampsMinAmount}
+          cashbackPercent={cashbackPercent}
           purchaseAmount={purchaseAmount}
           setPurchaseAmount={setPurchaseAmount}
           submitting={submitting}
@@ -534,6 +554,7 @@ function ClientDetailView({
   giftDue,
   requiresAmount,
   stampsMinAmount,
+  cashbackPercent,
   purchaseAmount,
   setPurchaseAmount,
   submitting,
@@ -552,6 +573,8 @@ function ClientDetailView({
   giftDue: { at: number; label: string; count: number } | null
   requiresAmount: boolean
   stampsMinAmount: number | null
+  /** Cashback reward: the share of the purchase the stamp keeps; null for a gift. */
+  cashbackPercent: number | null
   purchaseAmount: string
   setPurchaseAmount: (v: string) => void
   submitting: boolean
@@ -627,6 +650,9 @@ function ClientDetailView({
           </div>
         )}
       </div>
+
+      {/* Stamps with a cashback reward: what the card holds and what waits at the till */}
+      {!isPoints && selected.cashback && <CashbackSummary cashback={selected.cashback} />}
 
       {/* Stamps: intermediate gift reached by the visit just registered */}
       {!isPoints && giftDue && (
@@ -722,7 +748,9 @@ function ClientDetailView({
               placeholder={
                 stampsMinAmount !== null
                   ? `Monto de compra (min. S/ ${stampsMinAmount.toFixed(2)})`
-                  : "Monto de compra"
+                  : cashbackPercent !== null
+                    ? `Monto de compra (acumula ${cashbackPercent} % de cashback)`
+                    : "Monto de compra"
               }
               className="pl-9 h-11"
               value={purchaseAmount}

@@ -30,6 +30,16 @@ export type TemplateContext = {
   rewards?: {
     pending: number
   }
+  /** Cashback reward of a stamps card, already formatted ("S/ 12.50", "5 %"); absent for a gift. */
+  cashback?: {
+    /** Accumulated on the current card. */
+    balance: string
+    /** Completed cards waiting to be paid at the till. */
+    pending: string
+    /** balance + pending. */
+    total: string
+    percent: string
+  }
   tenant?: {
     name: string
   }

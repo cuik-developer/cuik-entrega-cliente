@@ -18,6 +18,7 @@ import { defaultGranularity, rangeDays, type TrendGranularity } from "@/lib/anal
 
 import { AnalyticsToolbar, type PeriodState } from "./_components/analytics-toolbar"
 import { CashOutCard, type CashOutData } from "./_components/cash-out-card"
+import { CashbackCard, type CashbackData } from "./_components/cashback-card"
 import { CumulativeExportButton } from "./_components/cumulative-export-button"
 import { FunnelChart } from "./_components/funnel-chart"
 import { KpiStrip } from "./_components/kpi-strip"
@@ -97,6 +98,7 @@ export default function AnaliticaPage() {
   const [points, setPoints] = useState<PointsAnalytics | null>(null)
   const [trend, setTrend] = useState<TenantTrend | null>(null)
   const [cashOut, setCashOut] = useState<CashOutData>({ enabled: false })
+  const [cashback, setCashback] = useState<CashbackData>({ enabled: false })
 
   const [loading, setLoading] = useState(true)
   const [trendLoading, setTrendLoading] = useState(true)
@@ -134,8 +136,8 @@ export default function AnaliticaPage() {
           `${base}/funnel`,
           `${base}/segments`,
           `${base}/removed-passes`,
-          // Early cash-out ladder: stamps programs only (tenant-wide, like the funnel).
-          ...(isPoints ? [] : [`${base}/cash-out?${range}`]),
+          // Early cash-out ladder and cashback reward: stamps programs only (tenant-wide, like the funnel).
+          ...(isPoints ? [] : [`${base}/cash-out?${range}`, `${base}/cashback?${range}`]),
           // Points widgets only exist for points programs; skip the call otherwise.
           ...(isPoints
             ? [`${base}/points?${range}&granularity=${granularity}${locationQuery}`]
@@ -153,6 +155,7 @@ export default function AnaliticaPage() {
         segmentsJson,
         removedJson,
         extraJson,
+        cashbackJson,
       ] = responses
       const pointsJson = isPoints ? extraJson : undefined
       const cashOutJson = isPoints ? undefined : extraJson
@@ -171,6 +174,7 @@ export default function AnaliticaPage() {
       applyIfOk<RemovedPassesData>(removedJson, EMPTY_REMOVED_PASSES, setRemovedPasses)
       applyIfOk<PointsAnalytics | null>(pointsJson, null, setPoints)
       applyIfOk<CashOutData>(cashOutJson, { enabled: false }, setCashOut)
+      applyIfOk<CashbackData>(isPoints ? undefined : cashbackJson, { enabled: false }, setCashback)
 
       if (!summaryJson.success && !heatmapJson.success && !funnelJson.success) {
         setError("No se pudieron cargar los datos de analítica.")
@@ -357,6 +361,8 @@ export default function AnaliticaPage() {
           )}
 
           <VisitsHeatmap data={heatmap} scopeLabel={scopeLabel} />
+
+          {!isPoints && <CashbackCard data={cashback} />}
 
           {!isPoints && <CashOutCard data={cashOut} />}
 

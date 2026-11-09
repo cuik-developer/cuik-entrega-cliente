@@ -42,6 +42,7 @@ import {
   validateAppleEnv,
 } from "@cuik/wallet/shared"
 import { clientIp } from "@/lib/client-ip"
+import { cashbackVarsFor } from "@/lib/loyalty/cashback-db"
 import { formatExpiry } from "@/lib/loyalty/expiration"
 import { nextExpiration } from "@/lib/loyalty/points-lots"
 import { stampsInCycleOf } from "@/lib/loyalty/stamps"
@@ -949,6 +950,11 @@ async function regeneratePass(ctx: {
       rewards: {
         pending: pendingRewards,
       },
+      // Cashback reward of a stamps card ({{cashback.balance}}…); undefined for a gift.
+      cashback:
+        activePromo?.type === "stamps"
+          ? await cashbackVarsFor({ id: client.id }, client.tenantId)
+          : undefined,
       tenant: {
         name: tenantRow?.name ?? "Cuik",
       },

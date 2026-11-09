@@ -58,7 +58,14 @@ import { simulateCampaign, simulateVisit } from "./actions"
 const T = "11111111-1111-4111-8111-111111111111"
 const C = "22222222-2222-4222-8222-222222222222"
 const SESSION = { user: { id: "diego", name: "Diego" } }
-const DEMO = { id: T, name: "Demo Cuik", slug: "demo", program: "stamps", maxVisits: 10 }
+const DEMO = {
+  id: T,
+  name: "Demo Cuik",
+  slug: "demo",
+  program: "stamps",
+  maxVisits: 10,
+  requiresAmount: false,
+}
 const CLIENT = { id: C, name: "Ana", qrCode: "QR1", status: "active" }
 
 describe("simulator actions", () => {
@@ -123,13 +130,13 @@ describe("simulator actions", () => {
   })
 
   it("points programs need the purchase amount", async () => {
-    m.demoTenant.mockResolvedValue({ ...DEMO, program: "points" })
+    m.demoTenant.mockResolvedValue({ ...DEMO, program: "points", requiresAmount: true })
     expect((await simulateVisit({ tenantId: T, clientId: C })).success).toBe(false)
     expect(m.registerVisit).not.toHaveBeenCalled()
   })
 
   it("caps the purchase amount like the cashier", async () => {
-    m.demoTenant.mockResolvedValue({ ...DEMO, program: "points" })
+    m.demoTenant.mockResolvedValue({ ...DEMO, program: "points", requiresAmount: true })
     const res = await simulateVisit({ tenantId: T, clientId: C, amount: 50000 })
     expect(res.success).toBe(false)
     expect(m.registerVisit).not.toHaveBeenCalled()

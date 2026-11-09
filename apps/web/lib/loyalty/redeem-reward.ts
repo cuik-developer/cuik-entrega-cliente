@@ -168,6 +168,9 @@ export async function redeemReward(params: {
         id: reward.id,
         cycleNumber: reward.cycleNumber,
         rewardType: reward.rewardType,
+        // Cashback reward: what the till discounts. Null for a gift.
+        cashbackAmount:
+          reward.cashbackAmount !== null ? Number.parseFloat(reward.cashbackAmount) : null,
         redeemedAt: now,
       },
       remainingPendingRewards: remainingCount[0]?.cnt ?? 0,

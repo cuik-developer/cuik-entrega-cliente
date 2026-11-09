@@ -37,6 +37,10 @@ function resolvePreviewValue(template: string, maxVisits = 8): string {
     "{{stamps.total}}": "15",
     "{{points.balance}}": "325",
     "{{rewards.pending}}": "1",
+    "{{cashback.balance}}": "S/ 12.50",
+    "{{cashback.pending}}": "S/ 0.00",
+    "{{cashback.total}}": "S/ 12.50",
+    "{{cashback.percent}}": "5 %",
     "{{tenant.name}}": "Tu comercio",
   }
   let resolved = template

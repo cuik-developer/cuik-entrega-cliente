@@ -49,6 +49,8 @@ import { saveBonusWindows } from "../actions"
 type Props = {
   initialWindows: BonusWindow[]
   promotionType: "stamps" | "points"
+  /** Stamps program whose reward is cashback: each window says what it multiplies. */
+  cashbackReward?: boolean
   timezone: string
   canEdit: boolean
 }
@@ -162,17 +164,37 @@ function emptyWindow(timezone: string): BonusWindow {
     start: "08:00",
     end: "12:00",
     multiplier: 2,
+    applies: "stamps",
     active: true,
   }
 }
 
-export function HorasEspecialesClient({ initialWindows, promotionType, timezone, canEdit }: Props) {
+/** What a window multiplies, for the table and the live notice. */
+function appliesLabel(w: BonusWindow, cashbackReward: boolean, unit: string): string {
+  if (!cashbackReward || promotionTypeIsPoints(unit)) return unit
+  if (w.applies === "cashback") return "cashback"
+  if (w.applies === "both") return "sellos y cashback"
+  return "sellos"
+}
+
+function promotionTypeIsPoints(unit: string) {
+  return unit === "puntos"
+}
+
+export function HorasEspecialesClient({
+  initialWindows,
+  promotionType,
+  cashbackReward = false,
+  timezone,
+  canEdit,
+}: Props) {
   const [windows, setWindows] = useState<BonusWindow[]>(initialWindows)
   const [editing, setEditing] = useState<BonusWindow | null>(null)
   const [saving, setSaving] = useState(false)
   // Read the clock only in the browser so server and client render the same.
   const [clock, setClock] = useState<ReturnType<typeof nowClock> | null>(null)
   const unit = promotionType === "points" ? "puntos" : "sellos"
+  const showApplies = promotionType === "stamps" && cashbackReward
 
   useEffect(() => {
     setClock(nowClock(timezone))
@@ -239,7 +261,7 @@ export function HorasEspecialesClient({ initialWindows, promotionType, timezone,
       {live && (
         <Notice tone="ok">
           <span className="font-medium text-ent-fg">Activa ahora:</span> cada visita suma ×
-          {live.multiplier} {unit}
+          {live.multiplier} {appliesLabel(live, showApplies, unit)}
           {live.label ? ` (${live.label})` : ""}.
         </Notice>
       )}
@@ -273,10 +295,16 @@ export function HorasEspecialesClient({ initialWindows, promotionType, timezone,
                 return (
                   <Tr key={w.id}>
                     <Td className="font-medium text-ent-fg">
-                      {w.label || `${w.multiplier === 2 ? "Doble" : `×${w.multiplier}`} de ${unit}`}
+                      {w.label ||
+                        `${w.multiplier === 2 ? "Doble" : `×${w.multiplier}`} de ${appliesLabel(w, showApplies, unit)}`}
                     </Td>
                     <Td align="right" className="hidden sm:table-cell font-semibold text-ent-fg">
                       ×{w.multiplier}
+                      {showApplies && (
+                        <span className="block text-[11px] font-normal text-ent-fg-3">
+                          {appliesLabel(w, showApplies, unit)}
+                        </span>
+                      )}
                     </Td>
                     <Td className="whitespace-normal text-ent-fg-2 first-letter:uppercase">
                       {describeWhen(w)}
@@ -379,6 +407,35 @@ export function HorasEspecialesClient({ initialWindows, promotionType, timezone,
                   ))}
                 </ToggleGroup>
               </div>
+
+              {showApplies && (
+                <div className="space-y-1.5">
+                  <Label>¿Qué multiplica?</Label>
+                  <ToggleGroup
+                    type="single"
+                    variant="outline"
+                    value={editing.applies}
+                    onValueChange={(v) =>
+                      v && setEditing({ ...editing, applies: v as BonusWindow["applies"] })
+                    }
+                    className="justify-start"
+                  >
+                    <ToggleGroupItem value="stamps" className="px-3">
+                      Sellos
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="cashback" className="px-3">
+                      Cashback
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="both" className="px-3">
+                      Ambos
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                  <p className="text-[11.5px] text-ent-fg-3">
+                    Sellos: la visita suma ×{editing.multiplier} sellos. Cashback: la compra deja ×
+                    {editing.multiplier} de cashback y un solo sello. Ambos: las dos cosas.
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <Label>¿Cuándo?</Label>

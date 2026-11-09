@@ -77,6 +77,10 @@ export const clients = loyaltySchema.table(
     pointsBalance: integer("points_balance").default(0).notNull(),
     /** Stamps spent by early cash-outs; the card runs on totalVisits - stampsCashed. */
     stampsCashed: integer("stamps_cashed").default(0).notNull(),
+    /** Cashback accumulated on the current card (cashback reward); back to 0 when it completes. */
+    cashbackBalance: numeric("cashback_balance", { precision: 10, scale: 2 })
+      .default("0")
+      .notNull(),
     marketingOptIn: boolean("marketing_opt_in").default(false).notNull(),
     birthday: date("birthday"),
     /** Set when an admin archives the client; the purge cron anonymizes 30 days later. */
@@ -117,6 +121,8 @@ export const visits = loyaltySchema.table(
     bonusKind: text("bonus_kind"),
     registeredBy: text("registered_by").references(() => authUsers.id),
     amount: numeric("amount", { precision: 10, scale: 2 }),
+    /** Share of `amount` this stamp kept as cashback; null when the reward is a gift. */
+    cashbackAmount: numeric("cashback_amount", { precision: 10, scale: 2 }),
     locationId: uuid("location_id"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
@@ -144,6 +150,8 @@ export const rewards = loyaltySchema.table(
     milestoneAt: integer("milestone_at"),
     /** Stamps the client had when cashing out early (e.g. 7). */
     stampsAtRedeem: integer("stamps_at_redeem"),
+    /** Soles the till discounts when the reward is cashback (the card's accumulated amount). */
+    cashbackAmount: numeric("cashback_amount", { precision: 10, scale: 2 }),
     /** Who redeemed it (user id); needed to allow undoing it. */
     redeemedBy: text("redeemed_by"),
     voidedAt: timestamp("voided_at"),
@@ -158,6 +166,32 @@ export const rewards = loyaltySchema.table(
       .on(table.clientId, table.status)
       .where(sql`status = 'pending'`),
   ],
+)
+
+/**
+ * A stage of a tenant's program ("Cashback 5 %" from 2026-11-15): the marker
+ * reports compare against, with a snapshot of the key numbers at its start.
+ * Nothing before it is deleted or moved; a phase only says where the new
+ * strategy began. Created by Cuik from the tenant page, or automatically when
+ * the stamps reward switches to cashback.
+ */
+export const programPhases = loyaltySchema.table(
+  "program_phases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    name: text("name").notNull(),
+    /** Local day ("YYYY-MM-DD") the stage starts. */
+    startsOn: date("starts_on").notNull(),
+    note: text("note"),
+    /** Snapshot taken when the phase was created (clients, visits, cards, cashback…). */
+    baseline: jsonb("baseline"),
+    createdBy: text("created_by").references(() => authUsers.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("program_phases_tenant_starts_idx").on(table.tenantId, table.startsOn)],
 )
 
 export const locations = loyaltySchema.table("locations", {

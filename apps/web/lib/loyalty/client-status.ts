@@ -13,11 +13,13 @@ import {
   visits,
 } from "@cuik/db"
 import {
+  cashbackSettingsOf,
   type PointsPromotionConfig,
   pointsPromotionConfigSchema,
   type StampsPromotionConfig,
   stampsPromotionConfigSchema,
 } from "@cuik/shared/validators"
+import { clientCashback } from "./cashback-db"
 import type { SegmentationThresholds } from "./client-segments"
 import { computeClientSegment } from "./client-segments"
 import { activeMilestones, cashOutOfferFor } from "./milestones"
@@ -70,6 +72,16 @@ async function voidableRedemption(
     label: last.label,
     redeemedAt: last.redeemedAt,
   }
+}
+
+/** Cashback reward: the card's accumulated amount and the rewards waiting at the till; null for a gift or points. */
+async function cashbackOf(
+  config: StampsPromotionConfig | PointsPromotionConfig | null,
+  client: { id: string; cashbackBalance: string | number | null },
+  tenantId: string,
+) {
+  if (!config || !("stamps" in config)) return null
+  return clientCashback(client, tenantId, cashbackSettingsOf(config.stamps))
 }
 
 function nextGiftFor(
@@ -177,6 +189,7 @@ export async function getClientStatus(params: {
       ? cashOutOfferFor(config.stamps, promotion.maxVisits, stampsInCycle)
       : null
   const lastRedemption = isPoints ? null : await voidableRedemption(client.id, tenantId)
+  const cashback = await cashbackOf(config, client, tenantId)
 
   // 9. For points promotions, count available catalog items
   let pointsData: ClientStatus["points"]
@@ -265,6 +278,7 @@ export async function getClientStatus(params: {
       : null,
     nextMilestone,
     cashOut,
+    cashback,
     lastRedemption,
     tierInfo: currentTier
       ? {

@@ -25,6 +25,7 @@ import {
 } from "@cuik/wallet/shared"
 import { errorResponse, requireAuth, requireTenantMembership, resolveTenant } from "@/lib/api-utils"
 import { isSilentClient } from "@/lib/loyalty/archive"
+import { cashbackVarsFor } from "@/lib/loyalty/cashback-db"
 import { pointsExpiryTemplateVars } from "@/lib/loyalty/points-lots"
 import { stampsInCycleOf } from "@/lib/loyalty/stamps"
 import { buildStripImages } from "@/lib/wallet/points-strip"
@@ -273,6 +274,11 @@ export async function GET(
         rewards: {
           pending: Number(pendingRewards),
         },
+        // Cashback reward of a stamps card ({{cashback.balance}}…); undefined for a gift.
+        cashback:
+          activePromo?.type === "stamps"
+            ? await cashbackVarsFor({ id: client.id }, tenant.id)
+            : undefined,
         tenant: {
           name: tenant.name,
         },

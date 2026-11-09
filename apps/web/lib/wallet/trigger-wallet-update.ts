@@ -26,6 +26,7 @@ import {
   validateGoogleEnv,
 } from "@cuik/wallet/shared"
 import { isCardCompleteMessage } from "@/lib/loyalty/card-complete"
+import { cashbackVarsFor } from "@/lib/loyalty/cashback-db"
 import { formatExpiry } from "@/lib/loyalty/expiration"
 import { allMilestoneMessages } from "@/lib/loyalty/milestones"
 import { nextExpiration } from "@/lib/loyalty/points-lots"
@@ -175,6 +176,8 @@ export async function triggerWalletUpdate(ctx: {
         .limit(1)
       const upcoming =
         activePromotion?.type === "points" ? await nextExpiration(db, ctx.clientId) : null
+      // {{cashback.*}}: undefined unless the active stamps reward is cashback.
+      const cashback = await cashbackVarsFor({ id: ctx.clientId }, ctx.tenantId)
       const templateContext: TemplateContext = {
         client: {
           name: ctx.clientName,
@@ -204,6 +207,7 @@ export async function triggerWalletUpdate(ctx: {
         rewards: {
           pending: ctx.pendingRewards,
         },
+        cashback,
         tenant: {
           name: ctx.tenantName,
         },

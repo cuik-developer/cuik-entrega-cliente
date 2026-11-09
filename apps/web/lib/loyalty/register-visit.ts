@@ -11,9 +11,21 @@ import {
   tenants,
   visits,
 } from "@cuik/db"
-import { pointsPromotionConfigSchema, stampsPromotionConfigSchema } from "@cuik/shared/validators"
+import {
+  cashbackSettingsOf,
+  pointsPromotionConfigSchema,
+  stampsPromotionConfigSchema,
+} from "@cuik/shared/validators"
 
 import { updateRewardsRedeemed, updateVisitsDaily } from "../analytics/update-visits-daily"
+import {
+  cashbackCentsFor,
+  cashbackRewardLabel,
+  centsToNumeric,
+  fromCents,
+  toCents,
+} from "./cashback"
+import { pendingCashbackCents } from "./cashback-db"
 import { cashOutOfferFor, milestoneNoticeFor } from "./milestones"
 import { registerPointsVisit } from "./register-points-visit"
 import { computeTier, evaluateStampRules } from "./rules-engine"
@@ -210,6 +222,9 @@ export async function registerVisit(params: {
 
     // Parse promotion config with defaults
     const config = stampsPromotionConfigSchema.parse(promotion.config ?? {})
+    // Cashback reward: each stamp keeps a share of its purchase on the card.
+    const cashbackSettings = cashbackSettingsOf(config.stamps)
+    const cashbackBalanceBefore = cashbackSettings ? toCents(client.cashbackBalance) : 0
 
     // 3. Count today's visits (uses tenant timezone, not UTC)
     const todayVisits = await tx
@@ -277,6 +292,16 @@ export async function registerVisit(params: {
         rewardValue: promotion.rewardValue,
         // A client already scanned today can still cash out early.
         cashOut: cashOutOfferFor(config.stamps, promotion.maxVisits, stampsInCycle),
+        cashback: cashbackSettings
+          ? {
+              earned: 0,
+              balance: fromCents(cashbackBalanceBefore),
+              pending: fromCents(await pendingCashbackCents(client.id, tenantId, tx)),
+              percent: cashbackSettings.percent,
+              rewardAmount: null,
+              rewardLabel: null,
+            }
+          : null,
       }
     }
 
@@ -310,6 +335,17 @@ export async function registerVisit(params: {
       ? cyclesAfter // last completed cycle
       : cyclesAfter + 1
 
+    // Cashback of this purchase (0 with a gift reward). When the visit
+    // completes the card, everything accumulated plus this share becomes the
+    // reward and the new card starts at 0; a bonus visit that completes more
+    // than one card puts it all on the first one.
+    const cashbackEarned =
+      cashbackSettings && amount
+        ? cashbackCentsFor(amount, cashbackSettings, rulesResult.cashbackMultiplier)
+        : 0
+    const cashbackRewardCents = cycleComplete ? cashbackBalanceBefore + cashbackEarned : 0
+    const cashbackBalanceAfter = cycleComplete ? 0 : cashbackBalanceBefore + cashbackEarned
+
     // 6. Insert visit
     const [visit] = await tx
       .insert(visits)
@@ -323,6 +359,7 @@ export async function registerVisit(params: {
         registeredBy: cashierId,
         locationId: locationId || null,
         amount: amount || null,
+        cashbackAmount: cashbackSettings ? centsToNumeric(cashbackEarned) : null,
       })
       .returning()
 
@@ -338,6 +375,7 @@ export async function registerVisit(params: {
         totalVisits: newTotalVisits,
         currentCycle: newCycle,
         tier: newTier,
+        ...(cashbackSettings ? { cashbackBalance: centsToNumeric(cashbackBalanceAfter) } : {}),
       })
       .where(eq(clients.id, client.id))
 
@@ -348,12 +386,14 @@ export async function registerVisit(params: {
         const expiresAt = config.stamps.rewardExpirationDays
           ? new Date(Date.now() + config.stamps.rewardExpirationDays * 24 * 60 * 60 * 1000)
           : null
+        const rewardCents = i === 0 ? cashbackRewardCents : 0
 
         await tx.insert(rewards).values({
           clientId: client.id,
           tenantId,
           cycleNumber: rewardCycleNumber,
-          rewardType: promotion.rewardValue,
+          rewardType: cashbackSettings ? cashbackRewardLabel(rewardCents) : promotion.rewardValue,
+          cashbackAmount: cashbackSettings ? centsToNumeric(rewardCents) : null,
           status: "pending",
           expiresAt,
         })
@@ -408,6 +448,16 @@ export async function registerVisit(params: {
       milestone,
       // Early cash-out the client can take now (null when the program has none or it is out of the window).
       cashOut: cashOutOfferFor(config.stamps, promotion.maxVisits, stampsInCycleAfter),
+      cashback: cashbackSettings
+        ? {
+            earned: fromCents(cashbackEarned),
+            balance: fromCents(cashbackBalanceAfter),
+            pending: fromCents(await pendingCashbackCents(client.id, tenantId, tx)),
+            percent: cashbackSettings.percent,
+            rewardAmount: cycleComplete ? fromCents(cashbackRewardCents) : null,
+            rewardLabel: cycleComplete ? cashbackRewardLabel(cashbackRewardCents) : null,
+          }
+        : null,
     }
   })
 

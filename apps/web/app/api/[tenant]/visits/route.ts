@@ -72,7 +72,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
                 ? cardCompleteNotice(tenant.automations, {
                     clientName: result.client.name,
                     tenantName: tenant.name,
-                    reward: result.rewardValue,
+                    // Cashback reward: "{{premio}}" is the amount ("Cashback S/ 25.00").
+                    reward: result.cashback?.rewardLabel ?? result.rewardValue,
                   })
                 : null) ??
               result.milestone?.message ??

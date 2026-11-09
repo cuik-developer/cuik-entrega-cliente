@@ -16,6 +16,7 @@ import {
   tenants,
 } from "@cuik/db"
 import { getInternalTenantIds } from "@/lib/admin/internal-tenants"
+import { cashbackPercentOf } from "@/lib/loyalty/cashback"
 import { stampsInCycleOf } from "@/lib/loyalty/stamps"
 
 /**
@@ -34,6 +35,8 @@ export type DemoTenant = {
   slug: string
   program: "stamps" | "points" | null
   maxVisits: number
+  /** The visit needs a purchase amount (points, or stamps paying cashback). */
+  requiresAmount: boolean
 }
 
 /** Demo comercios with their active program, in name order. */
@@ -50,6 +53,7 @@ export async function listDemoTenants(): Promise<DemoTenant[]> {
       tenantId: promotions.tenantId,
       type: promotions.type,
       maxVisits: promotions.maxVisits,
+      config: promotions.config,
     })
     .from(promotions)
     .where(and(inArray(promotions.tenantId, ids), eq(promotions.active, true)))
@@ -60,7 +64,15 @@ export async function listDemoTenants(): Promise<DemoTenant[]> {
   return rows.map((t) => {
     const p = promoOf.get(t.id)
     const program = p?.type === "stamps" || p?.type === "points" ? p.type : null
-    return { ...t, program, maxVisits: p?.maxVisits ?? 0 }
+    const cashback =
+      program === "stamps" &&
+      cashbackPercentOf((p?.config as Record<string, unknown> | null) ?? null) !== null
+    return {
+      ...t,
+      program,
+      maxVisits: p?.maxVisits ?? 0,
+      requiresAmount: program === "points" || cashback,
+    }
   })
 }
 

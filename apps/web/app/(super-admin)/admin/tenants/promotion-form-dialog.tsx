@@ -6,6 +6,8 @@ import type {
   PointsCalcMode,
 } from "@cuik/shared/validators"
 import {
+  CASHBACK_ROUND_STEPS,
+  DEFAULT_CASHBACK_SETTINGS,
   DEFAULT_MILESTONE_MESSAGES,
   describePointsRate,
   expirationPolicySchema,
@@ -113,6 +115,11 @@ const formSchema = z
       .number({ invalid_type_error: "Ingresa un numero valido" })
       .positive("Debe ser mayor a 0")
       .nullable(),
+    // Reward of the full card: a gift (the promotion name) or cashback
+    rewardMode: z.enum(["gift", "cashback"]).default("gift"),
+    cashbackPercent: z.number().or(z.nan()).nullable(),
+    cashbackRoundTo: z.number(),
+    cashbackMaxPerPurchase: z.number().or(z.nan()).nullable(),
     // Intermediate gifts ("escalera"), stamps only
     // Lenient here (inputs may be unmounted while the values linger); the real
     // checks run in superRefine only for stamps promotions with hitos.
@@ -202,6 +209,31 @@ const formSchema = z
           path: ["rewardValue"],
         })
       }
+      if (data.rewardMode === "cashback") {
+        const pct = data.cashbackPercent
+        if (pct === null || !Number.isFinite(pct) || pct < 0.5 || pct > 50) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Indica un porcentaje entre 0.5 y 50",
+            path: ["cashbackPercent"],
+          })
+        }
+        const cap = data.cashbackMaxPerPurchase
+        if (cap !== null && Number.isFinite(cap) && cap <= 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "El tope debe ser mayor a 0",
+            path: ["cashbackMaxPerPurchase"],
+          })
+        }
+        if (data.milestones.some((m) => m.redeemable)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Con cashback no puede haber un premio canjeable con reinicio",
+            path: ["milestones"],
+          })
+        }
+      }
       validateMilestones(data, ctx)
     }
     if (data.type === "points") {
@@ -249,6 +281,10 @@ function extractStampsConfigValues(config: unknown): {
   maxVisitsPerDay: number
   rewardExpirationDays: number | null
   minimumPurchaseAmount: number | null
+  rewardMode: "gift" | "cashback"
+  cashbackPercent: number | null
+  cashbackRoundTo: number
+  cashbackMaxPerPurchase: number | null
   milestones: { at: number; label: string; redeemable: boolean }[]
   milestoneNext: string
   milestoneReached: string
@@ -258,6 +294,10 @@ function extractStampsConfigValues(config: unknown): {
     maxVisitsPerDay: 1,
     rewardExpirationDays: null as number | null,
     minimumPurchaseAmount: null as number | null,
+    rewardMode: "gift" as "gift" | "cashback",
+    cashbackPercent: null as number | null,
+    cashbackRoundTo: DEFAULT_CASHBACK_SETTINGS.roundTo as number,
+    cashbackMaxPerPurchase: null as number | null,
     milestones: [] as { at: number; label: string; redeemable: boolean }[],
     milestoneNext: DEFAULT_MILESTONE_MESSAGES.next as string,
     milestoneReached: DEFAULT_MILESTONE_MESSAGES.reached as string,
@@ -273,6 +313,15 @@ function extractStampsConfigValues(config: unknown): {
   if (stamps) {
     if (typeof stamps.maxVisitsPerDay === "number") {
       defaults.maxVisitsPerDay = stamps.maxVisitsPerDay
+    }
+    if (stamps.rewardMode === "cashback") defaults.rewardMode = "cashback"
+    const cashback = stamps.cashback as Record<string, unknown> | null | undefined
+    if (cashback) {
+      if (typeof cashback.percent === "number") defaults.cashbackPercent = cashback.percent
+      if (typeof cashback.roundTo === "number") defaults.cashbackRoundTo = cashback.roundTo
+      if (typeof cashback.maxPerPurchase === "number") {
+        defaults.cashbackMaxPerPurchase = cashback.maxPerPurchase
+      }
     }
     if (typeof stamps.rewardExpirationDays === "number") {
       defaults.rewardExpirationDays = stamps.rewardExpirationDays
@@ -487,6 +536,10 @@ export function PromotionFormDialog({
             rewardExpirationDays: null,
             hasMinimumPurchase: false,
             minimumPurchaseAmount: null,
+            rewardMode: "gift",
+            cashbackPercent: null,
+            cashbackRoundTo: DEFAULT_CASHBACK_SETTINGS.roundTo,
+            cashbackMaxPerPurchase: null,
             milestones: [],
             milestoneNext: DEFAULT_MILESTONE_MESSAGES.next,
             milestoneReached: DEFAULT_MILESTONE_MESSAGES.reached,
@@ -510,6 +563,10 @@ export function PromotionFormDialog({
             rewardExpirationDays: stampsConfig?.rewardExpirationDays ?? null,
             hasMinimumPurchase: stampsConfig?.minimumPurchaseAmount !== null,
             minimumPurchaseAmount: stampsConfig?.minimumPurchaseAmount ?? null,
+            rewardMode: stampsConfig?.rewardMode ?? "gift",
+            cashbackPercent: stampsConfig?.cashbackPercent ?? null,
+            cashbackRoundTo: stampsConfig?.cashbackRoundTo ?? DEFAULT_CASHBACK_SETTINGS.roundTo,
+            cashbackMaxPerPurchase: stampsConfig?.cashbackMaxPerPurchase ?? null,
             milestones: stampsConfig?.milestones ?? [],
             milestoneNext: stampsConfig?.milestoneNext ?? DEFAULT_MILESTONE_MESSAGES.next,
             milestoneReached: stampsConfig?.milestoneReached ?? DEFAULT_MILESTONE_MESSAGES.reached,
@@ -533,6 +590,10 @@ export function PromotionFormDialog({
           rewardExpirationDays: null,
           hasMinimumPurchase: false,
           minimumPurchaseAmount: null,
+          rewardMode: "gift",
+          cashbackPercent: null,
+          cashbackRoundTo: DEFAULT_CASHBACK_SETTINGS.roundTo,
+          cashbackMaxPerPurchase: null,
           milestones: [],
           milestoneNext: DEFAULT_MILESTONE_MESSAGES.next,
           milestoneReached: DEFAULT_MILESTONE_MESSAGES.reached,
@@ -573,6 +634,8 @@ export function PromotionFormDialog({
     !!maxVisitsValue &&
     maxVisitsValue !== editingStampsMax
   const selectedType = watch("type")
+  const rewardMode = watch("rewardMode")
+  const cashbackPercentValue = watch("cashbackPercent")
   const hasExpiration = watch("hasExpiration")
   const hasMinimumPurchase = watch("hasMinimumPurchase")
   const hasMinimumPurchaseForPoints = watch("hasMinimumPurchaseForPoints")
@@ -594,10 +657,20 @@ export function PromotionFormDialog({
     // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: handles stamps vs points config building + create vs update branching
     startTransition(async () => {
       if (values.type === "stamps") {
+        const cashbackOn = values.rewardMode === "cashback"
+        const cap = values.cashbackMaxPerPurchase
         const stampsConfigPartial = {
           stamps: {
             maxVisitsPerDay: values.maxVisitsPerDay,
             rewardExpirationDays: values.hasExpiration ? values.rewardExpirationDays : null,
+            rewardMode: values.rewardMode,
+            cashback: cashbackOn
+              ? {
+                  percent: values.cashbackPercent ?? DEFAULT_CASHBACK_SETTINGS.percent,
+                  roundTo: values.cashbackRoundTo,
+                  maxPerPurchase: cap !== null && Number.isFinite(cap) && cap > 0 ? cap : null,
+                }
+              : null,
             milestones: values.milestones
               .filter((m) => Number.isFinite(m.at))
               .map((m) => ({ at: m.at, label: m.label.trim(), redeemable: !!m.redeemable }))
@@ -778,11 +851,142 @@ export function PromotionFormDialog({
                   {...register("rewardValue")}
                 />
                 <p className="text-xs text-ent-fg-3">
-                  El nombre identifica esta promocion. Para sellos, tambien indica el premio al
-                  completar el ciclo.
+                  {rewardMode === "cashback"
+                    ? "El nombre identifica esta promocion. El premio es el cashback acumulado."
+                    : "El nombre identifica esta promocion. Para sellos, tambien indica el premio al completar el ciclo."}
                 </p>
                 {errors.rewardValue && (
                   <p className="text-sm text-red-600">{errors.rewardValue.message}</p>
+                )}
+              </div>
+
+              {/* Reward of the full card: gift or cashback */}
+              <div className="space-y-3 rounded-[4px] border border-ent-line p-3">
+                <div>
+                  <Label>Modalidad del premio</Label>
+                  <p className="text-xs text-ent-fg-3 mt-1">
+                    Regalo: al completar la tarjeta el comercio entrega lo que dice el nombre.
+                    Cashback: cada sello guarda un porcentaje de su compra y, al completar la
+                    tarjeta, el cliente descuenta lo acumulado en caja. La tarjeta de{" "}
+                    {maxVisitsValue || "N"} sellos son sus ultimas {maxVisitsValue || "N"} compras.
+                  </p>
+                </div>
+                <Controller
+                  control={control}
+                  name="rewardMode"
+                  render={({ field }) => (
+                    <div className="flex gap-2">
+                      {(["gift", "cashback"] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => field.onChange(mode)}
+                          className={`flex-1 rounded-[4px] border px-3 py-2 text-left text-sm transition-colors ${
+                            field.value === mode
+                              ? "border-ent-accent bg-ent-accent-soft text-ent-fg"
+                              : "border-ent-line text-ent-fg-2 hover:border-ent-fg-3"
+                          }`}
+                        >
+                          <span className="font-medium">
+                            {mode === "gift" ? "Regalo" : "Cashback"}
+                          </span>
+                          <span className="block text-xs text-ent-fg-3">
+                            {mode === "gift"
+                              ? "Un producto o beneficio"
+                              : "Un porcentaje de cada compra"}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                />
+                {rewardMode === "cashback" && (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="cashbackPercent" className="text-xs">
+                        Porcentaje por compra
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          id="cashbackPercent"
+                          type="number"
+                          min={0.5}
+                          max={50}
+                          step={0.5}
+                          placeholder="5"
+                          className="pr-8"
+                          {...register("cashbackPercent", { valueAsNumber: true })}
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ent-fg-3">
+                          %
+                        </span>
+                      </div>
+                      {errors.cashbackPercent && (
+                        <p className="text-xs text-red-600">{errors.cashbackPercent.message}</p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Redondeo por compra</Label>
+                      <Controller
+                        control={control}
+                        name="cashbackRoundTo"
+                        render={({ field }) => (
+                          <Select
+                            value={String(field.value)}
+                            onValueChange={(v) => field.onChange(Number(v))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {CASHBACK_ROUND_STEPS.map((step) => (
+                                <SelectItem key={step} value={String(step)}>
+                                  S/ {step.toFixed(2)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="cashbackMaxPerPurchase" className="text-xs">
+                        Tope por compra (S/)
+                      </Label>
+                      <Input
+                        id="cashbackMaxPerPurchase"
+                        type="number"
+                        min={0.1}
+                        step={0.1}
+                        placeholder="Sin tope"
+                        {...register("cashbackMaxPerPurchase", {
+                          setValueAs: (v) => (v === "" || v === null ? null : Number(v)),
+                        })}
+                      />
+                      {errors.cashbackMaxPerPurchase && (
+                        <p className="text-xs text-red-600">
+                          {errors.cashbackMaxPerPurchase.message}
+                        </p>
+                      )}
+                    </div>
+                    <p className="sm:col-span-3 text-xs text-ent-fg-3">
+                      Ejemplo: compra de S/ 88 con{" "}
+                      {Number.isFinite(cashbackPercentValue) && cashbackPercentValue
+                        ? cashbackPercentValue
+                        : 5}{" "}
+                      % ={" "}
+                      {(
+                        (88 *
+                          (Number.isFinite(cashbackPercentValue) && cashbackPercentValue
+                            ? cashbackPercentValue
+                            : 5)) /
+                        100
+                      ).toFixed(2)}{" "}
+                      de cashback en el sello. El monto de compra pasa a ser obligatorio en caja. Al
+                      guardar el cambio a cashback, los clientes con tarjeta en curso reciben el
+                      saldo de los sellos que ya tienen monto, y se crea una etapa del programa.
+                    </p>
+                  </div>
                 )}
               </div>
 

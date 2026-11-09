@@ -18,6 +18,7 @@ import {
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import { CashbackSummary, type CashbackView } from "@/components/cajero/cashback-summary"
 import { PointsCatalog } from "@/components/cajero/points-catalog"
 import {
   CashOutOffer,
@@ -29,9 +30,12 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useTenant } from "@/hooks/use-tenant"
+import { cashbackPercentOf, formatSoles } from "@/lib/loyalty/cashback"
 import {
+  amountStepHint,
   CONNECTION_ERROR,
   redeemRejectionMessage,
+  redeemSuccessMessage,
   visitRejectionMessage,
 } from "@/lib/loyalty/cashier-messages"
 
@@ -66,6 +70,8 @@ type StampsVisitApiResult = {
   } | null
   /** Early cash-out the client can take now ("escalera canjeable"). */
   cashOut?: CashOutOfferView | null
+  /** Cashback of this purchase and the card; null when the reward is a gift. */
+  cashback?: (CashbackView & { rewardLabel?: string | null }) | null
   /** Bonuses the rules engine applied (comma separated), e.g. a "hora x2" window. */
   bonusApplied?: string | null
 }
@@ -319,12 +325,14 @@ export default function EscanearPage() {
   const isPoints = promotionType === "points"
 
   // Determine if the current promotion requires a purchase amount
-  // Points always require amount. Stamps require it only when minimumPurchaseAmount is set.
+  // Points always require amount. Stamps require it when minimumPurchaseAmount
+  // is set or when the reward is cashback (every stamp keeps a share of the purchase).
   const stampsMinAmount = !isPoints
     ? (((promotionConfig?.accumulation as Record<string, unknown> | undefined)
         ?.minimumPurchaseAmount as number | null) ?? null)
     : null
-  const requiresAmount = isPoints || stampsMinAmount !== null
+  const cashbackPercent = !isPoints ? cashbackPercentOf(promotionConfig) : null
+  const requiresAmount = isPoints || stampsMinAmount !== null || cashbackPercent !== null
 
   const locationSearchRef = useRef<HTMLInputElement>(null)
   const locationComboRef = useRef<HTMLDivElement>(null)
@@ -561,7 +569,7 @@ export default function EscanearPage() {
               : prev,
           )
         }
-        toast.success("Premio canjeado")
+        toast.success(redeemSuccessMessage(json.data.reward?.cashbackAmount))
         if (json.data.reward?.id) {
           setUndoable({
             id: json.data.reward.id,
@@ -722,6 +730,7 @@ export default function EscanearPage() {
       {step === "amount" && (
         <AmountStepView
           stampsMinAmount={stampsMinAmount}
+          cashbackPercent={cashbackPercent}
           purchaseAmount={purchaseAmount}
           setPurchaseAmount={setPurchaseAmount}
           handleAmountSubmit={handleAmountSubmit}
@@ -993,6 +1002,7 @@ function ScanStepView({
 
 function AmountStepView({
   stampsMinAmount,
+  cashbackPercent,
   purchaseAmount,
   setPurchaseAmount,
   handleAmountSubmit,
@@ -1000,6 +1010,8 @@ function AmountStepView({
   redeemCatalog,
 }: {
   stampsMinAmount: number | null
+  /** Cashback reward: the share of the purchase the stamp keeps; null for a gift. */
+  cashbackPercent: number | null
   purchaseAmount: string
   setPurchaseAmount: (v: string) => void
   handleAmountSubmit: () => void
@@ -1012,9 +1024,7 @@ function AmountStepView({
       <div>
         <h1 className="text-xl font-extrabold text-gray-900">Monto de compra</h1>
         <p className="text-sm text-gray-500 mt-1">
-          {stampsMinAmount !== null
-            ? `Monto minimo: S/ ${stampsMinAmount.toFixed(2)}`
-            : "Ingresa el monto de la compra del cliente."}
+          {amountStepHint(stampsMinAmount, cashbackPercent)}
         </p>
       </div>
 
@@ -1142,6 +1152,8 @@ function SuccessStepView({
             <StampRow filled={result.stamps.current} total={result.stamps.max} />
           </div>
 
+          {result.cashback && <CashbackSummary cashback={result.cashback} />}
+
           {result.bonusApplied && (
             <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
               <Zap className="w-5 h-5 text-amber-600 flex-shrink-0" />
@@ -1267,6 +1279,8 @@ function AlreadyScannedStepView({
             <StampRow filled={result.stamps.current} total={result.stamps.max} />
           </div>
 
+          {result.cashback && <CashbackSummary cashback={{ ...result.cashback, earned: 0 }} />}
+
           {result.pendingRewards > 0 && (
             <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
               <Gift className="w-5 h-5 text-amber-600 flex-shrink-0" />
@@ -1326,8 +1340,21 @@ function RewardStepView({
         <p className="text-gray-500 mt-1 text-sm">
           {result.client.name} {result.client.lastName || ""} completo su tarjeta
         </p>
-        {result.rewardValue && (
-          <Badge className="mt-2 bg-amber-100 text-amber-700 text-sm">{result.rewardValue}</Badge>
+        {result.cashback?.rewardAmount ? (
+          <>
+            <Badge className="mt-2 bg-amber-100 text-amber-700 text-sm">
+              {result.cashback.rewardLabel ?? formatSoles(result.cashback.rewardAmount)}
+            </Badge>
+            <p className="text-gray-600 mt-2 text-sm">
+              Al confirmar, descuenta{" "}
+              <span className="font-semibold">{formatSoles(result.cashback.rewardAmount)}</span> de
+              esta compra. La tarjeta vuelve a empezar.
+            </p>
+          </>
+        ) : (
+          result.rewardValue && (
+            <Badge className="mt-2 bg-amber-100 text-amber-700 text-sm">{result.rewardValue}</Badge>
+          )
         )}
       </div>
       <div className="flex flex-col gap-2 w-full max-w-xs">

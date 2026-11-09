@@ -180,8 +180,12 @@ export function SimulatorClient({
   async function visit() {
     if (!tenant || !clientId) return
     const value = Number(amount.replace(",", "."))
-    if (tenant.program === "points" && !(value > 0)) {
-      toast.error("Ingresa el monto de la compra para sumar puntos.")
+    if (tenant.requiresAmount && !(value > 0)) {
+      toast.error(
+        tenant.program === "points"
+          ? "Ingresa el monto de la compra para sumar puntos."
+          : "Ingresa el monto de la compra para calcular el cashback.",
+      )
       return
     }
     setBusy("visit")
@@ -189,7 +193,7 @@ export function SimulatorClient({
       const r = await simulateVisit({
         tenantId: tenant.id,
         clientId,
-        amount: tenant.program === "points" ? value : undefined,
+        amount: tenant.requiresAmount ? value : undefined,
       })
       if (r.success) {
         toast.success(r.data.message)
@@ -355,7 +359,7 @@ export function SimulatorClient({
                   </div>
                 )}
                 <div className="flex items-center gap-2 flex-wrap">
-                  {tenant?.program === "points" && (
+                  {tenant?.requiresAmount && (
                     <Input
                       id="sim-amount"
                       inputMode="decimal"

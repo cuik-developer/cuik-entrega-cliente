@@ -4,7 +4,7 @@ import type {
   PointsPromotionConfig,
   StampsPromotionConfig,
 } from "@cuik/shared/validators"
-import { activeBonusWindow, pointsForAmount } from "@cuik/shared/validators"
+import { activeBonusWindow, cashbackSettingsOf, pointsForAmount } from "@cuik/shared/validators"
 
 import type {
   PointsRulesContext,
@@ -30,6 +30,7 @@ export function evaluateStampRules(
     return {
       eligible: false,
       stampsToEarn: 0,
+      cashbackMultiplier: 1,
       bonusReasons: [],
       rejectionReason: "MAX_VISITS_REACHED",
     }
@@ -44,25 +45,32 @@ export function evaluateStampRules(
     return {
       eligible: false,
       stampsToEarn: 0,
+      cashbackMultiplier: 1,
       bonusReasons: [],
       rejectionReason: "LOCATION_NOT_ALLOWED",
     }
   }
 
-  // 3. Check minimum purchase amount
-  if (config.accumulation.minimumPurchaseAmount !== null) {
+  // 3. Check minimum purchase amount. A cashback reward needs the amount of
+  //    every purchase (the stamp keeps a share of it) even with no minimum.
+  if (config.accumulation.minimumPurchaseAmount !== null || cashbackSettingsOf(config.stamps)) {
     if (context.visitAmount == null) {
       return {
         eligible: false,
         stampsToEarn: 0,
+        cashbackMultiplier: 1,
         bonusReasons: [],
         rejectionReason: "AMOUNT_REQUIRED",
       }
     }
-    if (context.visitAmount < config.accumulation.minimumPurchaseAmount) {
+    if (
+      config.accumulation.minimumPurchaseAmount !== null &&
+      context.visitAmount < config.accumulation.minimumPurchaseAmount
+    ) {
       return {
         eligible: false,
         stampsToEarn: 0,
+        cashbackMultiplier: 1,
         bonusReasons: [],
         rejectionReason: "BELOW_MINIMUM_PURCHASE",
       }
@@ -79,23 +87,34 @@ export function evaluateStampRules(
     (dsd) =>
       dsd.dayOfWeek === clock.weekday && visitHour >= dsd.startHour && visitHour <= dsd.endHour,
   )
-  const stampsWindow = activeBonusWindow(config.accumulation.bonusWindows, clock)
+  const window = activeBonusWindow(config.accumulation.bonusWindows, clock)
+  // With a cashback reward the merchant chooses what each window multiplies:
+  // the stamps, the cashback of the purchase, or both. With a gift reward
+  // every window multiplies the stamps, whatever `applies` says.
+  const cashbackReward = cashbackSettingsOf(config.stamps) !== null
+  const windowOnStamps = window && (!cashbackReward || window.applies !== "cashback")
+  const windowOnCashback = window && cashbackReward && window.applies !== "stamps"
   const best = highestBonus([
     isBirthdayVisit(context) && {
       multiplier: config.accumulation.birthdayBonus,
       reason: "birthday_bonus",
     },
-    stampsWindow && {
-      multiplier: stampsWindow.multiplier,
-      reason: bonusWindowReason(stampsWindow),
+    windowOnStamps && {
+      multiplier: window.multiplier,
+      reason: bonusWindowReason(window),
     },
     legacyDouble && { multiplier: 2, reason: "double_stamps_day" },
   ])
+  const bonusReasons = best ? [best.reason] : []
+  if (windowOnCashback && !bonusReasons.includes(bonusWindowReason(window))) {
+    bonusReasons.push(bonusWindowReason(window))
+  }
 
   return {
     eligible: true,
     stampsToEarn: best?.multiplier ?? 1,
-    bonusReasons: best ? [best.reason] : [],
+    cashbackMultiplier: windowOnCashback ? window.multiplier : 1,
+    bonusReasons,
   }
 }
 

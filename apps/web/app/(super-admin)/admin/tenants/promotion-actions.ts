@@ -16,7 +16,9 @@ import {
   tenants,
 } from "@cuik/db"
 import {
+  type CashbackSettings,
   type CreatePromotionInput,
+  cashbackSettingsOf,
   createPromotionSchema,
   type ExpirationPolicy,
   pointsPromotionConfigSchema,
@@ -32,6 +34,7 @@ import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
 import { allMilestoneMessages } from "@/lib/loyalty/milestones"
 import { restampOpenLots } from "@/lib/loyalty/points-lots"
+import { createProgramPhase, localToday, seedCashbackBalances } from "@/lib/loyalty/program-phases"
 import { TWO_FACTOR_PENDING_ERROR, twoFactorPending } from "@/lib/two-factor"
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -349,7 +352,7 @@ export async function updatePromotion(
   promotionId: string,
   input: UpdatePromotionInput | UpdatePointsPromotionInput,
 ): Promise<ActionResult<{ id: string }>> {
-  const { error } = await requireSuperAdmin()
+  const { session, error } = await requireSuperAdmin()
   if (error) return { success: false, error }
 
   try {
@@ -438,6 +441,16 @@ export async function updatePromotion(
         )
       }
 
+      // Stamps reward switched to cashback on the active promotion: the cards
+      // in progress get their balance and a program phase marks the start.
+      if (!isPoints && activeAfter) {
+        const oldSettings = cashbackSettingsOfConfig(existing.config)
+        const newSettings = cashbackSettingsOfConfig(mergedConfig)
+        if (!oldSettings && newSettings) {
+          await startCashbackPhase(tx, existing.tenantId, newSettings, session.user.id)
+        }
+      }
+
       return { success: true, data: { id: promotionId } }
     })
   } catch (err) {
@@ -446,11 +459,51 @@ export async function updatePromotion(
   }
 }
 
+/** Cashback settings of a stored stamps config, or null (gift reward or unreadable). */
+function cashbackSettingsOfConfig(config: unknown) {
+  const parsed = stampsPromotionConfigSchema.safeParse(config ?? {})
+  return parsed.success ? cashbackSettingsOf(parsed.data.stamps) : null
+}
+
+/**
+ * The tenant starts paying cashback: seed the balances of the cards in
+ * progress from the stamps that already have an amount, and record a program
+ * phase ("Cashback 5 %") with the baseline so reports compare before/after.
+ */
+async function startCashbackPhase(
+  tx: Tx,
+  tenantId: string,
+  settings: CashbackSettings,
+  userId: string,
+) {
+  const [tenant] = await tx
+    .select({ timezone: tenants.timezone })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1)
+  const seeded = await seedCashbackBalances(tenantId, settings, tx)
+  const pct = Number.isInteger(settings.percent) ? settings.percent : settings.percent.toFixed(1)
+  await createProgramPhase(
+    {
+      tenantId,
+      name: `Cashback ${pct} %`,
+      startsOn: localToday(tenant?.timezone ?? "America/Lima"),
+      note: `Premio de la tarjeta cambiado a cashback. ${seeded.seededClients} clientes con tarjeta en curso recibieron saldo por los sellos que ya tenían monto (S/ ${seeded.seededTotal} en total).`,
+      createdBy: userId,
+      cashback: seeded,
+    },
+    tx,
+  )
+  console.info(
+    `[promotions] cashback phase started for tenant ${tenantId}: ${seeded.seededClients} clients seeded, S/ ${seeded.seededTotal}`,
+  )
+}
+
 export async function togglePromotionActive(
   promotionId: string,
   active: boolean,
 ): Promise<ActionResult<{ id: string }>> {
-  const { error } = await requireSuperAdmin()
+  const { session, error } = await requireSuperAdmin()
   if (error) return { success: false, error }
 
   try {
@@ -479,6 +532,15 @@ export async function togglePromotionActive(
         console.info(
           `[togglePromotionActive] activated points promotion (${policy.mode}), re-stamped ${updated} open lots (tenant ${existing.tenantId})`,
         )
+      }
+
+      // A stamps promotion with a cashback reward becomes the active one:
+      // same start as switching the mode on an active promotion.
+      if (existing.type === "stamps" && !existing.active) {
+        const settings = cashbackSettingsOfConfig(existing.config)
+        if (settings) {
+          await startCashbackPhase(tx, existing.tenantId, settings, session.user.id)
+        }
       }
 
       return { success: true, data: { id: promotionId } }

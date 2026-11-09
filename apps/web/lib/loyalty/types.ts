@@ -35,8 +35,38 @@ export type RulesEvaluationContext = {
 export type RulesEvaluationResult = {
   eligible: boolean
   stampsToEarn: number
+  /**
+   * Multiplier for the cashback of this purchase (cashback reward only): a
+   * bonus window set to multiply the cashback, or both. 1 when none applies.
+   */
+  cashbackMultiplier: number
   bonusReasons: string[]
   rejectionReason?: string
+}
+
+/** Cashback of a stamps visit, present only when the program's reward is cashback. */
+export type VisitCashback = {
+  /** Cashback this purchase earned, in soles. */
+  earned: number
+  /** Accumulated on the card after this visit (0 right after the card completes). */
+  balance: number
+  /** Sum of the cashback rewards waiting at the till after this visit. */
+  pending: number
+  /** Percentage of the program (5 = 5 %). */
+  percent: number
+  /** When this visit completed the card: the amount of the reward it created. */
+  rewardAmount: number | null
+  /** Reward label for notices and the till ("Cashback S/ 25.00"); null unless the card completed. */
+  rewardLabel: string | null
+}
+
+/** Cashback figures of a client, for the till and the pass. */
+export type ClientCashback = {
+  /** Accumulated on the current card. */
+  balance: number
+  /** Sum of the pending (not yet redeemed) cashback rewards. */
+  pending: number
+  percent: number
 }
 
 export type TierInfo = {
@@ -99,6 +129,8 @@ export type VisitResult = {
   milestone?: MilestoneNotice | null
   /** Early cash-out the client can take now; null when none is available. */
   cashOut?: CashOutOffer | null
+  /** Cashback of this visit and the card; absent when the reward is a gift. */
+  cashback?: VisitCashback | null
 }
 
 export type RedeemResult = {
@@ -107,6 +139,8 @@ export type RedeemResult = {
     id: string
     cycleNumber: number
     rewardType: string | null
+    /** Soles the till discounts when the reward is cashback; null for a gift. */
+    cashbackAmount: number | null
     redeemedAt: Date
   }
   remainingPendingRewards: number
@@ -147,6 +181,8 @@ export type ClientStatus = {
   nextMilestone?: { at: number; label: string } | null
   /** Early cash-out the client can take now; null when none is available. */
   cashOut?: CashOutOffer | null
+  /** Cashback on the card and pending; null when the reward is a gift or the program is points. */
+  cashback?: ClientCashback | null
   /** Last stamps redemption while it can still be undone; null otherwise. */
   lastRedemption?: {
     id: string

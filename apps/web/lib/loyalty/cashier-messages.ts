@@ -49,6 +49,29 @@ export function redeemRejectionMessage(code: unknown, serverError?: unknown): st
   return typeof serverError === "string" && serverError ? serverError : REDEEM_FALLBACK
 }
 
+/**
+ * Message for a stamps reward that was just redeemed. A cashback reward says
+ * the amount the cashier must discount from the purchase.
+ */
+export function redeemSuccessMessage(cashbackAmount: unknown): string {
+  if (typeof cashbackAmount === "number" && cashbackAmount > 0) {
+    return `Canjeado: descuenta S/ ${cashbackAmount.toFixed(2)} de la compra`
+  }
+  return "Premio canjeado"
+}
+
+/** Message for the amount step: why the till asks for the purchase amount. */
+export function amountStepHint(stampsMinAmount: number | null, cashbackPercent: number | null) {
+  if (cashbackPercent !== null) {
+    const pct = Number.isInteger(cashbackPercent) ? cashbackPercent : cashbackPercent.toFixed(1)
+    return stampsMinAmount !== null
+      ? `El cliente acumula ${pct} % de cashback. Monto mínimo: S/ ${stampsMinAmount.toFixed(2)}`
+      : `El cliente acumula ${pct} % de cashback de esta compra.`
+  }
+  if (stampsMinAmount !== null) return `Monto minimo: S/ ${stampsMinAmount.toFixed(2)}`
+  return "Ingresa el monto de la compra del cliente."
+}
+
 const CASH_OUT_MESSAGES: Record<string, string> = {
   NOT_AVAILABLE: "Este cliente no tiene un premio anticipado para cobrar",
 }

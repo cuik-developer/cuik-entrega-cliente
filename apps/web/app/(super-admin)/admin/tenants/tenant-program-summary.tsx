@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  cashbackSettingsOf,
   describePointsRate,
   expirationPolicySchema,
   stampsPromotionConfigSchema,
@@ -11,6 +12,7 @@ import { toast } from "sonner"
 import { FieldList } from "@/components/admin/enterprise"
 import { Button } from "@/components/ui/button"
 import { activeTimeLabel, formatYmd, todayYmd } from "@/lib/admin/billing"
+import { describeCashback } from "@/lib/loyalty/cashback"
 import { describeExpirationPolicy } from "@/lib/loyalty/expiration"
 import { describeMilestones } from "@/lib/loyalty/milestones"
 import { type ApiTenant, patchTenant, type TenantPromotion } from "./tenant-shared"
@@ -61,9 +63,13 @@ export function describeProgram(
     stampsCfg.success && promo.maxVisits
       ? describeMilestones(stampsCfg.data.stamps, promo.maxVisits)
       : null
-  const finalReward = promo.rewardValue?.trim() || "—"
+  // Cashback reward: the card pays a share of its purchases instead of a gift.
+  const cashback = stampsCfg.success ? cashbackSettingsOf(stampsCfg.data.stamps) : null
+  const finalReward = cashback
+    ? describeCashback(cashback, promo.maxVisits ?? 0)
+    : promo.rewardValue?.trim() || "—"
   return {
-    type: "Sellos",
+    type: cashback ? "Sellos · cashback" : "Sellos",
     target: promo.maxVisits ? `${promo.maxVisits} visitas` : "—",
     expiration: policyText(cfg.stamps?.stampsExpiration),
     rewards: ladder ? `${ladder} · ${promo.maxVisits}: ${finalReward}` : finalReward,

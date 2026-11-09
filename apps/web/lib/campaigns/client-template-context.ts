@@ -10,8 +10,10 @@ import {
   sql,
   tenants,
 } from "@cuik/db"
+import { cashbackSettingsOf, stampsPromotionConfigSchema } from "@cuik/shared/validators"
 import type { TemplateContext } from "@cuik/wallet/shared"
 import { formatBirthday } from "@/lib/birthday"
+import { cashbackTemplateVars } from "@/lib/loyalty/cashback"
 import { pointsExpiryTemplateVars } from "@/lib/loyalty/points-lots"
 import { stampsInCycleOf } from "@/lib/loyalty/stamps"
 
@@ -35,10 +37,16 @@ export async function buildClientTemplateContexts(
     .where(eq(tenants.id, tenantId))
     .limit(1)
   const [activePromotion] = await db
-    .select({ type: promotions.type })
+    .select({ type: promotions.type, config: promotions.config })
     .from(promotions)
     .where(and(eq(promotions.tenantId, tenantId), eq(promotions.active, true)))
     .limit(1)
+  // Cashback reward of a stamps program: {{cashback.*}} per client.
+  const stampsCfg =
+    activePromotion?.type === "stamps"
+      ? stampsPromotionConfigSchema.safeParse(activePromotion.config ?? {})
+      : null
+  const cashbackSettings = stampsCfg?.success ? cashbackSettingsOf(stampsCfg.data.stamps) : null
   const [activeDesign] = await db
     .select({ stampsConfig: passDesigns.stampsConfig })
     .from(passDesigns)
@@ -63,6 +71,7 @@ export async function buildClientTemplateContexts(
       tier: clients.tier,
       totalVisits: clients.totalVisits,
       stampsCashed: clients.stampsCashed,
+      cashbackBalance: clients.cashbackBalance,
       pointsBalance: clients.pointsBalance,
       customData: clients.customData,
     })
@@ -70,11 +79,16 @@ export async function buildClientTemplateContexts(
     .where(sql`${clients.id} IN (${idList})`)
 
   const pendingRows = await db
-    .select({ clientId: rewards.clientId, cnt: count() })
+    .select({
+      clientId: rewards.clientId,
+      cnt: count(),
+      cashback: sql<string>`COALESCE(SUM(${rewards.cashbackAmount}), 0)::text`,
+    })
     .from(rewards)
     .where(and(eq(rewards.status, "pending"), sql`${rewards.clientId} IN (${idList})`))
     .groupBy(rewards.clientId)
   const pendingByClient = new Map(pendingRows.map((r) => [r.clientId, Number(r.cnt)]))
+  const pendingCashbackByClient = new Map(pendingRows.map((r) => [r.clientId, r.cashback]))
 
   for (const c of clientRows) {
     const stampsInCycle = stampsInCycleOf(c, maxVisits)
@@ -101,6 +115,13 @@ export async function buildClientTemplateContexts(
       },
       points: { balance: c.pointsBalance, ...expiry },
       rewards: { pending: pendingByClient.get(c.id) ?? 0 },
+      cashback: cashbackSettings
+        ? cashbackTemplateVars(
+            cashbackSettings,
+            c.cashbackBalance,
+            pendingCashbackByClient.get(c.id) ?? 0,
+          )
+        : undefined,
       tenant: { name: tenantRow?.name ?? "" },
     })
   }
