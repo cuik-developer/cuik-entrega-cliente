@@ -59,6 +59,7 @@ import { PromotionFormDialog } from "./promotion-form-dialog"
 import { RegistrationConfigSection } from "./registration-config-section"
 import { TenantBillingSection } from "./tenant-billing-section"
 import { TenantCampaignsSection } from "./tenant-campaigns-section"
+import { TenantFeaturesSection } from "./tenant-features-section"
 import { TenantChurnLine } from "./tenant-health"
 import { TenantNotesSection } from "./tenant-notes-section"
 import { TenantPhasesSection } from "./tenant-phases-section"
@@ -640,6 +641,9 @@ export function TenantDetail({
 
               {/* Stages of the program: where each change of strategy began */}
               <TenantPhasesSection tenantId={tenant.id} />
+
+              {/* What Cuik turns on for this tenant (off by default) */}
+              <TenantFeaturesSection tenantId={tenant.id} />
 
               {/* Onboarding checklist */}
               {checklist && (

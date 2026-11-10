@@ -1,12 +1,17 @@
 "use client"
 
-import { Clock, LogOut, QrCode, Search } from "lucide-react"
+import { Clock, LayoutDashboard, LogOut, QrCode, Search } from "lucide-react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { useState } from "react"
+import { usePathname, useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 import { LogoutButton } from "@/components/logout-button"
 import { TenantProvider, useTenant } from "@/hooks/use-tenant"
 import { CUIK_ACCENT, CUIK_PRIMARY, darkenColor } from "@/lib/color-utils"
+
+/** Owner and admins reach these screens only when Cuik turned on "Modo cajero para administradores". */
+function isTenantAdmin(role: string | null): boolean {
+  return role === "owner" || role === "admin"
+}
 
 const navItems = [
   { href: "/cajero/escanear", label: "Escanear", icon: QrCode },
@@ -62,7 +67,7 @@ function LogoOrInitials({
 }
 
 function CajeroHeader() {
-  const { tenantName, branding, isLoading } = useTenant()
+  const { tenantName, branding, isLoading, memberRole } = useTenant()
   const primaryColor = branding?.primaryColor ?? CUIK_PRIMARY
   const displayName = tenantName || "Sin comercio"
 
@@ -83,6 +88,15 @@ function CajeroHeader() {
         </div>
       </div>
       <div className="flex items-center gap-3">
+        {isTenantAdmin(memberRole) && (
+          <Link
+            href="/panel"
+            className="flex items-center gap-1.5 rounded-md border border-white/15 px-2.5 py-1 text-xs text-white/70 hover:text-white hover:border-white/40 transition-colors"
+          >
+            <LayoutDashboard className="w-3.5 h-3.5" />
+            <span>Volver al panel</span>
+          </Link>
+        )}
         <div className="hidden sm:flex items-center gap-1.5 text-white/40 text-xs">
           <Clock className="w-3.5 h-3.5" />
           <span>
@@ -127,10 +141,16 @@ function CajeroNav() {
 }
 
 function CajeroContent({ children }: { children: React.ReactNode }) {
-  const { isLoading, error, branding } = useTenant()
+  const { isLoading, error, branding, memberRole, adminCashier } = useTenant()
   const primaryColor = branding?.primaryColor ?? CUIK_PRIMARY
+  const router = useRouter()
+  // An owner/admin without the switch on goes back to the panel (typed URL, old bookmark).
+  const blocked = !isLoading && !error && isTenantAdmin(memberRole) && !adminCashier
+  useEffect(() => {
+    if (blocked) router.replace("/panel")
+  }, [blocked, router])
 
-  if (isLoading) {
+  if (isLoading || blocked) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div

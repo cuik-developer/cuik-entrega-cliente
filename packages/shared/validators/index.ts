@@ -209,6 +209,11 @@ export {
   type StrategicField,
 } from "./registration-config-schema"
 export {
+  parseTenantFeatures,
+  type TenantFeatures,
+  tenantFeaturesSchema,
+} from "./tenant-features-schema"
+export {
   type CreateSolicitudInput,
   type CreateTenantInput,
   createSolicitudSchema,

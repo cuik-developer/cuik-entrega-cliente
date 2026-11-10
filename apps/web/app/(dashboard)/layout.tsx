@@ -9,6 +9,7 @@ import {
   LogOut,
   MapPin,
   Menu,
+  QrCode,
   Scale,
   Send,
   Settings,
@@ -35,6 +36,8 @@ type NavItem = {
   label: string
   icon: React.ComponentType<{ className?: string }>
   pointsOnly?: boolean
+  /** Only when Cuik turned on "Modo cajero para administradores" for the tenant. */
+  adminCashierOnly?: boolean
 }
 
 /**
@@ -49,6 +52,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/panel", label: "Resumen", icon: LayoutDashboard },
       { href: "/panel/clientes", label: "Clientes", icon: Users },
       { href: "/panel/cajeros", label: "Equipo", icon: UserCheck },
+      { href: "/cajero/escanear", label: "Cajero", icon: QrCode, adminCashierOnly: true },
     ],
   },
   {
@@ -242,7 +246,7 @@ function SuperAdminViewBanner() {
 
 function SideNav({ onNavigate }: { onNavigate: () => void }) {
   const pathname = usePathname()
-  const { promotionType, readOnly } = useTenant()
+  const { promotionType, readOnly, adminCashier } = useTenant()
   // Parents with their own entry ("Envíos" is /panel/campanas) match exactly.
   const EXACT = new Set(["/panel", "/panel/campanas"])
   const isActive = (href: string) =>
@@ -250,6 +254,7 @@ function SideNav({ onNavigate }: { onNavigate: () => void }) {
   // Exportar is a bulk PII download: not offered in the super-admin's read-only view.
   const visible = (item: NavItem) =>
     (!item.pointsOnly || promotionType === "points") &&
+    (!item.adminCashierOnly || (adminCashier && !readOnly)) &&
     !(readOnly && item.href === "/panel/exportar")
 
   return (

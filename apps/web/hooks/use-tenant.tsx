@@ -16,6 +16,10 @@ type TenantContextValue = {
   promotionConfig: Record<string, unknown> | null
   /** Super-admin viewing this tenant: banner + no writes. */
   readOnly: boolean
+  /** The user's role in the tenant: owner / admin / member (cashier); null for a super-admin viewing. */
+  memberRole: string | null
+  /** Super-admin switch: owner and admins also get the cashier screens. */
+  adminCashier: boolean
   isLoading: boolean
   error: string | null
 }
@@ -34,6 +38,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     promotionId: null,
     promotionConfig: null,
     readOnly: false,
+    memberRole: null,
+    adminCashier: false,
     isLoading: true,
     error: null,
   })
@@ -72,6 +78,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           promotionId: json.data.promotionId ?? null,
           promotionConfig: json.data.promotionConfig ?? null,
           readOnly: Boolean(json.data.readOnly),
+          memberRole: json.data.memberRole ?? null,
+          adminCashier: json.data.adminCashier === true,
           isLoading: false,
           error: null,
         })

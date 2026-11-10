@@ -1,5 +1,9 @@
 import { and, db, eq, member, organization, promotions, sql, tenants, user } from "@cuik/db"
-import { type TenantBranding, tenantBrandingSchema } from "@cuik/shared/validators"
+import {
+  parseTenantFeatures,
+  type TenantBranding,
+  tenantBrandingSchema,
+} from "@cuik/shared/validators"
 import { cookies } from "next/headers"
 
 import { parseSaViewToken, SA_VIEW_COOKIE } from "@/lib/sa-view"
@@ -16,6 +20,10 @@ export type TenantContextData = {
   promotionConfig: Record<string, unknown> | null
   /** True when a super-admin is viewing this tenant ("ver como el comercio"). */
   readOnly: boolean
+  /** The user's role in this tenant (owner / admin / member = cashier); null for a super-admin viewing. */
+  memberRole: string | null
+  /** Super-admin switch: owner and admins also get the cashier screens. */
+  adminCashier: boolean
 }
 
 /**
@@ -38,6 +46,7 @@ export async function getTenantForUser(userId: string): Promise<TenantContextDat
   const viewedTenantId = await saViewedTenantId(userId)
 
   let orgId = ""
+  let memberRole: string | null = null
   let tenantSlugToLoad: string | null = null
   if (!viewedTenantId) {
     // Find the user's organization membership
@@ -46,6 +55,7 @@ export async function getTenantForUser(userId: string): Promise<TenantContextDat
         orgId: organization.id,
         orgSlug: organization.slug,
         orgName: organization.name,
+        role: member.role,
       })
       .from(member)
       .innerJoin(organization, eq(member.organizationId, organization.id))
@@ -60,6 +70,7 @@ export async function getTenantForUser(userId: string): Promise<TenantContextDat
     const org = memberRows[0]
     if (!org) return null
     orgId = org.orgId
+    memberRole = org.role
     tenantSlugToLoad = org.orgSlug
   }
 
@@ -71,6 +82,7 @@ export async function getTenantForUser(userId: string): Promise<TenantContextDat
       name: tenants.name,
       branding: tenants.branding,
       timezone: tenants.timezone,
+      features: tenants.features,
     })
     .from(tenants)
     .where(
@@ -119,5 +131,7 @@ export async function getTenantForUser(userId: string): Promise<TenantContextDat
     promotionId: promo?.id ?? null,
     promotionConfig: (promo?.config as Record<string, unknown>) ?? null,
     readOnly: Boolean(viewedTenantId),
+    memberRole,
+    adminCashier: parseTenantFeatures(tenant.features).adminCashier,
   }
 }

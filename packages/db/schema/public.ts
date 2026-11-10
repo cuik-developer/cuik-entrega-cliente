@@ -76,6 +76,8 @@ export const tenants = pgTable("tenants", {
   segmentationConfig: jsonb("segmentation_config"),
   // Per-tenant automation settings (birthday greeting, ...). Shape: AutomationsConfig.
   automations: jsonb("automations"),
+  // Features Cuik turns on per tenant (super-admin only). Shape: TenantFeatures.
+  features: jsonb("features"),
   appleConfig: jsonb("apple_config"),
   timezone: text("timezone").default("America/Lima").notNull(),
   ownerId: text("owner_id").references(() => user.id),
