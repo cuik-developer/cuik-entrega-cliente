@@ -285,6 +285,9 @@ async function phaseInForce(
  * period of the file replaces what was loaded for those days before), then
  * compute the corte over every sale of the tenant and keep it.
  */
+/** A problem with the file itself, safe to show to whoever uploaded it. */
+class ImpactInputError extends Error {}
+
 export async function processImport(params: {
   tenantId: string
   importId: string
@@ -307,10 +310,10 @@ export async function processImport(params: {
     .where(eq(salesImports.id, imp.id))
   try {
     const parsed = await readSalesFile(await readStoredFile(imp.fileKey), imp.fileName)
-    if ("error" in parsed) throw new Error(parsed.error)
+    if ("error" in parsed) throw new ImpactInputError(parsed.error)
     const built = buildOrders(parsed.rows, params.mapping)
     if (built.orders.length === 0)
-      throw new Error("No se encontraron compras con fecha en el archivo")
+      throw new ImpactInputError("No se encontraron compras con fecha en el archivo")
     const days = built.orders.map((o) => o.day).sort()
     const from = days[0]
     const to = days[days.length - 1]
@@ -411,8 +414,13 @@ export async function processImport(params: {
     })
     return { reportId: report.id, summary }
   } catch (err) {
-    const message = err instanceof Error ? err.message : "No se pudo procesar el archivo"
-    console.error("[impact] processImport failed", err)
+    // Our own messages are short and in Spanish; anything else (a DB error that
+    // carries the whole INSERT) stays in the log and the user gets a plain line.
+    const own = err instanceof ImpactInputError
+    const message = own
+      ? err.message
+      : "No se pudo procesar el archivo. Revisa que las columnas sean las correctas o escríbenos."
+    console.error("[impact] processImport failed", own ? err.message : err)
     await db
       .update(salesImports)
       .set({ status: "failed", error: message.slice(0, 500) })

@@ -131,6 +131,29 @@ describe("parsing", () => {
     expect(r.orders.find((o) => o.orderRef === "A2")?.dni).toBeNull()
     expect(r.orders.find((o) => o.orderRef === "A3")?.dni).toBeNull()
   })
+
+  it("drops a purchase with an impossible amount and its refund", () => {
+    const mapping: ColumnMapping = {
+      orderRef: 0,
+      dni: 1,
+      idType: null,
+      name: null,
+      phone: null,
+      store: null,
+      cashier: null,
+      date: 2,
+      amount: 3,
+    }
+    const rows = [
+      ["S/75186", "46634066", "04/07/2026", "25345614871"],
+      ["REEMBOLSO DE S/75186", "46634066", "04/07/2026", "-25345614871"],
+      ["S/75190", "46634066", "04/07/2026", "543.50"],
+    ]
+    const r = buildOrders(rows, mapping)
+    expect(r.ordersWithBadAmount).toBe(2)
+    expect(r.orders).toHaveLength(1)
+    expect(r.orders[0]).toMatchObject({ orderRef: "S/75190", amount: 543.5 })
+  })
 })
 
 describe("date helpers", () => {

@@ -103,7 +103,16 @@ export type BuildResult = {
   rowsTotal: number
   /** Rows skipped for lacking a readable date (the file's own problem, reported). */
   rowsWithoutDate: number
+  /** Purchases dropped for an impossible amount (a barcode typed into the amount, say). */
+  ordersWithBadAmount: number
 }
+
+/**
+ * Above this a single purchase is a typing error, not a sale (S/ 25 345 614 871
+ * seen in a real Odoo export, refunded right after). Dropping it keeps the
+ * corte honest and the row inside numeric(12,2).
+ */
+export const MAX_ORDER_AMOUNT = 100_000
 
 /**
  * Rows -> purchases. With an order reference, lines of the same order are
@@ -155,9 +164,14 @@ export function buildOrders(rows: unknown[][], mapping: ColumnMapping): BuildRes
       existing.cashier ??= base.cashier
     }
   }
-  const all = [...orders.values(), ...loose].map((o) => ({
-    ...o,
-    amount: Math.round(o.amount * 100) / 100,
-  }))
-  return { orders: all, rowsTotal: rows.length, rowsWithoutDate }
+  const all: SaleOrder[] = []
+  let ordersWithBadAmount = 0
+  for (const o of [...orders.values(), ...loose]) {
+    if (!Number.isFinite(o.amount) || Math.abs(o.amount) > MAX_ORDER_AMOUNT) {
+      ordersWithBadAmount++
+      continue
+    }
+    all.push({ ...o, amount: Math.round(o.amount * 100) / 100 })
+  }
+  return { orders: all, rowsTotal: rows.length, rowsWithoutDate, ordersWithBadAmount }
 }
