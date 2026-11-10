@@ -27,6 +27,7 @@ const ALERT_MODULE: Record<AlertKind, AdminModuleKey> = {
   demo: "crm",
   cert: "loyalty",
   campaign: "loyalty",
+  impact: "loyalty",
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`

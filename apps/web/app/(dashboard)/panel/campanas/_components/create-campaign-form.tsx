@@ -47,6 +47,8 @@ interface CreateCampaignFormProps {
   onSuccess?: () => void
   /** Id of a draft / scheduled campaign to edit. Undefined = create. */
   editId?: string | null
+  /** Create mode: fields pre-filled by whoever opened the form (e.g. Impacto's cooled clients). */
+  initialValues?: Partial<CreateCampaignInput> | null
 }
 
 const EMPTY_VALUES: CreateCampaignInput = {
@@ -63,6 +65,7 @@ export function CreateCampaignForm({
   tenantSlug,
   onSuccess,
   editId,
+  initialValues,
 }: CreateCampaignFormProps) {
   const isEdit = Boolean(editId)
   const [loadingEdit, setLoadingEdit] = useState(false)
@@ -91,9 +94,11 @@ export function CreateCampaignForm({
   useEffect(() => {
     if (!open) return
     if (!editId) {
-      form.reset(EMPTY_VALUES)
+      form.reset({ ...EMPTY_VALUES, ...(initialValues ?? {}) })
       setIsScheduled(false)
       setScheduledLocal("")
+      // A pre-filled audience (a client list) must remount the picker on its tab.
+      if (initialValues?.segment) setLoadKey((k) => k + 1)
       return
     }
     let cancelled = false

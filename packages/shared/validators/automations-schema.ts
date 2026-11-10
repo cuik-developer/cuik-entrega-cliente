@@ -123,11 +123,25 @@ export const DEFAULT_CARD_COMPLETE_AUTOMATION: CardCompleteAutomation = {
   message: DEFAULT_CARD_COMPLETE_MESSAGE,
 }
 
+// ── Impacto: monthly reminder to upload the sales file ──────────────
+
+/**
+ * Once a merchant has loaded sales at least once, the first days of each
+ * month Cuik reminds it to upload the previous month. `lastReminderPeriod`
+ * ("2026-11") keeps a re-run from sending twice.
+ */
+export const impactAutomationSchema = z.object({
+  reminder: z.boolean().default(true),
+  lastReminderPeriod: z.string().optional(),
+})
+export type ImpactAutomation = z.infer<typeof impactAutomationSchema>
+
 export const automationsConfigSchema = z.object({
   birthday: birthdayAutomationSchema.optional(),
   pointsExpiry: pointsExpiryAutomationSchema.optional(),
   reports: reportsAutomationSchema.optional(),
   cardComplete: cardCompleteAutomationSchema.optional(),
+  impact: impactAutomationSchema.optional(),
 })
 
 export type AutomationsConfig = z.infer<typeof automationsConfigSchema>

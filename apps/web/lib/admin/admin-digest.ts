@@ -2,6 +2,7 @@ import { and, campaigns, db, eq, globalConfig, gte, sql, user } from "@cuik/db"
 import { MensajePersonalizado, sendEmail } from "@cuik/email"
 import forge from "node-forge"
 import { createElement } from "react"
+import { monthLabel, tenantsMissingLastMonth } from "@/lib/loyalty/impact/reminder"
 import { daysBetween, formatYmd, periodLabel, todayYmd } from "./billing"
 import { billingDueRows, summarize } from "./billing-overview"
 import { getInternalTenantIds } from "./internal-tenants"
@@ -141,6 +142,27 @@ function certAlerts(
   ]
 }
 
+/** Impacto: merchants that load their sales but skipped last month (from the 6th on). */
+async function impactAlerts(
+  today: string,
+  base: string,
+  internal: Set<string>,
+): Promise<AdminAlert[]> {
+  const out: AdminAlert[] = []
+  for (const m of await tenantsMissingLastMonth(today)) {
+    if (internal.has(m.tenantId)) continue
+    out.push({
+      key: `impact:${m.tenantId}:${m.missingMonth}`,
+      kind: "impact",
+      severity: "warning",
+      who: m.tenantName,
+      text: `No subió sus ventas de ${monthLabel(m.missingMonth)} para el corte de Impacto (última carga hasta el ${formatYmd(m.lastPeriodTo)}).`,
+      href: `${base}/admin/impacto`,
+    })
+  }
+  return out
+}
+
 export async function collectAdminAlerts(now = new Date()): Promise<AdminAlert[]> {
   const today = todayYmd(now)
   const internal = new Set(await getInternalTenantIds())
@@ -258,6 +280,8 @@ export async function collectAdminAlerts(now = new Date()): Promise<AdminAlert[]
       )
     }
   }
+
+  out.push(...(await impactAlerts(today, base, internal)))
 
   // ── Shared Cuik certificate (demo mode tenants) ──
   const shared = sharedAppleCertExpiry()

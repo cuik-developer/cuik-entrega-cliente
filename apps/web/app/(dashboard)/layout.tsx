@@ -327,9 +327,9 @@ function Shell({ children }: { children: React.ReactNode }) {
   }, [open])
 
   return (
-    <div className="ent fixed inset-0 flex flex-col overflow-hidden">
+    <div className="ent fixed inset-0 flex flex-col overflow-hidden print:static print:overflow-visible">
       {/* Top bar */}
-      <header className="h-10 shrink-0 bg-ent-topbar text-[#e8edf3] flex items-center gap-3 px-3">
+      <header className="h-10 shrink-0 bg-ent-topbar text-[#e8edf3] flex items-center gap-3 px-3 print:hidden">
         <button
           type="button"
           className="lg:hidden p-1.5 -ml-1 rounded-[4px] text-[#b6c0cc] hover:bg-white/10 hover:text-white"
@@ -378,7 +378,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         {/* Side navigation / drawer */}
         <aside
           inert={!desktop && !open}
-          className={`fixed top-10 bottom-0 left-0 z-30 w-60 max-w-[85vw] bg-ent-panel border-r border-ent-line flex flex-col transition-transform duration-200 lg:static lg:w-[180px] lg:translate-x-0 ${
+          className={`fixed top-10 bottom-0 left-0 z-30 w-60 max-w-[85vw] bg-ent-panel border-r border-ent-line flex flex-col transition-transform duration-200 lg:static lg:w-[180px] lg:translate-x-0 print:hidden ${
             open ? "translate-x-0" : "-translate-x-full"
           }`}
           aria-label="Menú del panel"
@@ -404,8 +404,10 @@ function Shell({ children }: { children: React.ReactNode }) {
           />
         )}
 
-        <main className="flex-1 min-w-0 overflow-y-auto">
-          <div className="px-4 py-3 lg:px-5 lg:py-4 max-w-[1280px]">{children}</div>
+        <main className="flex-1 min-w-0 overflow-y-auto print:overflow-visible">
+          <div className="px-4 py-3 lg:px-5 lg:py-4 max-w-[1280px] print:max-w-none print:p-0">
+            {children}
+          </div>
         </main>
       </div>
     </div>

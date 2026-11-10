@@ -1,8 +1,10 @@
 "use client"
 
+import type { CreateCampaignInput } from "@cuik/shared/validators"
 import { Loader2, Plus } from "lucide-react"
 import Link from "next/link"
 import { useCallback, useEffect, useState } from "react"
+import { toast } from "sonner"
 
 import { Notice, PageHeader, PanelMessage } from "@/components/admin/enterprise"
 import { PANEL_DEEP_LINK_EVENT } from "@/components/panel/command-search"
@@ -24,10 +26,44 @@ export default function CampanasPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [initialValues, setInitialValues] = useState<Partial<CreateCampaignInput> | null>(null)
 
   const handleCampaignCreated = useCallback(() => {
     setRefreshKey((k) => k + 1)
   }, [])
+
+  // From Impacto: /panel/campanas?impacto=enfriados opens the form with the
+  // card holders whose frequency broke, as a fixed list (snapshot of the corte).
+  useEffect(() => {
+    if (!tenantSlug) return
+    if (new URLSearchParams(window.location.search).get("impacto") !== "enfriados") return
+    window.history.replaceState(null, "", "/panel/campanas")
+    let cancelled = false
+    fetch(`/api/${tenantSlug}/impact/segment?kind=broken`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (cancelled) return
+        const ids: string[] = json.success ? json.data.clientIds : []
+        if (ids.length === 0) {
+          toast.error(
+            "El último corte de Impacto no tiene clientes con tarjeta que se hayan enfriado",
+          )
+          return
+        }
+        setInitialValues({
+          name: `Recuperación · clientes que se enfriaron (${ids.length})`,
+          type: "push",
+          segment: { clientIds: ids },
+        })
+        setShowCreateDialog(true)
+      })
+      .catch(() => {
+        if (!cancelled) toast.error("No se pudo leer el corte de Impacto")
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [tenantSlug])
 
   // Deep link from the panel search: /panel/campanas?nueva=1 opens the form,
   // also when the search is used while already on this page (window event).
@@ -104,11 +140,15 @@ export default function CampanasPage() {
       <CreateCampaignForm
         open={showCreateDialog || editId !== null}
         onOpenChange={(open) => {
-          if (!open) setEditId(null)
+          if (!open) {
+            setEditId(null)
+            setInitialValues(null)
+          }
           setShowCreateDialog(open && editId === null)
         }}
         tenantSlug={tenantSlug}
         editId={editId}
+        initialValues={initialValues}
         onSuccess={handleCampaignCreated}
       />
     </div>

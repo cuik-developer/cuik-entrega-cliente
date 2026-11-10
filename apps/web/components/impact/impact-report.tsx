@@ -1,6 +1,6 @@
 "use client"
 
-import { Download } from "lucide-react"
+import { Download, Megaphone, Printer } from "lucide-react"
 
 import {
   DataTable,
@@ -26,10 +26,13 @@ export function ImpactReport({
   report,
   excelHref,
   tenantName,
+  campaignHref,
 }: {
   report: ReportView
   excelHref: string
   tenantName: string
+  /** Panel only: opens a campaign to the card holders whose frequency broke. */
+  campaignHref?: string
 }) {
   const s = report.summary
   const p = report.previous?.summary ?? null
@@ -53,11 +56,21 @@ export function ImpactReport({
           </>
         }
         actions={
-          <Button asChild size="sm" variant="outline" className="h-8 gap-1.5 text-[12.5px]">
-            <a href={excelHref}>
-              <Download className="w-3.5 h-3.5" /> Excel
-            </a>
-          </Button>
+          <div className="flex items-center gap-2 print:hidden">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5 text-[12.5px]"
+              onClick={() => window.print()}
+            >
+              <Printer className="w-3.5 h-3.5" /> Imprimir / PDF
+            </Button>
+            <Button asChild size="sm" variant="outline" className="h-8 gap-1.5 text-[12.5px]">
+              <a href={excelHref}>
+                <Download className="w-3.5 h-3.5" /> Excel
+              </a>
+            </Button>
+          </div>
         }
       />
 
@@ -446,6 +459,14 @@ export function ImpactReport({
                 { label: "Sin tarjeta", value: `${s.brokenFrequency.notRegistered}` },
               ]}
             />
+            {campaignHref && s.brokenFrequency.registered > 0 && (
+              <Button asChild size="sm" className="mt-2 h-8 gap-1.5 text-[12.5px] print:hidden">
+                <a href={campaignHref}>
+                  <Megaphone className="w-3.5 h-3.5" /> Crear campaña a los{" "}
+                  {s.brokenFrequency.registered} con tarjeta
+                </a>
+              </Button>
+            )}
           </div>
         </Panel>
       </div>
