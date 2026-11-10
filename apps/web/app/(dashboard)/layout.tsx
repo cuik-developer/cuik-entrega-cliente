@@ -9,6 +9,7 @@ import {
   LogOut,
   MapPin,
   Menu,
+  Scale,
   Send,
   Settings,
   Sparkles,
@@ -71,6 +72,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: "Análisis",
     items: [
       { href: "/panel/analitica", label: "Analítica", icon: BarChart3 },
+      { href: "/panel/impacto", label: "Impacto", icon: Scale },
       { href: "/panel/exportar", label: "Exportar datos", icon: Download },
     ],
   },
