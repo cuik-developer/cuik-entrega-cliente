@@ -25,6 +25,30 @@ export class OdooError extends Error {
 
 type Fetch = typeof fetch
 
+/**
+ * Why a fetch failed, in the operator's words. Node wraps the real cause
+ * ("fetch failed" with `cause.code`), so the code is what says whether the
+ * server is down, the name is wrong or its certificate is the problem.
+ */
+export function networkMessage(err: unknown): string {
+  if (err instanceof Error && err.name === "AbortError") return "Tiempo de espera agotado"
+  const cause = (err as { cause?: { code?: string; message?: string } } | null)?.cause
+  const code = cause?.code ?? ""
+  const text = `${code} ${cause?.message ?? ""}`
+  if (code === "CERT_HAS_EXPIRED") {
+    return "El certificado TLS del servidor está vencido; el proveedor de Odoo debe renovarlo"
+  }
+  if (/CERT|SELF_SIGNED|UNABLE_TO_VERIFY|ALTNAME|certificate/i.test(text)) {
+    return "El certificado TLS del servidor no es válido para ese dominio"
+  }
+  if (code === "ENOTFOUND" || code === "EAI_AGAIN") return "El dominio no existe o no resuelve"
+  if (code === "ECONNREFUSED") return "El servidor rechazó la conexión (puerto cerrado)"
+  if (code === "ETIMEDOUT" || code === "UND_ERR_CONNECT_TIMEOUT") {
+    return "El servidor no respondió a tiempo"
+  }
+  return "No se pudo conectar"
+}
+
 const DEFAULT_TIMEOUT_MS = 60_000
 
 /** Odoo's "[id, display_name]" many2one shape. */
@@ -67,11 +91,7 @@ export class OdooClient {
         signal: controller.signal,
       })
     } catch (err) {
-      const msg =
-        err instanceof Error && err.name === "AbortError"
-          ? "Tiempo de espera agotado"
-          : "No se pudo conectar"
-      throw new OdooError(`${msg} (${this.endpoint})`, "network")
+      throw new OdooError(`${networkMessage(err)} (${this.endpoint})`, "network")
     } finally {
       clearTimeout(timer)
     }

@@ -60,3 +60,18 @@ describe("refunds in the corte", () => {
     expect(summary.period.to).toBe("2026-04-10")
   })
 })
+
+describe("network errors in the operator's words", () => {
+  it("names an expired certificate, a wrong domain and a closed port", async () => {
+    const { networkMessage } = await import("./odoo-client")
+    const wrap = (code: string) => Object.assign(new TypeError("fetch failed"), { cause: { code } })
+    expect(networkMessage(wrap("CERT_HAS_EXPIRED"))).toMatch(/vencido/)
+    expect(networkMessage(wrap("DEPTH_ZERO_SELF_SIGNED_CERT"))).toMatch(/no es válido/)
+    expect(networkMessage(wrap("ENOTFOUND"))).toMatch(/dominio/)
+    expect(networkMessage(wrap("ECONNREFUSED"))).toMatch(/rechazó/)
+    expect(networkMessage(new Error("x"))).toBe("No se pudo conectar")
+    const abort = new Error("aborted")
+    abort.name = "AbortError"
+    expect(networkMessage(abort)).toMatch(/Tiempo/)
+  })
+})
