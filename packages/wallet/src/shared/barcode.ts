@@ -37,14 +37,14 @@ export function appleBarcodes(qrCode: string, format?: BarcodeFormat): AppleBarc
     altText: "Powered by Cuik",
   }
   if (format !== "code128") return [qr]
-  const short = shortBarcodeValue(qrCode)
+  // Same text under the bars as under the QR. The 12 hex chars are not shown:
+  // when the gun fails, the till searches by name or DNI, never by typing them.
   return [
-    // Under the bars, the code itself: a cashier can type it if the gun fails.
     {
       format: "PKBarcodeFormatCode128",
-      message: short,
+      message: shortBarcodeValue(qrCode),
       messageEncoding: "iso-8859-1",
-      altText: short,
+      altText: qr.altText,
     },
     qr,
   ]
@@ -52,7 +52,8 @@ export function appleBarcodes(qrCode: string, format?: BarcodeFormat): AppleBarc
 
 /**
  * Barcode of a Google loyalty object. `qrType` keeps the enum spelling each
- * payload already used ("qrCode" / "QR_CODE"), so "qr" changes nothing.
+ * payload already used ("qrCode" / "QR_CODE"), so "qr" changes nothing; the
+ * alternate text stays the one the payload always sent (blank), in both formats.
  */
 export function googleBarcode(
   qrCode: string,
@@ -61,6 +62,5 @@ export function googleBarcode(
   alternateText: string,
 ): { type: string; value: string; alternateText: string } {
   if (format !== "code128") return { type: qrType, value: qrCode, alternateText }
-  const short = shortBarcodeValue(qrCode)
-  return { type: "CODE_128", value: short, alternateText: short }
+  return { type: "CODE_128", value: shortBarcodeValue(qrCode), alternateText }
 }

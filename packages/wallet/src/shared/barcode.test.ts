@@ -29,6 +29,11 @@ describe("appleBarcodes", () => {
     expect(bar).toMatchObject({ format: "PKBarcodeFormatCode128", message: "a1b2c3d4e5f6" })
     expect(qr).toMatchObject({ format: "PKBarcodeFormatQR", message: "cuik:cafe:a1b2c3d4e5f6" })
   })
+  it("shows the brand under the bars, never the hex", () => {
+    const [bar, qr] = appleBarcodes("cuik:cafe:a1b2c3d4e5f6", "code128")
+    expect(bar.altText).toBe("Powered by Cuik")
+    expect(qr.altText).toBe("Powered by Cuik")
+  })
 })
 
 describe("googleBarcode", () => {
@@ -40,11 +45,14 @@ describe("googleBarcode", () => {
     })
     expect(googleBarcode("x", "qr", "QR_CODE", "").type).toBe("QR_CODE")
   })
-  it("switches to CODE_128 with the short value", () => {
+  it("switches to CODE_128 with the short value and the same blank alternate text", () => {
     expect(googleBarcode("cuik:cafe:a1b2c3d4e5f6", "code128", "QR_CODE", "")).toEqual({
       type: "CODE_128",
       value: "a1b2c3d4e5f6",
-      alternateText: "a1b2c3d4e5f6",
+      alternateText: "",
     })
+    expect(googleBarcode("cuik:cafe:a1b2c3d4e5f6", "code128", "qrCode", " ").alternateText).toBe(
+      " ",
+    )
   })
 })
