@@ -30,6 +30,7 @@ import { isSilentClient } from "@/lib/loyalty/archive"
 import { cashbackVarsFor } from "@/lib/loyalty/cashback-db"
 import { pointsExpiryTemplateVars } from "@/lib/loyalty/points-lots"
 import { stampsInCycleOf } from "@/lib/loyalty/stamps"
+import { tenantBarcodeFormat } from "@/lib/wallet/barcode-format"
 import { pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
 import { googleSaveOrigins } from "@/lib/wallet/google-save-origins"
 import { type StampsConfigLike, stripMaxVisits } from "@/lib/wallet/strip-layout"
@@ -234,6 +235,7 @@ export async function POST(
       hasReward,
       rewardRedeemed: false,
       qrValue: serialNumber,
+      barcodeFormat: await tenantBarcodeFormat(tenant.id),
       accessToken,
       designFields: resolvedDesignFields,
       imageUrl: heroImageUrl,

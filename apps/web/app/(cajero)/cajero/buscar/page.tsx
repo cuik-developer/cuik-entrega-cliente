@@ -32,6 +32,7 @@ import {
   visitRejectionMessage,
 } from "@/lib/loyalty/cashier-messages"
 import { expiryPhrase } from "@/lib/loyalty/expiry-label"
+import { expandScannedCode } from "@/lib/wallet/scanned-code"
 
 type LocationOption = {
   id: string
@@ -209,6 +210,9 @@ export default function BuscarPage() {
   const cashbackPercent = !isPoints ? cashbackPercentOf(promotionConfig) : null
   const requiresAmount = isPoints || stampsMinAmount !== null || cashbackPercent !== null
 
+  // selectClient is declared below; the search reaches it through this ref.
+  const selectClientRef = useRef<((id: string) => Promise<void>) | null>(null)
+
   const searchClients = useCallback(
     async (term: string) => {
       if (!term.trim() || !tenantSlug) {
@@ -218,6 +222,21 @@ export default function BuscarPage() {
 
       setSearching(true)
       try {
+        // A barcode gun (or a pasted pass code) lands here too: open that client
+        // directly, the same lookup Escanear does.
+        const code = expandScannedCode(term, tenantSlug)
+        if (/^cuik:/i.test(code)) {
+          const qrRes = await fetch(`/api/${tenantSlug}/clients?qr=${encodeURIComponent(code)}`)
+          const qrJson = await qrRes.json()
+          const id: string | undefined = qrJson.success
+            ? qrJson.data?.data?.[0]?.client?.id
+            : undefined
+          if (id) {
+            setResults([])
+            await selectClientRef.current?.(id)
+            return
+          }
+        }
         const res = await fetch(
           `/api/${tenantSlug}/clients?search=${encodeURIComponent(term)}&limit=20`,
         )
@@ -253,6 +272,7 @@ export default function BuscarPage() {
       // silent
     }
   }
+  selectClientRef.current = selectClient
 
   const [submitting, setSubmitting] = useState(false)
 

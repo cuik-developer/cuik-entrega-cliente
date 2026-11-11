@@ -31,6 +31,7 @@ import { formatExpiry } from "@/lib/loyalty/expiration"
 import { allMilestoneMessages } from "@/lib/loyalty/milestones"
 import { nextExpiration } from "@/lib/loyalty/points-lots"
 import { apnsClientCertFor } from "@/lib/wallet/apns-client-cert"
+import { tenantBarcodeFormat } from "@/lib/wallet/barcode-format"
 import { pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
 import { stripCompleted } from "@/lib/wallet/strip-layout"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
@@ -263,6 +264,7 @@ export async function triggerWalletUpdate(ctx: {
     classId: string
     accessToken: string
     qrValue: string
+    barcodeFormat?: "qr" | "code128"
     clientDni?: string
     imageUrl?: string
   } | null = null
@@ -281,6 +283,7 @@ export async function triggerWalletUpdate(ctx: {
         classId,
         accessToken,
         qrValue: serialNumber,
+        barcodeFormat: await tenantBarcodeFormat(ctx.tenantId),
         ...details,
       }
     } catch (err) {

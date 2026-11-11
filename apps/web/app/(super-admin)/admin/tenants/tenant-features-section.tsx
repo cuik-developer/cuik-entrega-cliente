@@ -5,11 +5,21 @@ import { Loader2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { refreshTenantPasses } from "../pases/actions"
 
 type Features = Required<TenantFeatures>
 
-const ITEMS: { key: keyof Features; title: string; detail: string }[] = [
+type BoolKey = { [K in keyof Features]: Features[K] extends boolean ? K : never }[keyof Features]
+
+const ITEMS: { key: BoolKey; title: string; detail: string }[] = [
   {
     key: "adminCashier",
     title: "Modo cajero para administradores",
@@ -39,7 +49,7 @@ export function TenantFeaturesSection({ tenantId }: { tenantId: string }) {
     }
   }, [tenantId])
 
-  async function toggle(key: keyof Features, value: boolean) {
+  async function save(key: keyof Features, value: Features[keyof Features]): Promise<boolean> {
     setSaving(key)
     try {
       const res = await fetch(`/api/admin/tenants/${tenantId}/features`, {
@@ -50,15 +60,35 @@ export function TenantFeaturesSection({ tenantId }: { tenantId: string }) {
       const json = await res.json()
       if (!json.success) {
         toast.error(json.error ?? "No se pudo guardar")
-        return
+        return false
       }
       setFeatures(json.data)
-      toast.success(value ? "Activado" : "Desactivado")
+      return true
     } catch {
       toast.error("Error de conexión")
+      return false
     } finally {
       setSaving(null)
     }
+  }
+
+  async function toggle(key: BoolKey, value: boolean) {
+    if (await save(key, value)) toast.success(value ? "Activado" : "Desactivado")
+  }
+
+  async function changeBarcode(value: Features["barcodeFormat"]) {
+    if (!features || value === features.barcodeFormat) return
+    const ok = window.confirm(
+      value === "code128"
+        ? "¿Cambiar a código de barras? Se actualizan todos los pases del comercio (iPhone y Android). En Apple Watch se sigue viendo el QR."
+        : "¿Volver al código QR? Se actualizan todos los pases del comercio.",
+    )
+    if (!ok || !(await save("barcodeFormat", value))) return
+    setSaving("barcodeFormat")
+    const r = await refreshTenantPasses(tenantId)
+    setSaving(null)
+    if (r.success) toast.success("Guardado. Los pases se están actualizando.")
+    else toast.error(`Guardado, pero no se pudieron actualizar los pases: ${r.error}`)
   }
 
   return (
@@ -84,6 +114,31 @@ export function TenantFeaturesSection({ tenantId }: { tenantId: string }) {
             )}
           </div>
         ))}
+        <div className="flex items-start gap-3 p-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] text-ent-fg">Código del pase</div>
+            <div className="text-[11.5px] text-ent-fg-3 leading-snug mt-0.5">
+              Código de barras para tiendas con pistola lectora: más rápido en caja. Al cambiarlo se
+              actualizan todos los pases; el Apple Watch sigue mostrando el QR.
+            </div>
+          </div>
+          {features === null || saving === "barcodeFormat" ? (
+            <Loader2 className="w-4 h-4 mt-0.5 animate-spin text-ent-fg-3" />
+          ) : (
+            <Select
+              value={features.barcodeFormat}
+              onValueChange={(v) => void changeBarcode(v as Features["barcodeFormat"])}
+            >
+              <SelectTrigger className="h-8 w-[170px] text-[12.5px]" aria-label="Código del pase">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="qr">Código QR</SelectItem>
+                <SelectItem value="code128">Código de barras</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </div>
       </div>
     </div>
   )

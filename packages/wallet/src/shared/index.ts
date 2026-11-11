@@ -1,6 +1,7 @@
 // ─── Shared Wallet Exports ─────────────────────────────────────────────
 
 export { clearAssetCache, loadAssetBuffer } from "./asset-loader"
+export * from "./barcode"
 export * from "./constants"
 export * from "./env"
 export * from "./etag"

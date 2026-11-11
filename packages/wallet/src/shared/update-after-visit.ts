@@ -91,6 +91,7 @@ async function updateGoogle(
       hasReward: params.hasReward,
       rewardRedeemed: params.rewardRedeemed,
       qrValue: params.google.qrValue,
+      barcodeFormat: params.google.barcodeFormat,
       accessToken: params.google.accessToken,
       promotionType: params.promotionType,
       pointsBalance: params.pointsBalance,

@@ -37,6 +37,7 @@ import { insertEarnLot } from "@/lib/loyalty/points-lots"
 import { stampsInCycleOf } from "@/lib/loyalty/stamps"
 import { checkRateLimit, HOUR_MS, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit"
 import { TURNSTILE_FAILED_MESSAGE, verifyTurnstile } from "@/lib/turnstile"
+import { tenantBarcodeFormat } from "@/lib/wallet/barcode-format"
 import { pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
 import { googleSaveOrigins } from "@/lib/wallet/google-save-origins"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
@@ -443,6 +444,7 @@ async function generateGoogleWalletUrl(ctx: {
       hasReward: false,
       rewardRedeemed: false,
       qrValue: serialNumber,
+      barcodeFormat: await tenantBarcodeFormat(tenant.id),
       accessToken,
       designFields: resolvedDesignFields,
       imageUrl: heroImageUrl,

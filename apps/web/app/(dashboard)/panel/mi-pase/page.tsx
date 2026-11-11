@@ -431,7 +431,13 @@ export default async function MiPasePage() {
     )
   }
 
-  const config = assemblePassConfig(result.design, result.assets)
+  const designConfig = assemblePassConfig(result.design, result.assets)
+  // The real strip counts stamps against the active promotion (stripMaxVisits);
+  // the preview must too, or a design saved with 8 shows 8 on a 10-stamp card.
+  const promoMax = result.promotion?.type === "stamps" ? result.promotion.maxVisits : null
+  const config = promoMax
+    ? { ...designConfig, stampsConfig: { ...designConfig.stampsConfig, maxVisits: promoMax } }
+    : designConfig
 
   return (
     <div className="space-y-6">

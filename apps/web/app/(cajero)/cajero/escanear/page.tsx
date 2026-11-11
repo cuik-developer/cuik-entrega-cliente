@@ -38,6 +38,7 @@ import {
   redeemSuccessMessage,
   visitRejectionMessage,
 } from "@/lib/loyalty/cashier-messages"
+import { expandScannedCode } from "@/lib/wallet/scanned-code"
 
 type LocationOption = {
   id: string
@@ -428,10 +429,14 @@ export default function EscanearPage() {
   )
 
   const processQr = useCallback(
-    async (qrCode: string, source: "qr" | "manual" = "qr") => {
+    async (rawCode: string, source: "qr" | "manual" = "qr") => {
       if (processingRef.current) return
       processingRef.current = true
       sourceRef.current = source
+      // A Code 128 pass (camera or gun) carries only the 12 hex chars of
+      // `cuik:<slug>:<hex>`: rebuild the full code, as Buscar does. A QR or
+      // a migrated client's code passes through untouched.
+      const qrCode = expandScannedCode(rawCode, tenantSlug ?? "")
 
       if (!qrCode.startsWith("cuik:") && !qrCode.startsWith("MV_")) {
         setErrorMsg("QR no valido — formato incorrecto")
@@ -463,6 +468,7 @@ export default function EscanearPage() {
     },
     [
       stopCamera,
+      tenantSlug,
       requiresAmount,
       submitVisit,
       locations.length,

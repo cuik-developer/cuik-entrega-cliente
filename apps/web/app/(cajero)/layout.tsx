@@ -67,7 +67,7 @@ function LogoOrInitials({
 }
 
 function CajeroHeader() {
-  const { tenantName, branding, isLoading, memberRole } = useTenant()
+  const { tenantName, branding, isLoading, memberRole, readOnly } = useTenant()
   const primaryColor = branding?.primaryColor ?? CUIK_PRIMARY
   const displayName = tenantName || "Sin comercio"
 
@@ -88,7 +88,7 @@ function CajeroHeader() {
         </div>
       </div>
       <div className="flex items-center gap-3">
-        {isTenantAdmin(memberRole) && (
+        {(isTenantAdmin(memberRole) || readOnly) && (
           <Link
             href="/panel"
             className="flex items-center gap-1.5 rounded-md border border-white/15 px-2.5 py-1 text-xs text-white/70 hover:text-white hover:border-white/40 transition-colors"

@@ -13,6 +13,7 @@ import {
   rewards,
   tenants,
 } from "@cuik/db"
+import { parseTenantFeatures } from "@cuik/shared/validators"
 import {
   createApplePass,
   generateAuthToken,
@@ -880,6 +881,7 @@ async function regeneratePass(ctx: {
         name: tenants.name,
         walletConfig: tenants.walletConfig,
         timezone: tenants.timezone,
+        features: tenants.features,
       })
       .from(tenants)
       .where(eq(tenants.id, client.tenantId))
@@ -1018,6 +1020,7 @@ async function regeneratePass(ctx: {
       totalVisits: client.totalVisits,
       pendingRewards,
       qrMessage: serialNumber,
+      barcodeFormat: parseTenantFeatures(tenantRow?.features).barcodeFormat,
       stripImage2x,
       stripImage1x,
       logo: logoBuffer,

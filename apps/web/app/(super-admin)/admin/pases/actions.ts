@@ -49,6 +49,7 @@ import { activeCashbackSettings } from "@/lib/loyalty/cashback-db"
 import { stampsInCycleOf } from "@/lib/loyalty/stamps"
 import { canAccess } from "@/lib/staff-permissions"
 import { apnsClientCertFor } from "@/lib/wallet/apns-client-cert"
+import { tenantBarcodeFormat } from "@/lib/wallet/barcode-format"
 import { GOOGLE_HERO_ASSET_TYPE, pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
 import { googleMerchantLocations } from "@/lib/wallet/google-nearby"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
@@ -585,6 +586,44 @@ export async function publishDesign(
   return { success: true, data: { id: designId, version: newVersion } }
 }
 
+/**
+ * Rebuild every pass of a tenant with its live designs, as a publish does,
+ * after a tenant-wide wallet setting changed (the barcode format). Apple:
+ * passes marked changed + push (archived/deleted clients stay silent);
+ * Google: objects re-sent in the background. Super-admin only.
+ */
+export async function refreshTenantPasses(
+  tenantId: string,
+): Promise<ActionResult<{ designs: number }>> {
+  const guard = await requirePublish()
+  if (guard.error !== null) return { success: false, error: guard.error }
+  if (guard.access.kind === "staff") return { success: false, error: "Solo el super admin" }
+  if (!z.string().uuid().safeParse(tenantId).success)
+    return { success: false, error: "Comercio inválido" }
+
+  const live = await db
+    .select({ id: passDesigns.id, type: passDesigns.type, fields: passDesigns.fields })
+    .from(passDesigns)
+    .where(
+      and(
+        eq(passDesigns.tenantId, tenantId),
+        eq(passDesigns.isActive, true),
+        eq(passDesigns.isTemplate, false),
+      ),
+    )
+  const googleConfig = validateGoogleEnv()
+  for (const d of live) {
+    const type = d.type as "apple_store" | "google_loyalty"
+    if (type === "apple_store") await migratePassInstances(d.id, { tenantId, type })
+    else if (googleConfig) {
+      void propagateGooglePasses(d.id, tenantId, d.fields, googleConfig).catch((err) => {
+        console.error("[refreshTenantPasses] Google propagation error:", err)
+      })
+    }
+  }
+  return { success: true, data: { designs: live.length } }
+}
+
 export async function deleteDesign(designId: string): Promise<ActionResult<{ id: string }>> {
   const guard = await requirePublish()
   if (guard.error !== null) return { success: false, error: guard.error }
@@ -965,6 +1004,7 @@ async function propagateGooglePasses(
   // Cashback reward of the active stamps program: {{cashback.*}} per client.
   const cashbackSettings =
     promotionType === "stamps" ? await activeCashbackSettings(tenantId) : null
+  const barcodeFormat = await tenantBarcodeFormat(tenantId)
 
   // 6. Batch upsert: 5 at a time with Promise.allSettled
   let successCount = 0
@@ -1045,6 +1085,7 @@ async function propagateGooglePasses(
           hasReward,
           rewardRedeemed: false,
           qrValue: instance.serialNumber,
+          barcodeFormat,
           accessToken,
           designFields: resolvedDesignFields,
           imageUrl: heroImageUrl,

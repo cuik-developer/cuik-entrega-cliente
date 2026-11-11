@@ -1,5 +1,7 @@
 // ─── Shared Wallet Types ───────────────────────────────────────────────
 
+import type { BarcodeFormat } from "./barcode"
+
 // ─── Environment / Config ──────────────────────────────────────────────
 
 export type AppleWalletConfig = {
@@ -106,6 +108,8 @@ export type CreateApplePassParams = {
 
   // Barcode
   qrMessage: string
+  /** "code128": Code 128 on the phone, QR kept for Apple Watch. Default "qr" (as today). */
+  barcodeFormat?: BarcodeFormat
 
   // Images (Buffers)
   stripImage2x: Buffer
@@ -237,6 +241,8 @@ export type UpsertLoyaltyObjectParams = {
   hasReward: boolean
   rewardRedeemed: boolean
   qrValue: string
+  /** "code128" or "qr" (default, as today). */
+  barcodeFormat?: BarcodeFormat
   accessToken: string
 
   // Promotion type — affects loyaltyPoints label. Defaults to "stamps" behavior.
@@ -292,6 +298,7 @@ export type WalletUpdateParams = {
     classId: string
     accessToken: string
     qrValue: string
+    barcodeFormat?: BarcodeFormat
     /** "ID de miembro" on the back. The object update is a full PUT: omitting it wipes it. */
     clientDni?: string
     /** Image module of the pass details. Same full-PUT caveat. */

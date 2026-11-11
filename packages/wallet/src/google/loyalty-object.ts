@@ -1,3 +1,4 @@
+import { googleBarcode } from "../shared/barcode"
 import type { UpsertLoyaltyObjectParams, UpsertResult } from "../shared/types"
 
 const WALLET_API_BASE = "https://walletobjects.googleapis.com/walletobjects/v1/loyaltyObject"
@@ -79,6 +80,7 @@ function buildLoyaltyObjectPayload(params: UpsertLoyaltyObjectParams) {
     hasReward,
     rewardRedeemed,
     qrValue,
+    barcodeFormat,
     promotionType,
     expired,
   } = params
@@ -120,11 +122,7 @@ function buildLoyaltyObjectPayload(params: UpsertLoyaltyObjectParams) {
       accountName: clientName,
       // Google shows accountId as "ID de miembro" on the back: only the DNI, never the internal QR code.
       ...(clientDni ? { accountId: clientDni } : {}),
-      barcode: {
-        type: "qrCode",
-        value: qrValue,
-        alternateText: " ",
-      },
+      barcode: googleBarcode(qrValue, barcodeFormat, "qrCode", " "),
       loyaltyPoints: {
         label: loyaltyLabel,
         balance: {
@@ -155,11 +153,7 @@ function buildLoyaltyObjectPayload(params: UpsertLoyaltyObjectParams) {
     state: expired ? "EXPIRED" : "ACTIVE",
     accountName: clientName,
     ...(clientDni ? { accountId: clientDni } : {}),
-    barcode: {
-      type: "QR_CODE",
-      value: qrValue,
-      alternateText: "",
-    },
+    barcode: googleBarcode(qrValue, barcodeFormat, "QR_CODE", ""),
     loyaltyPoints: {
       label: loyaltyLabel,
       balance: {

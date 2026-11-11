@@ -254,7 +254,7 @@ function SideNav({ onNavigate }: { onNavigate: () => void }) {
   // Exportar is a bulk PII download: not offered in the super-admin's read-only view.
   const visible = (item: NavItem) =>
     (!item.pointsOnly || promotionType === "points") &&
-    (!item.adminCashierOnly || (adminCashier && !readOnly)) &&
+    (!item.adminCashierOnly || adminCashier) &&
     !(readOnly && item.href === "/panel/exportar")
 
   return (

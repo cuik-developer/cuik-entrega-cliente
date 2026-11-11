@@ -1,9 +1,6 @@
 import { PKPass } from "passkit-generator"
-import {
-  APPLE_PASS_BARCODE_FORMAT,
-  APPLE_PASS_CONTENT_TYPE,
-  APPLE_PASS_FORMAT_VERSION,
-} from "../shared/constants"
+import { appleBarcodes } from "../shared/barcode"
+import { APPLE_PASS_CONTENT_TYPE, APPLE_PASS_FORMAT_VERSION } from "../shared/constants"
 import type { CreateApplePassParams, CreateApplePassResult } from "../shared/types"
 import { buildIconSet, buildLogoSet } from "./image-set"
 
@@ -173,13 +170,9 @@ export async function createApplePass(
       }
     }
 
-    // ─── Barcode (QR) ─────────────────────────────────────────────────
-    pass.setBarcodes({
-      format: APPLE_PASS_BARCODE_FORMAT,
-      message: params.qrMessage,
-      messageEncoding: "iso-8859-1",
-      altText: "Powered by Cuik",
-    })
+    // ─── Barcode ──────────────────────────────────────────────────────
+    // QR (default) or Code 128 + QR fallback (Apple Watch cannot show Code 128).
+    pass.setBarcodes(...appleBarcodes(params.qrMessage, params.barcodeFormat))
 
     // ─── Images ───────────────────────────────────────────────────────
     pass.addBuffer("strip@2x.png", params.stripImage2x)

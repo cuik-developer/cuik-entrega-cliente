@@ -28,6 +28,7 @@ import { isSilentClient } from "@/lib/loyalty/archive"
 import { cashbackVarsFor } from "@/lib/loyalty/cashback-db"
 import { pointsExpiryTemplateVars } from "@/lib/loyalty/points-lots"
 import { stampsInCycleOf } from "@/lib/loyalty/stamps"
+import { tenantBarcodeFormat } from "@/lib/wallet/barcode-format"
 import { buildStripImages } from "@/lib/wallet/points-strip"
 import { passRelevantDate } from "@/lib/wallet/relevant-date"
 import {
@@ -332,6 +333,7 @@ export async function GET(
       totalVisits: client.totalVisits,
       pendingRewards: Number(pendingRewards),
       qrMessage: serialNumber,
+      barcodeFormat: await tenantBarcodeFormat(tenant.id),
       stripImage2x,
       stripImage1x,
       logo: logoBuffer,
