@@ -75,3 +75,17 @@ describe("network errors in the operator's words", () => {
     expect(networkMessage(abort)).toMatch(/Tiempo/)
   })
 })
+
+describe("which client a purchase belongs to", () => {
+  it("assigns a purchase only when the client was already registered that day", async () => {
+    const { clientOwning } = await import("./sync")
+    const clients = new Map([["12345678", { id: "ana", registeredOn: "2026-11-10" }]])
+    // Monday purchase, registered Tuesday: stays a DNI-only row ("compra sin sello").
+    expect(clientOwning("12345678", "2026-11-09", clients)).toBeNull()
+    // Same day and later days belong to the client.
+    expect(clientOwning("12345678", "2026-11-10", clients)).toBe("ana")
+    expect(clientOwning("12345678", "2026-11-11", clients)).toBe("ana")
+    expect(clientOwning(null, "2026-11-11", clients)).toBeNull()
+    expect(clientOwning("99999999", "2026-11-11", clients)).toBeNull()
+  })
+})

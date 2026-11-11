@@ -541,7 +541,7 @@ function buildRows(params: {
   linesByOrder: Map<number, OdooLine[]>
   productsById: Map<number, OdooProduct>
   importOf: (day: string) => string
-  clientByDni: Map<string, string>
+  clientByDni: Map<string, ClientRef>
   hasIdType: boolean
 }): { prepared: Prepared[]; badAmount: number } {
   const byRef = new Map<string, Prepared>()
@@ -574,7 +574,7 @@ function buildRows(params: {
       source: "pos",
       posOrderId: o.id,
       soldAt,
-      clientId: dni ? (params.clientByDni.get(dni) ?? null) : null,
+      clientId: clientOwning(dni, day, params.clientByDni),
     }
     const lines = (params.linesByOrder.get(o.id) ?? []).map((l) => {
       const prodId = m2oId(l.product_id)
@@ -655,26 +655,57 @@ async function upsertProducts(tenantId: string, odooProducts: Iterable<OdooProdu
   }
 }
 
-/** DNI -> client id for the tenant (one client per DNI; the newest wins on duplicates). */
-async function loadClientsByDni(tenantId: string): Promise<Map<string, string>> {
+/** A Cuik client as the sync needs it: id and the tenant-local day it registered. */
+export type ClientRef = { id: string; registeredOn: string }
+
+/**
+ * DNI -> client for the tenant (one per DNI; the newest wins on duplicates).
+ * `registeredOn` decides whether a purchase belongs to the client: only
+ * purchases made on or after the registration day do (see `clientFor`).
+ */
+async function loadClientsByDni(
+  tenantId: string,
+  timezone: string,
+): Promise<Map<string, ClientRef>> {
   const rows = await db
-    .select({ id: clients.id, dni: clients.dni })
+    .select({
+      id: clients.id,
+      dni: clients.dni,
+      registeredOn: sql<string>`to_char(${clients.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${timezone}, 'YYYY-MM-DD')`,
+    })
     .from(clients)
     .where(and(eq(clients.tenantId, tenantId), sql`${clients.status} <> 'deleted'`))
     .orderBy(clients.createdAt)
-  const map = new Map<string, string>()
+  const map = new Map<string, ClientRef>()
   for (const r of rows) {
     const dni = normalizeDni(r.dni)
-    if (dni) map.set(dni, r.id)
+    if (dni) map.set(dni, { id: r.id, registeredOn: r.registeredOn })
   }
   return map
 }
 
 /**
+ * The client a purchase belongs to: the one with that DNI, and only when it
+ * was already registered that day. A purchase made before the client joined
+ * Cuik stays a DNI-only row (user rule: the connector never rewrites the
+ * history of a registration; such purchases may be linked by hand later).
+ */
+export function clientOwning(
+  dni: string | null,
+  day: string,
+  clientByDni: Map<string, ClientRef>,
+): string | null {
+  if (!dni) return null
+  const c = clientByDni.get(dni)
+  return c && c.registeredOn <= day ? c.id : null
+}
+
+/**
  * Pairs the synced purchases of `fromDay..toDay` with the tenant's visits of
- * those days, and gives a client id to sales whose DNI registered in Cuik
- * after the sale. Refunds (negative amounts) never take a visit. Re-runs are
- * safe: the links of the range are recomputed in one statement.
+ * those days (same DNI, same local day, never another day), and gives a
+ * client id to purchases synced minutes before their client registered that
+ * same day. Refunds (negative amounts) never take a visit. Re-runs are safe:
+ * the links of the range are recomputed in one statement.
  */
 export async function matchVisitsInRange(
   tenantId: string,
@@ -688,14 +719,16 @@ export async function matchVisitsInRange(
     gte(sales.soldOn, fromDay),
     lte(sales.soldOn, toDay),
   )
-  // Clients that registered after their purchase was synced.
+  // The race of the same day: the sale was synced at 15:05 and the client
+  // registered at 15:10. Earlier purchases are never assigned to a client.
   await db.execute(sql`
     UPDATE analytics.sales s SET client_id = c.id
     FROM loyalty.clients c
     WHERE s.tenant_id = ${tenantId}::uuid AND s.source = 'pos' AND s.client_id IS NULL
       AND s.dni IS NOT NULL AND s.sold_on BETWEEN ${fromDay}::date AND ${toDay}::date
       AND c.tenant_id = s.tenant_id AND c.status <> 'deleted'
-      AND regexp_replace(coalesce(c.dni, ''), '\\D', '', 'g') = s.dni`)
+      AND regexp_replace(coalesce(c.dni, ''), '\\D', '', 'g') = s.dni
+      AND (c.created_at AT TIME ZONE 'UTC' AT TIME ZONE ${timezone})::date <= s.sold_on`)
 
   const orderRows = await db
     .select({ id: sales.id, dni: sales.dni, soldAt: sales.soldAt, store: sales.store })
@@ -806,7 +839,7 @@ type RunContext = {
   partnerFieldList: string[]
   lineFieldList: string[]
   hasIdType: boolean
-  clientByDni: Map<string, string>
+  clientByDni: Map<string, ClientRef>
   productCache: Map<number, OdooProduct>
   importCache: Map<string, string>
   touchedImports: Set<string>
@@ -954,7 +987,7 @@ export async function syncTenant(
         ...(lineFields.has("full_product_name") ? ["full_product_name"] : []),
       ],
       hasIdType,
-      clientByDni: await loadClientsByDni(tenantId),
+      clientByDni: await loadClientsByDni(tenantId, timezone),
       productCache: new Map(),
       importCache: new Map(),
       touchedImports,
