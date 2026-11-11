@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm"
 import {
+  boolean,
   date,
   index,
   integer,
@@ -12,6 +14,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core"
 import { authUsers } from "./auth"
+import { clients, visits } from "./loyalty"
 import { tenants } from "./public"
 
 const analyticsSchema = pgSchema("analytics")
@@ -82,6 +85,8 @@ export const salesImports = analyticsSchema.table(
       .notNull()
       .references(() => tenants.id),
     fileName: text("file_name").notNull(),
+    /** "file" (upload) or "pos" (connector: one row per synced month). */
+    source: text("source").default("file").notNull(),
     /** MinIO key of the uploaded file (null when the file could not be kept). */
     fileKey: text("file_key"),
     /** "mapping" (uploaded, columns not confirmed), "processing", "ready", "failed". */
@@ -100,7 +105,13 @@ export const salesImports = analyticsSchema.table(
     createdAt: timestamp("created_at").defaultNow().notNull(),
     processedAt: timestamp("processed_at"),
   },
-  (table) => [index("sales_imports_tenant_created_idx").on(table.tenantId, table.createdAt)],
+  (table) => [
+    index("sales_imports_tenant_created_idx").on(table.tenantId, table.createdAt),
+    // One "Odoo · YYYY-MM" row per tenant even when two sync runs race for the month.
+    uniqueIndex("sales_imports_pos_month_idx")
+      .on(table.tenantId, table.fileName)
+      .where(sql`${table.source} = 'pos'`),
+  ],
 )
 
 /** One purchase of the merchant (order lines already added up), as imported. */
@@ -124,13 +135,113 @@ export const sales = analyticsSchema.table(
     cashier: text("cashier"),
     soldOn: date("sold_on").notNull(),
     amount: numeric("amount", { precision: 12, scale: 2 }).default("0").notNull(),
+    /** "file" or "pos" (see salesImports.source). */
+    source: text("source").default("file").notNull(),
+    /** The POS's own order id (Odoo pos.order.id) for synced rows. */
+    posOrderId: integer("pos_order_id"),
+    /** Instant of sale (UTC) for synced rows; `soldOn` is its tenant-local day. */
+    soldAt: timestamp("sold_at"),
+    /** The Cuik client with this DNI at sync time, if any. */
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    /** The visit registered the same day at the same store, if any (one per visit). */
+    visitId: uuid("visit_id").references(() => visits.id, { onDelete: "set null" }),
   },
   (table) => [
     index("sales_tenant_dni_day_idx").on(table.tenantId, table.dni, table.soldOn),
     index("sales_tenant_day_idx").on(table.tenantId, table.soldOn),
     uniqueIndex("sales_tenant_order_idx").on(table.tenantId, table.orderRef),
+    uniqueIndex("sales_tenant_pos_order_idx")
+      .on(table.tenantId, table.posOrderId)
+      .where(sql`${table.posOrderId} IS NOT NULL`),
+    index("sales_tenant_client_day_idx").on(table.tenantId, table.clientId, table.soldOn),
+    uniqueIndex("sales_visit_idx").on(table.visitId).where(sql`${table.visitId} IS NOT NULL`),
   ],
 )
+
+/** One line (product) of a synced order. */
+export const saleLines = analyticsSchema.table(
+  "sale_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    saleId: uuid("sale_id")
+      .notNull()
+      .references(() => sales.id, { onDelete: "cascade" }),
+    posLineId: integer("pos_line_id").notNull(),
+    /** Normalised SKU (the POS's internal reference), joined with `products`. */
+    sku: text("sku"),
+    productName: text("product_name"),
+    /** The POS's own category path ("Alimento / Perro"), as a fallback for the master. */
+    odooCategory: text("odoo_category"),
+    qty: numeric("qty", { precision: 12, scale: 3 }).default("0").notNull(),
+    unitPrice: numeric("unit_price", { precision: 12, scale: 2 }).default("0").notNull(),
+    discountPct: numeric("discount_pct", { precision: 5, scale: 2 }).default("0").notNull(),
+    /** Line total with taxes, after discount. */
+    total: numeric("total", { precision: 12, scale: 2 }).default("0").notNull(),
+  },
+  (table) => [
+    uniqueIndex("sale_lines_sale_line_idx").on(table.saleId, table.posLineId),
+    index("sale_lines_tenant_sku_idx").on(table.tenantId, table.sku),
+  ],
+)
+
+/**
+ * The merchant's product master (SKU -> category, class, subclass), loaded
+ * from a file in the super-admin; `odooCategory` is what the POS says and is
+ * filled by the sync for SKUs the master does not have yet.
+ */
+export const products = analyticsSchema.table(
+  "products",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    sku: text("sku").notNull(),
+    name: text("name"),
+    category: text("category"),
+    class: text("class"),
+    subclass: text("subclass"),
+    odooCategory: text("odoo_category"),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("products_tenant_sku_idx").on(table.tenantId, table.sku)],
+)
+
+/**
+ * The tenant's POS connection (one per tenant). The API key is stored
+ * encrypted (apps/web/lib/encryption.ts); `cursor` is where the incremental
+ * pull resumes ({ writeDate, id }).
+ */
+export const posConnections = analyticsSchema.table("pos_connections", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .unique()
+    .references(() => tenants.id),
+  provider: text("provider").default("odoo").notNull(),
+  baseUrl: text("base_url").notNull(),
+  database: text("database").notNull(),
+  login: text("login").notNull(),
+  apiKeyEnc: text("api_key_enc"),
+  /** First day to pull (backfill start). */
+  startDate: date("start_date").notNull(),
+  enabled: boolean("enabled").default(false).notNull(),
+  cursor: jsonb("cursor"),
+  lastSyncAt: timestamp("last_sync_at"),
+  lastSyncOrders: integer("last_sync_orders"),
+  lastError: text("last_error"),
+  /** Corte options for a tenant that only uses the API (no file to inherit them from). */
+  retentionDays: integer("retention_days").default(90).notNull(),
+  excludedDnis: jsonb("excluded_dnis"),
+  /** Per-tenant lock: set by a run, cleared when it ends; a stale one (30 min) is taken over. */
+  syncStartedAt: timestamp("sync_started_at"),
+  createdBy: text("created_by").references(() => authUsers.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+})
 
 /**
  * One "corte": the metrics computed from an import, kept as a snapshot so

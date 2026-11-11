@@ -1,6 +1,6 @@
 /** Alert shapes shared by the digest (server) and the manager strip (client). No server imports here. */
 
-export type AlertKind = "billing" | "cold" | "demo" | "cert" | "campaign" | "impact"
+export type AlertKind = "billing" | "cold" | "demo" | "cert" | "campaign" | "impact" | "pos"
 export type AlertSeverity = "critical" | "warning" | "info"
 
 export type AdminAlert = {
@@ -23,4 +23,5 @@ export const ALERT_SECTION_TITLE: Record<AlertKind, string> = {
   cert: "Certificados Apple",
   campaign: "Campañas fallidas",
   impact: "Impacto sin ventas del mes",
+  pos: "Conector POS",
 }

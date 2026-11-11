@@ -32,7 +32,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       .select({ summary: impactReports.summary, periodTo: impactReports.periodTo })
       .from(impactReports)
       .where(eq(impactReports.tenantId, tenant.id))
-      .orderBy(desc(impactReports.computedAt))
+      // The corte covering the latest period, same choice as the panel's Impacto page.
+      .orderBy(desc(impactReports.periodTo), desc(impactReports.computedAt))
       .limit(1)
     if (!latest) return successResponse({ clientIds: [], count: 0, periodTo: null })
 

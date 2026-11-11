@@ -114,11 +114,14 @@ function storeList(stores: Set<string>): string {
 export function computeImpact(input: ImpactInput): ImpactSummary {
   const { options } = input
   const manualExcluded = new Set(options.excludedDnis.map((d) => d.replace(/\D/g, "")))
-  const allBuyers = groupBuyers(input.orders)
+  // A refund (negative order) is not a purchase: it nets the revenue and nothing else.
+  const purchases = input.orders.filter((o) => o.amount > 0)
+  const refunds = input.orders.filter((o) => o.amount < 0)
+  const allBuyers = groupBuyers(purchases)
   const detectedStaff = detectStaff(allBuyers.values()).filter((s) => !manualExcluded.has(s.dni))
   const excluded = new Set([...manualExcluded, ...detectedStaff.map((s) => s.dni)])
 
-  const orders = input.orders.filter((o) => !o.dni || !excluded.has(o.dni))
+  const orders = purchases.filter((o) => !o.dni || !excluded.has(o.dni))
   const buyers = new Map([...allBuyers].filter(([dni]) => !excluded.has(dni)))
   const days = orders.map((o) => o.day).sort()
   const from = days[0] ?? ""
@@ -143,6 +146,14 @@ export function computeImpact(input: ImpactInput): ImpactSummary {
     mc.orders++
     mc.revenue += o.amount
     monthCov.set(m, mc)
+  }
+  for (const r of refunds) {
+    if (r.dni && excluded.has(r.dni)) continue
+    revenue += r.amount
+    const s = storeCov.get(r.store ?? "(sin tienda)")
+    if (s) s.revenue += r.amount
+    const mc = monthCov.get(r.day.slice(0, 7))
+    if (mc) mc.revenue += r.amount
   }
   const avgTicket = orders.length ? round2(revenue / orders.length) : null
 

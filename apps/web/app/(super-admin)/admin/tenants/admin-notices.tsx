@@ -14,7 +14,7 @@ const TONE: Record<AdminAlert["severity"], "bad" | "warn" | "info"> = {
   warning: "warn",
   info: "info",
 }
-const ORDER: AlertKind[] = ["cert", "billing", "cold", "demo", "campaign"]
+const ORDER: AlertKind[] = ["cert", "billing", "cold", "demo", "campaign", "impact", "pos"]
 
 /** Strip above the tenant table: the same alerts the daily email carries, live. */
 export function AdminNotices() {

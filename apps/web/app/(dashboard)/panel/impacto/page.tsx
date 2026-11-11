@@ -41,6 +41,8 @@ export default function ImpactoPanelPage() {
   const [imports, setImports] = useState<ImportRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [uploadOpen, setUploadOpen] = useState(false)
+  /** The POS connector owns the sales from this day on: no file upload for the merchant. */
+  const [connector, setConnector] = useState<{ startDate: string } | null>(null)
 
   const load = useCallback(async () => {
     if (!tenantSlug) return
@@ -52,8 +54,10 @@ export default function ImpactoPanelPage() {
         })),
         fetch(`/api/${tenantSlug}/impact/imports`).then((res) => res.json()),
       ])
-      if (r.json.success) setReport(r.json.data.report ?? null)
-      else if (r.status === 403) {
+      if (r.json.success) {
+        setReport(r.json.data.report ?? null)
+        setConnector(r.json.data.connector ?? null)
+      } else if (r.status === 403) {
         setError("Solo el dueño o un administrador del comercio puede ver el impacto.")
         return
       } else setError(r.json.error ?? "No se pudo cargar el informe")
@@ -90,7 +94,8 @@ export default function ImpactoPanelPage() {
         subtitle="Tus ventas (DNI, fecha y monto) cruzadas con tus clientes y visitas en Cuik. Cada mes, un corte nuevo."
         actions={
           !readOnly &&
-          !error && (
+          !error &&
+          !connector && (
             <Button
               size="sm"
               className="h-8 gap-1.5 text-[12.5px] print:hidden"
@@ -129,9 +134,9 @@ export default function ImpactoPanelPage() {
           <PanelMessage>
             <span>Todavía no hay un corte para tu comercio.</span>
             <span>
-              Sube la exportación de ventas del mes (DNI, fecha y monto) con el botón de arriba, o
-              envíasela a Cuik. En minutos verás el registro en caja, la retención con y sin tarjeta
-              y a quién invitar.
+              {connector
+                ? "Tus ventas llegan solas desde tu punto de venta; el primer corte se calcula al cerrar el mes."
+                : "Sube la exportación de ventas del mes (DNI, fecha y monto) con el botón de arriba, o envíasela a Cuik. En minutos verás el registro en caja, la retención con y sin tarjeta y a quién invitar."}
             </span>
           </PanelMessage>
         </Panel>
@@ -171,15 +176,17 @@ export default function ImpactoPanelPage() {
                   </Td>
                   {!readOnly && (
                     <Td align="right">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 w-7 p-0 text-ent-fg-3 hover:text-red-600"
-                        aria-label="Eliminar carga"
-                        onClick={() => void removeImport(r)}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
+                      {r.source === "file" && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 text-ent-fg-3 hover:text-red-600"
+                          aria-label="Eliminar carga"
+                          onClick={() => void removeImport(r)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
                     </Td>
                   )}
                 </Tr>

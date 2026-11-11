@@ -76,8 +76,8 @@ export async function DELETE(
     const adminError = await requireTenantAdmin(session, tenant.id)
     if (adminError) return adminError
     if (readOnlyView(session)) return errorResponse("Vista de solo lectura", 403)
-    const ok = await deleteImport(id, tenant.id)
-    if (!ok) return errorResponse("Carga no encontrada", 404)
+    const result = await deleteImport(id, tenant.id)
+    if ("error" in result) return errorResponse(result.error, result.status)
     return successResponse({ id })
   } catch (error) {
     console.error("[DELETE /api/[tenant]/impact/imports/[id]]", error)

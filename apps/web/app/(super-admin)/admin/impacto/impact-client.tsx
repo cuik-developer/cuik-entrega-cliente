@@ -109,6 +109,31 @@ export function ImpactClient({ tenants }: { tenants: TenantOption[] }) {
     await loadImports()
   }
 
+  /** A synced month: its corte is computed on demand (the cron does the previous month once). */
+  async function computeCorte(row: ImportRow) {
+    const month = row.fileName.replace("Odoo · ", "")
+    setLoadingReport(true)
+    try {
+      const res = await fetch(`/api/admin/tenants/${tenantId}/pos/corte`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month }),
+      })
+      const json = await res.json()
+      if (!json.success) {
+        toast.error(json.error ?? "No se pudo calcular el corte")
+        return
+      }
+      toast.success(`Corte de ${month} calculado`)
+      await loadImports()
+      await openReport(json.data.reportId)
+    } catch {
+      toast.error("Error de conexión")
+    } finally {
+      setLoadingReport(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -181,12 +206,18 @@ export function ImpactClient({ tenants }: { tenants: TenantOption[] }) {
               </tr>
             </thead>
             <tbody>
+              {/* biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one row with its status, source and actions */}
               {imports.map((r) => (
                 <Tr
                   key={r.id}
                   className={report?.id === r.reportId ? "bg-ent-accent-soft" : undefined}
                 >
-                  <Td className="font-medium text-ent-fg max-w-[260px] truncate">{r.fileName}</Td>
+                  <Td className="font-medium text-ent-fg max-w-[260px] truncate">
+                    {r.fileName}
+                    {r.source === "pos" && (
+                      <span className="ml-1.5 text-[11px] font-normal text-ent-fg-3">API</span>
+                    )}
+                  </Td>
                   <Td>{r.periodFrom ? `${fmtDay(r.periodFrom)} – ${fmtDay(r.periodTo)}` : "—"}</Td>
                   <Td align="right">{r.ordersTotal.toLocaleString("es-PE")}</Td>
                   <Td align="right">
@@ -218,15 +249,27 @@ export function ImpactClient({ tenants }: { tenants: TenantOption[] }) {
                           Ver corte
                         </Button>
                       )}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 w-7 p-0 text-ent-fg-3 hover:text-red-600"
-                        aria-label="Eliminar carga"
-                        onClick={() => void removeImport(r)}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
+                      {r.source === "pos" ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-[12px]"
+                          disabled={loadingReport}
+                          onClick={() => void computeCorte(r)}
+                        >
+                          {r.reportId ? "Recalcular" : "Calcular corte"}
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 text-ent-fg-3 hover:text-red-600"
+                          aria-label="Eliminar carga"
+                          onClick={() => void removeImport(r)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
                     </div>
                   </Td>
                 </Tr>

@@ -60,8 +60,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     const { id } = await params
     const tenantId = new URL(request.url).searchParams.get("tenantId") ?? ""
     if (!UUID.test(id) || !UUID.test(tenantId)) return errorResponse("Invalid ID", 400)
-    const ok = await deleteImport(id, tenantId)
-    if (!ok) return errorResponse("Carga no encontrada", 404)
+    const result = await deleteImport(id, tenantId)
+    if ("error" in result) return errorResponse(result.error, result.status)
     return successResponse({ id })
   } catch (error) {
     console.error("[DELETE /api/admin/impact/imports/[id]]", error)

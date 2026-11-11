@@ -63,6 +63,7 @@ import { TenantFeaturesSection } from "./tenant-features-section"
 import { TenantChurnLine } from "./tenant-health"
 import { TenantNotesSection } from "./tenant-notes-section"
 import { TenantPhasesSection } from "./tenant-phases-section"
+import { TenantPosSection } from "./tenant-pos-section"
 import { type CatalogSummaryItem, TenantProgramSummary } from "./tenant-program-summary"
 import {
   type ApiTenant,
@@ -644,6 +645,9 @@ export function TenantDetail({
 
               {/* What Cuik turns on for this tenant (off by default) */}
               <TenantFeaturesSection tenantId={tenant.id} />
+
+              {/* POS connector (Odoo) and product master */}
+              <TenantPosSection tenantId={tenant.id} />
 
               {/* Onboarding checklist */}
               {checklist && (

@@ -3,6 +3,7 @@ import { MensajePersonalizado, sendEmail } from "@cuik/email"
 import forge from "node-forge"
 import { createElement } from "react"
 import { monthLabel, tenantsMissingLastMonth } from "@/lib/loyalty/impact/reminder"
+import { connectorsNeedingAttention } from "@/lib/pos/sync"
 import { daysBetween, formatYmd, periodLabel, todayYmd } from "./billing"
 import { billingDueRows, summarize } from "./billing-overview"
 import { getInternalTenantIds } from "./internal-tenants"
@@ -163,6 +164,29 @@ async function impactAlerts(
   return out
 }
 
+/** POS connector: an error, or no successful sync for hours (the merchant's sales stop arriving). */
+async function posAlerts(
+  today: string,
+  base: string,
+  internal: Set<string>,
+): Promise<AdminAlert[]> {
+  const out: AdminAlert[] = []
+  for (const c of await connectorsNeedingAttention()) {
+    if (internal.has(c.tenantId)) continue
+    out.push({
+      key: `pos:${c.tenantId}:${today}`,
+      kind: "pos",
+      severity: "warning",
+      who: c.tenantName,
+      text: c.lastError
+        ? `El conector POS falló: ${c.lastError}`
+        : `El conector POS no sincroniza desde ${c.lastSyncAt ? formatYmd(c.lastSyncAt.slice(0, 10)) : "que se activó"}.`,
+      href: `${base}/admin/tenants/${c.tenantId}`,
+    })
+  }
+  return out
+}
+
 export async function collectAdminAlerts(now = new Date()): Promise<AdminAlert[]> {
   const today = todayYmd(now)
   const internal = new Set(await getInternalTenantIds())
@@ -282,6 +306,7 @@ export async function collectAdminAlerts(now = new Date()): Promise<AdminAlert[]
   }
 
   out.push(...(await impactAlerts(today, base, internal)))
+  out.push(...(await posAlerts(today, base, internal)))
 
   // ── Shared Cuik certificate (demo mode tenants) ──
   const shared = sharedAppleCertExpiry()
@@ -396,6 +421,8 @@ export function composeDigest(alerts: AdminAlert[]) {
     parts.push(
       `${n("campaign")} campaña${n("campaign") === 1 ? "" : "s"} fallida${n("campaign") === 1 ? "" : "s"}`,
     )
+  if (n("impact")) parts.push(`${n("impact")} sin ventas del mes`)
+  if (n("pos")) parts.push(`${n("pos")} conector${n("pos") === 1 ? "" : "es"} POS`)
   return { subject: `Resumen Cuik: ${parts.join(", ")}`, paragraphs }
 }
 

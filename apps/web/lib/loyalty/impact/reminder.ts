@@ -64,6 +64,10 @@ async function candidates(today: string): Promise<Row[]> {
     FROM tenants t
     JOIN analytics.sales_imports i ON i.tenant_id = t.id AND i.status = 'ready' AND i.period_to IS NOT NULL
     WHERE t.status IN ('active', 'trial')
+      -- With the POS connector on, the sales arrive by API: nothing to ask for.
+      AND NOT EXISTS (
+        SELECT 1 FROM analytics.pos_connections c WHERE c.tenant_id = t.id AND c.enabled
+      )
     GROUP BY t.id, t.name, t.automations
     HAVING max(i.period_to) < ${lastDay}::date
     ORDER BY t.name`)

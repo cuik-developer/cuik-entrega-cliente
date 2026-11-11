@@ -18,8 +18,9 @@ import {
 } from "@cuik/db"
 import { cashbackSettingsOf, stampsPromotionConfigSchema } from "@cuik/shared/validators"
 
+import { connectionOwning } from "@/lib/pos/sync"
 import { getAsset, uploadAsset } from "@/lib/storage"
-import { detectMapping, missingRequiredFields } from "./columns"
+import { detectMapping, missingRequiredFields, normalizeDay } from "./columns"
 import { computeImpact } from "./metrics"
 import { buildOrders, readSalesFile } from "./parse"
 import {
@@ -54,6 +55,8 @@ export type ImportPreview = {
 export type ImportRow = {
   id: string
   fileName: string
+  /** "file" or "pos". */
+  source: string
   status: string
   error: string | null
   periodFrom: string | null
@@ -83,15 +86,21 @@ export async function programMinimumPurchase(tenantId: string): Promise<number |
   return parsed.data.accumulation.minimumPurchaseAmount
 }
 
-/** Mapping and options of the tenant's last processed import, to start from. */
-async function lastSettings(tenantId: string): Promise<{
+/** Mapping and options of the tenant's last processed file import, to start from. */
+export async function lastSettings(tenantId: string): Promise<{
   mapping: ColumnMapping | null
   options: ImportOptions
 }> {
   const [last] = await db
     .select({ mapping: salesImports.mapping, excluded: salesImports.excludedDnis })
     .from(salesImports)
-    .where(and(eq(salesImports.tenantId, tenantId), eq(salesImports.status, "ready")))
+    .where(
+      and(
+        eq(salesImports.tenantId, tenantId),
+        eq(salesImports.status, "ready"),
+        eq(salesImports.source, "file"),
+      ),
+    )
     .orderBy(desc(salesImports.createdAt))
     .limit(1)
   const stored = (last?.mapping ?? null) as
@@ -131,6 +140,20 @@ export async function createImport(params: {
 }): Promise<ImportPreview | { error: string }> {
   const parsed = await readSalesFile(params.file.buffer, params.file.name)
   if ("error" in parsed) return parsed
+  // With a POS connector, the API owns the sales from its start date: a file
+  // reaching those days is refused here, before anything is stored.
+  const connector = await connectionOwning(params.tenantId)
+  if (connector) {
+    const dateCol = detectMapping(parsed.headers).date
+    const lastDay =
+      dateCol === null
+        ? null
+        : parsed.rows.reduce<string | null>((max, r) => {
+            const d = normalizeDay(r[dateCol])
+            return d && (!max || d > max) ? d : max
+          }, null)
+    if (lastDay && lastDay >= connector.startDate) return { error: connectorOwnsMessage(connector) }
+  }
   const [row] = await db
     .insert(salesImports)
     .values({
@@ -246,8 +269,8 @@ export async function loadCuikData(
   return { clients: clientList, visits: visitList }
 }
 
-/** Every sale of the tenant loaded so far, as the metrics read them. */
-export async function loadTenantSales(tenantId: string): Promise<SaleOrder[]> {
+/** Every sale of the tenant up to `until` (inclusive), as the metrics read them. */
+export async function loadTenantSales(tenantId: string, until?: string): Promise<SaleOrder[]> {
   const rows = await db
     .select({
       orderRef: sales.orderRef,
@@ -260,7 +283,9 @@ export async function loadTenantSales(tenantId: string): Promise<SaleOrder[]> {
       amount: sales.amount,
     })
     .from(sales)
-    .where(eq(sales.tenantId, tenantId))
+    .where(
+      and(eq(sales.tenantId, tenantId), until ? sql`${sales.soldOn} <= ${until}::date` : undefined),
+    )
   return rows.map((r) => ({ ...r, amount: Number.parseFloat(r.amount) }))
 }
 
@@ -287,6 +312,10 @@ async function phaseInForce(
  */
 /** A problem with the file itself, safe to show to whoever uploaded it. */
 class ImpactInputError extends Error {}
+
+function connectorOwnsMessage(connector: { startDate: string }): string {
+  return `Desde el ${connector.startDate} las ventas llegan solas desde el POS; el archivo solo puede traer fechas anteriores.`
+}
 
 export async function processImport(params: {
   tenantId: string
@@ -317,17 +346,24 @@ export async function processImport(params: {
     const days = built.orders.map((o) => o.day).sort()
     const from = days[0]
     const to = days[days.length - 1]
+    // With a POS connector, its period is not loaded from files (the API owns it, on or paused).
+    const connector = await connectionOwning(params.tenantId)
+    if (connector && to >= connector.startDate) {
+      throw new ImpactInputError(connectorOwnsMessage(connector))
+    }
     const excluded = params.options.excludedDnis
       .map((d) => d.replace(/\D/g, ""))
       .filter((d) => d.length === 8)
 
     await db.transaction(async (tx) => {
-      // The file's period replaces what was loaded for those days (same month twice = no duplicates).
+      // The file's period replaces what earlier files loaded for those days
+      // (same month twice = no duplicates); synced rows are never touched.
       await tx
         .delete(sales)
         .where(
           and(
             eq(sales.tenantId, params.tenantId),
+            eq(sales.source, "file"),
             sql`${sales.soldOn} BETWEEN ${from}::date AND ${to}::date`,
           ),
         )
@@ -376,43 +412,12 @@ export async function processImport(params: {
         .where(eq(salesImports.id, imp.id))
     })
 
-    const [orders, cuik, minimumPurchase, phase] = await Promise.all([
-      loadTenantSales(params.tenantId),
-      loadCuikData(params.tenantId),
-      programMinimumPurchase(params.tenantId),
-      phaseInForce(params.tenantId, to),
-    ])
-    const summary = computeImpact({
-      orders,
-      clients: cuik.clients,
-      visits: cuik.visits,
-      options: {
-        retentionDays: params.options.retentionDays,
-        excludedDnis: excluded,
-        minimumPurchase,
-        phase,
-      },
+    return await computeReportForImport({
+      tenantId: params.tenantId,
+      importId: imp.id,
+      until: to,
+      options: { retentionDays: params.options.retentionDays, excludedDnis: excluded },
     })
-    const [report] = await db.transaction(async (tx) => {
-      await tx.delete(impactReports).where(eq(impactReports.importId, imp.id))
-      const inserted = await tx
-        .insert(impactReports)
-        .values({
-          tenantId: params.tenantId,
-          importId: imp.id,
-          phaseId: phase?.id ?? null,
-          periodFrom: summary.period.from,
-          periodTo: summary.period.to,
-          summary,
-        })
-        .returning({ id: impactReports.id })
-      await tx
-        .update(salesImports)
-        .set({ status: "ready", processedAt: new Date() })
-        .where(eq(salesImports.id, imp.id))
-      return inserted
-    })
-    return { reportId: report.id, summary }
   } catch (err) {
     // Our own messages are short and in Spanish; anything else (a DB error that
     // carries the whole INSERT) stays in the log and the user gets a plain line.
@@ -429,12 +434,78 @@ export async function processImport(params: {
   }
 }
 
+/**
+ * Computes the corte over every sale of the tenant and keeps it as the
+ * report of `importId` (replacing that import's previous report). Shared by
+ * the file upload and the POS connector's monthly corte.
+ */
+export async function computeReportForImport(params: {
+  tenantId: string
+  importId: string
+  /** Last day the corte covers: sales after it stay out, and it picks the program phase in force. */
+  until: string
+  options: ImportOptions
+}): Promise<{ reportId: string; summary: ImpactSummary }> {
+  const excluded = params.options.excludedDnis
+    .map((d) => d.replace(/\D/g, ""))
+    .filter((d) => d.length === 8)
+  const [orders, cuik, minimumPurchase, phase] = await Promise.all([
+    loadTenantSales(params.tenantId, params.until),
+    loadCuikData(params.tenantId),
+    programMinimumPurchase(params.tenantId),
+    phaseInForce(params.tenantId, params.until),
+  ])
+  const summary = computeImpact({
+    orders,
+    clients: cuik.clients,
+    visits: cuik.visits,
+    options: {
+      retentionDays: params.options.retentionDays,
+      excludedDnis: excluded,
+      minimumPurchase,
+      phase,
+    },
+  })
+  const [report] = await db.transaction(async (tx) => {
+    await tx.delete(impactReports).where(eq(impactReports.importId, params.importId))
+    const inserted = await tx
+      .insert(impactReports)
+      .values({
+        tenantId: params.tenantId,
+        importId: params.importId,
+        phaseId: phase?.id ?? null,
+        periodFrom: summary.period.from,
+        periodTo: params.until,
+        summary,
+      })
+      .returning({ id: impactReports.id })
+    await tx
+      .update(salesImports)
+      .set({ status: "ready", processedAt: new Date() })
+      .where(eq(salesImports.id, params.importId))
+    return inserted
+  })
+  return { reportId: report.id, summary }
+}
+
+/** The tenant's current corte: the one covering the latest period (ties: the newest computed). */
+export async function latestReportId(tenantId: string): Promise<string | null> {
+  const [latest] = await db
+    .select({ id: impactReports.id })
+    .from(impactReports)
+    .where(eq(impactReports.tenantId, tenantId))
+    .orderBy(desc(impactReports.periodTo), desc(impactReports.computedAt))
+    .limit(1)
+  return latest?.id ?? null
+}
+
 /** Imports of a tenant, newest first, each with its report id when computed. */
 export async function listImports(tenantId: string): Promise<ImportRow[]> {
   const rows = await db
     .select({
       id: salesImports.id,
       fileName: salesImports.fileName,
+      source: salesImports.source,
       status: salesImports.status,
       error: salesImports.error,
       periodFrom: salesImports.periodFrom,
@@ -461,6 +532,7 @@ export async function listImports(tenantId: string): Promise<ImportRow[]> {
   return rows.map((r) => ({
     id: r.id,
     fileName: r.fileName,
+    source: r.source,
     status: r.status,
     error: r.error,
     periodFrom: r.periodFrom ? String(r.periodFrom) : null,
@@ -502,10 +574,11 @@ export async function getReport(reportId: string, tenantId: string): Promise<Rep
       and(
         eq(impactReports.tenantId, tenantId),
         sql`${impactReports.id} <> ${reportId}::uuid`,
-        sql`${impactReports.computedAt} < ${r.computedAt}`,
+        // The corte of the period before this one (not whichever was computed before).
+        sql`(${impactReports.periodTo}, ${impactReports.computedAt}) < (${r.periodTo}::date, ${r.computedAt})`,
       ),
     )
-    .orderBy(desc(impactReports.computedAt))
+    .orderBy(desc(impactReports.periodTo), desc(impactReports.computedAt))
     .limit(1)
   return {
     id: r.id,
@@ -523,11 +596,29 @@ export async function getReport(reportId: string, tenantId: string): Promise<Rep
   }
 }
 
-/** Removes an import, its sales rows and its report (cascade). */
-export async function deleteImport(importId: string, tenantId: string): Promise<boolean> {
-  const deleted = await db
+/**
+ * Removes a file import, its sales rows and its report (cascade). A synced
+ * month is never deleted this way: its orders would not come back (the
+ * connector's cursor is past them).
+ */
+export async function deleteImport(
+  importId: string,
+  tenantId: string,
+): Promise<{ ok: true } | { error: string; status: 404 | 409 }> {
+  const [imp] = await db
+    .select({ source: salesImports.source })
+    .from(salesImports)
+    .where(and(eq(salesImports.id, importId), eq(salesImports.tenantId, tenantId)))
+    .limit(1)
+  if (!imp) return { error: "Carga no encontrada", status: 404 }
+  if (imp.source !== "file") {
+    return {
+      error: "Este mes viene del conector POS y no se puede eliminar desde aquí.",
+      status: 409,
+    }
+  }
+  await db
     .delete(salesImports)
     .where(and(eq(salesImports.id, importId), eq(salesImports.tenantId, tenantId)))
-    .returning({ id: salesImports.id })
-  return deleted.length > 0
+  return { ok: true }
 }
