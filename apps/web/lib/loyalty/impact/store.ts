@@ -276,16 +276,18 @@ export async function loadTenantSales(tenantId: string, until?: string): Promise
   const clientDni = sql<
     string | null
   >`nullif(regexp_replace(coalesce(${clients.dni}, ''), '\\D', '', 'g'), '')`
+  // Only while the visit still exists: a deleted visit takes the inference with it.
+  // An inferred sale may carry a mistyped document: the client's DNI wins there.
+  const inferredLive = sql`${sales.visitId} IS NOT NULL AND ${sales.linkKind} IN ('inferred_amount', 'inferred_time')`
   const rows = await db
     .select({
       orderRef: sales.orderRef,
-      // Only while the visit still exists: a deleted visit takes the inference with it.
       dni: sql<
         string | null
-      >`coalesce(${sales.dni}, CASE WHEN ${sales.visitId} IS NOT NULL THEN ${clientDni} END)`,
+      >`CASE WHEN ${inferredLive} THEN coalesce(${clientDni}, ${sales.dni}) ELSE ${sales.dni} END`,
       name: sql<
         string | null
-      >`coalesce(${sales.customerName}, CASE WHEN ${sales.visitId} IS NOT NULL THEN ${clients.name} END)`,
+      >`CASE WHEN ${inferredLive} THEN coalesce(${clients.name}, ${sales.customerName}) ELSE ${sales.customerName} END`,
       phone: sales.phone,
       store: sales.store,
       cashier: sales.cashier,

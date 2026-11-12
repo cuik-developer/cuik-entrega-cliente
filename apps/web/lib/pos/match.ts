@@ -124,6 +124,8 @@ export type GuestOrder = {
   soldAt: Date
   store: string | null
   amount: number
+  /** The document typed at the till, when it matched no Cuik client (a typo, a relative's DNI). */
+  dni?: string | null
 }
 
 export type FreeVisit = {
@@ -139,7 +141,7 @@ export type InferredKind = "inferred_amount" | "inferred_time"
 
 export type InferredLink = { visitId: string; clientId: string; kind: InferredKind }
 
-/** A sale with a DNI that got no visit: not linkable here, but it can be the visit's real purchase. */
+/** A registered client's sale without a stamp: not linkable here, but it can be the visit's real purchase. */
 export type Blocker = { soldAt: Date; store: string | null; amount: number }
 
 export type InferOptions = {
@@ -151,7 +153,7 @@ export type InferOptions = {
   locations?: string[]
 }
 
-/** The cashier may scan while still closing the order: the visit may precede the sale by this much. */
+/** Time-only pairing: the cashier may scan while still closing the order, so the visit may precede the sale by this much. */
 export const INFER_BEFORE_MS = 3 * 60_000
 
 /** Visit amount equal to the sale within S/ 0.50 or 2 %, whichever is larger. */
@@ -200,16 +202,20 @@ export function storeMap(
  * the Cuik visit stamped at the same store right after the sale (the cashier
  * charges first, scans next). Two levels, both same local day and same store:
  *
- * - `inferred_amount`: the visit's amount equals the sale's and no other sale
- *   or visit in the window has that amount too.
- * - `inferred_time`: the visit has no amount, the sale is the only one of
- *   that store in the visit's window and the visit the only free one in the
- *   sale's window.
+ * - `inferred_amount`: the visit's amount equals the sale's, within the window
+ *   on either side (a stamp given before charging, or a service charged on
+ *   pick-up), and no other sale or visit in the window has that amount too.
+ *   A sale typed under a document that matches no Cuik client (a typo, a
+ *   relative's DNI) qualifies as well as a guest sale.
+ * - `inferred_time`: guest sales only; the visit has no amount, the sale is
+ *   the only one of that store from 3 minutes before to the window after
+ *   the visit, and the visit the only free one in the sale's window.
  *
- * Ties and look-alikes are left unlinked rather than guessed. A DNI sale that
- * found no visit (`blockers`) counts as a rival: it may be the visit's real
- * purchase. Each sale and each visit is used at most once. Callers pass only
- * guest sales with a positive amount and visits no sale owns yet.
+ * Ties and look-alikes are left unlinked rather than guessed. A registered
+ * client's sale without a stamp (`blockers`) counts as a rival: it may be the
+ * visit's real purchase. Each sale and each visit is used at most once.
+ * Callers pass only sales of no Cuik client with a positive amount, and
+ * visits no sale owns yet.
  */
 export function inferGuestLinks(
   orders: GuestOrder[],
@@ -234,7 +240,11 @@ export function inferGuestLinks(
     if (location === null) return singleLocation
     return mapped === location
   }
-  const inWindow = (o: { soldAt: Date; store: string | null }, v: FreeVisit): boolean => {
+  const inAmountWindow: InWindow = (o, v) => {
+    const dt = v.createdAt.getTime() - o.soldAt.getTime()
+    return Math.abs(dt) <= afterMs && storeOk(o.store, v.location)
+  }
+  const inTimeWindow: InWindow = (o, v) => {
     const dt = v.createdAt.getTime() - o.soldAt.getTime()
     return dt >= -INFER_BEFORE_MS && dt <= afterMs && storeOk(o.store, v.location)
   }
@@ -249,14 +259,14 @@ export function inferGuestLinks(
     const dayVisits = visitsByDay.get(k) ?? []
     if (dayVisits.length === 0) continue
     const dayBlockers = blockersByDay.get(k) ?? []
-    const byAmount = linkByAmount(dayOrders, dayVisits, dayBlockers, inWindow)
+    const byAmount = linkByAmount(dayOrders, dayVisits, dayBlockers, inAmountWindow)
     for (const [id, link] of byAmount) pairs.set(id, link)
     const usedVisits = new Set([...byAmount.values()].map((l) => l.visitId))
     const byTime = linkByTime(
       dayOrders.filter((o) => !pairs.has(o.id)),
       dayVisits.filter((v) => !usedVisits.has(v.id)),
       dayBlockers,
-      inWindow,
+      inTimeWindow,
     )
     for (const [id, link] of byTime) pairs.set(id, link)
   }
@@ -303,7 +313,7 @@ function linkByAmount(
   return pairs
 }
 
-/** Level 2: no amount to compare; only a pair with no other sale or visit in reach. */
+/** Level 2: guest sales only, no amount to compare; only a pair with no other sale or visit in reach. */
 function linkByTime(
   orders: GuestOrder[],
   visits: FreeVisit[],
@@ -312,6 +322,7 @@ function linkByTime(
 ): Map<string, InferredLink> {
   const pairs = new Map<string, InferredLink>()
   for (const o of orders) {
+    if (o.dni) continue
     const near = visits.filter((v) => inWindow(o, v))
     if (near.length !== 1) continue
     const v = near[0]

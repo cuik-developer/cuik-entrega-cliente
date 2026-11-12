@@ -363,7 +363,7 @@ export function TenantPosSection({ tenantId }: { tenantId: string }) {
                     {
                       label: "Enlace inferido",
                       value: conn.inferLinks
-                        ? `Activo · hasta ${conn.inferWindowMinutes} min después de la venta`
+                        ? `Activo · ±${conn.inferWindowMinutes} min por monto · hasta ${conn.inferWindowMinutes} min después por única visita cercana`
                         : "Apagado",
                     },
                     { label: "Vínculos", value: linksSummary(conn.links, conn.inferLinks) },

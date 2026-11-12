@@ -46,7 +46,7 @@ export const DEFAULT_IMPORT_OPTIONS: ImportOptions = { retentionDays: 90, exclud
 /** One purchase (order lines already added up), as stored in analytics.sales. */
 export type SaleOrder = {
   orderRef: string | null
-  /** Digits only, 8 of them; null when the row had no usable document. */
+  /** Digits only: 8 (DNI) or 9 (carné de extranjería); null when the row had no usable document. */
   dni: string | null
   name: string | null
   phone: string | null

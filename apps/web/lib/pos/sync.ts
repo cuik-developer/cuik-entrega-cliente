@@ -565,8 +565,9 @@ function partnerDni(partner: OdooPartner | null | undefined, hasIdType: boolean)
   const idType = partner.l10n_latam_identification_type_id
     ? m2oName(partner.l10n_latam_identification_type_id)
     : null
-  // A document typed as something else (RUC, CE, passport) is not a DNI even if it has 8 digits.
-  const typeOk = !hasIdType || !idType || /dni/i.test(idType)
+  // A document typed as something else (RUC, passport) is not a person's document even if it has 8 digits.
+  // DNI or carné de extranjería (the merchant's clients carry either); RUC and passports are not people here.
+  const typeOk = !hasIdType || !idType || /dni|extranjer|^ce$/i.test(idType.trim())
   if (!typeOk || isPlaceholderName(partner.name ? String(partner.name) : null)) return null
   return normalizeDni(partner.vat || null)
 }
@@ -827,6 +828,7 @@ export async function matchVisitsInRange(
     .select({
       id: sales.id,
       dni: sales.dni,
+      clientId: sales.clientId,
       soldAt: sales.soldAt,
       store: sales.store,
       amount: sales.amount,
@@ -882,7 +884,7 @@ export async function matchVisitsInRange(
       .set({
         visitId: null,
         linkKind: null,
-        clientId: sql`CASE WHEN ${sales.dni} IS NULL THEN NULL ELSE ${sales.clientId} END`,
+        clientId: sql`CASE WHEN ${sales.linkKind} IN ('inferred_amount', 'inferred_time') THEN NULL ELSE ${sales.clientId} END`,
       })
       .where(inRange)
     if (saleIds.length > 0) {
@@ -896,11 +898,27 @@ export async function matchVisitsInRange(
   })
   if (!infer.enabled) return { exact: result.pairs.size, inferred: 0 }
 
-  // Second pass: guest sales and the visits nobody owns after the exact pass.
+  // Second pass: sales of no Cuik client (guests, and documents no client has:
+  // a typo or a relative's DNI) and the visits nobody owns after the exact pass.
   const guestRows = await db
-    .select({ id: sales.id, soldAt: sales.soldAt, store: sales.store, amount: sales.amount })
+    .select({
+      id: sales.id,
+      dni: sales.dni,
+      soldAt: sales.soldAt,
+      store: sales.store,
+      amount: sales.amount,
+    })
     .from(sales)
-    .where(and(sellable, sql`${sales.dni} IS NULL`, isNotNull(sales.store)))
+    .where(
+      and(
+        sellable,
+        sql`${sales.clientId} IS NULL`,
+        isNotNull(sales.store),
+        sql`(${sales.dni} IS NULL OR NOT EXISTS (
+          SELECT 1 FROM loyalty.clients k WHERE k.tenant_id = ${sales.tenantId}
+            AND regexp_replace(coalesce(k.dni, ''), '\\D', '', 'g') = ${sales.dni}))`,
+      ),
+    )
   const freeRows =
     guestRows.length === 0
       ? []
@@ -944,6 +962,7 @@ export async function matchVisitsInRange(
   const inferred = inferGuestLinks(
     guestRows.map((g) => ({
       id: g.id,
+      dni: g.dni,
       soldAt: g.soldAt as Date,
       store: g.store,
       amount: Number.parseFloat(g.amount),
@@ -962,8 +981,9 @@ export async function matchVisitsInRange(
       timezone,
       stores: storeNames,
       locations: locationNames,
+      // A registered client's purchase without a stamp may be the visit's real purchase.
       blockers: orderRows
-        .filter((o) => !result.pairs.has(o.id))
+        .filter((o) => !result.pairs.has(o.id) && o.clientId !== null)
         .map((o) => ({
           soldAt: o.soldAt as Date,
           store: o.store,

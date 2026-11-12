@@ -379,3 +379,35 @@ describe("inferred links and the store map", () => {
     expect(sameAmount(10, Number.NaN)).toBe(false)
   })
 })
+
+describe("inferred links by amount reach mistyped documents and early stamps", () => {
+  const at = (hhmm: string) => new Date(`2026-11-06T${hhmm}:00Z`)
+  const opts = { windowMinutes: 20, timezone: "America/Lima" }
+  const stamp = (hhmm: string, amount: number | null) => ({
+    id: "v",
+    clientId: "c",
+    createdAt: at(hhmm),
+    location: "Pezet",
+    amount,
+  })
+
+  it("links a sale typed under a document no client has when the amount matches, never by time alone", () => {
+    const typo = {
+      id: "s",
+      soldAt: at("20:24"),
+      store: "PEZET - SAN ISIDRO",
+      amount: 161.82,
+      dni: "73039960",
+    }
+    expect(inferGuestLinks([typo], [stamp("20:30", 161.82)], opts).get("s")?.kind).toBe(
+      "inferred_amount",
+    )
+    expect(inferGuestLinks([typo], [stamp("20:30", null)], opts).size).toBe(0)
+  })
+
+  it("accepts a stamp given before charging, within the window, when the amount matches", () => {
+    const sale = { id: "s", soldAt: at("20:24"), store: "PEZET - SAN ISIDRO", amount: 84.7 }
+    expect(inferGuestLinks([sale], [stamp("20:12", 84.7)], opts).size).toBe(1)
+    expect(inferGuestLinks([sale], [stamp("19:50", 84.7)], opts).size).toBe(0)
+  })
+})

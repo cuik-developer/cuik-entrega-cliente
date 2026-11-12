@@ -89,12 +89,15 @@ export function parseMapping(raw: unknown, columnCount: number): ColumnMapping |
 
 // --- Cell normalization ---
 
-/** Digits only; a Peruvian DNI has 8. Anything else (RUC, passport, blank) is no DNI. */
+/**
+ * Digits only; a Peruvian DNI has 8 and a carné de extranjería 9. Anything
+ * else (RUC with 11, passport, blank) is no personal document.
+ */
 export function normalizeDni(value: unknown): string | null {
   const digits = String(value ?? "").replace(/\D/g, "")
-  if (digits.length !== 8) return null
+  if (digits.length !== 8 && digits.length !== 9) return null
   // 00000000, 11111111…: placeholders typed at the till.
-  if (/^(\d)\1{7}$/.test(digits)) return null
+  if (/^(\d)\1+$/.test(digits)) return null
   return digits
 }
 
