@@ -11,6 +11,8 @@ describe("moduleForPath", () => {
     expect(moduleForPath("/admin/enlaces")?.module.key).toBe("comercios")
     expect(moduleForPath("/admin/impacto")?.module.key).toBe("loyalty")
     expect(moduleForPath("/admin/growth")?.module.key).toBe("growth")
+    expect(moduleForPath("/admin/growth/reglas")?.item.label).toBe("Reglas por comercio")
+    expect(moduleForPath("/admin/growth/conectores")?.module.key).toBe("growth")
     expect(moduleForPath("/admin/finanzas/prospectos")?.module.key).toBe("crm")
     expect(moduleForPath("/admin/finanzas/tablero")?.item.label).toBe("Tablero")
     expect(moduleForPath("/admin/finanzas")?.module.key).toBe("finanzas")

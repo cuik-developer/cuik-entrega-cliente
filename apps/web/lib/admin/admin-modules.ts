@@ -12,11 +12,14 @@ import {
   Link2,
   type LucideIcon,
   Megaphone,
+  MessageSquareText,
   Paintbrush,
   Palette,
+  Plug,
   Rocket,
   Scale,
   Settings,
+  SlidersHorizontal,
   TrendingUp,
   Users,
   UtensilsCrossed,
@@ -114,8 +117,22 @@ export const ADMIN_MODULES: AdminModule[] = [
     rule: "#7a4fb3",
     groups: [
       {
-        title: "Growth",
-        items: [{ href: "/admin/growth", label: "Estado Growth", icon: Rocket }],
+        title: "Operación",
+        items: [
+          { href: "/admin/growth", label: "Estado Growth", icon: Rocket },
+          { href: "/admin/growth/reglas", label: "Reglas por comercio", icon: SlidersHorizontal },
+        ],
+      },
+      {
+        title: "Datos",
+        items: [
+          { href: "/admin/growth/conectores", label: "Conectores POS", icon: Plug },
+          {
+            href: "/admin/growth/plantillas",
+            label: "Plantillas y audiencias",
+            icon: MessageSquareText,
+          },
+        ],
       },
     ],
   },
