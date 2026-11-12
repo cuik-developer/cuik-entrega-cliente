@@ -60,6 +60,14 @@ export const connectionSchema = connectionFieldsSchema.extend({
   startDate: dayStringSchema,
   enabled: z.boolean(),
   retentionDays: z.number().int().min(7).max(365),
+  /** Pair guest sales with the visit stamped minutes later at the same store. */
+  inferLinks: z.boolean().optional(),
+  inferWindowMinutes: z
+    .number()
+    .int("La ventana debe ser un número entero de minutos")
+    .min(1, "La ventana debe ser de 1 a 120 minutos")
+    .max(120, "La ventana debe ser de 1 a 120 minutos")
+    .optional(),
   excludedDnis: z
     .array(z.string().trim())
     .max(50)

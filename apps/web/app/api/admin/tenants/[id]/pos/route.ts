@@ -56,6 +56,9 @@ export async function PUT(request: Request, { params }: Params) {
       enabled: parsed.data.enabled,
       retentionDays: parsed.data.retentionDays,
       excludedDnis: parsed.data.excludedDnis,
+      // A body without the fields keeps what the tenant has (older bundles, scripts).
+      inferLinks: parsed.data.inferLinks ?? existing?.inferLinks ?? true,
+      inferWindowMinutes: parsed.data.inferWindowMinutes ?? existing?.inferWindowMinutes ?? 20,
       userId: session.user.id,
     })
     if ("error" in saved) return errorResponse(saved.error, 409)

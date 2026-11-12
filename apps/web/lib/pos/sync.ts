@@ -22,7 +22,7 @@ import {
 import { decrypt, encrypt } from "@/lib/encryption"
 import { isPlaceholderName, normalizeDni, normalizePhone } from "@/lib/loyalty/impact/columns"
 import { MAX_ORDER_AMOUNT } from "@/lib/loyalty/impact/parse"
-import { dayInTz, matchOrdersToVisits } from "./match"
+import { dayInTz, type InferredLink, inferGuestLinks, matchOrdersToVisits } from "./match"
 import {
   type Many2one,
   m2oId,
@@ -60,6 +60,10 @@ export type PosConnectionView = {
   enabled: boolean
   retentionDays: number
   excludedDnis: string[]
+  inferLinks: boolean
+  inferWindowMinutes: number
+  /** How the synced sales are linked so far (the value the connector adds). */
+  links: LinkCounts
   cursor: Cursor | null
   /** True until the first pull from the start date has reached the end. */
   backfilling: boolean
@@ -71,6 +75,22 @@ export type PosConnectionView = {
   updatedAt: string
 }
 
+export type LinkCounts = {
+  /** Synced sales in all. */
+  total: number
+  /** Linked by DNI, same day. */
+  dni: number
+  /** Guest sales paired with a visit by amount and time. */
+  inferredAmount: number
+  /** Guest sales paired with the only visit in the window. */
+  inferredTime: number
+  manual: number
+  /** Guest sales (no DNI) still without a visit. */
+  guestUnlinked: number
+  /** Purchases of a Cuik client with no stamp that day. */
+  clientNoVisit: number
+}
+
 export type Cursor = {
   /** Odoo write_date ("YYYY-MM-DD HH:MM:SS", UTC) of the last order read. */
   writeDate: string
@@ -79,6 +99,8 @@ export type Cursor = {
   offset: number
   /** The run that saved this cursor reached the end of the domain. */
   exhausted: boolean
+  /** When the inferred pass last covered the whole history (after a backfill, or after turning it on). */
+  inferredAt?: string
 }
 
 /** Orders per Odoo request. */
@@ -93,7 +115,7 @@ const REMATCH_DAYS = 3
 const LOCK_STALE_MINUTES = 30
 const ORDER_STATES = ["paid", "done", "invoiced"]
 
-function viewOf(row: typeof posConnections.$inferSelect): PosConnectionView {
+function viewOf(row: typeof posConnections.$inferSelect, links: LinkCounts): PosConnectionView {
   const cursor = (row.cursor as Cursor | null) ?? null
   const excluded = Array.isArray(row.excludedDnis) ? (row.excludedDnis as string[]) : []
   return {
@@ -106,6 +128,9 @@ function viewOf(row: typeof posConnections.$inferSelect): PosConnectionView {
     enabled: row.enabled,
     retentionDays: row.retentionDays,
     excludedDnis: excluded,
+    inferLinks: row.inferLinks,
+    inferWindowMinutes: row.inferWindowMinutes,
+    links,
     cursor,
     backfilling: !cursor || !cursor.exhausted,
     syncing: lockIsHeld(row.syncStartedAt),
@@ -126,7 +151,34 @@ export async function getConnection(tenantId: string): Promise<PosConnectionView
     .from(posConnections)
     .where(eq(posConnections.tenantId, tenantId))
     .limit(1)
-  return row ? viewOf(row) : null
+  return row ? viewOf(row, await linkCounts(tenantId)) : null
+}
+
+/** How the tenant's synced sales are linked, one grouped count. */
+export async function linkCounts(tenantId: string): Promise<LinkCounts> {
+  const [r] = await db
+    .select({
+      total: sql<number>`count(*) filter (where ${sales.amount} > 0)::int`,
+      dni: sql<number>`count(*) filter (where ${sales.visitId} is not null and ${sales.linkKind} = 'dni')::int`,
+      inferredAmount: sql<number>`count(*) filter (where ${sales.visitId} is not null and ${sales.linkKind} = 'inferred_amount')::int`,
+      inferredTime: sql<number>`count(*) filter (where ${sales.visitId} is not null and ${sales.linkKind} = 'inferred_time')::int`,
+      manual: sql<number>`count(*) filter (where ${sales.visitId} is not null and ${sales.linkKind} = 'manual')::int`,
+      guestUnlinked: sql<number>`count(*) filter (where ${sales.dni} is null and ${sales.visitId} is null and ${sales.amount} > 0)::int`,
+      clientNoVisit: sql<number>`count(*) filter (where ${sales.clientId} is not null and ${sales.visitId} is null and ${sales.amount} > 0)::int`,
+    })
+    .from(sales)
+    .where(and(eq(sales.tenantId, tenantId), eq(sales.source, "pos")))
+  return (
+    r ?? {
+      total: 0,
+      dni: 0,
+      inferredAmount: 0,
+      inferredTime: 0,
+      manual: 0,
+      guestUnlinked: 0,
+      clientNoVisit: 0,
+    }
+  )
 }
 
 /**
@@ -169,6 +221,8 @@ export type SaveConnectionInput = {
   enabled: boolean
   retentionDays: number
   excludedDnis: string[]
+  inferLinks: boolean
+  inferWindowMinutes: number
   userId: string
 }
 
@@ -185,6 +239,10 @@ export async function saveConnection(
     return { error: "Hay una sincronización en curso; espera a que termine para guardar." }
   }
   const resetCursor = !existing || existing.startDate !== input.startDate
+  // Turned on: the next complete run infers over the whole history. Turned off: no inferred link stays.
+  const inferTurnedOn = !!existing && !existing.inferLinks && input.inferLinks
+  const cursorWithoutInferredAt =
+    inferTurnedOn && existing?.cursor ? { ...existing.cursor, inferredAt: undefined } : undefined
   const values = {
     provider: "odoo",
     baseUrl: input.baseUrl.trim().replace(/\/+$/, ""),
@@ -194,14 +252,18 @@ export async function saveConnection(
     enabled: input.enabled,
     retentionDays: input.retentionDays,
     excludedDnis: input.excludedDnis,
+    inferLinks: input.inferLinks,
+    inferWindowMinutes: input.inferWindowMinutes,
     updatedAt: new Date(),
     ...(input.apiKey !== undefined ? { apiKeyEnc: encrypt(input.apiKey) } : {}),
     ...(resetCursor ? { cursor: null, lastError: null } : {}),
+    ...(cursorWithoutInferredAt ? { cursor: cursorWithoutInferredAt } : {}),
   }
   await db
     .insert(posConnections)
     .values({ ...values, tenantId: input.tenantId, createdBy: input.userId })
     .onConflictDoUpdate({ target: posConnections.tenantId, set: values })
+  if (!input.inferLinks) await clearInferredLinks(input.tenantId)
   return (await getConnection(input.tenantId)) as PosConnectionView
 }
 
@@ -356,6 +418,8 @@ export type SyncResult = {
   pulled: number
   upserted: number
   matchedVisits: number
+  /** Guest sales (no DNI) paired with a visit by amount or time. */
+  inferredVisits: number
   /** Orders left out for an impossible amount (above MAX_ORDER_AMOUNT). */
   skippedBadAmount: number
   /** File-loaded sales removed because the connector now owns their period (first run). */
@@ -606,7 +670,8 @@ async function writePage(prepared: Prepared[]): Promise<number> {
           source: sql`excluded.source`,
           posOrderId: sql`excluded.pos_order_id`,
           soldAt: sql`excluded.sold_at`,
-          clientId: sql`excluded.client_id`,
+          // A hand-made link keeps its client; inferred ones are recomputed by the matcher.
+          clientId: sql`CASE WHEN ${sales.linkKind} = 'manual' THEN ${sales.clientId} ELSE excluded.client_id END`,
         },
       })
       .returning({ id: sales.id, posOrderId: sales.posOrderId })
@@ -700,24 +765,51 @@ export function clientOwning(
   return c && c.registeredOn <= day ? c.id : null
 }
 
+/** Drops every inferred link of the tenant (the switch went off): the guest sales go back to being guests. */
+export async function clearInferredLinks(tenantId: string): Promise<number> {
+  const rows = await db
+    .update(sales)
+    .set({ visitId: null, linkKind: null, clientId: null })
+    .where(
+      and(
+        eq(sales.tenantId, tenantId),
+        eq(sales.source, "pos"),
+        inArray(sales.linkKind, ["inferred_amount", "inferred_time"]),
+      ),
+    )
+    .returning({ id: sales.id })
+  return rows.length
+}
+
+/** The inferred pass as configured on the connection. */
+export type InferSettings = { enabled: boolean; windowMinutes: number; excludedDnis: string[] }
+
 /**
  * Pairs the synced purchases of `fromDay..toDay` with the tenant's visits of
  * those days (same DNI, same local day, never another day), and gives a
  * client id to purchases synced minutes before their client registered that
  * same day. Refunds (negative amounts) never take a visit. Re-runs are safe:
- * the links of the range are recomputed in one statement.
+ * the links of the range are recomputed in one statement; links made by
+ * hand (`link_kind = 'manual'`) are left alone.
+ *
+ * With `infer.enabled`, a second pass pairs guest sales (no DNI) with the
+ * visit stamped at the same store minutes later (see `inferGuestLinks`), and
+ * those sales get the visit's client too.
  */
 export async function matchVisitsInRange(
   tenantId: string,
   timezone: string,
   fromDay: string,
   toDay: string,
-): Promise<number> {
+  infer: InferSettings = { enabled: false, windowMinutes: 0, excludedDnis: [] },
+): Promise<{ exact: number; inferred: number }> {
+  const notManual = sql`${sales.linkKind} IS DISTINCT FROM 'manual'`
   const inRange = and(
     eq(sales.tenantId, tenantId),
     eq(sales.source, "pos"),
     gte(sales.soldOn, fromDay),
     lte(sales.soldOn, toDay),
+    notManual,
   )
   // The race of the same day: the sale was synced at 15:05 and the client
   // registered at 15:10. Earlier purchases are never assigned to a client.
@@ -730,15 +822,33 @@ export async function matchVisitsInRange(
       AND regexp_replace(coalesce(c.dni, ''), '\\D', '', 'g') = s.dni
       AND (c.created_at AT TIME ZONE 'UTC' AT TIME ZONE ${timezone})::date <= s.sold_on`)
 
+  const sellable = and(inRange, isNotNull(sales.soldAt), sql`${sales.amount} > 0`)
   const orderRows = await db
-    .select({ id: sales.id, dni: sales.dni, soldAt: sales.soldAt, store: sales.store })
+    .select({
+      id: sales.id,
+      dni: sales.dni,
+      soldAt: sales.soldAt,
+      store: sales.store,
+      amount: sales.amount,
+    })
     .from(sales)
-    .where(and(inRange, isNotNull(sales.dni), isNotNull(sales.soldAt), sql`${sales.amount} > 0`))
+    .where(and(sellable, isNotNull(sales.dni)))
   // Visits of the same local days, with a day of slack on each side for the timezone.
   const fromUtc = new Date(`${fromDay}T00:00:00Z`)
   fromUtc.setUTCDate(fromUtc.getUTCDate() - 1)
   const toUtc = new Date(`${toDay}T00:00:00Z`)
   toUtc.setUTCDate(toUtc.getUTCDate() + 2)
+  // A visit a hand-made link owns is not up for grabs.
+  const notHeldByHand = sql`NOT EXISTS (
+    SELECT 1 FROM analytics.sales m WHERE m.visit_id = ${visits.id} AND m.link_kind = 'manual')`
+  const visitWindow = and(
+    eq(visits.tenantId, tenantId),
+    sql`${visits.source} <> 'bonus'`,
+    gte(visits.createdAt, fromUtc),
+    lte(visits.createdAt, toUtc),
+    sql`${clients.status} <> 'deleted'`,
+    notHeldByHand,
+  )
   const visitRows =
     orderRows.length === 0
       ? []
@@ -752,15 +862,7 @@ export async function matchVisitsInRange(
           .from(visits)
           .innerJoin(clients, eq(clients.id, visits.clientId))
           .leftJoin(locations, eq(locations.id, visits.locationId))
-          .where(
-            and(
-              eq(visits.tenantId, tenantId),
-              sql`${visits.source} <> 'bonus'`,
-              gte(visits.createdAt, fromUtc),
-              lte(visits.createdAt, toUtc),
-              isNotNull(clients.dni),
-            ),
-          )
+          .where(and(visitWindow, isNotNull(clients.dni)))
   const result = matchOrdersToVisits(
     orderRows.map((o) => ({ id: o.id, dni: o.dni, soldAt: o.soldAt as Date, store: o.store })),
     visitRows.map((v) => ({
@@ -774,17 +876,120 @@ export async function matchVisitsInRange(
   const saleIds = [...result.pairs.keys()]
   const visitIds = saleIds.map((id) => result.pairs.get(id) as string)
   await db.transaction(async (tx) => {
-    await tx.update(sales).set({ visitId: null }).where(inRange)
+    // Inferred rows got their client from the visit: without the visit there is no client.
+    await tx
+      .update(sales)
+      .set({
+        visitId: null,
+        linkKind: null,
+        clientId: sql`CASE WHEN ${sales.dni} IS NULL THEN NULL ELSE ${sales.clientId} END`,
+      })
+      .where(inRange)
     if (saleIds.length > 0) {
       // Arrays go as one '{a,b,c}' literal: drizzle would expand a JS array into a row.
       await tx.execute(sql`
-        UPDATE analytics.sales s SET visit_id = v.visit_id
+        UPDATE analytics.sales s SET visit_id = v.visit_id, link_kind = 'dni'
         FROM (SELECT unnest(${uuidArrayLiteral(saleIds)}::uuid[]) AS sale_id,
                      unnest(${uuidArrayLiteral(visitIds)}::uuid[]) AS visit_id) v
         WHERE s.id = v.sale_id`)
     }
   })
-  return result.pairs.size
+  if (!infer.enabled) return { exact: result.pairs.size, inferred: 0 }
+
+  // Second pass: guest sales and the visits nobody owns after the exact pass.
+  const guestRows = await db
+    .select({ id: sales.id, soldAt: sales.soldAt, store: sales.store, amount: sales.amount })
+    .from(sales)
+    .where(and(sellable, sql`${sales.dni} IS NULL`, isNotNull(sales.store)))
+  const freeRows =
+    guestRows.length === 0
+      ? []
+      : await db
+          .select({
+            id: visits.id,
+            clientId: visits.clientId,
+            createdAt: visits.createdAt,
+            location: locations.name,
+            amount: visits.amount,
+            dni: clients.dni,
+          })
+          .from(visits)
+          .innerJoin(clients, eq(clients.id, visits.clientId))
+          .leftJoin(locations, eq(locations.id, visits.locationId))
+          .where(
+            and(
+              visitWindow,
+              sql`NOT EXISTS (SELECT 1 FROM analytics.sales o WHERE o.visit_id = ${visits.id})`,
+            ),
+          )
+  // Staff (excluded DNIs) never receive a guest sale; the corte leaves them out anyway.
+  const excluded = new Set(infer.excludedDnis)
+  const [storeNames, locationNames] =
+    guestRows.length === 0
+      ? [[], []]
+      : await Promise.all([
+          db
+            .selectDistinct({ store: sales.store })
+            .from(sales)
+            .where(
+              and(eq(sales.tenantId, tenantId), eq(sales.source, "pos"), isNotNull(sales.store)),
+            )
+            .then((rows) => rows.map((r) => r.store as string)),
+          db
+            .select({ name: locations.name })
+            .from(locations)
+            .where(eq(locations.tenantId, tenantId))
+            .then((rows) => rows.map((r) => r.name)),
+        ])
+  const inferred = inferGuestLinks(
+    guestRows.map((g) => ({
+      id: g.id,
+      soldAt: g.soldAt as Date,
+      store: g.store,
+      amount: Number.parseFloat(g.amount),
+    })),
+    freeRows
+      .filter((v) => !excluded.has((v.dni ?? "").replace(/\D/g, "")))
+      .map((v) => ({
+        id: v.id,
+        clientId: v.clientId,
+        createdAt: v.createdAt,
+        location: v.location,
+        amount: v.amount === null ? null : Number.parseFloat(v.amount),
+      })),
+    {
+      windowMinutes: infer.windowMinutes,
+      timezone,
+      stores: storeNames,
+      locations: locationNames,
+      blockers: orderRows
+        .filter((o) => !result.pairs.has(o.id))
+        .map((o) => ({
+          soldAt: o.soldAt as Date,
+          store: o.store,
+          amount: Number.parseFloat(o.amount),
+        })),
+    },
+  )
+  if (inferred.size > 0) {
+    const ids = [...inferred.keys()]
+    const links = ids.map((id) => inferred.get(id) as InferredLink)
+    await db.execute(sql`
+      UPDATE analytics.sales s
+      SET visit_id = v.visit_id, client_id = v.client_id, link_kind = v.kind
+      FROM unnest(${uuidArrayLiteral(ids)}::uuid[],
+                  ${uuidArrayLiteral(links.map((l) => l.visitId))}::uuid[],
+                  ${uuidArrayLiteral(links.map((l) => l.clientId))}::uuid[],
+                  ${textArrayLiteral(links.map((l) => l.kind))}::text[])
+           AS v(sale_id, visit_id, client_id, kind)
+      WHERE s.id = v.sale_id`)
+  }
+  return { exact: result.pairs.size, inferred: inferred.size }
+}
+
+/** Plain words as a Postgres text[] literal ('{"a","b"}'). */
+export function textArrayLiteral(values: string[]): string {
+  return `{${values.map((v) => `"${v.replace(/["\\]/g, "")}"`).join(",")}}`
 }
 
 /** UUIDs as a Postgres array literal ("{a,b}"), the shape a `uuid[]` parameter needs. */
@@ -909,9 +1114,39 @@ async function processPage(
 }
 
 /**
+ * The linking that closes a run. The first time the history is complete
+ * (`cursor` given, no `inferredAt` yet), the inferred pass runs once over all
+ * of it; otherwise only the last few days are re-matched, for visits
+ * registered after their sale was synced. Returns the cursor to report.
+ */
+async function finishLinks(p: {
+  tenantId: string
+  timezone: string
+  startDate: string
+  today: string
+  infer: InferSettings
+  backfilling: boolean
+  /** The exhausted cursor, or null when the run stopped early. */
+  cursor: Cursor | null
+}): Promise<Cursor | null> {
+  if (p.cursor && p.infer.enabled && !p.cursor.inferredAt) {
+    await matchVisitsInRange(p.tenantId, p.timezone, p.startDate, p.today, p.infer)
+    const cursor = { ...p.cursor, inferredAt: new Date().toISOString() }
+    await db.update(posConnections).set({ cursor }).where(eq(posConnections.tenantId, p.tenantId))
+    return cursor
+  }
+  await matchVisitsInRange(p.tenantId, p.timezone, addDays(p.today, -REMATCH_DAYS), p.today, {
+    ...p.infer,
+    enabled: p.infer.enabled && !p.backfilling,
+  })
+  return p.cursor
+}
+
+/**
  * One run for one tenant. `full` restarts from the start date (the cursor
  * is dropped). Holds the tenant lock for the whole run.
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one linear run (lock → fields → page loop with cursor → closing links → status) whose branches are the stop conditions; splitting it would scatter the cursor handling
 export async function syncTenant(
   tenantId: string,
   opts: { full?: boolean; maxOrders?: number } = {},
@@ -921,6 +1156,7 @@ export async function syncTenant(
     pulled: 0,
     upserted: 0,
     matchedVisits: 0,
+    inferredVisits: 0,
     skippedBadAmount: 0,
     replacedFileSales: 0,
     more: false,
@@ -942,6 +1178,16 @@ export async function syncTenant(
     const previous: Cursor | null = opts.full ? null : ((row.cursor as Cursor | null) ?? null)
     result.cursor = previous
     const startUtc = localMidnightUtc(startDate, timezone)
+    const infer: InferSettings = {
+      enabled: row.inferLinks,
+      windowMinutes: row.inferWindowMinutes,
+      excludedDnis: Array.isArray(row.excludedDnis) ? (row.excludedDnis as string[]) : [],
+    }
+    // Half-synced days would make lone candidates look unambiguous: during the
+    // backfill the inferred pass waits, and runs once over the whole history at the end.
+    const backfilling = !previous || !previous.exhausted
+    const inferredAt = previous?.inferredAt
+    const linksBefore = await linkCounts(tenantId)
 
     await client.authenticate()
     const [orderFields, partnerFields, lineFields] = await Promise.all([
@@ -1025,18 +1271,22 @@ export async function syncTenant(
       // Visits of the days this page touched, before the cursor moves past them
       // (only those days: the last-days rematch below covers late visits).
       const sorted = [...days].sort()
-      result.matchedVisits += await matchVisitsInRange(
-        tenantId,
-        timezone,
-        sorted[0],
-        sorted[sorted.length - 1],
-      )
+      await matchVisitsInRange(tenantId, timezone, sorted[0], sorted[sorted.length - 1], {
+        ...infer,
+        enabled: infer.enabled && !backfilling,
+      })
 
       const last = page[page.length - 1]
       const sameSecond = page.filter((o) => o.write_date === last.write_date).length
       const offset = point.writeDate === last.write_date ? point.offset + sameSecond : sameSecond
       exhausted = page.length < PAGE
-      cursor = { writeDate: last.write_date, id: last.id, offset, exhausted }
+      cursor = {
+        ...(inferredAt ? { inferredAt } : {}),
+        writeDate: last.write_date,
+        id: last.id,
+        offset,
+        exhausted,
+      }
       point = { writeDate: last.write_date, offset }
       await db
         .update(posConnections)
@@ -1051,13 +1301,25 @@ export async function syncTenant(
       await db.update(posConnections).set({ cursor }).where(eq(posConnections.tenantId, tenantId))
       result.cursor = cursor
     }
-
-    // Visits registered after their sale was synced (the last few days).
-    result.matchedVisits += await matchVisitsInRange(
-      tenantId,
-      timezone,
-      addDays(today, -REMATCH_DAYS),
-      today,
+    result.cursor =
+      (await finishLinks({
+        tenantId,
+        timezone,
+        startDate,
+        today,
+        infer,
+        backfilling,
+        cursor: exhausted ? cursor : null,
+      })) ?? result.cursor
+    // What this run added, by counting before and after (ranges overlap, so pass totals would double up).
+    const linksAfter = await linkCounts(tenantId)
+    result.matchedVisits = Math.max(0, linksAfter.dni - linksBefore.dni)
+    result.inferredVisits = Math.max(
+      0,
+      linksAfter.inferredAmount +
+        linksAfter.inferredTime -
+        linksBefore.inferredAmount -
+        linksBefore.inferredTime,
     )
     await refreshImports(tenantId, touchedImports)
     await db

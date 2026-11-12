@@ -47,6 +47,8 @@ type Form = {
   enabled: boolean
   retentionDays: string
   excludedDnis: string
+  inferLinks: boolean
+  inferWindowMinutes: string
 }
 
 function todayYmd(): string {
@@ -63,6 +65,8 @@ function emptyForm(startDate: string): Form {
     enabled: false,
     retentionDays: "90",
     excludedDnis: "",
+    inferLinks: true,
+    inferWindowMinutes: "20",
   }
 }
 
@@ -77,6 +81,8 @@ function formFrom(c: PosConnectionView): Form {
     enabled: c.enabled,
     retentionDays: String(c.retentionDays),
     excludedDnis: c.excludedDnis.join(", "),
+    inferLinks: c.inferLinks,
+    inferWindowMinutes: String(c.inferWindowMinutes),
   }
 }
 
@@ -88,6 +94,23 @@ function fmtWhen(iso: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   })
+}
+
+/** "1,230 ventas · 86 por DNI · 40 inferidas (31 por monto, 9 por única visita cercana) · 210 de clientes sin sello · 5,900 de invitados sin enlazar". */
+function linksSummary(l: PosConnectionView["links"], inferOn: boolean): string {
+  const n = (v: number) => v.toLocaleString("es-PE")
+  const inferred = l.inferredAmount + l.inferredTime
+  const parts = [`${n(l.total)} ventas`, `${n(l.dni)} por DNI`]
+  if (inferOn || inferred > 0)
+    parts.push(
+      inferred > 0
+        ? `${n(inferred)} inferidas (${n(l.inferredAmount)} por monto, ${n(l.inferredTime)} por única visita cercana)`
+        : "0 inferidas",
+    )
+  if (l.manual > 0) parts.push(`${n(l.manual)} a mano`)
+  parts.push(`${n(l.clientNoVisit)} de clientes sin sello`)
+  parts.push(`${n(l.guestUnlinked)} de invitados sin enlazar`)
+  return parts.join(" · ")
 }
 
 const inputClass = "h-8 text-[12.5px]"
@@ -144,12 +167,14 @@ export function TenantPosSection({ tenantId }: { tenantId: string }) {
       login: form.login,
       startDate: form.startDate,
       enabled: form.enabled,
-      retentionDays: Number(form.retentionDays) || 90,
+      retentionDays: Math.round(Number(form.retentionDays)) || 90,
       excludedDnis: form.excludedDnis
         .split(/[\s,;]+/)
         .map((d) => d.trim())
         .filter(Boolean),
       apiKey: form.apiKey || undefined,
+      inferLinks: form.inferLinks,
+      inferWindowMinutes: Math.round(Number(form.inferWindowMinutes)) || 20,
     }
   }
 
@@ -240,8 +265,10 @@ export function TenantPosSection({ tenantId }: { tenantId: string }) {
       else {
         const parts = [
           `${r.pulled.toLocaleString("es-PE")} órdenes leídas`,
-          `${r.matchedVisits.toLocaleString("es-PE")} visitas vinculadas`,
+          `${r.matchedVisits.toLocaleString("es-PE")} visitas vinculadas por DNI`,
         ]
+        if (r.inferredVisits > 0)
+          parts.push(`${r.inferredVisits.toLocaleString("es-PE")} inferidas`)
         if (r.replacedFileSales > 0)
           parts.push(
             `${r.replacedFileSales.toLocaleString("es-PE")} ventas del archivo reemplazadas`,
@@ -333,6 +360,13 @@ export function TenantPosSection({ tenantId }: { tenantId: string }) {
                           : " · sin DNI excluidos"
                       }`,
                     },
+                    {
+                      label: "Enlace inferido",
+                      value: conn.inferLinks
+                        ? `Activo · hasta ${conn.inferWindowMinutes} min después de la venta`
+                        : "Apagado",
+                    },
+                    { label: "Vínculos", value: linksSummary(conn.links, conn.inferLinks) },
                     {
                       label: "Última sincronización",
                       value: `${fmtWhen(conn.lastSyncAt)}${
@@ -481,6 +515,31 @@ export function TenantPosSection({ tenantId }: { tenantId: string }) {
                       value={form.excludedDnis}
                       onChange={(e) => set("excludedDnis", e.target.value)}
                     />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className={labelClass}>Ventana del enlace inferido (min)</Label>
+                    <Input
+                      className={inputClass}
+                      type="number"
+                      min={1}
+                      max={120}
+                      value={form.inferWindowMinutes}
+                      onChange={(e) => set("inferWindowMinutes", e.target.value)}
+                    />
+                    <div className="text-[11px] text-ent-fg-3">
+                      Una venta sin DNI se une a la visita de la misma tienda sellada hasta estos
+                      minutos después de abrir la orden en caja, por monto igual o por ser la única
+                      cercana. En empates no se enlaza. Durante la carga inicial espera y corre una
+                      vez sobre todo el historial al terminar.
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-[12.5px] text-ent-fg sm:col-span-2">
+                    <Switch
+                      checked={form.inferLinks}
+                      onCheckedChange={(v) => set("inferLinks", v)}
+                      aria-label="Enlace inferido"
+                    />
+                    {form.inferLinks ? "Enlace inferido activado" : "Enlace inferido apagado"}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-[12.5px] text-ent-fg">

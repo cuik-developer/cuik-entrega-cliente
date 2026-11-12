@@ -20,7 +20,7 @@ import { cashbackSettingsOf, stampsPromotionConfigSchema } from "@cuik/shared/va
 
 import { connectionOwning } from "@/lib/pos/sync"
 import { getAsset, uploadAsset } from "@/lib/storage"
-import { detectMapping, missingRequiredFields, normalizeDay } from "./columns"
+import { detectMapping, missingRequiredFields, normalizeDay, normalizeDni } from "./columns"
 import { computeImpact } from "./metrics"
 import { buildOrders, readSalesFile } from "./parse"
 import {
@@ -271,11 +271,21 @@ export async function loadCuikData(
 
 /** Every sale of the tenant up to `until` (inclusive), as the metrics read them. */
 export async function loadTenantSales(tenantId: string, until?: string): Promise<SaleOrder[]> {
+  // A sale linked to a client by inference (guest at the till) counts as that
+  // client's purchase: it borrows the client's DNI and name.
+  const clientDni = sql<
+    string | null
+  >`nullif(regexp_replace(coalesce(${clients.dni}, ''), '\\D', '', 'g'), '')`
   const rows = await db
     .select({
       orderRef: sales.orderRef,
-      dni: sales.dni,
-      name: sales.customerName,
+      // Only while the visit still exists: a deleted visit takes the inference with it.
+      dni: sql<
+        string | null
+      >`coalesce(${sales.dni}, CASE WHEN ${sales.visitId} IS NOT NULL THEN ${clientDni} END)`,
+      name: sql<
+        string | null
+      >`coalesce(${sales.customerName}, CASE WHEN ${sales.visitId} IS NOT NULL THEN ${clients.name} END)`,
       phone: sales.phone,
       store: sales.store,
       cashier: sales.cashier,
@@ -283,10 +293,11 @@ export async function loadTenantSales(tenantId: string, until?: string): Promise
       amount: sales.amount,
     })
     .from(sales)
+    .leftJoin(clients, eq(clients.id, sales.clientId))
     .where(
       and(eq(sales.tenantId, tenantId), until ? sql`${sales.soldOn} <= ${until}::date` : undefined),
     )
-  return rows.map((r) => ({ ...r, amount: Number.parseFloat(r.amount) }))
+  return rows.map((r) => ({ ...r, dni: normalizeDni(r.dni), amount: Number.parseFloat(r.amount) }))
 }
 
 /** The phase in force at `day` (latest startsOn ≤ day), if any. */

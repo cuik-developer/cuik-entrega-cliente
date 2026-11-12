@@ -145,6 +145,8 @@ export const sales = analyticsSchema.table(
     clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
     /** The visit registered the same day at the same store, if any (one per visit). */
     visitId: uuid("visit_id").references(() => visits.id, { onDelete: "set null" }),
+    /** How the visit was linked: "dni" | "inferred_amount" | "inferred_time" | "manual"; null = no visit. */
+    linkKind: text("link_kind"),
   },
   (table) => [
     index("sales_tenant_dni_day_idx").on(table.tenantId, table.dni, table.soldOn),
@@ -236,6 +238,10 @@ export const posConnections = analyticsSchema.table("pos_connections", {
   /** Corte options for a tenant that only uses the API (no file to inherit them from). */
   retentionDays: integer("retention_days").default(90).notNull(),
   excludedDnis: jsonb("excluded_dnis"),
+  /** Pair guest sales with the visit of the same store minutes later. */
+  inferLinks: boolean("infer_links").default(true).notNull(),
+  /** How many minutes after the sale a visit may still be its stamp. */
+  inferWindowMinutes: integer("infer_window_minutes").default(20).notNull(),
   /** Per-tenant lock: set by a run, cleared when it ends; a stale one (30 min) is taken over. */
   syncStartedAt: timestamp("sync_started_at"),
   createdBy: text("created_by").references(() => authUsers.id),
