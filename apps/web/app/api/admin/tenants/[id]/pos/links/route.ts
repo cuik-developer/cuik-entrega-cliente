@@ -1,5 +1,8 @@
+import { db, eq, tenants } from "@cuik/db"
+
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
 import { csvCell } from "@/lib/csv"
+import { buildLinksExcel } from "@/lib/pos/links-excel"
 import { linksReview } from "@/lib/pos/links-review"
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -8,10 +11,11 @@ const YM = /^(\d{4}-\d{2}|all)$/
 export const dynamic = "force-dynamic"
 
 /**
- * GET /api/admin/tenants/[id]/pos/links?month=YYYY-MM[&format=csv]
+ * GET /api/admin/tenants/[id]/pos/links?month=YYYY-MM|all[&format=xlsx|csv]
  * Validación de enlaces: the month's stamps without a POS sale (with the
  * sales nearby that could be theirs) and the links the matcher inferred.
- * `format=csv` downloads the stamps without sale for a review outside Cuik.
+ * `format=xlsx` downloads the stamps without sale as the sheet the merchant
+ * answers (Decisión dropdown, ids for the import); `format=csv` the same as text.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -27,6 +31,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const review = await linksReview(id, month)
     if (!review) return errorResponse("Tenant not found", 404)
 
+    if (url.searchParams.get("format") === "xlsx") {
+      const [t] = await db
+        .select({ name: tenants.name })
+        .from(tenants)
+        .where(eq(tenants.id, id))
+        .limit(1)
+      const buffer = await buildLinksExcel(review, t?.name ?? "comercio")
+      const safe = (t?.name ?? "comercio").replace(/[^\w\s-]/g, "").trim()
+      const period = month === "all" ? "todo" : month
+      return new Response(new Uint8Array(buffer), {
+        headers: {
+          "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="Registros sin venta - ${safe} - ${period}.xlsx"`,
+        },
+      })
+    }
     if (url.searchParams.get("format") === "csv") {
       const tz = review.timezone
       const when = (iso: string) =>

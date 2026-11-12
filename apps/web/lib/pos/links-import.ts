@@ -26,7 +26,7 @@ export type ImportResult = {
   toLink: number
   linked: number
   /** Rows marked "Enlazar" that could not be applied, with the reason. */
-  failed: { line: number; reason: string }[]
+  failed: { line: number; visitId: string | null; sale: string | null; reason: string }[]
   /** Rows with another decision (kept as they are). */
   skipped: number
 }
@@ -109,7 +109,12 @@ export async function applyLinks(tenantId: string, rows: ImportRow[]): Promise<I
     }
     result.toLink++
     if (!r.visitId) {
-      result.failed.push({ line: r.line, reason: "visita_id inválido" })
+      result.failed.push({
+        line: r.line,
+        visitId: null,
+        sale: r.saleId ?? r.orderRef,
+        reason: "visita_id inválido",
+      })
       continue
     }
     let saleId = r.saleId
@@ -121,17 +126,33 @@ export async function applyLinks(tenantId: string, rows: ImportRow[]): Promise<I
         .limit(1)
       saleId = s?.id ?? null
       if (!saleId) {
-        result.failed.push({ line: r.line, reason: `Venta ${r.orderRef} no encontrada` })
+        result.failed.push({
+          line: r.line,
+          visitId: r.visitId,
+          sale: r.orderRef,
+          reason: "Venta no encontrada en Cuik",
+        })
         continue
       }
     }
     if (!saleId) {
-      result.failed.push({ line: r.line, reason: "Sin venta en la fila" })
+      result.failed.push({
+        line: r.line,
+        visitId: r.visitId,
+        sale: null,
+        reason: "Sin venta en la fila",
+      })
       continue
     }
     const linked = await linkSaleToVisit(tenantId, saleId, r.visitId)
     if (linked.ok) result.linked++
-    else result.failed.push({ line: r.line, reason: linked.error })
+    else
+      result.failed.push({
+        line: r.line,
+        visitId: r.visitId,
+        sale: r.orderRef ?? saleId,
+        reason: linked.error,
+      })
   }
   return result
 }

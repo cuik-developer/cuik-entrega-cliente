@@ -210,7 +210,7 @@ export function EnlacesClient() {
           tenantId && (
             <>
               <Button asChild variant="outline" size="sm" className="h-8 text-[12.5px]">
-                <a href={`/api/admin/tenants/${tenantId}/pos/links?month=${month}&format=csv`}>
+                <a href={`/api/admin/tenants/${tenantId}/pos/links?month=${month}&format=xlsx`}>
                   Exportar registros sin venta
                 </a>
               </Button>
@@ -293,35 +293,7 @@ export function EnlacesClient() {
 
       {error && <Notice tone="bad">{error}</Notice>}
 
-      {imported && (
-        <Notice
-          tone={imported.failed.length > 0 ? "warn" : "ok"}
-          action={
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-[12px]"
-              onClick={() => setImported(null)}
-            >
-              Cerrar
-            </Button>
-          }
-        >
-          {imported.linked} de {imported.toLink} filas marcadas “Enlazar” quedaron enlazadas ·{" "}
-          {imported.skipped} filas con otra decisión sin tocar.
-          {imported.failed.length > 0 && (
-            <span>
-              {" "}
-              No se pudieron enlazar {imported.failed.length}:{" "}
-              {imported.failed
-                .slice(0, 5)
-                .map((f) => `fila ${f.line} (${f.reason})`)
-                .join(", ")}
-              {imported.failed.length > 5 ? "…" : ""}
-            </span>
-          )}
-        </Notice>
-      )}
+      {imported && <ImportSummary result={imported} onClose={() => setImported(null)} />}
 
       {s && (
         <StatStrip
@@ -455,6 +427,75 @@ export function EnlacesClient() {
         </Panel>
       )}
     </div>
+  )
+}
+
+/** What the bulk import did: linked / untouched / every row it could not link, downloadable. */
+function ImportSummary({ result, onClose }: { result: ImportResult; onClose: () => void }) {
+  const failed = result.failed
+  function download() {
+    const cell = (v: string | number | null) => `"${String(v ?? "").replace(/"/g, '""')}"`
+    const lines = [
+      ["Fila", "visita_id", "Venta", "Motivo"].map(cell).join(","),
+      ...failed.map((f) => [f.line, f.visitId, f.sale, f.reason].map(cell).join(",")),
+    ]
+    const blob = new Blob([`\uFEFF${lines.join("\r\n")}`], { type: "text/csv;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "Incidencias de la carga.csv"
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+  return (
+    <Panel
+      className={
+        failed.length > 0 ? "border-l-[3px] border-l-ent-warn" : "border-l-[3px] border-l-ent-ok"
+      }
+    >
+      <PanelHeader
+        title="Resumen de la carga"
+        actions={
+          <>
+            {failed.length > 0 && (
+              <Button variant="outline" size="sm" className="h-7 text-[12px]" onClick={download}>
+                Descargar incidencias
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" className="h-7 text-[12px]" onClick={onClose}>
+              Cerrar
+            </Button>
+          </>
+        }
+      />
+      <div className="px-3 py-2 text-[12.5px] text-ent-fg-2">
+        {result.rows} filas leídas · {result.linked} de {result.toLink} marcadas “Enlazar” quedaron
+        enlazadas · {result.skipped} con otra decisión, sin tocar
+        {failed.length > 0 ? ` · ${failed.length} incidencias:` : "."}
+      </div>
+      {failed.length > 0 && (
+        <div className="max-h-64 overflow-y-auto border-t border-ent-line">
+          <DataTable>
+            <thead>
+              <tr>
+                <Th className="text-right">Fila</Th>
+                <Th>Venta</Th>
+                <Th>Motivo</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {failed.map((f) => (
+                <Tr key={`${f.line}-${f.reason}`}>
+                  <Td className="text-right tabular-nums text-ent-fg-3">{f.line}</Td>
+                  <Td className="text-ent-fg-2">{f.sale ?? "—"}</Td>
+                  <Td>{f.reason}</Td>
+                </Tr>
+              ))}
+            </tbody>
+          </DataTable>
+        </div>
+      )}
+    </Panel>
   )
 }
 

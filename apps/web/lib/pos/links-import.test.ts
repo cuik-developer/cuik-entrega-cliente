@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
+import { buildLinksExcel } from "./links-excel"
 import { isLinkDecision, parseLinksFile } from "./links-import"
+import type { LinksReview } from "./links-review"
 
 const V1 = "d9de8e6e-78b5-45d3-b35d-e52a0ff1d743"
 const V2 = "2b6f0c1e-1111-4222-8333-444455556666"
@@ -42,5 +44,63 @@ describe("links import", () => {
     expect(isLinkDecision(" sí ")).toBe(true)
     expect(isLinkDecision("Revisar")).toBe(false)
     expect(isLinkDecision("")).toBe(false)
+  })
+})
+
+describe("links excel", () => {
+  it("writes the sheet the merchant answers and reads it back for the import", async () => {
+    const review: LinksReview = {
+      month: "2026-11",
+      from: "2026-11-01",
+      to: "2026-11-30",
+      timezone: "America/Lima",
+      summary: {
+        visits: 2,
+        withSale: 1,
+        withoutSale: 1,
+        rate: 50,
+        byKind: { dni: 1, inferredAmount: 0, inferredTime: 0, manual: 0 },
+        guestUnlinked: 3,
+        clientNoVisit: 0,
+        suggestions: { link: 1, review: 0, none: 0 },
+      },
+      unlinked: [
+        {
+          visitId: V1,
+          createdAt: "2026-11-10T18:30:00Z",
+          day: "2026-11-10",
+          clientId: V2,
+          clientName: "Juan Pinedo",
+          dni: "46198799",
+          phone: "940242928",
+          location: "Jacaranda",
+          amount: 418.2,
+          registeredBy: "Rosa",
+          suggestion: "link",
+          candidates: [
+            {
+              saleId: S1,
+              orderRef: "SURCO - JACARANDA/79083",
+              soldAt: "2026-11-10T18:28:00Z",
+              minutes: -2,
+              store: "SURCO - JACARANDA",
+              amount: 418.2,
+              dni: null,
+              customerName: null,
+              clientId: null,
+              sameAmount: true,
+              sameStore: true,
+            },
+          ],
+        },
+      ],
+      inferred: [],
+    }
+    const buffer = await buildLinksExcel(review, "Mascota Veloz")
+    expect(buffer.length).toBeGreaterThan(1000)
+    const parsed = await parseLinksFile(buffer, "registros.xlsx")
+    if ("error" in parsed) throw new Error(parsed.error)
+    expect(parsed.rows).toHaveLength(1)
+    expect(parsed.rows[0]).toMatchObject({ visitId: V1, saleId: S1, decision: "Enlazar" })
   })
 })
