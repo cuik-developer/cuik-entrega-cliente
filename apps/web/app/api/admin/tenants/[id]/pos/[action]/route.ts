@@ -2,6 +2,7 @@ import { z } from "zod"
 
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
 import { computeSyncedCorte } from "@/lib/pos/corte"
+import { linkSaleToVisit, unlinkSale } from "@/lib/pos/links-review"
 import { OdooError } from "@/lib/pos/odoo-client"
 import { syncTenant, testConnection } from "@/lib/pos/sync"
 import { connectionFieldsSchema, dayStringSchema } from "../connection-schema"
@@ -24,11 +25,29 @@ const testSchema = connectionFieldsSchema
   })
 const syncSchema = z.object({ full: z.boolean().optional() })
 const corteSchema = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) })
+const linkSchema = z.object({ saleId: z.string().regex(UUID), visitId: z.string().regex(UUID) })
+const unlinkSchema = z.object({ saleId: z.string().regex(UUID) })
+
+/** Validación de enlaces: a link made by hand, or an inferred/manual one undone. */
+async function linkAction(tenantId: string, action: "link" | "unlink", body: unknown) {
+  if (action === "link") {
+    const parsed = linkSchema.safeParse(body)
+    if (!parsed.success) return errorResponse("Datos inválidos", 400)
+    const result = await linkSaleToVisit(tenantId, parsed.data.saleId, parsed.data.visitId)
+    return result.ok ? successResponse({ linked: true }) : errorResponse(result.error, 400)
+  }
+  const parsed = unlinkSchema.safeParse(body)
+  if (!parsed.success) return errorResponse("Datos inválidos", 400)
+  const result = await unlinkSale(tenantId, parsed.data.saleId)
+  return result.ok ? successResponse({ unlinked: true }) : errorResponse(result.error, 400)
+}
 
 /**
  * POST /api/admin/tenants/[id]/pos/test   { baseUrl?, database?, login?, apiKey? } — login + counts with the form's values, nothing written
  * POST /api/admin/tenants/[id]/pos/sync   { full? }  — one sync run now
  * POST /api/admin/tenants/[id]/pos/corte  { month }  — (re)compute a synced month's corte
+ * POST /api/admin/tenants/[id]/pos/link   { saleId, visitId } — link a sale to a stamp by hand (Validación de enlaces)
+ * POST /api/admin/tenants/[id]/pos/unlink { saleId } — undo an inferred or manual link
  */
 export async function POST(request: Request, { params }: Params) {
   try {
@@ -65,6 +84,7 @@ export async function POST(request: Request, { params }: Params) {
       if ("error" in result) return errorResponse(result.error, 400)
       return successResponse(result)
     }
+    if (action === "link" || action === "unlink") return linkAction(id, action, body)
     return errorResponse("Unknown action", 404)
   } catch (error) {
     console.error("[POST /api/admin/tenants/[id]/pos/[action]]", error)

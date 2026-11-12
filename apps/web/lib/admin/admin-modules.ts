@@ -9,6 +9,7 @@ import {
   Heart,
   History,
   LayoutDashboard,
+  Link2,
   type LucideIcon,
   Megaphone,
   Paintbrush,
@@ -57,6 +58,7 @@ export const ADMIN_MODULES: AdminModule[] = [
         items: [
           { href: "/admin/tenants", label: "Tenants", icon: Building2 },
           { href: "/admin/campanas", label: "Validación de campañas", icon: Megaphone },
+          { href: "/admin/enlaces", label: "Validación de enlaces", icon: Link2 },
           { href: "/admin/metricas", label: "Métricas", icon: TrendingUp },
           { href: "/admin/impacto", label: "Impacto", icon: Scale },
           { href: "/admin/historial", label: "Historial", icon: History },
