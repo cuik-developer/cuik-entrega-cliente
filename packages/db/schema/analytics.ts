@@ -182,10 +182,16 @@ export const saleLines = analyticsSchema.table(
     discountPct: numeric("discount_pct", { precision: 5, scale: 2 }).default("0").notNull(),
     /** Line total with taxes, after discount. */
     total: numeric("total", { precision: 12, scale: 2 }).default("0").notNull(),
+    /** Cuik classification ("gato:alimento_humedo"): the master first, else the Odoo path. */
+    categoryKey: text("category_key"),
+    /** The master's brand, else the one in parentheses in the product name. */
+    brand: text("brand"),
   },
   (table) => [
     uniqueIndex("sale_lines_sale_line_idx").on(table.saleId, table.posLineId),
     index("sale_lines_tenant_sku_idx").on(table.tenantId, table.sku),
+    index("sale_lines_tenant_category_idx").on(table.tenantId, table.categoryKey),
+    index("sale_lines_tenant_brand_idx").on(table.tenantId, table.brand),
   ],
 )
 
@@ -207,6 +213,12 @@ export const products = analyticsSchema.table(
     class: text("class"),
     subclass: text("subclass"),
     odooCategory: text("odoo_category"),
+    /** From the master; wins over the brand parsed from the product name. */
+    brand: text("brand"),
+    /** "7 kg", "lata 100 g". */
+    packSize: text("pack_size"),
+    /** Days the product usually lasts (expected repurchase). */
+    durationDays: integer("duration_days"),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => [uniqueIndex("products_tenant_sku_idx").on(table.tenantId, table.sku)],

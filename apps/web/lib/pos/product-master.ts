@@ -7,7 +7,16 @@ import type { SalesSheet } from "@/lib/loyalty/impact/parse"
  * headers are detected here and the operator sees what was recognised.
  */
 
-export const MASTER_FIELDS = ["sku", "name", "category", "class", "subclass"] as const
+export const MASTER_FIELDS = [
+  "sku",
+  "name",
+  "category",
+  "class",
+  "subclass",
+  "brand",
+  "packSize",
+  "durationDays",
+] as const
 export type MasterField = (typeof MASTER_FIELDS)[number]
 
 export const MASTER_FIELD_LABELS: Record<MasterField, string> = {
@@ -16,6 +25,9 @@ export const MASTER_FIELD_LABELS: Record<MasterField, string> = {
   category: "Categoría",
   class: "Clase",
   subclass: "Subclase",
+  brand: "Marca",
+  packSize: "Presentación",
+  durationDays: "Duración (días)",
 }
 
 export type MasterMapping = Record<MasterField, number | null>
@@ -39,6 +51,9 @@ const PATTERNS: { field: MasterField; test: RegExp }[] = [
     test: /\bsku\b|codigo interno|referencia interna|default_code|\bcodigo\b|^cod\b|^code|referencia|\bitem\b|articulo|^id$/,
   },
   { field: "name", test: /nombre|descripcion|producto|product|name|detalle/ },
+  { field: "brand", test: /\bmarca\b|\bbrand\b/ },
+  { field: "durationDays", test: /duraci|\bdias\b|\bdays\b|rinde/ },
+  { field: "packSize", test: /presentaci|tama|peso|\bsize\b|contenido|formato/ },
 ]
 
 export function emptyMasterMapping(): MasterMapping {
@@ -82,6 +97,9 @@ export type MasterRow = {
   category: string | null
   class: string | null
   subclass: string | null
+  brand: string | null
+  packSize: string | null
+  durationDays: number | null
 }
 
 export type MasterBuild = {
@@ -103,6 +121,14 @@ export function normalizeSku(value: unknown): string | null {
   return out.length > 0 && out.length <= 64 ? out : null
 }
 
+/** "45", "45 días", "45.0" → 45; anything else null. */
+function durationOf(value: unknown): number | null {
+  const s = cellText(value)
+  if (!s) return null
+  const n = Number.parseFloat(s.replace(",", "."))
+  return Number.isFinite(n) && n >= 1 && n <= 3650 ? Math.round(n) : null
+}
+
 export function buildMaster(sheet: SalesSheet, mapping: MasterMapping): MasterBuild {
   const col = (row: unknown[], f: MasterField) =>
     mapping[f] === null ? null : (row[mapping[f] as number] ?? null)
@@ -122,6 +148,9 @@ export function buildMaster(sheet: SalesSheet, mapping: MasterMapping): MasterBu
       category: cellText(col(row, "category"))?.slice(0, 120) ?? null,
       class: cellText(col(row, "class"))?.slice(0, 120) ?? null,
       subclass: cellText(col(row, "subclass"))?.slice(0, 120) ?? null,
+      brand: cellText(col(row, "brand"))?.slice(0, 80) ?? null,
+      packSize: cellText(col(row, "packSize"))?.slice(0, 60) ?? null,
+      durationDays: durationOf(col(row, "durationDays")),
     })
   }
   return { rows: [...bySku.values()], rowsTotal: sheet.rows.length, rowsWithoutSku, duplicates }

@@ -36,6 +36,14 @@ function buy(
 }
 
 describe("categories", () => {
+  it("keeps the master species and takes the leaf from Odoo when the master says only the species", () => {
+    const c = classifyLine({
+      odooCategory: "All / Vendibles / Gatos / Alimento / Alimento humedo",
+      masterCategory: "Perro",
+    })
+    expect(c).toEqual({ species: "perro", group: "alimento", sub: "alimento_humedo" })
+  })
+
   it("classifies the Odoo path into species, group and leaf", () => {
     expect(classifyOdooCategory(CAT_WET)).toEqual({
       species: "gato",

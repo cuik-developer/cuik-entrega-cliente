@@ -16,7 +16,7 @@ import {
   tenants,
 } from "@cuik/db"
 import { parseTenantFeatures } from "@cuik/shared/validators"
-import { uuidArrayLiteral } from "@/lib/pos/sync"
+import { uuidArrayLiteral } from "@/lib/pos/pg-arrays"
 import {
   attributeSales,
   measuringDayOf,

@@ -75,6 +75,11 @@ export function classifyLine(line: LineClassInput): ProductClass {
       : (slugify(line.masterCategory) ?? slugify(line.masterClass))
     const sub = slugify(line.masterSubclass) ?? slugify(line.masterClass) ?? group
     if (group || sub) return { species, group, sub }
+    if (species) {
+      // Species only ("Perro"): the leaf comes from Odoo, the species stays the master's.
+      const odoo = classifyOdooCategory(line.odooCategory)
+      return { species, group: odoo.group, sub: odoo.sub }
+    }
   }
   return classifyOdooCategory(line.odooCategory)
 }

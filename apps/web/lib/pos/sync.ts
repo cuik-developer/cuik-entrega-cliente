@@ -20,8 +20,10 @@ import {
 } from "@cuik/db"
 
 import { decrypt, encrypt } from "@/lib/encryption"
+import { brandOf, categoryKey, classifyLine } from "@/lib/growth/categories"
 import { isPlaceholderName, normalizeDni, normalizePhone } from "@/lib/loyalty/impact/columns"
 import { MAX_ORDER_AMOUNT } from "@/lib/loyalty/impact/parse"
+import { loadMaster, type MasterEntry } from "./classify"
 import { dayInTz, type InferredLink, inferGuestLinks, matchOrdersToVisits } from "./match"
 import {
   type Many2one,
@@ -576,16 +578,29 @@ function lineRow(
   tenantId: string,
   l: OdooLine,
   product: OdooProduct | undefined,
+  master: ReadonlyMap<string, MasterEntry>,
 ): Omit<typeof saleLines.$inferInsert, "saleId"> {
   const name = (l.full_product_name || product?.name || m2oName(l.product_id) || null) as
     | string
     | null
+  const sku = normalizeSku(product?.default_code || null)
+  const odooCategory = m2oName(product?.categ_id)?.slice(0, 200) ?? null
+  const m = sku ? master.get(sku) : undefined
+  const cls = classifyLine({
+    odooCategory,
+    masterCategory: m?.category,
+    masterClass: m?.class,
+    masterSubclass: m?.subclass,
+    productName: name,
+  })
   return {
     tenantId,
     posLineId: l.id,
-    sku: normalizeSku(product?.default_code || null),
+    sku,
     productName: name?.slice(0, 200) ?? null,
-    odooCategory: m2oName(product?.categ_id)?.slice(0, 200) ?? null,
+    odooCategory,
+    categoryKey: categoryKey(cls),
+    brand: m?.brand ?? brandOf(name),
     qty: String(Number(l.qty) || 0),
     unitPrice: (Number(l.price_unit) || 0).toFixed(2),
     discountPct: (Number(l.discount) || 0).toFixed(2),
@@ -608,6 +623,7 @@ function buildRows(params: {
   importOf: (day: string) => string
   clientByDni: Map<string, ClientRef>
   hasIdType: boolean
+  master: ReadonlyMap<string, MasterEntry>
 }): { prepared: Prepared[]; badAmount: number } {
   const byRef = new Map<string, Prepared>()
   let badAmount = 0
@@ -643,7 +659,12 @@ function buildRows(params: {
     }
     const lines = (params.linesByOrder.get(o.id) ?? []).map((l) => {
       const prodId = m2oId(l.product_id)
-      return lineRow(params.tenantId, l, prodId ? params.productsById.get(prodId) : undefined)
+      return lineRow(
+        params.tenantId,
+        l,
+        prodId ? params.productsById.get(prodId) : undefined,
+        params.master,
+      )
     })
     byRef.set(o.name, { order: o, row, lines })
   }
@@ -1007,15 +1028,9 @@ export async function matchVisitsInRange(
   return { exact: result.pairs.size, inferred: inferred.size }
 }
 
-/** Plain words as a Postgres text[] literal ('{"a","b"}'). */
-export function textArrayLiteral(values: string[]): string {
-  return `{${values.map((v) => `"${v.replace(/["\\]/g, "")}"`).join(",")}}`
-}
+import { textArrayLiteral, uuidArrayLiteral } from "./pg-arrays"
 
-/** UUIDs as a Postgres array literal ("{a,b}"), the shape a `uuid[]` parameter needs. */
-export function uuidArrayLiteral(ids: string[]): string {
-  return `{${ids.join(",")}}`
-}
+export { textArrayLiteral, uuidArrayLiteral }
 
 /**
  * Takes the per-tenant lock. Returns the token this run must present to
@@ -1068,6 +1083,8 @@ type RunContext = {
   productCache: Map<number, OdooProduct>
   importCache: Map<string, string>
   touchedImports: Set<string>
+  /** The product master, loaded once per run (an upload mid-run reclassifies on its own). */
+  master?: ReadonlyMap<string, MasterEntry>
 }
 
 /** Reads the partners, lines and products of a page and writes it; returns the days it touched. */
@@ -1118,6 +1135,8 @@ async function processPage(
   for (const m of new Set(days.map(monthOf))) {
     ctx.touchedImports.add(await monthImportId(ctx.tenantId, m, ctx.importCache))
   }
+  if (!ctx.master) ctx.master = await loadMaster(ctx.tenantId)
+  const master = ctx.master
   const { prepared, badAmount } = buildRows({
     tenantId: ctx.tenantId,
     timezone: ctx.timezone,
@@ -1128,6 +1147,7 @@ async function processPage(
     importOf: (day) => ctx.importCache.get(monthOf(day)) as string,
     clientByDni: ctx.clientByDni,
     hasIdType: ctx.hasIdType,
+    master,
   })
   const upserted = await writePage(prepared)
   return { upserted, badAmount, days }

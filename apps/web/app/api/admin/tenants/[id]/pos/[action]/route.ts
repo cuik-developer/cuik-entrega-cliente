@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
+import { reclassifyLines, unclassifiedCount } from "@/lib/pos/classify"
 import { computeSyncedCorte } from "@/lib/pos/corte"
 import { linkSaleToVisit, unlinkSale } from "@/lib/pos/links-review"
 import { OdooError } from "@/lib/pos/odoo-client"
@@ -48,6 +49,7 @@ async function linkAction(tenantId: string, action: "link" | "unlink", body: unk
  * POST /api/admin/tenants/[id]/pos/corte  { month }  — (re)compute a synced month's corte
  * POST /api/admin/tenants/[id]/pos/link   { saleId, visitId } — link a sale to a stamp by hand (Validación de enlaces)
  * POST /api/admin/tenants/[id]/pos/unlink { saleId } — undo an inferred or manual link
+ * POST /api/admin/tenants/[id]/pos/reclassify — recompute category and brand of every line sold (master first)
  */
 export async function POST(request: Request, { params }: Params) {
   try {
@@ -85,6 +87,10 @@ export async function POST(request: Request, { params }: Params) {
       return successResponse(result)
     }
     if (action === "link" || action === "unlink") return linkAction(id, action, body)
+    if (action === "reclassify") {
+      const lines = await reclassifyLines(id)
+      return successResponse({ lines, unclassified: await unclassifiedCount(id) })
+    }
     return errorResponse("Unknown action", 404)
   } catch (error) {
     console.error("[POST /api/admin/tenants/[id]/pos/[action]]", error)

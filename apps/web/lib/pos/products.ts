@@ -1,6 +1,7 @@
 import { and, db, eq, isNull, products, saleLines, sql } from "@cuik/db"
 
 import { readSalesFile } from "@/lib/loyalty/impact/parse"
+import { reclassifyLines } from "./classify"
 import {
   buildMaster,
   detectMasterMapping,
@@ -102,6 +103,8 @@ export type MasterApplyResult = {
   duplicates: number
   /** Products that were in the master before and are not in this file (kept, not deleted). */
   keptFromBefore: number
+  /** Lines sold reclassified with the new master; null when that step failed. */
+  reclassified: number | null
 }
 
 /** Step 2: with the confirmed mapping, upsert every SKU of the file. */
@@ -131,20 +134,41 @@ export async function applyMaster(params: {
             category: r.category,
             class: r.class,
             subclass: r.subclass,
+            brand: r.brand,
+            packSize: r.packSize,
+            durationDays: r.durationDays,
           })),
         )
         .onConflictDoUpdate({
           target: [products.tenantId, products.sku],
           set: {
             name: sql`coalesce(excluded.name, ${products.name})`,
-            category: sql`excluded.category`,
-            class: sql`excluded.class`,
-            subclass: sql`excluded.subclass`,
+            // Columns the file does not carry keep what the master had.
+            category:
+              mapping.category === null ? sql`${products.category}` : sql`excluded.category`,
+            class: mapping.class === null ? sql`${products.class}` : sql`excluded.class`,
+            subclass:
+              mapping.subclass === null ? sql`${products.subclass}` : sql`excluded.subclass`,
+            brand: mapping.brand === null ? sql`${products.brand}` : sql`excluded.brand`,
+            packSize:
+              mapping.packSize === null ? sql`${products.packSize}` : sql`excluded.pack_size`,
+            durationDays:
+              mapping.durationDays === null
+                ? sql`${products.durationDays}`
+                : sql`excluded.duration_days`,
             updatedAt: new Date(),
           },
         })
     }
   })
+  // The lines sold carry the classification: a new master reclassifies them.
+  // Best effort: the master is saved either way, and "Reclasificar líneas" can redo it.
+  let reclassified: number | null = null
+  try {
+    reclassified = await reclassifyLines(params.tenantId)
+  } catch (err) {
+    console.error("[pos-master] reclassify failed", params.tenantId, err)
+  }
   const [after] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(products)
@@ -155,5 +179,6 @@ export async function applyMaster(params: {
     rowsWithoutSku: built.rowsWithoutSku,
     duplicates: built.duplicates,
     keptFromBefore: Math.max(0, (after?.n ?? 0) - classifiedInFile),
+    reclassified,
   }
 }

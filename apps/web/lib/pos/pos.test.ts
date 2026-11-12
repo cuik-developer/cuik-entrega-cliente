@@ -20,6 +20,7 @@ import {
 import {
   buildMaster,
   detectMasterMapping,
+  emptyMasterMapping,
   normalizeSku,
   parseMasterMapping,
 } from "./product-master"
@@ -151,12 +152,45 @@ describe("visit matching", () => {
 describe("product master", () => {
   it("detects the usual Spanish headers", () => {
     const m = detectMasterMapping(["Código", "Descripción", "Categoría", "Clase", "Sub Clase"])
-    expect(m).toEqual({ sku: 0, name: 1, category: 2, class: 3, subclass: 4 })
+    expect(m).toEqual({
+      ...emptyMasterMapping(),
+      sku: 0,
+      name: 1,
+      category: 2,
+      class: 3,
+      subclass: 4,
+    })
+  })
+
+  it("picks up brand, presentation and duration when the master carries them", () => {
+    const m = detectMasterMapping([
+      "SKU",
+      "Nombre",
+      "Categoría",
+      "Marca",
+      "Presentación",
+      "Duración (días)",
+    ])
+    expect(m).toMatchObject({
+      sku: 0,
+      name: 1,
+      category: 2,
+      brand: 3,
+      packSize: 4,
+      durationDays: 5,
+    })
   })
 
   it("does not let 'subclase' steal the class or category column", () => {
     const m = detectMasterMapping(["SKU", "Producto", "Subclase", "Clase", "Categoria"])
-    expect(m).toEqual({ sku: 0, name: 1, category: 4, class: 3, subclass: 2 })
+    expect(m).toEqual({
+      ...emptyMasterMapping(),
+      sku: 0,
+      name: 1,
+      category: 4,
+      class: 3,
+      subclass: 2,
+    })
   })
 
   it("normalises SKUs the way the POS writes them", () => {
@@ -177,13 +211,38 @@ describe("product master", () => {
         ["B2", "Correa", "Accesorios", null, null],
       ],
     }
-    const built = buildMaster(sheet, { sku: 0, name: 1, category: 2, class: 3, subclass: 4 })
+    const built = buildMaster(sheet, {
+      ...emptyMasterMapping(),
+      sku: 0,
+      name: 1,
+      category: 2,
+      class: 3,
+      subclass: 4,
+    })
     expect(built.rowsTotal).toBe(4)
     expect(built.rowsWithoutSku).toBe(1)
     expect(built.duplicates).toBe(1)
     expect(built.rows).toEqual([
-      { sku: "A1", name: "Croquetas 2", category: "Alimento", class: "Perro", subclass: "Húmedo" },
-      { sku: "B2", name: "Correa", category: "Accesorios", class: null, subclass: null },
+      {
+        sku: "A1",
+        name: "Croquetas 2",
+        category: "Alimento",
+        class: "Perro",
+        subclass: "Húmedo",
+        brand: null,
+        packSize: null,
+        durationDays: null,
+      },
+      {
+        sku: "B2",
+        name: "Correa",
+        category: "Accesorios",
+        class: null,
+        subclass: null,
+        brand: null,
+        packSize: null,
+        durationDays: null,
+      },
     ])
   })
 
@@ -196,6 +255,9 @@ describe("product master", () => {
       category: 2,
       class: null,
       subclass: null,
+      brand: null,
+      packSize: null,
+      durationDays: null,
     })
   })
 })

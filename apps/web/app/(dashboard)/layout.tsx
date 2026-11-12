@@ -16,6 +16,7 @@ import {
   Scale,
   Send,
   Settings,
+  ShoppingBag,
   Sparkles,
   TrendingUp,
   UserCheck,
@@ -91,6 +92,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: "Análisis",
     items: [
       { href: "/panel/analitica", label: "Analítica", icon: BarChart3 },
+      { href: "/panel/compras", label: "Compras", icon: ShoppingBag },
       { href: "/panel/impacto", label: "Impacto", icon: Scale },
       { href: "/panel/exportar", label: "Exportar datos", icon: Download },
     ],
