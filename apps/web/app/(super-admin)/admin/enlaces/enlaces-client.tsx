@@ -203,7 +203,7 @@ export function EnlacesClient() {
   return (
     <div className="space-y-3">
       <PageHeader
-        crumbs={[{ label: "Inicio", href: "/admin" }, { label: "Validación de enlaces" }]}
+        crumbs={[{ label: "Comercios", href: "/admin" }, { label: "Validación de enlaces" }]}
         title="Validación de enlaces"
         subtitle="Antes de cerrar el mes: los registros (sellos) que no tienen una venta del punto de venta enlazada y los enlaces que Cuik infirió. Enlaza aquí uno a uno, o exporta la lista, decide en el Excel (columna Decisión = Enlazar) e impórtalo. Lo enlazado a mano queda fijo: la sincronización no lo toca."
         actions={

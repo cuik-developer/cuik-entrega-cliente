@@ -33,7 +33,14 @@ import { type AdminAccess, canAccess, permissionForAdminPath } from "@/lib/staff
 
 export type AdminNavItem = { href: string; label: string; icon: LucideIcon }
 export type AdminNavGroup = { title: string; items: AdminNavItem[] }
-export type AdminModuleKey = "loyalty" | "growth" | "crm" | "reclamaciones" | "finanzas" | "sistema"
+export type AdminModuleKey =
+  | "comercios"
+  | "loyalty"
+  | "growth"
+  | "crm"
+  | "reclamaciones"
+  | "finanzas"
+  | "sistema"
 
 export type AdminModule = {
   key: AdminModuleKey
@@ -47,22 +54,43 @@ export type AdminModule = {
 
 export const ADMIN_MODULES: AdminModule[] = [
   {
-    key: "loyalty",
-    label: "Loyalty",
-    description: "Comercios, pases, campañas y métricas",
-    icon: Heart,
-    rule: "#2f6fb5",
+    // Cross-cutting: a tenant is a Loyalty and a Growth customer at once, and
+    // the daily checks (links, campaigns) and the record serve every line.
+    key: "comercios",
+    label: "Comercios",
+    description: "Tenants, validaciones, historial y exportación",
+    icon: Building2,
+    rule: "#3b5b7a",
     groups: [
       {
         title: "Operación",
         items: [
           { href: "/admin/tenants", label: "Tenants", icon: Building2 },
-          { href: "/admin/campanas", label: "Validación de campañas", icon: Megaphone },
           { href: "/admin/enlaces", label: "Validación de enlaces", icon: Link2 },
-          { href: "/admin/metricas", label: "Métricas", icon: TrendingUp },
-          { href: "/admin/impacto", label: "Impacto", icon: Scale },
+          { href: "/admin/campanas", label: "Validación de campañas", icon: Megaphone },
+        ],
+      },
+      {
+        title: "Registro",
+        items: [
           { href: "/admin/historial", label: "Historial", icon: History },
           { href: "/admin/exportar", label: "Exportar datos", icon: Download },
+        ],
+      },
+    ],
+  },
+  {
+    key: "loyalty",
+    label: "Loyalty",
+    description: "Pases, métricas e impacto de la tarjeta",
+    icon: Heart,
+    rule: "#2f6fb5",
+    groups: [
+      {
+        title: "Análisis",
+        items: [
+          { href: "/admin/metricas", label: "Métricas", icon: TrendingUp },
+          { href: "/admin/impacto", label: "Impacto", icon: Scale },
         ],
       },
       {
@@ -87,7 +115,7 @@ export const ADMIN_MODULES: AdminModule[] = [
     groups: [
       {
         title: "Growth",
-        items: [{ href: "/admin/growth", label: "Comercios", icon: Building2 }],
+        items: [{ href: "/admin/growth", label: "Estado Growth", icon: Rocket }],
       },
     ],
   },

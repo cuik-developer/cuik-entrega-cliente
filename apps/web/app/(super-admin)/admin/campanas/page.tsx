@@ -99,7 +99,7 @@ export default function AdminCampaignsPage() {
   return (
     <div className="space-y-3">
       <PageHeader
-        crumbs={[{ label: "Inicio", href: "/admin" }, { label: "Validación de campañas" }]}
+        crumbs={[{ label: "Comercios", href: "/admin" }, { label: "Validación de campañas" }]}
         title="Validación de campañas"
         subtitle="Envíos de todos los comercios, con sus fallos. Haz clic en una fila para ver el detalle."
       />

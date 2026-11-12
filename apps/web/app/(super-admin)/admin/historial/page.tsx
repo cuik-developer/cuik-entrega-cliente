@@ -151,7 +151,7 @@ export default async function HistorialPage({ searchParams }: { searchParams: Pr
   return (
     <div className="space-y-3">
       <PageHeader
-        crumbs={[{ label: "Producto" }, { label: "Historial" }]}
+        crumbs={[{ label: "Comercios", href: "/admin" }, { label: "Historial" }]}
         title="Historial"
         subtitle="Cada cambio en diseños de pases, branding y el simulador de demos: quién, cuándo y sobre qué."
       />

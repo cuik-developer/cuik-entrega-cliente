@@ -66,8 +66,8 @@ export function GrowthClient() {
   return (
     <div className="space-y-4">
       <PageHeader
-        crumbs={[{ label: "Growth", href: "/admin" }, { label: "Comercios" }]}
-        title="Comercios"
+        crumbs={[{ label: "Growth", href: "/admin" }, { label: "Estado Growth" }]}
+        title="Estado Growth"
         subtitle="Quién tiene datos del punto de venta, qué se envió, qué venta se atribuyó y cuánto se factura. Growth se enciende por comercio en su ficha › Funciones."
         actions={
           <Select value={month} onValueChange={setMonth}>

@@ -23,12 +23,12 @@ export type HomePending = {
 
 const ALERT_MODULE: Record<AlertKind, AdminModuleKey> = {
   billing: "finanzas",
-  cold: "loyalty",
+  cold: "comercios",
   demo: "crm",
-  cert: "loyalty",
-  campaign: "loyalty",
+  cert: "comercios",
+  campaign: "comercios",
   impact: "loyalty",
-  pos: "loyalty",
+  pos: "comercios",
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`

@@ -4,10 +4,13 @@ import { ADMIN_MODULES, moduleForPath, visibleModules } from "./admin-modules"
 
 describe("moduleForPath", () => {
   it("puts every screen in its module, most specific href first", () => {
-    expect(moduleForPath("/admin/tenants/abc")?.module.key).toBe("loyalty")
+    expect(moduleForPath("/admin/tenants/abc")?.module.key).toBe("comercios")
     expect(moduleForPath("/admin/pases/123/editor")?.module.key).toBe("loyalty")
     expect(moduleForPath("/admin/campanas")?.item.label).toBe("Validación de campañas")
-    expect(moduleForPath("/admin/historial")?.module.key).toBe("loyalty")
+    expect(moduleForPath("/admin/historial")?.module.key).toBe("comercios")
+    expect(moduleForPath("/admin/enlaces")?.module.key).toBe("comercios")
+    expect(moduleForPath("/admin/impacto")?.module.key).toBe("loyalty")
+    expect(moduleForPath("/admin/growth")?.module.key).toBe("growth")
     expect(moduleForPath("/admin/finanzas/prospectos")?.module.key).toBe("crm")
     expect(moduleForPath("/admin/finanzas/tablero")?.item.label).toBe("Tablero")
     expect(moduleForPath("/admin/finanzas")?.module.key).toBe("finanzas")
@@ -27,6 +30,7 @@ describe("moduleForPath", () => {
 describe("visibleModules", () => {
   it("shows the owner every module", () => {
     expect(visibleModules(accessFor("super_admin", null)).map((m) => m.module.key)).toEqual([
+      "comercios",
       "loyalty",
       "growth",
       "crm",
@@ -40,9 +44,10 @@ describe("visibleModules", () => {
     const diego = visibleModules(
       accessFor("staff", ["designs", "branding", "campaigns", "tenants_view", "metrics"]),
     )
-    expect(diego.map((m) => m.module.key)).toEqual(["loyalty"])
-    const labels = diego[0].groups.flatMap((g) => g.items.map((i) => i.label))
+    expect(diego.map((m) => m.module.key)).toEqual(["comercios", "loyalty"])
+    const labels = diego.flatMap((m) => m.groups.flatMap((g) => g.items.map((i) => i.label)))
     expect(labels).not.toContain("Exportar datos")
+    expect(labels).not.toContain("Validación de enlaces")
     expect(diego[0].href).toBe("/admin/tenants")
 
     const brandingOnly = visibleModules(accessFor("staff", ["branding"]))
