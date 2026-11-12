@@ -21,6 +21,7 @@ import {
   Tr,
 } from "@/components/admin/enterprise"
 import { Button } from "@/components/ui/button"
+import type { ImportResult } from "@/lib/pos/links-import"
 import type {
   CandidateSale,
   InferredLink,
@@ -53,6 +54,7 @@ function lastMonths(n: number): string[] {
 }
 
 const fmtMonth = (ym: string) => {
+  if (ym === "all") return "todo el historial"
   const [y, m] = ym.split("-").map(Number)
   return new Date(y, m - 1, 1, 12).toLocaleDateString("es-PE", { month: "long", year: "numeric" })
 }
@@ -83,6 +85,8 @@ export function EnlacesClient() {
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<"all" | Suggestion>("all")
   const [busy, setBusy] = useState<string | null>(null)
+  const [imported, setImported] = useState<ImportResult | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
   const reqSeq = useRef(0)
 
   useEffect(() => {
@@ -157,6 +161,29 @@ export function EnlacesClient() {
     }
   }
 
+  async function importFile(file: File) {
+    setBusy("import")
+    setImported(null)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await fetch(`/api/admin/tenants/${tenantId}/pos/links/import`, {
+        method: "POST",
+        body: fd,
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.success) throw new Error(json?.error ?? "No se pudo importar")
+      setImported(json.data)
+      toast.success(`${json.data.linked} ventas enlazadas`)
+      await load()
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setBusy(null)
+      if (fileRef.current) fileRef.current.value = ""
+    }
+  }
+
   async function recomputeCorte() {
     setBusy("corte")
     try {
@@ -178,7 +205,7 @@ export function EnlacesClient() {
       <PageHeader
         crumbs={[{ label: "Inicio", href: "/admin" }, { label: "Validación de enlaces" }]}
         title="Validación de enlaces"
-        subtitle="Antes de cerrar el mes: los registros (sellos) que no tienen una venta del punto de venta enlazada y los enlaces que Cuik infirió. Lo que se enlaza a mano queda fijo: la sincronización no lo toca."
+        subtitle="Antes de cerrar el mes: los registros (sellos) que no tienen una venta del punto de venta enlazada y los enlaces que Cuik infirió. Enlaza aquí uno a uno, o exporta la lista, decide en el Excel (columna Decisión = Enlazar) e impórtalo. Lo enlazado a mano queda fijo: la sincronización no lo toca."
         actions={
           tenantId && (
             <>
@@ -187,11 +214,31 @@ export function EnlacesClient() {
                   Exportar registros sin venta
                 </a>
               </Button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".xlsx,.csv"
+                className="hidden"
+                aria-label="Archivo de decisiones"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) void importFile(f)
+                }}
+              />
               <Button
                 variant="outline"
                 size="sm"
                 className="h-8 text-[12.5px]"
-                disabled={busy === "corte"}
+                disabled={busy !== null}
+                onClick={() => fileRef.current?.click()}
+              >
+                Importar decisiones
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-[12.5px]"
+                disabled={busy !== null || month === "all"}
                 onClick={() => void recomputeCorte()}
               >
                 Recalcular corte del mes
@@ -227,6 +274,7 @@ export function EnlacesClient() {
                 {fmtMonth(m)}
               </option>
             ))}
+            <option value="all">Todo el historial</option>
           </select>
           <select
             value={filter}
@@ -244,6 +292,36 @@ export function EnlacesClient() {
       </Panel>
 
       {error && <Notice tone="bad">{error}</Notice>}
+
+      {imported && (
+        <Notice
+          tone={imported.failed.length > 0 ? "warn" : "ok"}
+          action={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-[12px]"
+              onClick={() => setImported(null)}
+            >
+              Cerrar
+            </Button>
+          }
+        >
+          {imported.linked} de {imported.toLink} filas marcadas “Enlazar” quedaron enlazadas ·{" "}
+          {imported.skipped} filas con otra decisión sin tocar.
+          {imported.failed.length > 0 && (
+            <span>
+              {" "}
+              No se pudieron enlazar {imported.failed.length}:{" "}
+              {imported.failed
+                .slice(0, 5)
+                .map((f) => `fila ${f.line} (${f.reason})`)
+                .join(", ")}
+              {imported.failed.length > 5 ? "…" : ""}
+            </span>
+          )}
+        </Notice>
+      )}
 
       {s && (
         <StatStrip

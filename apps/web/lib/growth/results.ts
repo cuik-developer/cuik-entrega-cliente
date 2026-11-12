@@ -479,7 +479,7 @@ export async function growthOverview(month: string): Promise<TenantGrowthRow[]> 
     })
     .from(tenants)
     .leftJoin(posConnections, eq(posConnections.tenantId, tenants.id))
-    .where(sql`${tenants.status} <> 'archived'`)
+    .where(inArray(tenants.status, ["trial", "active", "paused"]))
     .orderBy(tenants.name)
     .limit(500)
   // One grouped query per table, months by each tenant's local time.

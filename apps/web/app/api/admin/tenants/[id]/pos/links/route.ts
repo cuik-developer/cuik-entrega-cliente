@@ -3,7 +3,7 @@ import { csvCell } from "@/lib/csv"
 import { linksReview } from "@/lib/pos/links-review"
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const YM = /^\d{4}-\d{2}$/
+const YM = /^(\d{4}-\d{2}|all)$/
 
 export const dynamic = "force-dynamic"
 
@@ -78,7 +78,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return new Response(`﻿${[head.map(csvCell).join(","), ...lines].join("\r\n")}`, {
         headers: {
           "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": `attachment; filename="Registros sin venta ${month}.csv"`,
+          "Content-Disposition": `attachment; filename="Registros sin venta ${month === "all" ? "todo" : month}.csv"`,
         },
       })
     }

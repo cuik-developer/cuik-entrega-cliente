@@ -99,7 +99,17 @@ export type LinksReview = {
   inferred: InferredLink[]
 }
 
-export function monthBounds(month: string): { from: string; to: string } {
+/** "YYYY-MM" → its first and last day; "all" → everything up to today. */
+export function monthBounds(
+  month: string,
+  timezone = "America/Lima",
+): { from: string; to: string } {
+  if (month === "all") {
+    return {
+      from: "2000-01-01",
+      to: new Date().toLocaleDateString("en-CA", { timeZone: timezone }),
+    }
+  }
   const [y, m] = month.split("-").map(Number)
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate()
   return { from: `${month}-01`, to: `${month}-${String(last).padStart(2, "0")}` }
@@ -124,7 +134,7 @@ export async function linksReview(tenantId: string, month: string): Promise<Link
     .limit(1)
   if (!t) return null
   const timezone = t.timezone
-  const { from, to } = monthBounds(month)
+  const { from, to } = monthBounds(month, timezone)
   const { fromUtc, toUtc } = utcSlack(from, to)
 
   const [visitRows, saleRows, kindRows] = await Promise.all([
@@ -424,4 +434,3 @@ export async function connectorTenants(): Promise<{ id: string; name: string }[]
     .orderBy(tenants.name)
   return rows
 }
-
