@@ -60,6 +60,7 @@ import { RegistrationConfigSection } from "./registration-config-section"
 import { TenantBillingSection } from "./tenant-billing-section"
 import { TenantCampaignsSection } from "./tenant-campaigns-section"
 import { TenantFeaturesSection } from "./tenant-features-section"
+import { TenantGrowthSection } from "./tenant-growth-section"
 import { TenantChurnLine } from "./tenant-health"
 import { TenantNotesSection } from "./tenant-notes-section"
 import { TenantPhasesSection } from "./tenant-phases-section"
@@ -648,6 +649,9 @@ export function TenantDetail({
 
               {/* POS connector (Odoo) and product master */}
               <TenantPosSection tenantId={tenant.id} />
+
+              {/* Growth rules and terms (what the merchant reads, never edits) */}
+              <TenantGrowthSection tenantId={tenant.id} />
 
               {/* Onboarding checklist */}
               {checklist && (

@@ -6,14 +6,18 @@ import {
   Download,
   Gift,
   LayoutDashboard,
+  ListChecks,
   LogOut,
   MapPin,
   Menu,
+  MessageSquare,
   QrCode,
+  Rocket,
   Scale,
   Send,
   Settings,
   Sparkles,
+  TrendingUp,
   UserCheck,
   Users,
   X,
@@ -38,6 +42,8 @@ type NavItem = {
   pointsOnly?: boolean
   /** Only when Cuik turned on "Modo cajero para administradores" for the tenant. */
   adminCashierOnly?: boolean
+  /** Only when Cuik turned on Growth for the tenant (owner and admins). */
+  growthOnly?: boolean
 }
 
 /**
@@ -70,6 +76,15 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/panel/horas-especiales", label: "Horas especiales", icon: Zap },
       // Only shown to points programs.
       { href: "/panel/premios", label: "Premios", icon: Gift, pointsOnly: true },
+    ],
+  },
+  {
+    title: "Growth",
+    items: [
+      { href: "/panel/growth", label: "Resumen", icon: Rocket, growthOnly: true },
+      { href: "/panel/growth/audiencias", label: "Audiencias", icon: ListChecks, growthOnly: true },
+      { href: "/panel/growth/envios", label: "Envíos", icon: MessageSquare, growthOnly: true },
+      { href: "/panel/growth/resultados", label: "Resultados", icon: TrendingUp, growthOnly: true },
     ],
   },
   {
@@ -246,15 +261,17 @@ function SuperAdminViewBanner() {
 
 function SideNav({ onNavigate }: { onNavigate: () => void }) {
   const pathname = usePathname()
-  const { promotionType, readOnly, adminCashier } = useTenant()
+  const { promotionType, readOnly, adminCashier, growth, memberRole } = useTenant()
   // Parents with their own entry ("Envíos" is /panel/campanas) match exactly.
-  const EXACT = new Set(["/panel", "/panel/campanas"])
+  const EXACT = new Set(["/panel", "/panel/campanas", "/panel/growth"])
   const isActive = (href: string) =>
     EXACT.has(href) ? pathname === href : pathname.startsWith(href)
   // Exportar is a bulk PII download: not offered in the super-admin's read-only view.
   const visible = (item: NavItem) =>
     (!item.pointsOnly || promotionType === "points") &&
     (!item.adminCashierOnly || adminCashier) &&
+    (!item.growthOnly ||
+      (growth && (readOnly || memberRole === "owner" || memberRole === "admin"))) &&
     !(readOnly && item.href === "/panel/exportar")
 
   return (

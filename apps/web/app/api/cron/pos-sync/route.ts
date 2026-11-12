@@ -1,5 +1,6 @@
 import { errorResponse, successResponse } from "@/lib/api-utils"
 import { isCronAuthorized } from "@/lib/cron-auth"
+import { attributeAll } from "@/lib/growth/results"
 import { computeMissingCortes } from "@/lib/pos/corte"
 import { syncAllEnabled } from "@/lib/pos/sync"
 
@@ -11,14 +12,17 @@ export const maxDuration = 300
  * the connector on (incremental, at most MAX_ORDERS_PER_RUN per tenant per
  * run: a backfill finishes over a few runs), pairs them with the visits, and
  * computes the previous month's corte once per tenant when that month has no
- * report yet (tenants still backfilling wait).
+ * report yet (tenants still backfilling wait). Tenants with Growth on that
+ * got new orders also get their sales attributed to confirmed sends.
  */
 export async function POST(request: Request) {
   try {
     if (!isCronAuthorized(request)) return errorResponse("Unauthorized", 401)
     const synced = await syncAllEnabled()
     const cortes = await computeMissingCortes(synced)
-    return successResponse({ synced, cortes })
+    const touched = synced.filter((s) => !s.error && s.upserted > 0).map((s) => s.tenantId)
+    const attributed = touched.length > 0 ? await attributeAll(touched) : []
+    return successResponse({ synced, cortes, attributed })
   } catch (error) {
     console.error("[POST /api/cron/pos-sync]", error)
     return errorResponse("Internal server error", 500)

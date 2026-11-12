@@ -26,6 +26,12 @@ const ITEMS: { key: BoolKey; title: string; detail: string }[] = [
     detail:
       "El dueño y los administradores del comercio ven “Cajero” en su menú (Escanear, Buscar e Historial) para atender en caja sin otra cuenta.",
   },
+  {
+    key: "growth",
+    title: "Growth",
+    detail:
+      "Audiencias, envíos por WhatsApp y ventas atribuidas sobre las ventas del punto de venta. Necesita el conector POS; las reglas y los términos se fijan en Growth › Reglas por comercio.",
+  },
 ]
 
 /**

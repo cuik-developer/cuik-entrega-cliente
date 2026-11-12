@@ -32,7 +32,7 @@ import { type AdminAccess, canAccess, permissionForAdminPath } from "@/lib/staff
 
 export type AdminNavItem = { href: string; label: string; icon: LucideIcon }
 export type AdminNavGroup = { title: string; items: AdminNavItem[] }
-export type AdminModuleKey = "loyalty" | "crm" | "reclamaciones" | "finanzas" | "sistema"
+export type AdminModuleKey = "loyalty" | "growth" | "crm" | "reclamaciones" | "finanzas" | "sistema"
 
 export type AdminModule = {
   key: AdminModuleKey
@@ -73,6 +73,19 @@ export const ADMIN_MODULES: AdminModule[] = [
       {
         title: "Demos",
         items: [{ href: "/admin/simulador", label: "Simulador", icon: FlaskConical }],
+      },
+    ],
+  },
+  {
+    key: "growth",
+    label: "Growth",
+    description: "Audiencias, envíos y venta atribuida sobre el POS",
+    icon: Rocket,
+    rule: "#7a4fb3",
+    groups: [
+      {
+        title: "Growth",
+        items: [{ href: "/admin/growth", label: "Comercios", icon: Building2 }],
       },
     ],
   },
@@ -145,7 +158,7 @@ export const ADMIN_MODULES: AdminModule[] = [
 
 /** Business lines still to come: shown greyed on the owner's launcher. */
 export const UPCOMING_MODULES: { label: string; description: string; icon: LucideIcon }[] = [
-  { label: "Growth", description: "Agencia Meta y Google Ads", icon: Rocket },
+  { label: "Ads", description: "Agencia Meta y Google Ads", icon: Megaphone },
   { label: "Mesa", description: "Pedidos y mesas", icon: UtensilsCrossed },
 ]
 

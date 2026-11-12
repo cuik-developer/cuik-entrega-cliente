@@ -12,7 +12,7 @@ import { useTenant } from "@/hooks/use-tenant"
 import { formatDateTime } from "@/lib/format-date"
 import { purgeDateFor } from "@/lib/loyalty/archive"
 import { expiryPhrase } from "@/lib/loyalty/expiry-label"
-
+import { ClientGrowth } from "../_components/client-growth"
 import { ClientNotes } from "../_components/client-notes"
 import { ClientPointsHistory } from "../_components/client-points-history"
 import { ClientStatusDialog } from "../_components/client-status-dialog"
@@ -62,7 +62,7 @@ function ClientBadges({ segment, status }: { segment: string; status: string }) 
 export default function ClientDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const { tenantSlug, timezone } = useTenant()
+  const { tenantSlug, timezone, growth } = useTenant()
   const clientId = params.id as string
 
   const [data, setData] = useState<ClientDetail | null>(null)
@@ -294,6 +294,7 @@ export default function ClientDetailPage() {
           <TabsTrigger value="notes">Notas</TabsTrigger>
           <TabsTrigger value="tags">Tags</TabsTrigger>
           <TabsTrigger value="communications">Comunicaciones</TabsTrigger>
+          {growth && <TabsTrigger value="growth">Growth</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="activity" className="mt-4">
@@ -335,6 +336,18 @@ export default function ClientDetailPage() {
         <TabsContent value="communications" className="mt-4">
           {tenantSlug && <CommunicationHistory clientId={clientId} tenantSlug={tenantSlug} />}
         </TabsContent>
+
+        {growth && (
+          <TabsContent value="growth" className="mt-4">
+            {tenantSlug && (
+              <ClientGrowth
+                clientId={clientId}
+                tenantSlug={tenantSlug}
+                clientName={`${client.name} ${client.lastName ?? ""}`.trim()}
+              />
+            )}
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   )

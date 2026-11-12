@@ -24,6 +24,8 @@ export type TenantContextData = {
   memberRole: string | null
   /** Super-admin switch: owner and admins also get the cashier screens. */
   adminCashier: boolean
+  /** Super-admin switch: the Growth module (audiences, envíos, resultados) is on. */
+  growth: boolean
 }
 
 /**
@@ -133,5 +135,6 @@ export async function getTenantForUser(userId: string): Promise<TenantContextDat
     readOnly: Boolean(viewedTenantId),
     memberRole,
     adminCashier: parseTenantFeatures(tenant.features).adminCashier,
+    growth: parseTenantFeatures(tenant.features).growth,
   }
 }

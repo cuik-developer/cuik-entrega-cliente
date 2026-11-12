@@ -28,6 +28,7 @@ describe("visibleModules", () => {
   it("shows the owner every module", () => {
     expect(visibleModules(accessFor("super_admin", null)).map((m) => m.module.key)).toEqual([
       "loyalty",
+      "growth",
       "crm",
       "reclamaciones",
       "finanzas",

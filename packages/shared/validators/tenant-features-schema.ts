@@ -10,6 +10,8 @@ export const tenantFeaturesSchema = z.object({
   adminCashier: z.boolean().optional(),
   /** Code on the wallet pass: "qr" (default) or "code128" for stores with a barcode gun. */
   barcodeFormat: z.enum(["qr", "code128"]).optional(),
+  /** Growth: audiences, envíos and attributed sales over the POS data (needs the connector). */
+  growth: z.boolean().optional(),
 })
 export type TenantFeatures = z.infer<typeof tenantFeaturesSchema>
 
@@ -20,5 +22,6 @@ export function parseTenantFeatures(raw: unknown): Required<TenantFeatures> {
   return {
     adminCashier: data.adminCashier === true,
     barcodeFormat: data.barcodeFormat === "code128" ? "code128" : "qr",
+    growth: data.growth === true,
   }
 }

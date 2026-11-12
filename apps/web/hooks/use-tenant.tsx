@@ -20,6 +20,8 @@ type TenantContextValue = {
   memberRole: string | null
   /** Super-admin switch: owner and admins also get the cashier screens. */
   adminCashier: boolean
+  /** Super-admin switch: the Growth module is on for this tenant. */
+  growth: boolean
   isLoading: boolean
   error: string | null
 }
@@ -40,6 +42,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     readOnly: false,
     memberRole: null,
     adminCashier: false,
+    growth: false,
     isLoading: true,
     error: null,
   })
@@ -80,6 +83,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           readOnly: Boolean(json.data.readOnly),
           memberRole: json.data.memberRole ?? null,
           adminCashier: json.data.adminCashier === true,
+          growth: json.data.growth === true,
           isLoading: false,
           error: null,
         })
