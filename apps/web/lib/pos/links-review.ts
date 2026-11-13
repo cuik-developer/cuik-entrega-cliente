@@ -15,13 +15,17 @@ import {
   visits,
 } from "@cuik/db"
 
-import { dayInTz, sameAmount, sameStore } from "./match"
+import { normalizeDni } from "@/lib/loyalty/impact/columns"
+import { dayInTz, sameAmount, sameStore, sourceRank } from "./match"
+import { CONNECTOR_SOURCES, type ConnectorSource, POS_SOURCE, SALE_ORDER_SOURCE } from "./sources"
 
 /**
  * Validación de enlaces (super-admin, before each month's close): the
  * stamps of a month that have no POS sale linked, with the sales nearby that
  * could be theirs, and the links the matcher inferred, to confirm or undo.
  * A link made here is `link_kind = 'manual'`: the matcher never touches it.
+ * Candidates are the till's orders and the sales orders of Odoo Ventas
+ * (e-commerce, phone), which the matcher never infers on its own.
  */
 
 /** A candidate sale is shown up to this far from the stamp, either side. */
@@ -34,6 +38,8 @@ export type Suggestion = "link" | "review" | "none"
 
 export type CandidateSale = {
   saleId: string
+  /** "pos" (the till) or "sale_order" (Odoo Ventas: e-commerce, phone). */
+  source: ConnectorSource
   orderRef: string | null
   soldAt: string
   /** Minutes from the stamp to the sale (negative = sale before the stamp). */
@@ -47,6 +53,8 @@ export type CandidateSale = {
   clientId: string | null
   sameAmount: boolean
   sameStore: boolean
+  /** The document typed for the sale is the stamp's client's (shown even hours away from the stamp). */
+  sameDni: boolean
 }
 
 export type UnlinkedVisit = {
@@ -171,6 +179,7 @@ export async function linksReview(tenantId: string, month: string): Promise<Link
     db
       .select({
         id: sales.id,
+        source: sales.source,
         orderRef: sales.orderRef,
         soldAt: sales.soldAt,
         store: sales.store,
@@ -185,7 +194,7 @@ export async function linksReview(tenantId: string, month: string): Promise<Link
       .where(
         and(
           eq(sales.tenantId, tenantId),
-          eq(sales.source, "pos"),
+          inArray(sales.source, [...CONNECTOR_SOURCES]),
           isNotNull(sales.soldAt),
           sql`${sales.amount} > 0`,
           gte(sales.soldOn, from),
@@ -198,14 +207,15 @@ export async function linksReview(tenantId: string, month: string): Promise<Link
         inferredAmount: sql<number>`count(*) filter (where ${sales.visitId} is not null and ${sales.linkKind} = 'inferred_amount')::int`,
         inferredTime: sql<number>`count(*) filter (where ${sales.visitId} is not null and ${sales.linkKind} = 'inferred_time')::int`,
         manual: sql<number>`count(*) filter (where ${sales.visitId} is not null and ${sales.linkKind} = 'manual')::int`,
-        guestUnlinked: sql<number>`count(*) filter (where ${sales.dni} is null and ${sales.visitId} is null)::int`,
-        clientNoVisit: sql<number>`count(*) filter (where ${sales.clientId} is not null and ${sales.visitId} is null)::int`,
+        // Stamps missed at the till only: an order placed online or by phone may never get one.
+        guestUnlinked: sql<number>`count(*) filter (where ${sales.source} = ${POS_SOURCE} and ${sales.dni} is null and ${sales.visitId} is null)::int`,
+        clientNoVisit: sql<number>`count(*) filter (where ${sales.source} = ${POS_SOURCE} and ${sales.clientId} is not null and ${sales.visitId} is null)::int`,
       })
       .from(sales)
       .where(
         and(
           eq(sales.tenantId, tenantId),
-          eq(sales.source, "pos"),
+          inArray(sales.source, [...CONNECTOR_SOURCES]),
           sql`${sales.amount} > 0`,
           gte(sales.soldOn, from),
           lte(sales.soldOn, to),
@@ -235,31 +245,10 @@ export async function linksReview(tenantId: string, month: string): Promise<Link
     if (v.saleId) continue
     const day = dayInTz(v.createdAt, timezone)
     const visitAmount = num(v.amount)
-    const candidates: CandidateSale[] = (freeByDay.get(day) ?? [])
-      .map((s) => {
-        const soldAt = s.soldAt as Date
-        const dt = soldAt.getTime() - v.createdAt.getTime()
-        return { s, soldAt, dt }
-      })
-      .filter(({ dt }) => Math.abs(dt) <= CANDIDATE_WINDOW_MS)
-      .sort((a, b) => Math.abs(a.dt) - Math.abs(b.dt))
-      .slice(0, CANDIDATES_PER_VISIT)
-      .map(({ s, soldAt, dt }) => {
-        const amount = Number(s.amount)
-        return {
-          saleId: s.id,
-          orderRef: s.orderRef,
-          soldAt: soldAt.toISOString(),
-          minutes: Math.round(dt / 60_000),
-          store: s.store,
-          amount,
-          dni: s.dni,
-          customerName: s.customerName,
-          clientId: s.clientId,
-          sameAmount: visitAmount != null && sameAmount(amount, visitAmount),
-          sameStore: sameStore(s.store, v.location),
-        }
-      })
+    const candidates = candidatesFor(
+      { createdAt: v.createdAt, dni: v.dni, amount: visitAmount, location: v.location },
+      (freeByDay.get(day) ?? []) as FreeSale[],
+    )
     const suggestion = suggestionFor(candidates)
     suggestions[suggestion]++
     unlinked.push({
@@ -336,16 +325,97 @@ export async function linksReview(tenantId: string, month: string): Promise<Link
   }
 }
 
+/** A synced sale with no stamp yet, as the review reads it. */
+export type FreeSale = {
+  id: string
+  source: string
+  orderRef: string | null
+  soldAt: Date
+  store: string | null
+  amount: string | number
+  dni: string | null
+  customerName: string | null
+  clientId: string | null
+}
+
+/** Sales orders shown per stamp after the till's candidates. */
+const SALE_ORDER_CANDIDATES_PER_VISIT = 2
+
 /**
- * "Enlazar" when one candidate has the stamp's amount within the hour and no
- * other candidate shares it; "Revisar" when something sits within the hour;
- * "No" otherwise (a service, a stamp without sale, a sale hours away).
+ * The sales that could be a stamp's, from the free sales of its local day:
+ * those within ±2 h, and the ones typed under the client's own document at
+ * any hour of the day (a sales order confirmed in the morning and stamped at
+ * pick-up in the afternoon). POS first (user rule, 13 Nov 2026): the till's
+ * sales, then the sales orders of Odoo Ventas; within each, the client's own
+ * document first, then the closest in time. The suggested one goes first.
  */
-export function suggestionFor(candidates: CandidateSale[]): Suggestion {
-  const near = candidates.filter((c) => Math.abs(c.minutes) * 60_000 <= SUGGEST_WINDOW_MS)
-  const same = near.filter((c) => c.sameAmount)
-  if (same.length === 1) return "link"
-  if (near.length > 0) return "review"
+export function candidatesFor(
+  visit: { createdAt: Date; dni: string | null; amount: number | null; location: string | null },
+  daySales: FreeSale[],
+): CandidateSale[] {
+  const visitDni = normalizeDni(visit.dni)
+  const ranked = daySales
+    .map((s) => {
+      const dt = s.soldAt.getTime() - visit.createdAt.getTime()
+      return { s, dt, dni: visitDni !== null && s.dni === visitDni }
+    })
+    .filter(({ dt, dni }) => dni || Math.abs(dt) <= CANDIDATE_WINDOW_MS)
+    .sort((a, b) => Number(b.dni) - Number(a.dni) || Math.abs(a.dt) - Math.abs(b.dt))
+  const pos = ranked.filter((r) => sourceRank(r.s.source) === 0).slice(0, CANDIDATES_PER_VISIT)
+  const orders = ranked
+    .filter((r) => sourceRank(r.s.source) === 1)
+    .slice(0, SALE_ORDER_CANDIDATES_PER_VISIT)
+  const list = [...pos, ...orders].map(({ s, dt, dni }) => {
+    const amount = Number(s.amount)
+    return {
+      saleId: s.id,
+      source: (s.source === SALE_ORDER_SOURCE ? SALE_ORDER_SOURCE : POS_SOURCE) as ConnectorSource,
+      orderRef: s.orderRef,
+      soldAt: s.soldAt.toISOString(),
+      minutes: Math.round(dt / 60_000),
+      store: s.store,
+      amount,
+      dni: s.dni,
+      customerName: s.customerName,
+      clientId: s.clientId,
+      sameAmount: visit.amount != null && sameAmount(amount, visit.amount),
+      sameStore: sameStore(s.store, visit.location),
+      sameDni: dni,
+    }
+  })
+  // The one to link first, so the Excel's "Venta más cercana" is the suggested sale.
+  const pick = suggestedCandidate(list)
+  return pick ? [pick, ...list.filter((c) => c !== pick)] : list
+}
+
+type Suggestable = Pick<CandidateSale, "minutes" | "sameAmount" | "sameDni" | "source">
+
+const isNear = (c: Suggestable) => c.sameDni || Math.abs(c.minutes) * 60_000 <= SUGGEST_WINDOW_MS
+
+/**
+ * The candidate to link, if one stands out: the only till sale with the
+ * stamp's amount within the hour (or under the client's own document, any
+ * hour that day); failing any such till sale, the only such sales order. Two
+ * till sales that fit leave the choice to a person, never to a sales order.
+ */
+export function suggestedCandidate<C extends Suggestable>(candidates: C[]): C | null {
+  const fits = (c: C) => isNear(c) && c.sameAmount
+  const pos = candidates.filter((c) => sourceRank(c.source) === 0 && fits(c))
+  if (pos.length > 0) return pos.length === 1 ? pos[0] : null
+  const orders = candidates.filter((c) => sourceRank(c.source) === 1 && fits(c))
+  return orders.length === 1 ? orders[0] : null
+}
+
+/**
+ * "Enlazar" when a candidate stands out (see `suggestedCandidate`: the till
+ * first, the sales order only when no till sale fits); "Revisar" when
+ * something sits within the hour, or the client's own document bought that
+ * day; "No" otherwise (a service, a stamp without sale, a stranger's sale
+ * hours away): the merchant confirms those.
+ */
+export function suggestionFor(candidates: Suggestable[]): Suggestion {
+  if (suggestedCandidate(candidates)) return "link"
+  if (candidates.some(isNear)) return "review"
   return "none"
 }
 
@@ -364,7 +434,13 @@ export async function linkSaleToVisit(
   const [sale] = await db
     .select({ id: sales.id, visitId: sales.visitId, linkKind: sales.linkKind })
     .from(sales)
-    .where(and(eq(sales.id, saleId), eq(sales.tenantId, tenantId), eq(sales.source, "pos")))
+    .where(
+      and(
+        eq(sales.id, saleId),
+        eq(sales.tenantId, tenantId),
+        inArray(sales.source, [...CONNECTOR_SOURCES]),
+      ),
+    )
     .limit(1)
   if (!sale) return { ok: false, error: "Venta no encontrada" }
   if (sale.visitId && sale.linkKind === "manual" && sale.visitId !== visitId) {
@@ -401,7 +477,13 @@ export async function unlinkSale(tenantId: string, saleId: string): Promise<Link
   const [sale] = await db
     .select({ id: sales.id, visitId: sales.visitId, linkKind: sales.linkKind, dni: sales.dni })
     .from(sales)
-    .where(and(eq(sales.id, saleId), eq(sales.tenantId, tenantId), eq(sales.source, "pos")))
+    .where(
+      and(
+        eq(sales.id, saleId),
+        eq(sales.tenantId, tenantId),
+        inArray(sales.source, [...CONNECTOR_SOURCES]),
+      ),
+    )
     .limit(1)
   if (!sale) return { ok: false, error: "Venta no encontrada" }
   if (!sale.visitId) return { ok: false, error: "La venta no está enlazada" }

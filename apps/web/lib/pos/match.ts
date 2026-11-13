@@ -12,6 +12,17 @@ export type MatchOrder = {
   /** Instant of sale. */
   soldAt: Date
   store: string | null
+  /** "pos" (default) or "sale_order": a till sale always goes before a sales order. */
+  source?: string
+}
+
+/**
+ * Order of preference when a stamp could be more than one sale (user rule,
+ * 13 Nov 2026): the till's sale first, the sales order (Odoo Ventas) only
+ * when no till sale fits; with neither, the merchant decides.
+ */
+export function sourceRank(source: string | null | undefined): 0 | 1 {
+  return source === "sale_order" ? 1 : 0
 }
 
 export type MatchVisit = {
@@ -73,8 +84,10 @@ export type MatchResult = {
 }
 
 /**
- * Greedy: candidates (same DNI, same day) sorted by store agreement first,
- * then by time distance; each visit and each order used once.
+ * Greedy: candidates (same DNI, same day) sorted by source (till before
+ * sales order), then store agreement, then time distance; each visit and
+ * each order used once. A sales order only gets a stamp no till sale of that
+ * client took.
  */
 export function matchOrdersToVisits(
   orders: MatchOrder[],
@@ -90,7 +103,7 @@ export function matchOrdersToVisits(
     list.push(v)
     visitsByKey.set(key, list)
   }
-  type Cand = { order: MatchOrder; visit: MatchVisit; store: 0 | 1; dt: number }
+  type Cand = { order: MatchOrder; visit: MatchVisit; rank: 0 | 1; store: 0 | 1; dt: number }
   const cands: Cand[] = []
   for (const o of orders) {
     if (!o.dni) continue
@@ -100,12 +113,13 @@ export function matchOrdersToVisits(
       cands.push({
         order: o,
         visit: v,
+        rank: sourceRank(o.source),
         store: sameStore(o.store, v.location) ? 0 : 1,
         dt: Math.abs(o.soldAt.getTime() - v.createdAt.getTime()),
       })
     }
   }
-  cands.sort((a, b) => a.store - b.store || a.dt - b.dt)
+  cands.sort((a, b) => a.rank - b.rank || a.store - b.store || a.dt - b.dt)
   const pairs = new Map<string, string>()
   const usedVisits = new Set<string>()
   for (const c of cands) {

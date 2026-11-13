@@ -2,6 +2,7 @@ import { db, sql } from "@cuik/db"
 import ExcelJS from "exceljs"
 
 import { categoryLabel, type PurchaseAnalytics, type PurchaseFilters } from "./purchases"
+import { CONNECTOR_SOURCES_SQL, sourceLabel } from "./sources"
 
 /**
  * "Exportar compras": the purchases of the period as the merchant (or Cuik)
@@ -26,6 +27,7 @@ type LineRow = {
   store: string | null
   cashier: string | null
   order_ref: string | null
+  source: string
   link_kind: string | null
   client_name: string | null
   client_dni: string | null
@@ -50,6 +52,7 @@ type SaleRow = {
   store: string | null
   cashier: string | null
   order_ref: string | null
+  source: string
   amount: string
   link_kind: string | null
   client_name: string | null
@@ -78,7 +81,8 @@ export async function buildPurchasesExcel(input: {
   analytics: PurchaseAnalytics
 }): Promise<{ buffer: Buffer; lines: number; truncated: boolean }> {
   const { tenantId, filters: f, analytics: a, timezone } = input
-  const where = sql`s.tenant_id = ${tenantId} and s.source = 'pos' and s.amount > 0
+  // The till and Odoo Ventas (e-commerce, phone) alike: both are the merchant's sales.
+  const where = sql`s.tenant_id = ${tenantId} and s.source in ${CONNECTOR_SOURCES_SQL} and s.amount > 0
     and s.sold_on between ${f.from}::date and ${f.to}::date
     ${f.store ? sql`and s.store = ${f.store}` : sql``}
     ${f.cuikOnly ? sql`and s.client_id is not null` : sql``}`
@@ -87,7 +91,7 @@ export async function buildPurchasesExcel(input: {
     db.execute<LineRow>(sql`
       select s.sold_on,
              to_char(s.sold_at at time zone 'UTC' at time zone ${timezone}, 'DD/MM/YYYY HH24:MI') as sold_at_local,
-             s.store, s.cashier, s.order_ref, s.link_kind,
+             s.store, s.cashier, s.order_ref, s.source, s.link_kind,
              case when c.id is null then null else trim(c.name || ' ' || coalesce(c.last_name, '')) end as client_name,
              c.dni as client_dni, c.phone as client_phone, c.email as client_email,
              s.dni as till_dni, s.customer_name as till_name,
@@ -101,7 +105,7 @@ export async function buildPurchasesExcel(input: {
       order by s.sold_at desc, s.order_ref, l.pos_line_id
       limit ${MAX_EXPORT_LINES + 1}`),
     db.execute<SaleRow>(sql`
-      select s.sold_on, s.store, s.cashier, s.order_ref, s.amount, s.link_kind,
+      select s.sold_on, s.store, s.cashier, s.order_ref, s.source, s.amount, s.link_kind,
              case when c.id is null then null else trim(c.name || ' ' || coalesce(c.last_name, '')) end as client_name,
              c.dni as client_dni,
              (select count(*) from analytics.sale_lines l where l.sale_id = s.id) as lines
@@ -163,6 +167,8 @@ export async function buildPurchasesExcel(input: {
     { header: "Precio", key: "price", width: 10 },
     { header: "Dto. %", key: "disc", width: 8 },
     { header: "Total", key: "total", width: 11 },
+    // Last, so readers of the older layout still find every column where it was.
+    { header: "Canal", key: "channel", width: 14 },
   ]
   ws.getRow(1).font = { bold: true }
   for (const l of lineRows) {
@@ -189,6 +195,7 @@ export async function buildPurchasesExcel(input: {
       price: Number(l.unit_price),
       disc: Number(l.discount_pct),
       total: Number(l.total),
+      channel: sourceLabel(l.source),
     })
   }
   for (const k of ["price", "total"]) ws.getColumn(k).numFmt = "#,##0.00"
@@ -204,6 +211,7 @@ export async function buildPurchasesExcel(input: {
     { header: "Enlace", key: "link", width: 14 },
     { header: "Líneas", key: "lines", width: 8 },
     { header: "Monto", key: "amount", width: 11 },
+    { header: "Canal", key: "channel", width: 14 },
   ]
   wsS.getRow(1).font = { bold: true }
   for (const s of sales.rows) {
@@ -217,6 +225,7 @@ export async function buildPurchasesExcel(input: {
       link: s.link_kind ? (LINK_LABEL[s.link_kind] ?? s.link_kind) : s.client_name ? "DNI" : "",
       lines: Number(s.lines),
       amount: Number(s.amount),
+      channel: sourceLabel(s.source),
     })
   }
   wsS.getColumn("amount").numFmt = "#,##0.00"

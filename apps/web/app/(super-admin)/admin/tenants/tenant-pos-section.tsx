@@ -30,7 +30,7 @@ import {
   type MasterMapping,
 } from "@/lib/pos/product-master"
 import type { MasterApplyResult, MasterPreview, MasterSummary } from "@/lib/pos/products"
-import type { PosConnectionView, SyncResult, TestResult } from "@/lib/pos/sync"
+import type { PosConnectionView, SaleOrderCursor, SyncResult, TestResult } from "@/lib/pos/sync"
 
 /**
  * Super-admin › tenant › General: the POS connector (Odoo) and the product
@@ -100,7 +100,12 @@ function fmtWhen(iso: string | null): string {
 function linksSummary(l: PosConnectionView["links"], inferOn: boolean): string {
   const n = (v: number) => v.toLocaleString("es-PE")
   const inferred = l.inferredAmount + l.inferredTime
-  const parts = [`${n(l.total)} ventas`, `${n(l.dni)} por DNI`]
+  const parts = [
+    l.saleOrders > 0
+      ? `${n(l.total)} ventas (${n(l.saleOrders)} órdenes de venta)`
+      : `${n(l.total)} ventas`,
+    `${n(l.dni)} por DNI`,
+  ]
   if (inferOn || inferred > 0)
     parts.push(
       inferred > 0
@@ -111,6 +116,31 @@ function linksSummary(l: PosConnectionView["links"], inferOn: boolean): string {
   parts.push(`${n(l.clientNoVisit)} de clientes sin sello`)
   parts.push(`${n(l.guestUnlinked)} de invitados sin enlazar`)
   return parts.join(" · ")
+}
+
+/** The toast after a manual run: what was read and linked. */
+function syncSummary(r: SyncResult): string {
+  const n = (v: number) => v.toLocaleString("es-PE")
+  const parts = [`${n(r.pulled)} órdenes leídas`]
+  if (r.saleOrders > 0) parts.push(`${n(r.saleOrders)} de ellas órdenes de venta`)
+  parts.push(`${n(r.matchedVisits)} visitas vinculadas por DNI`)
+  if (r.removedSaleOrders > 0)
+    parts.push(
+      `${n(r.removedSaleOrders)} órdenes de venta quitadas (anuladas o cobradas en el POS)`,
+    )
+  if (r.inferredVisits > 0) parts.push(`${n(r.inferredVisits)} inferidas`)
+  if (r.replacedFileSales > 0)
+    parts.push(`${n(r.replacedFileSales)} ventas del archivo reemplazadas`)
+  if (r.skippedBadAmount > 0) parts.push(`${r.skippedBadAmount} descartadas por monto`)
+  if (r.more) parts.push("continúa en la próxima corrida")
+  return parts.join(" · ")
+}
+
+/** Where the sales orders (Odoo Ventas) pull stands. */
+function saleOrdersCursor(c: SaleOrderCursor | undefined): string {
+  if (!c) return "Sin iniciar (empieza cuando termina la carga del POS)"
+  if (c.unavailable) return "Odoo sin la app Ventas (o el usuario no tiene acceso)"
+  return `${c.writeDate} UTC${c.exhausted ? "" : " (incompleto)"}`
 }
 
 const inputClass = "h-8 text-[12.5px]"
@@ -262,21 +292,7 @@ export function TenantPosSection({ tenantId }: { tenantId: string }) {
       const r = json.data as SyncResult | undefined
       if (!json.success || !r) toast.error(json.error ?? "No se pudo sincronizar")
       else if (r.error) toast.error(r.error)
-      else {
-        const parts = [
-          `${r.pulled.toLocaleString("es-PE")} órdenes leídas`,
-          `${r.matchedVisits.toLocaleString("es-PE")} visitas vinculadas por DNI`,
-        ]
-        if (r.inferredVisits > 0)
-          parts.push(`${r.inferredVisits.toLocaleString("es-PE")} inferidas`)
-        if (r.replacedFileSales > 0)
-          parts.push(
-            `${r.replacedFileSales.toLocaleString("es-PE")} ventas del archivo reemplazadas`,
-          )
-        if (r.skippedBadAmount > 0) parts.push(`${r.skippedBadAmount} descartadas por monto`)
-        if (r.more) parts.push("continúa en la próxima corrida")
-        toast.success(parts.join(" · "))
-      }
+      else toast.success(syncSummary(r))
       await load()
     } catch {
       toast.error("Error de conexión")
@@ -380,6 +396,10 @@ export function TenantPosSection({ tenantId }: { tenantId: string }) {
                       value: conn.cursor
                         ? `${conn.cursor.writeDate} UTC${conn.cursor.exhausted ? "" : " (incompleto)"}`
                         : "Sin iniciar",
+                    },
+                    {
+                      label: "Órdenes de venta",
+                      value: saleOrdersCursor(conn.cursor?.saleOrders),
                     },
                   ]}
                 />
@@ -621,7 +641,10 @@ function TestSummary({ test }: { test: TestResult }) {
   return (
     <Notice tone="ok">
       Odoo {test.version} · {test.ordersSinceStart.toLocaleString("es-PE")} órdenes desde la fecha
-      de inicio · {test.ordersLast30Days.toLocaleString("es-PE")} en los últimos 30 días
+      de inicio · {test.ordersLast30Days.toLocaleString("es-PE")} en los últimos 30 días ·{" "}
+      {test.saleOrdersSinceStart === null
+        ? "sin acceso a Ventas (órdenes de venta)"
+        : `${test.saleOrdersSinceStart.toLocaleString("es-PE")} órdenes de venta confirmadas`}
       {test.hasEmployee ? " · cajero por empleado" : " · cajero por usuario"}
       {test.hasIdType ? " · tipo de documento disponible" : ""}
     </Notice>

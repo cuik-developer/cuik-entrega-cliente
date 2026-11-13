@@ -35,11 +35,15 @@ import {
   parseOdooDateTime,
 } from "./odoo-client"
 import { normalizeSku } from "./product-master"
+import { CONNECTOR_SOURCES, CONNECTOR_SOURCES_SQL, POS_SOURCE, SALE_ORDER_SOURCE } from "./sources"
 
 /**
  * The POS connector: pulls the merchant's Odoo POS orders (with their lines)
  * into analytics.sales / analytics.sale_lines, resolves the Cuik client by
- * DNI and pairs each order with the visit registered that day.
+ * DNI and pairs each order with the visit registered that day. After the
+ * POS orders it pulls the confirmed sales orders of Odoo Ventas (`sale.order`:
+ * e-commerce, phone, orders keyed in at a store), stored with
+ * `source = 'sale_order'` and their own cursor (`cursor.saleOrders`).
  *
  * Incremental by write_date. Pages are keyed by (write_date second, offset
  * inside that second), never by a global offset, so a cluster of orders with
@@ -91,6 +95,8 @@ export type LinkCounts = {
   guestUnlinked: number
   /** Purchases of a Cuik client with no stamp that day. */
   clientNoVisit: number
+  /** Of `total`, the confirmed sales orders of Odoo Ventas (not the till). */
+  saleOrders: number
 }
 
 export type Cursor = {
@@ -103,6 +109,24 @@ export type Cursor = {
   exhausted: boolean
   /** When the inferred pass last covered the whole history (after a backfill, or after turning it on). */
   inferredAt?: string
+  /** Where the sales orders pull (`sale.order`) resumes; absent until its first run. */
+  saleOrders?: SaleOrderCursor
+}
+
+/** The sales orders pull's own position, same paging rules as the POS one. */
+export type SaleOrderCursor = {
+  /** write_date of the last sales order read (UTC); the start instant while none was read. */
+  writeDate: string
+  id: number
+  offset: number
+  exhausted: boolean
+  /** The Odoo has no Sales app (no `sale.order` model): nothing to pull. */
+  unavailable?: boolean
+}
+
+/** Both pulls (POS orders and sales orders) have reached the end at least once. */
+export function syncComplete(cursor: Cursor | null | undefined): boolean {
+  return !!cursor?.exhausted && cursor.saleOrders?.exhausted === true
 }
 
 /** Orders per Odoo request. */
@@ -116,6 +140,12 @@ const REMATCH_DAYS = 3
 /** A lock older than this is a run that died; the next run takes over. */
 const LOCK_STALE_MINUTES = 30
 const ORDER_STATES = ["paid", "done", "invoiced"]
+/** Confirmed sales orders ("done" is the locked state before Odoo 17). */
+const SALE_ORDER_STATES = ["sale", "done"]
+/** Read too, so an order cancelled after it was synced leaves analytics.sales. */
+const SALE_ORDER_DEAD_STATES = ["cancel"]
+/** Read once the history is in: an order cancelled and sent back to quotation between two runs. */
+const QUOTATION_STATES = ["draft", "sent"]
 
 function viewOf(row: typeof posConnections.$inferSelect, links: LinkCounts): PosConnectionView {
   const cursor = (row.cursor as Cursor | null) ?? null
@@ -134,7 +164,7 @@ function viewOf(row: typeof posConnections.$inferSelect, links: LinkCounts): Pos
     inferWindowMinutes: row.inferWindowMinutes,
     links,
     cursor,
-    backfilling: !cursor || !cursor.exhausted,
+    backfilling: !syncComplete(cursor),
     syncing: lockIsHeld(row.syncStartedAt),
     lastSyncAt: row.lastSyncAt?.toISOString() ?? null,
     lastSyncOrders: row.lastSyncOrders,
@@ -165,11 +195,13 @@ export async function linkCounts(tenantId: string): Promise<LinkCounts> {
       inferredAmount: sql<number>`count(*) filter (where ${sales.visitId} is not null and ${sales.linkKind} = 'inferred_amount')::int`,
       inferredTime: sql<number>`count(*) filter (where ${sales.visitId} is not null and ${sales.linkKind} = 'inferred_time')::int`,
       manual: sql<number>`count(*) filter (where ${sales.visitId} is not null and ${sales.linkKind} = 'manual')::int`,
-      guestUnlinked: sql<number>`count(*) filter (where ${sales.dni} is null and ${sales.visitId} is null and ${sales.amount} > 0)::int`,
-      clientNoVisit: sql<number>`count(*) filter (where ${sales.clientId} is not null and ${sales.visitId} is null and ${sales.amount} > 0)::int`,
+      // Stamps missed at the till: an order placed online or by phone may never get one.
+      guestUnlinked: sql<number>`count(*) filter (where ${sales.source} = ${POS_SOURCE} and ${sales.dni} is null and ${sales.visitId} is null and ${sales.amount} > 0)::int`,
+      clientNoVisit: sql<number>`count(*) filter (where ${sales.source} = ${POS_SOURCE} and ${sales.clientId} is not null and ${sales.visitId} is null and ${sales.amount} > 0)::int`,
+      saleOrders: sql<number>`count(*) filter (where ${sales.source} = ${SALE_ORDER_SOURCE} and ${sales.amount} > 0)::int`,
     })
     .from(sales)
-    .where(and(eq(sales.tenantId, tenantId), eq(sales.source, "pos")))
+    .where(and(eq(sales.tenantId, tenantId), inArray(sales.source, [...CONNECTOR_SOURCES])))
   return (
     r ?? {
       total: 0,
@@ -179,6 +211,7 @@ export async function linkCounts(tenantId: string): Promise<LinkCounts> {
       manual: 0,
       guestUnlinked: 0,
       clientNoVisit: 0,
+      saleOrders: 0,
     }
   )
 }
@@ -317,6 +350,8 @@ export type TestResult =
       version: string
       ordersSinceStart: number
       ordersLast30Days: number
+      /** Confirmed sales orders (Odoo Ventas) since the start date; null when the Odoo has no Sales app. */
+      saleOrdersSinceStart: number | null
       /** Optional Odoo fields found (pos_hr cashier, Peruvian document type). */
       hasEmployee: boolean
       hasIdType: boolean
@@ -352,21 +387,33 @@ export async function testConnection(
   const since = odooDateTime(new Date(Date.now() - 30 * 24 * 3600 * 1000))
   const startDate =
     overrides.startDate ?? (row ? String(row.startDate) : dayInTz(new Date(), timezone))
-  const [ordersSinceStart, ordersLast30Days] = await Promise.all([
+  const startUtc = localMidnightUtc(startDate, timezone)
+  const [ordersSinceStart, ordersLast30Days, saleOrdersSinceStart] = await Promise.all([
     client.searchCount("pos.order", [
       ["state", "in", ORDER_STATES],
-      ["date_order", ">=", localMidnightUtc(startDate, timezone)],
+      ["date_order", ">=", startUtc],
     ]),
     client.searchCount("pos.order", [
       ["state", "in", ORDER_STATES],
       ["date_order", ">=", since],
     ]),
+    // An Odoo without the Sales app (or a user without access to it) is not a failed test.
+    client
+      .searchCount("sale.order", [
+        ["state", "in", SALE_ORDER_STATES],
+        ["date_order", ">=", startUtc],
+      ])
+      .catch((err) => {
+        if (meansNoSales(err)) return null
+        throw err
+      }),
   ])
   return {
     kind: "ok",
     version,
     ordersSinceStart,
     ordersLast30Days,
+    saleOrdersSinceStart,
     hasEmployee: orderFields.has("employee_id"),
     hasIdType: partnerFields.has("l10n_latam_identification_type_id"),
   }
@@ -397,6 +444,39 @@ type OdooLine = {
   discount: number
   price_subtotal_incl: number
   full_product_name?: string | false
+  /** pos_sale: the sales order this line pays at the till. */
+  sale_order_origin_id?: Many2one
+}
+
+/** A sales order of Odoo Ventas (`sale.order`), as read. */
+export type OdooSaleOrder = {
+  id: number
+  /** "S09270". */
+  name: string
+  /** Confirmation instant once confirmed (Odoo moves it there on confirm). */
+  date_order: string
+  amount_total: number
+  partner_id: Many2one
+  /** Salesperson: at Mascota Veloz a store account ("Mascota Veloz Santa Cruz"). */
+  user_id?: Many2one
+  team_id?: Many2one
+  state: string
+  write_date: string
+  order_line: number[]
+}
+
+/** A line of a sales order (`sale.order.line`), as read. */
+export type OdooSaleLine = {
+  id: number
+  order_id: Many2one
+  product_id: Many2one
+  product_uom_qty: number
+  price_unit: number
+  discount: number
+  /** Line total with taxes, after discount. */
+  price_total: number
+  /** "line_section" / "line_note": a heading or a note, not a product. */
+  display_type?: string | false
 }
 
 type OdooPartner = {
@@ -426,6 +506,10 @@ export type SyncResult = {
   skippedBadAmount: number
   /** File-loaded sales removed because the connector now owns their period (first run). */
   replacedFileSales: number
+  /** Of `pulled`, the sales orders (Odoo Ventas) read. */
+  saleOrders: number
+  /** Sales orders removed: cancelled after they were synced, or settled at the till (the POS order counts). */
+  removedSaleOrders: number
   /** True when the run stopped at MAX_ORDERS_PER_RUN; the next run continues. */
   more: boolean
   cursor: Cursor | null
@@ -556,8 +640,9 @@ async function replaceFileSales(tenantId: string, startDate: string): Promise<nu
   return deleted.length
 }
 
-type Prepared = {
-  order: OdooOrder
+export type Prepared = {
+  /** The order reference (unique per tenant): POS orders and sales orders alike. */
+  ref: string
   row: typeof sales.$inferInsert
   lines: Omit<typeof saleLines.$inferInsert, "saleId">[]
 }
@@ -574,7 +659,7 @@ function partnerDni(partner: OdooPartner | null | undefined, hasIdType: boolean)
   return normalizeDni(partner.vat || null)
 }
 
-function lineRow(
+export function lineRow(
   tenantId: string,
   l: OdooLine,
   product: OdooProduct | undefined,
@@ -666,7 +751,137 @@ function buildRows(params: {
         params.master,
       )
     })
-    byRef.set(o.name, { order: o, row, lines })
+    byRef.set(o.name, { ref: o.name, row, lines })
+  }
+  return { prepared: [...byRef.values()], badAmount }
+}
+
+/**
+ * The store a sales order belongs to. Odoo Ventas has no till: the
+ * salesperson stands for it (Mascota Veloz keys orders in under store
+ * accounts, "Mascota Veloz Santa Cruz"), else the sales team. The merchant's
+ * own name in front is dropped ("Santa Cruz"), since it would make the order
+ * look like it belongs to every location named after the brand.
+ */
+export function saleOrderStore(
+  salesperson: string | null,
+  team: string | null,
+  tenantName: string | null,
+): string | null {
+  for (const raw of [salesperson, team]) {
+    const name = raw?.trim()
+    if (!name) continue
+    return (withoutPrefix(name, tenantName) || name).slice(0, 120)
+  }
+  return null
+}
+
+const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+
+/** Company-type words after a brand ("Mascota Veloz S.A.C."): not part of how a salesperson is named. */
+const LEGAL_SUFFIX = /^(s|a|c|r|l|e|i|sac|saa|sa|srl|eirl|ltda|inc|llc|corp)$/
+
+/** `name` without `prefix`'s words in front (accents and case ignored); "" when nothing is left. */
+function withoutPrefix(name: string, prefix: string | null): string {
+  const words0 = prefix
+    ? fold(prefix)
+        .split(/[^a-z0-9]+/)
+        .filter(Boolean)
+    : []
+  // Trailing legal words only ("S.A.C." -> s, a, c); a brand word stays even if short.
+  let end = words0.length
+  while (end > 1 && LEGAL_SUFFIX.test(words0[end - 1])) end--
+  const want = words0.slice(0, end)
+  if (want.length === 0) return name
+  const words = [...name.matchAll(/[\p{L}\p{N}]+/gu)]
+  if (words.length < want.length) return name
+  for (let i = 0; i < want.length; i++) {
+    if (fold(words[i][0]) !== want[i]) return name
+  }
+  const last = words[want.length - 1]
+  return name
+    .slice((last.index ?? 0) + last[0].length)
+    .replace(/^[\s\-–—·:|/,.]+/, "")
+    .trim()
+}
+
+/** A sales order line in the shape `lineRow` reads (the product's own name, not the line's free text). */
+function saleLineAsPosLine(l: OdooSaleLine): OdooLine {
+  return {
+    id: l.id,
+    order_id: l.order_id,
+    product_id: l.product_id,
+    qty: l.product_uom_qty,
+    price_unit: l.price_unit,
+    discount: l.discount,
+    price_subtotal_incl: l.price_total,
+  }
+}
+
+/**
+ * Confirmed Odoo sales orders -> sales rows + lines, like `buildRows` for the
+ * till: `source = 'sale_order'`, no POS order id (`pos_order_id` is the
+ * pos.order id space; the reference "S09270" is the key), the store from the
+ * salesperson or team, the date of the order (its confirmation) as the
+ * instant of sale. Section and note lines are not products and are dropped.
+ */
+export function buildSaleOrderRows(params: {
+  tenantId: string
+  tenantName: string | null
+  timezone: string
+  orders: OdooSaleOrder[]
+  partners: Map<number, OdooPartner>
+  linesByOrder: Map<number, OdooSaleLine[]>
+  productsById: Map<number, OdooProduct>
+  importOf: (day: string) => string
+  clientByDni: Map<string, ClientRef>
+  hasIdType: boolean
+  master: ReadonlyMap<string, MasterEntry>
+}): { prepared: Prepared[]; badAmount: number } {
+  const byRef = new Map<string, Prepared>()
+  let badAmount = 0
+  for (const o of params.orders) {
+    const amount = Number(o.amount_total)
+    if (!Number.isFinite(amount) || Math.abs(amount) > MAX_ORDER_AMOUNT) {
+      badAmount++
+      continue
+    }
+    const pid = m2oId(o.partner_id)
+    const partner = pid ? params.partners.get(pid) : null
+    const partnerName = partner?.name ? String(partner.name) : null
+    const placeholder = isPlaceholderName(partnerName)
+    const dni = partnerDni(partner, params.hasIdType)
+    const soldAt = parseOdooDateTime(o.date_order)
+    const day = dayInTz(soldAt, params.timezone)
+    const salesperson = m2oName(o.user_id)
+    const row: typeof sales.$inferInsert = {
+      tenantId: params.tenantId,
+      importId: params.importOf(day),
+      orderRef: o.name,
+      dni,
+      customerName: partnerName && !placeholder ? partnerName.slice(0, 200) : null,
+      phone: normalizePhone(partner?.mobile || partner?.phone || null),
+      store: saleOrderStore(salesperson, m2oName(o.team_id), params.tenantName),
+      cashier: salesperson?.slice(0, 120) ?? null,
+      soldOn: day,
+      amount: (Math.round(amount * 100) / 100).toFixed(2),
+      source: SALE_ORDER_SOURCE,
+      posOrderId: null,
+      soldAt,
+      clientId: clientOwning(dni, day, params.clientByDni),
+    }
+    const lines = (params.linesByOrder.get(o.id) ?? [])
+      .filter((l) => !l.display_type && m2oId(l.product_id) !== null)
+      .map((l) => {
+        const prodId = m2oId(l.product_id) as number
+        return lineRow(
+          params.tenantId,
+          saleLineAsPosLine(l),
+          params.productsById.get(prodId),
+          params.master,
+        )
+      })
+    byRef.set(o.name, { ref: o.name, row, lines })
   }
   return { prepared: [...byRef.values()], badAmount }
 }
@@ -696,12 +911,13 @@ async function writePage(prepared: Prepared[]): Promise<number> {
           clientId: sql`CASE WHEN ${sales.linkKind} = 'manual' THEN ${sales.clientId} ELSE excluded.client_id END`,
         },
       })
-      .returning({ id: sales.id, posOrderId: sales.posOrderId })
-    const saleIdOf = new Map(inserted.map((r) => [r.posOrderId as number, r.id]))
+      .returning({ id: sales.id, orderRef: sales.orderRef })
+    // By reference: sales orders have no POS order id, and the reference is the upsert key anyway.
+    const saleIdOf = new Map(inserted.map((r) => [r.orderRef as string, r.id]))
     const saleIds = inserted.map((r) => r.id)
     await tx.delete(saleLines).where(inArray(saleLines.saleId, saleIds))
     const lineRows = prepared.flatMap((p) => {
-      const saleId = saleIdOf.get(p.order.id)
+      const saleId = saleIdOf.get(p.ref)
       return saleId ? p.lines.map((l) => ({ ...l, saleId })) : []
     })
     for (let i = 0; i < lineRows.length; i += 1000) {
@@ -795,7 +1011,7 @@ export async function clearInferredLinks(tenantId: string): Promise<number> {
     .where(
       and(
         eq(sales.tenantId, tenantId),
-        eq(sales.source, "pos"),
+        inArray(sales.source, [...CONNECTOR_SOURCES]),
         inArray(sales.linkKind, ["inferred_amount", "inferred_time"]),
       ),
     )
@@ -817,6 +1033,12 @@ export type InferSettings = { enabled: boolean; windowMinutes: number; excludedD
  * With `infer.enabled`, a second pass pairs guest sales (no DNI) with the
  * visit stamped at the same store minutes later (see `inferGuestLinks`), and
  * those sales get the visit's client too.
+ *
+ * Sales orders (Odoo Ventas) take part in the exact pass (same DNI, same
+ * day: ordered by phone, stamped at pick-up) and stand as rivals of the
+ * inferred one, but never get an inferred link themselves: their time is the
+ * confirmation, not a moment at the till, so a stamp minutes later proves
+ * nothing. Those are confirmed by hand in Validación de enlaces.
  */
 export async function matchVisitsInRange(
   tenantId: string,
@@ -828,7 +1050,7 @@ export async function matchVisitsInRange(
   const notManual = sql`${sales.linkKind} IS DISTINCT FROM 'manual'`
   const inRange = and(
     eq(sales.tenantId, tenantId),
-    eq(sales.source, "pos"),
+    inArray(sales.source, [...CONNECTOR_SOURCES]),
     gte(sales.soldOn, fromDay),
     lte(sales.soldOn, toDay),
     notManual,
@@ -838,7 +1060,7 @@ export async function matchVisitsInRange(
   await db.execute(sql`
     UPDATE analytics.sales s SET client_id = c.id
     FROM loyalty.clients c
-    WHERE s.tenant_id = ${tenantId}::uuid AND s.source = 'pos' AND s.client_id IS NULL
+    WHERE s.tenant_id = ${tenantId}::uuid AND s.source IN ${CONNECTOR_SOURCES_SQL} AND s.client_id IS NULL
       AND s.dni IS NOT NULL AND s.sold_on BETWEEN ${fromDay}::date AND ${toDay}::date
       AND c.tenant_id = s.tenant_id AND c.status <> 'deleted'
       AND regexp_replace(coalesce(c.dni, ''), '\\D', '', 'g') = s.dni
@@ -848,6 +1070,7 @@ export async function matchVisitsInRange(
   const orderRows = await db
     .select({
       id: sales.id,
+      source: sales.source,
       dni: sales.dni,
       clientId: sales.clientId,
       soldAt: sales.soldAt,
@@ -856,6 +1079,17 @@ export async function matchVisitsInRange(
     })
     .from(sales)
     .where(and(sellable, isNotNull(sales.dni)))
+  // POS first (user rule): the till's sales take their stamps, then the
+  // inferred pass, and only then do sales orders get the stamps left free.
+  const posRows = orderRows.filter((o) => o.source !== SALE_ORDER_SOURCE)
+  const saleOrderRows = orderRows.filter((o) => o.source === SALE_ORDER_SOURCE)
+  const asMatchOrder = (o: (typeof orderRows)[number]) => ({
+    id: o.id,
+    dni: o.dni,
+    soldAt: o.soldAt as Date,
+    store: o.store,
+    source: o.source,
+  })
   // Visits of the same local days, with a day of slack on each side for the timezone.
   const fromUtc = new Date(`${fromDay}T00:00:00Z`)
   fromUtc.setUTCDate(fromUtc.getUTCDate() - 1)
@@ -886,16 +1120,13 @@ export async function matchVisitsInRange(
           .innerJoin(clients, eq(clients.id, visits.clientId))
           .leftJoin(locations, eq(locations.id, visits.locationId))
           .where(and(visitWindow, isNotNull(clients.dni)))
-  const result = matchOrdersToVisits(
-    orderRows.map((o) => ({ id: o.id, dni: o.dni, soldAt: o.soldAt as Date, store: o.store })),
-    visitRows.map((v) => ({
-      id: v.id,
-      dni: v.dni as string,
-      createdAt: v.createdAt,
-      location: v.location,
-    })),
-    timezone,
-  )
+  const matchVisits = visitRows.map((v) => ({
+    id: v.id,
+    dni: v.dni as string,
+    createdAt: v.createdAt,
+    location: v.location,
+  }))
+  const result = matchOrdersToVisits(posRows.map(asMatchOrder), matchVisits, timezone)
   const saleIds = [...result.pairs.keys()]
   const visitIds = saleIds.map((id) => result.pairs.get(id) as string)
   await db.transaction(async (tx) => {
@@ -917,10 +1148,31 @@ export async function matchVisitsInRange(
         WHERE s.id = v.sale_id`)
     }
   })
-  if (!infer.enabled) return { exact: result.pairs.size, inferred: 0 }
+  // Last: sales orders, on the stamps no till sale took (exactly or inferred).
+  const linkSaleOrders = async (taken: Set<string>): Promise<number> => {
+    if (saleOrderRows.length === 0) return 0
+    const pairs = matchOrdersToVisits(
+      saleOrderRows.map(asMatchOrder),
+      matchVisits.filter((v) => !taken.has(v.id)),
+      timezone,
+    ).pairs
+    if (pairs.size === 0) return 0
+    const ids = [...pairs.keys()]
+    await db.execute(sql`
+      UPDATE analytics.sales s SET visit_id = v.visit_id, link_kind = 'dni'
+      FROM (SELECT unnest(${uuidArrayLiteral(ids)}::uuid[]) AS sale_id,
+                   unnest(${uuidArrayLiteral(ids.map((id) => pairs.get(id) as string))}::uuid[]) AS visit_id) v
+      WHERE s.id = v.sale_id`)
+    return pairs.size
+  }
+  if (!infer.enabled) {
+    const bySaleOrder = await linkSaleOrders(new Set(visitIds))
+    return { exact: result.pairs.size + bySaleOrder, inferred: 0 }
+  }
 
   // Second pass: sales of no Cuik client (guests, and documents no client has:
   // a typo or a relative's DNI) and the visits nobody owns after the exact pass.
+  // Till sales only: a sales order is never inferred (see above).
   const guestRows = await db
     .select({
       id: sales.id,
@@ -933,6 +1185,7 @@ export async function matchVisitsInRange(
     .where(
       and(
         sellable,
+        eq(sales.source, POS_SOURCE),
         sql`${sales.clientId} IS NULL`,
         isNotNull(sales.store),
         sql`(${sales.dni} IS NULL OR NOT EXISTS (
@@ -971,7 +1224,12 @@ export async function matchVisitsInRange(
             .selectDistinct({ store: sales.store })
             .from(sales)
             .where(
-              and(eq(sales.tenantId, tenantId), eq(sales.source, "pos"), isNotNull(sales.store)),
+              // The till's stores: the map tells which location each one stands for.
+              and(
+                eq(sales.tenantId, tenantId),
+                eq(sales.source, POS_SOURCE),
+                isNotNull(sales.store),
+              ),
             )
             .then((rows) => rows.map((r) => r.store as string)),
           db
@@ -1002,8 +1260,9 @@ export async function matchVisitsInRange(
       timezone,
       stores: storeNames,
       locations: locationNames,
-      // A registered client's purchase without a stamp may be the visit's real purchase.
-      blockers: orderRows
+      // A registered client's till purchase without a stamp may be the visit's
+      // real purchase. Sales orders are no rivals: the till goes first.
+      blockers: posRows
         .filter((o) => !result.pairs.has(o.id) && o.clientId !== null)
         .map((o) => ({
           soldAt: o.soldAt as Date,
@@ -1025,7 +1284,10 @@ export async function matchVisitsInRange(
            AS v(sale_id, visit_id, client_id, kind)
       WHERE s.id = v.sale_id`)
   }
-  return { exact: result.pairs.size, inferred: inferred.size }
+  const bySaleOrder = await linkSaleOrders(
+    new Set([...visitIds, ...[...inferred.values()].map((l) => l.visitId)]),
+  )
+  return { exact: result.pairs.size + bySaleOrder, inferred: inferred.size }
 }
 
 import { textArrayLiteral, uuidArrayLiteral } from "./pg-arrays"
@@ -1062,7 +1324,7 @@ async function releaseLock(tenantId: string, token: Date) {
 
 /** Where this run starts reading: a fresh backfill, an exact resume, or two days before a finished cursor. */
 function startingPoint(
-  cursor: Cursor | null,
+  cursor: { writeDate: string; offset: number; exhausted: boolean } | null | undefined,
   full: boolean,
 ): { writeDate: string | null; offset: number } {
   if (full || !cursor) return { writeDate: null, offset: 0 }
@@ -1085,6 +1347,12 @@ type RunContext = {
   touchedImports: Set<string>
   /** The product master, loaded once per run (an upload mid-run reclassifies on its own). */
   master?: ReadonlyMap<string, MasterEntry>
+  /** Strips the brand off a salesperson's name to get a sales order's store. */
+  tenantName: string | null
+  /** What to read of Odoo Ventas; null when the Odoo has none (or the user may not read it). */
+  saleFields: SaleOrderFields | null
+  /** The start date as an Odoo UTC datetime: nothing before it is synced. */
+  startUtc: string
 }
 
 /** Reads the partners, lines and products of a page and writes it; returns the days it touched. */
@@ -1113,23 +1381,10 @@ async function processPage(
     list.push(l)
     linesByOrder.set(oid, list)
   }
-  const missingProducts = [
-    ...new Set(
-      lineRows
-        .map((l) => m2oId(l.product_id))
-        .filter((id): id is number => id !== null && !ctx.productCache.has(id)),
-    ),
-  ]
-  if (missingProducts.length) {
-    const fetched = await ctx.client.readMany<OdooProduct>("product.product", missingProducts, [
-      "id",
-      "default_code",
-      "name",
-      "categ_id",
-    ])
-    for (const p of fetched) ctx.productCache.set(p.id, p)
-    await upsertProducts(ctx.tenantId, fetched)
-  }
+  await ensureProducts(
+    ctx,
+    lineRows.map((l) => m2oId(l.product_id)),
+  )
   // Import rows per month exist before the write so import_id is known.
   const days = page.map((o) => dayInTz(parseOdooDateTime(o.date_order), ctx.timezone))
   for (const m of new Set(days.map(monthOf))) {
@@ -1150,7 +1405,429 @@ async function processPage(
     master,
   })
   const upserted = await writePage(prepared)
-  return { upserted, badAmount, days }
+  // Sales orders paid at this page's till (pos_sale): their row shrinks or goes.
+  const paid = lineRows
+    .map((l) => m2oId(l.sale_order_origin_id))
+    .filter((id): id is number => id !== null)
+  const soDays = await refreshPaidSaleOrders(ctx, paid)
+  return { upserted, badAmount, days: [...days, ...soDays] }
+}
+
+/** Reads the products the run has not seen yet and keeps analytics.products up to date with them. */
+async function ensureProducts(ctx: RunContext, ids: (number | null)[]) {
+  const missing = [
+    ...new Set(ids.filter((id): id is number => id !== null && !ctx.productCache.has(id))),
+  ]
+  if (missing.length === 0) return
+  const fetched = await ctx.client.readMany<OdooProduct>("product.product", missing, [
+    "id",
+    "default_code",
+    "name",
+    "categ_id",
+  ])
+  for (const p of fetched) ctx.productCache.set(p.id, p)
+  await upsertProducts(ctx.tenantId, fetched)
+}
+
+// --- Sales orders (Odoo Ventas) ---
+
+/** What the sales orders pull reads from Odoo, decided once per run from the fields Odoo has. */
+export type SaleOrderFields = {
+  orderFieldList: string[]
+  lineFieldList: string[]
+  /** pos_sale is installed: a sales order can be paid at the till (pos.order.line.sale_order_origin_id). */
+  settledAtTill: boolean
+}
+
+/**
+ * True when Odoo's answer means "no Sales here for this user": the model
+ * does not exist, or the user may not read it. Network trouble, an HTTP 5xx
+ * or a broken reply are not that: they fail the run, so the pull resumes
+ * where it was (and the corte keeps waiting) instead of being marked done.
+ */
+export function meansNoSales(err: unknown): boolean {
+  if (!(err instanceof OdooError)) return false
+  if (err.kind === "auth") return true
+  return (
+    err.kind === "server" &&
+    /doesn'?t exist|does not exist|keyerror|^'sale\.order(\.line)?'$/i.test(err.message)
+  )
+}
+
+/**
+ * The fields to read, or null when the Odoo has no Sales app or the API user
+ * cannot read it (then there is nothing to pull, and the POS sync goes on).
+ */
+async function saleOrderFields(client: OdooClient): Promise<SaleOrderFields | null> {
+  try {
+    const [orderFields, lineFields, posLineFields] = await Promise.all([
+      client.fieldNames("sale.order"),
+      client.fieldNames("sale.order.line"),
+      client.fieldNames("pos.order.line"),
+    ])
+    if (orderFields.size === 0) return null
+    // fields_get needs no read right: a user without access to Ventas only fails on a read.
+    await client.searchCount("sale.order", [["id", "=", 0]])
+    return {
+      orderFieldList: [
+        "id",
+        "name",
+        "date_order",
+        "amount_total",
+        "partner_id",
+        "user_id",
+        "state",
+        "write_date",
+        "order_line",
+        ...(orderFields.has("team_id") ? ["team_id"] : []),
+      ],
+      lineFieldList: [
+        "id",
+        "order_id",
+        "product_id",
+        "product_uom_qty",
+        "price_unit",
+        "discount",
+        "price_total",
+        ...(lineFields.has("display_type") ? ["display_type"] : []),
+      ],
+      settledAtTill: posLineFields.has("sale_order_origin_id"),
+    }
+  } catch (err) {
+    if (meansNoSales(err)) return null
+    throw err
+  }
+}
+
+/**
+ * What becomes of a sales order: not confirmed (cancelled, back to
+ * quotation) → out; paid at the till (pos_sale) → the POS order is that
+ * purchase, so only the part paid elsewhere stays (a deposit paid online,
+ * the rest at pick-up), and nothing when the till paid it all. Counting
+ * both would count the purchase twice.
+ */
+export function saleOrderOutcome(
+  order: Pick<OdooSaleOrder, "state" | "amount_total">,
+  paidAtTill: number,
+): { keep: false } | { keep: true; amount: number } {
+  if (!SALE_ORDER_STATES.includes(order.state)) return { keep: false }
+  const total = Number(order.amount_total) || 0
+  if (!paidAtTill) return { keep: true, amount: total }
+  const rest = Math.round((total - paidAtTill) * 100) / 100
+  return rest > 0.5 ? { keep: true, amount: rest } : { keep: false }
+}
+
+/** Amount of each sales order paid at the till (pos_sale), from the lines of paid POS orders. */
+async function paidAtTill(
+  ctx: RunContext,
+  fields: SaleOrderFields,
+  ids: number[],
+): Promise<Map<number, number>> {
+  const out = new Map<number, number>()
+  if (!fields.settledAtTill || ids.length === 0) return out
+  const rows = await ctx.client.searchRead<{
+    sale_order_origin_id: Many2one
+    price_subtotal_incl: number
+  }>(
+    "pos.order.line",
+    [
+      ["sale_order_origin_id", "in", ids],
+      ["order_id.state", "in", ORDER_STATES],
+    ],
+    ["sale_order_origin_id", "price_subtotal_incl"],
+  )
+  for (const r of rows) {
+    const id = m2oId(r.sale_order_origin_id)
+    if (id !== null) out.set(id, (out.get(id) ?? 0) + (Number(r.price_subtotal_incl) || 0))
+  }
+  return out
+}
+
+/** The fields of a synced row that decide its links: a change means its day is matched again. */
+type LinkFacts = { dni: string | null; amount: string; soldAt: number | null; store: string | null }
+
+const factsOf = (r: {
+  dni?: string | null
+  amount?: string | null
+  soldAt?: Date | null
+  store?: string | null
+}): LinkFacts => ({
+  dni: r.dni ?? null,
+  amount: Number(r.amount ?? 0).toFixed(2),
+  soldAt: r.soldAt ? r.soldAt.getTime() : null,
+  store: r.store ?? null,
+})
+
+/**
+ * One page of sales orders: removes the ones that left (cancelled, back to
+ * quotation, paid at the till) and writes the rest with their lines. Returns
+ * the days whose links may change: rows new or changed in DNI, amount, time
+ * or store, and removed rows (their stamp is free again). An old order
+ * re-written by invoicing or delivery changes nothing and costs no rematch.
+ */
+async function processSaleOrderPage(
+  ctx: RunContext,
+  fields: SaleOrderFields,
+  page: OdooSaleOrder[],
+): Promise<{ upserted: number; removed: number; badAmount: number; days: string[] }> {
+  const tillPaid = await paidAtTill(
+    ctx,
+    fields,
+    page.filter((o) => SALE_ORDER_STATES.includes(o.state)).map((o) => o.id),
+  )
+  const keep: OdooSaleOrder[] = []
+  const dropRefs: string[] = []
+  for (const o of page) {
+    const outcome = saleOrderOutcome(o, tillPaid.get(o.id) ?? 0)
+    if (outcome.keep) keep.push({ ...o, amount_total: outcome.amount })
+    else dropRefs.push(o.name)
+  }
+  const days = new Set<string>()
+  let removed = 0
+  if (dropRefs.length > 0) {
+    const gone = await db
+      .delete(sales)
+      .where(
+        and(
+          eq(sales.tenantId, ctx.tenantId),
+          eq(sales.source, SALE_ORDER_SOURCE),
+          inArray(sales.orderRef, dropRefs),
+        ),
+      )
+      .returning({ importId: sales.importId, soldOn: sales.soldOn })
+    removed = gone.length
+    for (const g of gone) {
+      ctx.touchedImports.add(g.importId)
+      days.add(String(g.soldOn))
+    }
+  }
+  if (keep.length === 0) return { upserted: 0, removed, badAmount: 0, days: [...days] }
+
+  const partnerIds = [
+    ...new Set(keep.map((o) => m2oId(o.partner_id)).filter((id): id is number => id !== null)),
+  ]
+  const lineIds = keep.flatMap((o) => o.order_line ?? [])
+  const [partnerRows, lineRows, before] = await Promise.all([
+    partnerIds.length
+      ? ctx.client.readMany<OdooPartner>("res.partner", partnerIds, ctx.partnerFieldList)
+      : Promise.resolve([] as OdooPartner[]),
+    lineIds.length
+      ? ctx.client.readMany<OdooSaleLine>("sale.order.line", lineIds, fields.lineFieldList)
+      : Promise.resolve([] as OdooSaleLine[]),
+    db
+      .select({
+        orderRef: sales.orderRef,
+        dni: sales.dni,
+        amount: sales.amount,
+        soldAt: sales.soldAt,
+        store: sales.store,
+        soldOn: sales.soldOn,
+        source: sales.source,
+      })
+      .from(sales)
+      .where(
+        and(
+          eq(sales.tenantId, ctx.tenantId),
+          inArray(
+            sales.orderRef,
+            keep.map((o) => o.name),
+          ),
+        ),
+      ),
+  ])
+  const partners = new Map(partnerRows.map((p) => [p.id, p]))
+  const linesByOrder = new Map<number, OdooSaleLine[]>()
+  for (const l of lineRows) {
+    const oid = m2oId(l.order_id)
+    if (oid === null) continue
+    const list = linesByOrder.get(oid) ?? []
+    list.push(l)
+    linesByOrder.set(oid, list)
+  }
+  await ensureProducts(
+    ctx,
+    lineRows.map((l) => m2oId(l.product_id)),
+  )
+  for (const m of new Set(
+    keep.map((o) => monthOf(dayInTz(parseOdooDateTime(o.date_order), ctx.timezone))),
+  )) {
+    ctx.touchedImports.add(await monthImportId(ctx.tenantId, m, ctx.importCache))
+  }
+  if (!ctx.master) ctx.master = await loadMaster(ctx.tenantId)
+  const { prepared, badAmount } = buildSaleOrderRows({
+    tenantId: ctx.tenantId,
+    tenantName: ctx.tenantName,
+    timezone: ctx.timezone,
+    orders: keep,
+    partners,
+    linesByOrder,
+    productsById: ctx.productCache,
+    importOf: (day) => ctx.importCache.get(monthOf(day)) as string,
+    clientByDni: ctx.clientByDni,
+    hasIdType: ctx.hasIdType,
+    master: ctx.master,
+  })
+  const prior = new Map(before.map((b) => [b.orderRef as string, b]))
+  for (const p of prepared) {
+    const b = prior.get(p.ref)
+    const changed =
+      !b ||
+      b.source !== SALE_ORDER_SOURCE ||
+      JSON.stringify(factsOf(b)) !== JSON.stringify(factsOf(p.row))
+    if (changed) days.add(p.row.soldOn as string)
+    // A row that moved to another day frees its stamp on the old one.
+    if (b && String(b.soldOn) !== p.row.soldOn) days.add(String(b.soldOn))
+  }
+  const upserted = await writePage(prepared)
+  return { upserted, removed, badAmount, days: [...days] }
+}
+
+/**
+ * Sales orders a page of POS orders paid at the till (pos_sale): read again
+ * right away, since the payment at the till does not always touch the sales
+ * order's write_date and the sales orders pull would never see it.
+ */
+async function refreshPaidSaleOrders(ctx: RunContext, ids: number[]): Promise<string[]> {
+  const fields = ctx.saleFields
+  if (!fields || ids.length === 0) return []
+  const orders = await ctx.client.searchRead<OdooSaleOrder>(
+    "sale.order",
+    [
+      ["id", "in", [...new Set(ids)]],
+      ["date_order", ">=", ctx.startUtc],
+    ],
+    fields.orderFieldList,
+  )
+  if (orders.length === 0) return []
+  return (await processSaleOrderPage(ctx, fields, orders)).days
+}
+
+/**
+ * Consecutive runs of days ("YYYY-MM-DD", any order), runs closer than
+ * `maxGap` days merged, so a page whose orders sit on a few scattered days
+ * is matched day by day instead of over everything in between; past
+ * `maxRanges` runs, one range from the first to the last day.
+ */
+export function dayRanges(days: string[], maxGap = 3, maxRanges = 6): [string, string][] {
+  const sorted = [...new Set(days)].sort()
+  if (sorted.length === 0) return []
+  const out: [string, string][] = []
+  let from = sorted[0]
+  let to = sorted[0]
+  for (const d of sorted.slice(1)) {
+    if (d <= addDays(to, maxGap)) to = d
+    else {
+      out.push([from, to])
+      from = d
+      to = d
+    }
+  }
+  out.push([from, to])
+  return out.length > maxRanges ? [[sorted[0], sorted[sorted.length - 1]]] : out
+}
+
+/** Re-matches the visits of the given days, range by range (see `dayRanges`). */
+async function matchDays(ctx: RunContext, days: string[], infer: InferSettings) {
+  for (const [from, to] of dayRanges(days)) {
+    await matchVisitsInRange(ctx.tenantId, ctx.timezone, from, to, infer)
+  }
+}
+
+/**
+ * Pulls the sales orders after the POS orders, same paging as the POS pull
+ * (write_date second + offset), from `previous` on. Cancelled orders are read
+ * too, and once the history is in (incremental runs) quotations as well, so
+ * an order cancelled or sent back to quotation after it was synced leaves
+ * analytics.sales. Saves its cursor after every page through `save`.
+ */
+async function pullSaleOrders(p: {
+  ctx: RunContext
+  startUtc: string
+  previous: SaleOrderCursor | undefined
+  full: boolean
+  budget: number
+  infer: InferSettings
+  save: (cursor: SaleOrderCursor) => Promise<void>
+}): Promise<{
+  pulled: number
+  upserted: number
+  removed: number
+  badAmount: number
+  exhausted: boolean
+}> {
+  const out = { pulled: 0, upserted: 0, removed: 0, badAmount: 0, exhausted: false }
+  const fields = p.ctx.saleFields
+  if (!fields) {
+    // Re-checked every run: the merchant may install Ventas (or grant access) later.
+    await p.save({
+      writeDate: p.previous?.writeDate ?? p.startUtc,
+      id: p.previous?.id ?? 0,
+      offset: p.previous?.offset ?? 0,
+      exhausted: true,
+      unavailable: true,
+    })
+    out.exhausted = true
+    return out
+  }
+  // A cursor written while Ventas was missing says nothing about where to resume.
+  const previous = p.full || p.previous?.unavailable ? undefined : p.previous
+  let point = startingPoint(previous, p.full)
+  /** The cursor saved by this run's last page, if any. */
+  let last: SaleOrderCursor | null = null
+  // Quotations only once the history is in: a backfill has nothing to remove,
+  // and every abandoned e-commerce cart is a quotation. The domain stays the
+  // same for the whole backfill, so the offset inside a second stays valid.
+  const incremental = !!previous?.exhausted
+  const baseDomain: unknown[] = [
+    [
+      "state",
+      "in",
+      [...SALE_ORDER_STATES, ...SALE_ORDER_DEAD_STATES, ...(incremental ? QUOTATION_STATES : [])],
+    ],
+    ["date_order", ">=", p.startUtc],
+  ]
+  while (out.pulled < p.budget) {
+    const domain = point.writeDate
+      ? [...baseDomain, ["write_date", ">=", point.writeDate]]
+      : baseDomain
+    const page = await p.ctx.client.searchRead<OdooSaleOrder>(
+      "sale.order",
+      domain,
+      fields.orderFieldList,
+      { limit: PAGE, offset: point.offset, order: "write_date asc, id asc" },
+    )
+    if (page.length === 0) {
+      out.exhausted = true
+      // Nothing (more) to read: the last position stays (never the overlap's
+      // earlier point, or the cursor would walk back two days every run).
+      if (!last) {
+        await p.save(
+          previous
+            ? { ...previous, exhausted: true }
+            : { writeDate: p.startUtc, id: 0, offset: 0, exhausted: true },
+        )
+      }
+      break
+    }
+    out.pulled += page.length
+    const r = await processSaleOrderPage(p.ctx, fields, page)
+    out.upserted += r.upserted
+    out.removed += r.removed
+    out.badAmount += r.badAmount
+    // Before the cursor moves past them, like the POS pull.
+    await matchDays(p.ctx, r.days, p.infer)
+    const tail = page[page.length - 1]
+    const sameSecond = page.filter((o) => o.write_date === tail.write_date).length
+    const offset = point.writeDate === tail.write_date ? point.offset + sameSecond : sameSecond
+    out.exhausted = page.length < PAGE
+    point = { writeDate: tail.write_date, offset }
+    last = { writeDate: tail.write_date, id: tail.id, offset, exhausted: out.exhausted }
+    await p.save(last)
+    if (out.exhausted) break
+  }
+  // A full last page followed by an empty one: the position read last is complete.
+  if (out.exhausted && last && !last.exhausted) await p.save({ ...last, exhausted: true })
+  return out
 }
 
 /**
@@ -1199,6 +1876,8 @@ export async function syncTenant(
     inferredVisits: 0,
     skippedBadAmount: 0,
     replacedFileSales: 0,
+    saleOrders: 0,
+    removedSaleOrders: 0,
     more: false,
     cursor: null,
     error: null,
@@ -1213,6 +1892,11 @@ export async function syncTenant(
     const { client, row } = await clientFor(tenantId)
     if (!row) throw new OdooError("El comercio no tiene conector configurado", "server")
     const timezone = await tenantTimezone(tenantId)
+    const [tenantRow] = await db
+      .select({ name: tenants.name })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1)
     const maxOrders = opts.maxOrders ?? MAX_ORDERS_PER_RUN
     const startDate = String(row.startDate)
     const previous: Cursor | null = opts.full ? null : ((row.cursor as Cursor | null) ?? null)
@@ -1236,6 +1920,7 @@ export async function syncTenant(
       client.fieldNames("pos.order.line"),
     ])
     const hasIdType = partnerFields.has("l10n_latam_identification_type_id")
+    const saleFields = await saleOrderFields(client)
     const ctx: RunContext = {
       tenantId,
       timezone,
@@ -1271,12 +1956,16 @@ export async function syncTenant(
         "discount",
         "price_subtotal_incl",
         ...(lineFields.has("full_product_name") ? ["full_product_name"] : []),
+        ...(saleFields?.settledAtTill ? ["sale_order_origin_id"] : []),
       ],
       hasIdType,
       clientByDni: await loadClientsByDni(tenantId, timezone),
       productCache: new Map(),
       importCache: new Map(),
       touchedImports,
+      tenantName: tenantRow?.name ?? null,
+      saleFields,
+      startUtc,
     }
 
     // A fresh backfill takes over the period from the file uploads.
@@ -1322,6 +2011,8 @@ export async function syncTenant(
       exhausted = page.length < PAGE
       cursor = {
         ...(inferredAt ? { inferredAt } : {}),
+        // The sales orders pull keeps its own position while this one moves.
+        ...(previous?.saleOrders ? { saleOrders: previous.saleOrders } : {}),
         writeDate: last.write_date,
         id: last.id,
         offset,
@@ -1335,12 +2026,48 @@ export async function syncTenant(
       result.cursor = cursor
       if (exhausted) break
     }
-    result.more = !exhausted
     if (exhausted && cursor && !cursor.exhausted) {
       cursor = { ...cursor, exhausted: true }
       await db.update(posConnections).set({ cursor }).where(eq(posConnections.tenantId, tenantId))
       result.cursor = cursor
     }
+    // No POS order since the start date at all: the pull is complete all the
+    // same, and the sales orders' position needs a cursor to live in.
+    if (exhausted && !cursor) {
+      cursor = { writeDate: startUtc, id: 0, offset: 0, exhausted: true }
+      await db.update(posConnections).set({ cursor }).where(eq(posConnections.tenantId, tenantId))
+      result.cursor = cursor
+    }
+
+    // Then the sales orders (Odoo Ventas), with what is left of the run's budget.
+    let saleOrdersDone = previous?.saleOrders?.exhausted === true
+    if (exhausted && cursor && result.pulled < maxOrders) {
+      const so = await pullSaleOrders({
+        ctx,
+        startUtc,
+        previous: previous?.saleOrders,
+        full: opts.full === true,
+        budget: maxOrders - result.pulled,
+        infer: { ...infer, enabled: infer.enabled && !backfilling },
+        save: async (saleOrders) => {
+          cursor = { ...(cursor as Cursor), saleOrders }
+          await db
+            .update(posConnections)
+            .set({ cursor, updatedAt: new Date() })
+            .where(eq(posConnections.tenantId, tenantId))
+          result.cursor = cursor
+        },
+      })
+      result.pulled += so.pulled
+      result.saleOrders = so.pulled
+      result.upserted += so.upserted
+      result.removedSaleOrders = so.removed
+      result.skippedBadAmount += so.badAmount
+      saleOrdersDone = so.exhausted
+    } else if (!exhausted) {
+      saleOrdersDone = false
+    }
+    result.more = !exhausted || !saleOrdersDone
     result.cursor =
       (await finishLinks({
         tenantId,
@@ -1349,7 +2076,8 @@ export async function syncTenant(
         today,
         infer,
         backfilling,
-        cursor: exhausted ? cursor : null,
+        // The whole-history inferred pass waits for both pulls (sales orders are its rivals).
+        cursor: exhausted && saleOrdersDone ? cursor : null,
       })) ?? result.cursor
     // What this run added, by counting before and after (ranges overlap, so pass totals would double up).
     const linksAfter = await linkCounts(tenantId)

@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs"
 
 import type { CandidateSale, LinksReview, UnlinkedVisit } from "./links-review"
+import { sourceLabel } from "./sources"
 
 /**
  * "Registros sin venta" as an Excel the merchant can answer: one row per
@@ -29,6 +30,7 @@ function candidateCells(c: CandidateSale | undefined, tz: string) {
   if (!c) {
     return {
       orderRef: "",
+      saleSource: "",
       saleWhen: "",
       minutes: null,
       saleStore: "",
@@ -42,6 +44,7 @@ function candidateCells(c: CandidateSale | undefined, tz: string) {
   }
   return {
     orderRef: c.orderRef ?? "",
+    saleSource: sourceLabel(c.source),
     saleWhen: when(c.soldAt, tz),
     minutes: c.minutes,
     saleStore: c.store ?? "",
@@ -68,6 +71,7 @@ export async function buildLinksExcel(review: LinksReview, tenantName: string): 
     { header: "Monto sello", key: "amount", width: 12 },
     { header: "Cajero", key: "cashier", width: 14 },
     { header: "Venta más cercana", key: "orderRef", width: 26 },
+    { header: "Canal venta", key: "saleSource", width: 14 },
     { header: "Hora venta", key: "saleWhen", width: 18 },
     { header: "Minutos", key: "minutes", width: 9 },
     { header: "Tienda venta", key: "saleStore", width: 18 },
@@ -113,7 +117,7 @@ export async function buildLinksExcel(review: LinksReview, tenantName: string): 
     if (v.suggestion === "link") row.getCell("suggestion").font = { bold: true }
   })
   for (const key of ["amount", "saleAmount"]) ws.getColumn(key).numFmt = "#,##0.00"
-  ws.autoFilter = { from: "A1", to: `W${Math.max(2, review.unlinked.length + 1)}` }
+  ws.autoFilter = { from: "A1", to: `X${Math.max(2, review.unlinked.length + 1)}` }
 
   const s = review.summary
   const resumen = wb.addWorksheet("Resumen")

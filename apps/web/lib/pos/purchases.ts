@@ -2,12 +2,15 @@ import { db, eq, sql, tenants } from "@cuik/db"
 
 import { leafOfKey, speciesOfKey } from "@/lib/growth/categories"
 import { addDays } from "@/lib/growth/dates"
+import { CONNECTOR_SOURCES_SQL } from "./sources"
 
 /**
  * Análisis de compras: what the point of sale sells by category, brand and
  * SKU, and how the Cuik clients buy it. Everything is SQL over
  * analytics.sales / sale_lines for the period; the classification comes from
- * sale_lines.category_key / brand (the product master first).
+ * sale_lines.category_key / brand (the product master first). The till's
+ * orders and the sales orders of Odoo Ventas (e-commerce, phone) both count:
+ * they are the merchant's sales, and a client's repurchase may go either way.
  */
 
 export type PurchaseFilters = {
@@ -97,7 +100,7 @@ export function categoryLabel(key: string): string {
 export async function purchaseStores(tenantId: string): Promise<string[]> {
   const rows = await db.execute<{ store: string }>(sql`
     select distinct store from analytics.sales
-    where tenant_id = ${tenantId} and source = 'pos' and store is not null
+    where tenant_id = ${tenantId} and source in ${CONNECTOR_SOURCES_SQL} and store is not null
     order by store`)
   return rows.rows.map((r) => r.store)
 }
@@ -106,12 +109,12 @@ export async function purchaseAnalytics(
   tenantId: string,
   f: PurchaseFilters,
 ): Promise<PurchaseAnalytics> {
-  const where = sql`s.tenant_id = ${tenantId} and s.source = 'pos' and s.amount > 0
+  const where = sql`s.tenant_id = ${tenantId} and s.source in ${CONNECTOR_SOURCES_SQL} and s.amount > 0
     and s.sold_on between ${f.from}::date and ${f.to}::date
     ${f.store ? sql`and s.store = ${f.store}` : sql``}
     ${f.cuikOnly ? sql`and s.client_id is not null` : sql``}`
   const freqFrom = addDays(f.to, -365)
-  const whereFreq = sql`s.tenant_id = ${tenantId} and s.source = 'pos' and s.amount > 0
+  const whereFreq = sql`s.tenant_id = ${tenantId} and s.source in ${CONNECTOR_SOURCES_SQL} and s.amount > 0
     and s.client_id is not null and s.sold_on between ${freqFrom}::date and ${f.to}::date
     ${f.store ? sql`and s.store = ${f.store}` : sql``}`
 

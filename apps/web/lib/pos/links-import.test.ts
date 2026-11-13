@@ -80,6 +80,7 @@ describe("links excel", () => {
           candidates: [
             {
               saleId: S1,
+              source: "pos",
               orderRef: "SURCO - JACARANDA/79083",
               soldAt: "2026-11-10T18:28:00Z",
               minutes: -2,
@@ -90,6 +91,7 @@ describe("links excel", () => {
               clientId: null,
               sameAmount: true,
               sameStore: true,
+              sameDni: false,
             },
           ],
         },

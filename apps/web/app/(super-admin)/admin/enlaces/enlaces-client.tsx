@@ -547,8 +547,10 @@ function UnlinkedRow({
                   {c.customerName ? ` · ${c.customerName}` : ""}
                   {c.store ? ` · ${c.store}` : ""}
                   {c.clientId ? " · cliente Cuik sin sello" : ""}
+                  {c.sameDni ? " · mismo DNI" : ""}
                   {c.orderRef ? ` · ${c.orderRef}` : ""}
                 </span>
+                {c.source === "sale_order" && <StatusChip tone="info">Orden de venta</StatusChip>}
                 <Button
                   variant="outline"
                   size="sm"

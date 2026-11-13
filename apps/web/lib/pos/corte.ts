@@ -2,7 +2,7 @@ import { and, db, eq, impactReports, posConnections, salesImports, sql, tenants 
 import { previousMonth } from "@/lib/loyalty/impact/reminder"
 import { computeReportForImport, lastSettings } from "@/lib/loyalty/impact/store"
 import { dayInTz } from "./match"
-import { type Cursor, type SyncResult, syncedMonths } from "./sync"
+import { type Cursor, type SyncResult, syncComplete, syncedMonths } from "./sync"
 
 /**
  * The monthly corte for tenants on the POS connector: the same report the
@@ -42,7 +42,8 @@ export async function computeSyncedCorte(
     .where(eq(posConnections.tenantId, tenantId))
     .limit(1)
   const cursor = (conn?.cursor as Cursor | null) ?? null
-  if (!cursor || !cursor.exhausted) {
+  // Both pulls: a corte without the sales orders (Odoo Ventas) would undercount the month.
+  if (!syncComplete(cursor)) {
     return { error: "La carga inicial desde el POS todavía no termina; el corte saldría a medias." }
   }
   if (conn?.lastError) {
@@ -89,7 +90,7 @@ export async function computeMissingCortes(
   for (const r of rows) {
     if (busy.has(r.tenantId)) continue
     const cursor = (r.cursor as Cursor | null) ?? null
-    if (!cursor?.exhausted || !r.lastSyncAt) continue
+    if (!syncComplete(cursor) || !r.lastSyncAt) continue
     const timezone = r.timezone ?? "America/Lima"
     const today = dayInTz(new Date(), timezone)
     if (Number(today.slice(8, 10)) < 2) continue
