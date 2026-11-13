@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm"
 import {
   boolean,
   date,
@@ -9,6 +10,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core"
 import { user } from "./auth"
@@ -222,3 +224,91 @@ export const uitValues = financeSchema.table("uit_values", {
   updatedBy: text("updated_by").references(() => user.id),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })
+
+export type IgvTreatment = "credito" | "sin_credito" | "representacion" | "no_domiciliado"
+export type DocType = "01" | "03" | "07" | "08" | "02" | "12" | "14" | "91" | "00"
+
+/**
+ * Who Cuik buys from. `domiciled` false for foreign providers (Hetzner,
+ * Apple, Google…), whose IGV goes through "utilización de servicios".
+ * Migration 0048.
+ */
+export const suppliers = financeSchema.table("suppliers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  docType: text("doc_type").$type<"ruc" | "dni" | "foreign">().default("ruc").notNull(),
+  docNumber: text("doc_number"),
+  name: text("name").notNull(),
+  country: text("country").default("PE").notNull(),
+  domiciled: boolean("domiciled").default(true).notNull(),
+  defaultCategory: text("default_category"),
+  defaultIgvTreatment: text("default_igv_treatment").$type<IgvTreatment>(),
+  notes: text("notes"),
+  updatedBy: text("updated_by").references(() => user.id),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+})
+
+/**
+ * One fiscal document, issued (sale) or received (purchase): invoice, boleta,
+ * credit/debit note, recibo por honorarios, ticket, utility bill or foreign
+ * invoice. Amounts in the document currency; `fxRate` (PEN per USD) only for
+ * USD. A merchant invoice in `tenant_invoices` points here through
+ * `document_id`. Migration 0048.
+ */
+export const documents = financeSchema.table(
+  "documents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    direction: text("direction").$type<"sale" | "purchase">().notNull(),
+    issuerId: uuid("issuer_id")
+      .notNull()
+      .references(() => issuers.id),
+    docType: text("doc_type").$type<DocType>().notNull(),
+    serie: text("serie").notNull(),
+    numero: text("numero").notNull(),
+    issueDate: date("issue_date").notNull(),
+    /** "YYYY-MM" the document counts in for IGV (purchases: may be after issue). */
+    taxPeriod: text("tax_period").notNull(),
+    tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "set null" }),
+    supplierId: uuid("supplier_id").references(() => suppliers.id, { onDelete: "restrict" }),
+    counterpartyDoc: text("counterparty_doc"),
+    counterpartyName: text("counterparty_name").notNull(),
+    currency: text("currency").$type<"PEN" | "USD">().default("PEN").notNull(),
+    fxRate: numeric("fx_rate", { precision: 10, scale: 4 }),
+    baseGravada: numeric("base_gravada", { precision: 12, scale: 2 }).default("0").notNull(),
+    baseNoGravada: numeric("base_no_gravada", { precision: 12, scale: 2 }).default("0").notNull(),
+    igv: numeric("igv", { precision: 12, scale: 2 }).default("0").notNull(),
+    total: numeric("total", { precision: 12, scale: 2 }).notNull(),
+    igvTreatment: text("igv_treatment").$type<IgvTreatment>(),
+    rentaDeductible: text("renta_deductible").$type<"si" | "no" | "limitado">(),
+    category: text("category"),
+    detraccionRate: numeric("detraccion_rate", { precision: 6, scale: 4 }),
+    detraccionConstancia: text("detraccion_constancia"),
+    relatedDocumentId: uuid("related_document_id"),
+    status: text("status").$type<"registered" | "void">().default("registered").notNull(),
+    paidOn: date("paid_on"),
+    pdfKey: text("pdf_key"),
+    pdfName: text("pdf_name"),
+    xmlKey: text("xml_key"),
+    xmlName: text("xml_name"),
+    cdrKey: text("cdr_key"),
+    cdrName: text("cdr_name"),
+    entryId: uuid("entry_id").references(() => financeEntries.id, { onDelete: "set null" }),
+    notes: text("notes"),
+    createdBy: text("created_by").references(() => user.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedBy: text("updated_by").references(() => user.id),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("finance_documents_period_idx").on(t.direction, t.taxPeriod),
+    index("finance_documents_tenant_idx").on(t.tenantId),
+    // A number exists once, void or not (SUNAT never reuses it).
+    uniqueIndex("finance_documents_sale_number_uidx")
+      .on(t.issuerId, t.docType, t.serie, t.numero)
+      .where(sql`direction = 'sale'`),
+    uniqueIndex("finance_documents_purchase_number_uidx")
+      .on(t.supplierId, t.docType, t.serie, t.numero)
+      .where(sql`direction = 'purchase'`),
+  ],
+)

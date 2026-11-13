@@ -117,6 +117,9 @@ export {
   solicitudEmailTemplatesSchema,
 } from "./email-templates-schema"
 export {
+  DOC_TYPES,
+  type DocumentInput,
+  documentSchema,
   FINANCE_COST_CATEGORIES,
   FINANCE_INCOME_CATEGORIES,
   type FinanceEntryInput,
@@ -124,7 +127,9 @@ export {
   type FxRateInput,
   financeEntrySchema,
   financeLedgerQuerySchema,
+  financeMonthSchema,
   fxRateSchema,
+  IGV_TREATMENTS,
   type IssuerInput,
   issuerSchema,
   type LoanInput,
@@ -135,6 +140,8 @@ export {
   prospectSchema,
   type RecurringItemInput,
   recurringItemSchema,
+  type SupplierInput,
+  supplierSchema,
   TAX_REGIMES,
   type TaxProfileInput,
   taxProfileSchema,

@@ -137,6 +137,8 @@ export async function loadBilling(tenantId: string) {
       invoiceFile: i.invoiceFileKey ? { name: i.invoiceFileName ?? "factura" } : null,
       receiptFile: i.receiptFileKey ? { name: i.receiptFileName ?? "voucher" } : null,
       issuer: issuerOf(i.issuedOn),
+      /** Sale document in Finanzas › Ventas (from CUIK E.I.R.L. on). */
+      documentId: i.documentId,
       createdAt: i.createdAt.toISOString(),
     })),
   }

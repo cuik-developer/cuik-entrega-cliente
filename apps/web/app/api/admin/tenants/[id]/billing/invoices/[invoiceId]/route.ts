@@ -1,11 +1,17 @@
 import { and, db, eq, tenantInvoices } from "@cuik/db"
-import { updateInvoiceSchema } from "@cuik/shared/validators"
+import { type UpdateInvoiceInput, updateInvoiceSchema } from "@cuik/shared/validators"
 import {
   findCoverageClash,
   isPeriodConflict,
   loadBilling,
   lockTenantInvoices,
 } from "@/lib/admin/billing-data"
+import {
+  DocumentError,
+  deleteDocumentRow,
+  isDocumentNumberConflict,
+  syncSaleFromInvoice,
+} from "@/lib/admin/documents-data"
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
 import { deleteAsset } from "@/lib/storage"
 
@@ -26,7 +32,32 @@ async function guard(request: Request, ctx: Ctx) {
     .where(and(eq(tenantInvoices.id, invoiceId), eq(tenantInvoices.tenantId, id)))
     .limit(1)
   if (!row) return { error: errorResponse("Not found", 404) }
-  return { id, row }
+  return { id, row, session }
+}
+
+/** Columns to write for a PATCH: only what was sent, plus status and the paid date it implies. */
+function invoicePatch(
+  u: UpdateInvoiceInput,
+  row: typeof tenantInvoices.$inferSelect,
+  nextStatus: "pending" | "paid" | "void",
+) {
+  return {
+    ...(u.period !== undefined ? { period: u.period } : {}),
+    ...(u.months !== undefined ? { months: u.months } : {}),
+    ...(u.recognition !== undefined ? { recognition: u.recognition } : {}),
+    ...(u.issuedOn !== undefined ? { issuedOn: u.issuedOn } : {}),
+    ...(u.number !== undefined ? { number: u.number } : {}),
+    ...(u.amount !== undefined ? { amount: String(u.amount) } : {}),
+    ...(u.currency !== undefined ? { currency: u.currency } : {}),
+    status: nextStatus,
+    paidOn:
+      nextStatus === "paid"
+        ? (u.paidOn ?? row.paidOn ?? row.issuedOn)
+        : u.paidOn !== undefined
+          ? u.paidOn
+          : row.paidOn,
+    ...(u.note !== undefined ? { note: u.note } : {}),
+  }
 }
 
 /** Edit an invoice (status change: pending → paid / void, number, amount, dates). */
@@ -52,32 +83,30 @@ export async function PATCH(request: Request, ctx: Ctx) {
           )
           if (msg) return msg
         }
-        await tx
+        const [updated] = await tx
           .update(tenantInvoices)
-          .set({
-            ...(u.period !== undefined ? { period: u.period } : {}),
-            ...(u.months !== undefined ? { months: u.months } : {}),
-            ...(u.recognition !== undefined ? { recognition: u.recognition } : {}),
-            ...(u.issuedOn !== undefined ? { issuedOn: u.issuedOn } : {}),
-            ...(u.number !== undefined ? { number: u.number } : {}),
-            ...(u.amount !== undefined ? { amount: String(u.amount) } : {}),
-            ...(u.currency !== undefined ? { currency: u.currency } : {}),
-            status: nextStatus,
-            paidOn:
-              nextStatus === "paid"
-                ? (u.paidOn ?? g.row.paidOn ?? g.row.issuedOn)
-                : u.paidOn !== undefined
-                  ? u.paidOn
-                  : g.row.paidOn,
-            ...(u.note !== undefined ? { note: u.note } : {}),
-          })
+          .set(invoicePatch(u, g.row, nextStatus))
           .where(eq(tenantInvoices.id, g.row.id))
+          .returning()
+        // Keep the sale in Finanzas › Ventas in step (number, amount, date, void).
+        if (updated) {
+          await syncSaleFromInvoice(tx, updated, g.session.user.id, {
+            // Editing the number or date must leave a valid sale; marking paid never blocks.
+            strict: u.number !== undefined || u.issuedOn !== undefined,
+            amountChanged:
+              u.amount !== undefined || u.currency !== undefined || u.issuedOn !== undefined,
+          })
+        }
         return null
       })
       if (clash) return errorResponse(clash, 409)
     } catch (err) {
       if (isPeriodConflict(err)) {
         return errorResponse("Ya hay otra factura activa para ese periodo", 409)
+      }
+      if (err instanceof DocumentError) return errorResponse(err.message, err.status)
+      if (isDocumentNumberConflict(err)) {
+        return errorResponse("Ya existe un comprobante con ese número", 409)
       }
       throw err
     }
@@ -92,9 +121,14 @@ export async function DELETE(request: Request, ctx: Ctx) {
   try {
     const g = await guard(request, ctx)
     if ("error" in g) return g.error
-    await db.delete(tenantInvoices).where(eq(tenantInvoices.id, g.row.id))
+    // Its sale in Finanzas › Ventas goes with it, so the number can be registered again.
+    const docKeys = await db.transaction(async (tx) => {
+      await lockTenantInvoices(tx, g.id)
+      await tx.delete(tenantInvoices).where(eq(tenantInvoices.id, g.row.id))
+      return g.row.documentId ? deleteDocumentRow(tx, g.row.documentId) : []
+    })
     // The attachments go with the record (best effort: a missing object is not an error).
-    for (const key of [g.row.invoiceFileKey, g.row.receiptFileKey]) {
+    for (const key of [g.row.invoiceFileKey, g.row.receiptFileKey, ...docKeys]) {
       if (key) await deleteAsset(key).catch(() => undefined)
     }
     return successResponse(await loadBilling(g.id))

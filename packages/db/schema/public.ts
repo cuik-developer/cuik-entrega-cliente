@@ -175,11 +175,20 @@ export const tenantInvoices = pgTable(
     invoiceFileName: text("invoice_file_name"),
     receiptFileKey: text("receipt_file_key"),
     receiptFileName: text("receipt_file_name"),
+    /**
+     * Fiscal document of this invoice (finance.documents.id), from CUIK
+     * E.I.R.L. on. FK lives in migration 0048 (not declared here to avoid a
+     * circular import with the finance schema).
+     */
+    documentId: uuid("document_id"),
     createdBy: text("created_by").references(() => user.id),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
     index("tenant_invoices_tenant_issued_idx").on(table.tenantId, table.issuedOn),
+    uniqueIndex("tenant_invoices_document_uidx")
+      .on(table.documentId)
+      .where(sql`document_id IS NOT NULL`),
     uniqueIndex("tenant_invoices_tenant_period_uidx")
       .on(table.tenantId, table.period)
       .where(sql`status <> 'void'`),

@@ -4,6 +4,8 @@ import {
   ClipboardList,
   CreditCard,
   Download,
+  FileInput,
+  FileOutput,
   FlaskConical,
   Handshake,
   Heart,
@@ -178,6 +180,13 @@ export const ADMIN_MODULES: AdminModule[] = [
         items: [
           { href: "/admin/finanzas/tablero", label: "Tablero", icon: LayoutDashboard },
           { href: "/admin/finanzas", label: "Costos e ingresos", icon: Wallet },
+        ],
+      },
+      {
+        title: "Contabilidad",
+        items: [
+          { href: "/admin/finanzas/ventas", label: "Ventas", icon: FileOutput },
+          { href: "/admin/finanzas/compras", label: "Compras", icon: FileInput },
         ],
       },
       {

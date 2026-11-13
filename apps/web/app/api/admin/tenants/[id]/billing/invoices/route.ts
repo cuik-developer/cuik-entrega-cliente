@@ -6,6 +6,11 @@ import {
   loadBilling,
   lockTenantInvoices,
 } from "@/lib/admin/billing-data"
+import {
+  DocumentError,
+  isDocumentNumberConflict,
+  syncSaleFromInvoice,
+} from "@/lib/admin/documents-data"
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -37,20 +42,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         await lockTenantInvoices(tx, id)
         const msg = await findCoverageClash(tx, id, i.period, i.months)
         if (msg) return msg
-        await tx.insert(tenantInvoices).values({
-          tenantId: id,
-          period: i.period,
-          months: i.months,
-          recognition: i.recognition,
-          issuedOn: i.issuedOn,
-          number: i.number ?? null,
-          amount: String(i.amount),
-          currency: i.currency,
-          status: i.status,
-          paidOn: i.status === "paid" ? (i.paidOn ?? i.issuedOn) : (i.paidOn ?? null),
-          note: i.note ?? null,
-          createdBy: session.user.id,
-        })
+        const [row] = await tx
+          .insert(tenantInvoices)
+          .values({
+            tenantId: id,
+            period: i.period,
+            months: i.months,
+            recognition: i.recognition,
+            issuedOn: i.issuedOn,
+            number: i.number ?? null,
+            amount: String(i.amount),
+            currency: i.currency,
+            status: i.status,
+            paidOn: i.status === "paid" ? (i.paidOn ?? i.issuedOn) : (i.paidOn ?? null),
+            note: i.note ?? null,
+            createdBy: session.user.id,
+          })
+          .returning()
+        // From CUIK E.I.R.L. on, the invoice is also a sale in Finanzas › Ventas.
+        if (row) await syncSaleFromInvoice(tx, row, session.user.id, { strict: true })
         return null
       })
       if (clash) return errorResponse(clash, 409)
@@ -58,6 +68,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       // Partial unique index: one live invoice per period.
       if (isPeriodConflict(err)) {
         return errorResponse(`Ya hay una factura registrada para el periodo ${i.period}`, 409)
+      }
+      if (err instanceof DocumentError) return errorResponse(err.message, err.status)
+      if (isDocumentNumberConflict(err)) {
+        return errorResponse("Ya existe un comprobante con ese número", 409)
       }
       throw err
     }

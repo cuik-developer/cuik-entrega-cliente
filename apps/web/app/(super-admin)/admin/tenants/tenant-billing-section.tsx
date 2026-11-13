@@ -69,6 +69,7 @@ type Invoice = {
   receiptFile: { name: string } | null
   /** Who issued it, by the month of issue (Making Brands until Oct 2026). */
   issuer: (IssuerRef & { current: boolean }) | null
+  documentId: string | null
 }
 type Data = {
   config: Config | null
@@ -262,6 +263,38 @@ function FileSlot({
         }}
       />
     </span>
+  )
+}
+
+/** From CUIK E.I.R.L. on, the number must read serie-número: the invoice is also a sale. */
+function SaleNumberHint({ show }: { show: boolean }) {
+  if (!show) return null
+  return (
+    <p className="text-[11px] text-ent-fg-3">
+      Serie-número (F001-123): también queda registrada en Finanzas › Ventas.
+    </p>
+  )
+}
+
+/** Invoice number, who issued it, and the link to its sale in Finanzas › Ventas. */
+function InvoiceNumberCell({ invoice: i }: { invoice: Invoice }) {
+  return (
+    <td className="py-2 pr-3 text-ent-fg-2">
+      {i.number ?? "—"}
+      {i.issuer && (
+        <span className="block text-[11px] text-ent-fg-3" title={`RUC ${i.issuer.ruc}`}>
+          {i.issuer.current ? i.issuer.razonSocial : `${i.issuer.razonSocial} (histórico)`}
+        </span>
+      )}
+      {i.documentId && (
+        <a
+          href={`/admin/finanzas/ventas?month=${i.issuedOn.slice(0, 7)}`}
+          className="block text-[11px] text-ent-accent hover:underline"
+        >
+          Ver en Ventas
+        </a>
+      )}
+    </td>
   )
 }
 
@@ -613,6 +646,7 @@ export function TenantBillingSection({
                 onChange={(e) => setInv({ ...inv, number: e.target.value })}
                 placeholder="F001-000123"
               />
+              <SaleNumberHint show={igvRate !== null} />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Monto ({currency})</Label>
@@ -855,19 +889,7 @@ export function TenantBillingSection({
                         {periodLabel(i.period, i.months)}
                       </td>
                       <td className="py-2 pr-3 text-ent-fg-2">{formatYmd(i.issuedOn)}</td>
-                      <td className="py-2 pr-3 text-ent-fg-2">
-                        {i.number ?? "—"}
-                        {i.issuer && (
-                          <span
-                            className="block text-[11px] text-ent-fg-3"
-                            title={`RUC ${i.issuer.ruc}`}
-                          >
-                            {i.issuer.current
-                              ? i.issuer.razonSocial
-                              : `${i.issuer.razonSocial} (histórico)`}
-                          </span>
-                        )}
-                      </td>
+                      <InvoiceNumberCell invoice={i} />
                       <td className="py-2 pr-3 text-right tabular-nums">
                         {money(i.amount, i.currency)}
                       </td>

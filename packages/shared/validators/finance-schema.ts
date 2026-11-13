@@ -220,3 +220,126 @@ export const uitValueSchema = z.object({
   value: z.number().positive().max(1_000_000),
 })
 export type UitValueInput = z.infer<typeof uitValueSchema>
+
+// ── Contabilidad: comprobantes y proveedores (migration 0048) ──────────────
+
+const YMD_RE = /^\d{4}-\d{2}-\d{2}$/
+export const DOC_TYPES = ["01", "03", "07", "08", "02", "12", "14", "91", "00"] as const
+export const IGV_TREATMENTS = [
+  "credito",
+  "sin_credito",
+  "representacion",
+  "no_domiciliado",
+] as const
+/** Always positive: a credit note subtracts because of its type (07), never by its sign. */
+const money = z.number().min(0, "Escribe el monto en positivo").max(1_000_000)
+const realDate = (v: string) => {
+  const d = new Date(`${v}T12:00:00Z`)
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v
+}
+const SALE_DOC_TYPES: readonly string[] = ["01", "03", "07", "08"]
+const optionalText = (max: number) =>
+  z.preprocess(emptyToNull, z.string().trim().max(max).nullable().optional())
+
+/** POST /api/admin/finance/suppliers, PUT …/[id]. */
+export const supplierSchema = z
+  .object({
+    docType: z.enum(["ruc", "dni", "foreign"]),
+    docNumber: optionalText(30),
+    name: z.string().trim().min(1, "Falta el nombre").max(200),
+    country: z.string().trim().length(2).toUpperCase().default("PE"),
+    domiciled: z.boolean(),
+    defaultCategory: optionalText(60),
+    defaultIgvTreatment: z.preprocess(emptyToNull, z.enum(IGV_TREATMENTS).nullable().optional()),
+    notes: optionalText(1000),
+  })
+  .refine(
+    (v) => v.docType !== "ruc" || (v.docNumber != null && rucSchema.safeParse(v.docNumber).success),
+    {
+      message: "RUC inválido: revisa los dígitos",
+      path: ["docNumber"],
+    },
+  )
+  .refine((v) => v.docType !== "dni" || (v.docNumber != null && /^\d{8}$/.test(v.docNumber)), {
+    message: "El DNI tiene 8 dígitos",
+    path: ["docNumber"],
+  })
+export type SupplierInput = z.infer<typeof supplierSchema>
+
+/**
+ * POST /api/admin/finance/documents, PUT …/[id] (whole object). Sales need a
+ * counterparty name (or a tenant); purchases a supplier and an IGV treatment.
+ * Base + no gravada + IGV must add up to the total.
+ */
+export const documentSchema = z
+  .object({
+    direction: z.enum(["sale", "purchase"]),
+    docType: z.enum(DOC_TYPES),
+    serie: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z0-9]{1,4}$/, "Serie inválida (hasta 4 letras o números)"),
+    numero: z
+      .string()
+      .trim()
+      .regex(/^\d{1,10}$/, "Número inválido (solo dígitos)"),
+    issueDate: z.string().regex(YMD_RE, "Fecha inválida").refine(realDate, "Fecha inválida"),
+    taxPeriod: financeMonthSchema,
+    tenantId: z.preprocess(emptyToNull, z.string().uuid().nullable().optional()),
+    supplierId: z.preprocess(emptyToNull, z.string().uuid().nullable().optional()),
+    counterpartyDoc: optionalText(30),
+    counterpartyName: optionalText(200),
+    currency: financeCurrencySchema,
+    fxRate: z.number().positive().max(100).nullable().optional(),
+    baseGravada: money,
+    baseNoGravada: money,
+    igv: money,
+    total: money,
+    igvTreatment: z.preprocess(emptyToNull, z.enum(IGV_TREATMENTS).nullable().optional()),
+    rentaDeductible: z.preprocess(
+      emptyToNull,
+      z.enum(["si", "no", "limitado"]).nullable().optional(),
+    ),
+    category: optionalText(60),
+    detraccionRate: z.number().min(0).max(1).nullable().optional(),
+    detraccionConstancia: optionalText(60),
+    relatedDocumentId: z.preprocess(emptyToNull, z.string().uuid().nullable().optional()),
+    paidOn: z.preprocess(
+      emptyToNull,
+      z
+        .string()
+        .regex(YMD_RE, "Fecha inválida")
+        .refine(realDate, "Fecha inválida")
+        .nullable()
+        .optional(),
+    ),
+    notes: optionalText(1000),
+    /** Purchases: also create the cost in Costos e ingresos (management ledger). */
+    createCostEntry: z.boolean().optional(),
+  })
+  .refine(
+    (v) => Math.abs(Math.round((v.baseGravada + v.baseNoGravada + v.igv - v.total) * 100)) <= 2,
+    { message: "Base + no gravado + IGV no suman el total", path: ["total"] },
+  )
+  .refine((v) => v.currency === "PEN" || (v.fxRate ?? 0) > 0, {
+    message: "Falta el tipo de cambio del comprobante",
+    path: ["fxRate"],
+  })
+  .refine((v) => v.direction === "sale" || !!v.supplierId, {
+    message: "Elige el proveedor",
+    path: ["supplierId"],
+  })
+  .refine((v) => v.direction === "sale" || !!v.igvTreatment, {
+    message: "Indica cómo se trata el IGV",
+    path: ["igvTreatment"],
+  })
+  .refine((v) => v.direction === "purchase" || SALE_DOC_TYPES.includes(v.docType), {
+    message: "Ese tipo de comprobante no se emite",
+    path: ["docType"],
+  })
+  .refine((v) => v.direction === "purchase" || !!v.tenantId || !!v.counterpartyName, {
+    message: "Indica el cliente",
+    path: ["counterpartyName"],
+  })
+export type DocumentInput = z.infer<typeof documentSchema>
