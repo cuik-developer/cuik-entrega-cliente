@@ -411,9 +411,24 @@ export function ImpactReport({
                       : "—",
                 },
                 {
+                  label: "Ticket promedio",
+                  value:
+                    s.coverage.avgTicket != null
+                      ? `S/ ${s.coverage.avgTicket.toFixed(2)} por compra`
+                      : "—",
+                },
+                {
                   label: "Venta protegida",
                   value: `${soles(f.moneyPerYear)} al año · ${f.cardClients} clientes con tarjeta`,
                 },
+                ...(f.extraPurchasesPerYear != null && s.coverage.avgTicket != null
+                  ? [
+                      {
+                        label: "Cálculo",
+                        value: `${f.extraPurchasesPerYear} compras × S/ ${s.coverage.avgTicket.toFixed(2)} × ${f.cardClients} clientes`,
+                      },
+                    ]
+                  : []),
               ]}
             />
           </div>
