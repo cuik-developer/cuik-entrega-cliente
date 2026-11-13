@@ -3,10 +3,12 @@ import {
   date,
   index,
   integer,
+  jsonb,
   numeric,
   pgSchema,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core"
 import { user } from "./auth"
@@ -156,3 +158,67 @@ export const prospects = financeSchema.table(
   },
   (t) => [index("finance_prospects_stage_idx").on(t.stage)],
 )
+
+/**
+ * A legal entity that issues Cuik's invoices, with its validity in months
+ * ("YYYY-MM"; from null = no start, to null = current). Making Brands until
+ * 2026-10, CUIK E.I.R.L. from 2026-11. Migration 0047.
+ */
+export const issuers = financeSchema.table("issuers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ruc: text("ruc").notNull().unique("issuers_ruc_key"),
+  razonSocial: text("razon_social").notNull(),
+  nombreComercial: text("nombre_comercial"),
+  domicilioFiscal: text("domicilio_fiscal"),
+  fromMonth: text("from_month"),
+  toMonth: text("to_month"),
+  notes: text("notes"),
+  updatedBy: text("updated_by").references(() => user.id),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+})
+
+export type TaxRegime = "rmt" | "rer" | "general"
+/** Annual income-tax bracket over net income in UIT; `upToUit` null = no ceiling. */
+export type AnnualBracket = { upToUit: number | null; rate: number }
+
+/**
+ * Tax regime and rates of an issuer from a month on (the one in force is the
+ * latest `fromMonth` <= month). No rate lives in code; the accountant
+ * validates them. Migration 0047.
+ */
+export const taxProfiles = financeSchema.table(
+  "tax_profiles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    issuerId: uuid("issuer_id")
+      .notNull()
+      .references(() => issuers.id, { onDelete: "cascade" }),
+    fromMonth: text("from_month").notNull(),
+    regime: text("regime").$type<TaxRegime>().notNull(),
+    igvRate: numeric("igv_rate", { precision: 6, scale: 4 }).default("0.18").notNull(),
+    /** Monthly advance (RMT / General) or final monthly quota (RER), over net income. */
+    monthlyRate: numeric("monthly_rate", { precision: 6, scale: 4 }).notNull(),
+    annualBrackets: jsonb("annual_brackets").$type<AnnualBracket[]>().default([]).notNull(),
+    representationCapPct: numeric("representation_cap_pct", { precision: 6, scale: 4 })
+      .default("0.005")
+      .notNull(),
+    representationCapUit: numeric("representation_cap_uit", { precision: 8, scale: 2 })
+      .default("40")
+      .notNull(),
+    validatedByAccountant: boolean("validated_by_accountant").default(false).notNull(),
+    validatedAt: timestamp("validated_at"),
+    notes: text("notes"),
+    updatedBy: text("updated_by").references(() => user.id),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [unique("tax_profiles_issuer_id_from_month_key").on(t.issuerId, t.fromMonth)],
+)
+
+/** UIT (Unidad Impositiva Tributaria) of each year, typed by the owner or the accountant. Migration 0047. */
+export const uitValues = financeSchema.table("uit_values", {
+  year: integer("year").primaryKey(),
+  value: numeric("value", { precision: 10, scale: 2 }).notNull(),
+  updatedBy: text("updated_by").references(() => user.id),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+})

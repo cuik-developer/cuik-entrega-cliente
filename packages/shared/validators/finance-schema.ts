@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { rucSchema } from "./billing-schema"
 
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/
 const emptyToNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v)
@@ -153,3 +154,69 @@ export const FINANCE_COST_CATEGORIES = [
   "Otros",
 ] as const
 export const FINANCE_INCOME_CATEGORIES = ["Servicios", "Consultoría", "Diseño", "Otros"] as const
+
+// ── Contabilidad: emisor, régimen y UIT (migration 0047) ───────────────────
+
+const nullableMonth = z.preprocess(emptyToNull, financeMonthSchema.nullable())
+const rate = z.number().min(0).max(1)
+
+/** POST /api/admin/finance/issuers, PATCH …/[id] (whole object). */
+export const issuerSchema = z
+  .object({
+    ruc: rucSchema,
+    razonSocial: z.string().trim().min(1, "Falta la razón social").max(200),
+    nombreComercial: z.preprocess(emptyToNull, z.string().trim().max(120).nullable()),
+    domicilioFiscal: z.preprocess(emptyToNull, z.string().trim().max(300).nullable()),
+    fromMonth: nullableMonth,
+    toMonth: nullableMonth,
+    notes: z.preprocess(emptyToNull, z.string().trim().max(1000).nullable()),
+  })
+  .refine((v) => !v.fromMonth || !v.toMonth || v.fromMonth <= v.toMonth, {
+    message: "El mes final es anterior al inicial",
+    path: ["toMonth"],
+  })
+export type IssuerInput = z.infer<typeof issuerSchema>
+
+export const TAX_REGIMES = ["rmt", "rer", "general"] as const
+
+const annualBracketSchema = z.object({
+  /** Upper limit of the bracket in UIT of net income; null = no ceiling (last bracket). */
+  upToUit: z.number().positive().max(100_000).nullable(),
+  rate,
+})
+
+/** POST /api/admin/finance/tax-profiles, PATCH …/[id] (whole object). */
+export const taxProfileSchema = z
+  .object({
+    issuerId: z.string().uuid(),
+    fromMonth: financeMonthSchema,
+    regime: z.enum(TAX_REGIMES),
+    igvRate: rate,
+    monthlyRate: rate,
+    annualBrackets: z.array(annualBracketSchema).max(6),
+    representationCapPct: rate,
+    representationCapUit: z.number().min(0).max(100_000),
+    validatedByAccountant: z.boolean(),
+    notes: z.preprocess(emptyToNull, z.string().trim().max(1000).nullable()),
+  })
+  .refine(
+    (v) =>
+      (v.annualBrackets.length === 0 || v.annualBrackets.at(-1)?.upToUit === null) &&
+      v.annualBrackets.every((b, i, all) => {
+        if (b.upToUit === null) return i === all.length - 1
+        const prev = i === 0 ? 0 : (all[i - 1]?.upToUit ?? Number.POSITIVE_INFINITY)
+        return b.upToUit > prev
+      }),
+    {
+      message: "Los tramos deben ir de menor a mayor y el último no debe tener tope",
+      path: ["annualBrackets"],
+    },
+  )
+export type TaxProfileInput = z.infer<typeof taxProfileSchema>
+
+/** PUT /api/admin/finance/uit — the UIT of one year. */
+export const uitValueSchema = z.object({
+  year: z.number().int().min(2000).max(2100),
+  value: z.number().positive().max(1_000_000),
+})
+export type UitValueInput = z.infer<typeof uitValueSchema>

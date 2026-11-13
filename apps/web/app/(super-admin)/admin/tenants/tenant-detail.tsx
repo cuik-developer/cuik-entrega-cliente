@@ -60,6 +60,7 @@ import { RegistrationConfigSection } from "./registration-config-section"
 import { TenantBillingSection } from "./tenant-billing-section"
 import { TenantCampaignsSection } from "./tenant-campaigns-section"
 import { TenantFeaturesSection } from "./tenant-features-section"
+import { TenantFiscalSection } from "./tenant-fiscal-section"
 import { TenantGrowthSection } from "./tenant-growth-section"
 import { TenantChurnLine } from "./tenant-health"
 import { TenantNotesSection } from "./tenant-notes-section"
@@ -110,6 +111,8 @@ export function TenantDetail({
   const cfg = statusConfig[status] ?? statusConfig.active
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [adminEmail, setAdminEmail] = useState<string | null>(null)
+  // Bumped when "Datos de facturación" is saved, so the Facturación tab re-reads it.
+  const [billingRefresh, setBillingRefresh] = useState(0)
   const [resettingPassword, setResettingPassword] = useState(false)
   const [newPassword, setNewPassword] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -1633,6 +1636,13 @@ export function TenantDetail({
                 )}
                 Guardar cambios
               </Button>
+
+              <div className="border-t border-ent-line pt-4 mt-2">
+                <TenantFiscalSection
+                  tenantId={tenant.id}
+                  onSaved={() => setBillingRefresh((n) => n + 1)}
+                />
+              </div>
             </div>
           </TabsContent>
           {/* ── Tab: Facturación ───────────────────────────── */}
@@ -1641,7 +1651,12 @@ export function TenantDetail({
             forceMount
             className="data-[state=inactive]:hidden bg-ent-panel rounded-[4px] border border-ent-line"
           >
-            <TenantBillingSection tenantId={tenant.id} tenantName={tenant.name} />
+            <TenantBillingSection
+              tenantId={tenant.id}
+              tenantName={tenant.name}
+              refreshKey={billingRefresh}
+              onEditFiscal={() => setActiveTab("editar")}
+            />
           </TabsContent>
           {/* ── Tab: Notas internas ────────────────────────── */}
           <TabsContent

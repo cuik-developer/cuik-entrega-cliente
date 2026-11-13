@@ -8,6 +8,7 @@ import {
   Handshake,
   Heart,
   History,
+  Landmark,
   LayoutDashboard,
   Link2,
   type LucideIcon,
@@ -180,8 +181,11 @@ export const ADMIN_MODULES: AdminModule[] = [
         ],
       },
       {
-        title: "Facturación",
-        items: [{ href: "/admin/planes", label: "Planes", icon: CreditCard }],
+        title: "Configuración",
+        items: [
+          { href: "/admin/finanzas/empresa", label: "Empresa y régimen", icon: Landmark },
+          { href: "/admin/planes", label: "Planes", icon: CreditCard },
+        ],
       },
     ],
   },

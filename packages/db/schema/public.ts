@@ -140,6 +140,10 @@ export const tenantBilling = pgTable("tenant_billing", {
   billingMode: text("billing_mode").$type<"advance" | "arrears">().default("arrears").notNull(),
   /** Months covered by each invoice: 1 (monthly), 3, 6 or 12. `monthly_amount` is the amount per invoice. */
   billingIntervalMonths: integer("billing_interval_months").default(1).notNull(),
+  /** Whether `monthly_amount` already includes IGV (every current fee does). Migration 0047. */
+  amountIncludesIgv: boolean("amount_includes_igv").default(true).notNull(),
+  /** The merchant is an IGV withholding agent (keeps 3 % of invoices over S/ 700). Migration 0047. */
+  isRetentionAgent: boolean("is_retention_agent").default(false).notNull(),
   notes: text("notes"),
   updatedBy: text("updated_by").references(() => user.id),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

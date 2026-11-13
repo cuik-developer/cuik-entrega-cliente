@@ -1,5 +1,7 @@
-import { and, db, desc, eq, sql, tenantBilling, tenantInvoices } from "@cuik/db"
+import { and, db, desc, eq, sql, taxProfiles, tenantBilling, tenantInvoices } from "@cuik/db"
 import { asInterval, billingOutlook, periodLabel, shiftMonth, todayYmd } from "./billing"
+import { currentMonthLima, loadIssuers } from "./company-data"
+import { issuerForMonth, profileForMonth } from "./issuers"
 
 /**
  * Serialises invoice writes of one tenant inside the current transaction, so
@@ -43,8 +45,33 @@ export function isPeriodConflict(err: unknown): boolean {
   return cause?.code === "23505" && cause.constraint === "tenant_invoices_tenant_period_uidx"
 }
 
-/** Billing config + calendar outlook + invoice history of one tenant. */
+/**
+ * Billing config + calendar outlook + invoice history of one tenant, with the
+ * issuer of each invoice (by the month it was issued: Making Brands until
+ * Oct 2026, CUIK E.I.R.L. after) and the issuer and IGV rate in force today.
+ */
 export async function loadBilling(tenantId: string) {
+  const [issuerRows, profileRows] = await Promise.all([
+    loadIssuers(),
+    db
+      .select({
+        issuerId: taxProfiles.issuerId,
+        fromMonth: taxProfiles.fromMonth,
+        igvRate: taxProfiles.igvRate,
+      })
+      .from(taxProfiles),
+  ])
+  const month = currentMonthLima()
+  const currentIssuer = issuerForMonth(issuerRows, month)
+  const currentProfile = currentIssuer
+    ? profileForMonth(profileRows, currentIssuer.id, month)
+    : null
+  const issuerOf = (ymd: string) => {
+    const i = issuerForMonth(issuerRows, ymd.slice(0, 7))
+    return i
+      ? { razonSocial: i.razonSocial, ruc: i.ruc, current: i.id === currentIssuer?.id }
+      : null
+  }
   const [config] = await db
     .select()
     .from(tenantBilling)
@@ -83,11 +110,18 @@ export async function loadBilling(tenantId: string) {
           billingDay: config.billingDay,
           billingMode: config.billingMode,
           billingIntervalMonths: asInterval(config.billingIntervalMonths),
+          amountIncludesIgv: config.amountIncludesIgv,
+          isRetentionAgent: config.isRetentionAgent,
           notes: config.notes,
           updatedAt: config.updatedAt.toISOString(),
         }
       : null,
     outlook,
+    issuer: currentIssuer
+      ? { razonSocial: currentIssuer.razonSocial, ruc: currentIssuer.ruc }
+      : null,
+    /** IGV rate of the regime in force today; null until a tax profile exists. */
+    igvRate: currentProfile ? Number(currentProfile.igvRate) : null,
     invoices: invoices.map((i) => ({
       id: i.id,
       period: i.period,
@@ -102,6 +136,7 @@ export async function loadBilling(tenantId: string) {
       note: i.note,
       invoiceFile: i.invoiceFileKey ? { name: i.invoiceFileName ?? "factura" } : null,
       receiptFile: i.receiptFileKey ? { name: i.receiptFileName ?? "voucher" } : null,
+      issuer: issuerOf(i.issuedOn),
       createdAt: i.createdAt.toISOString(),
     })),
   }

@@ -38,14 +38,19 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   try {
     const g = await guard(request, params)
     if ("error" in g) return g.error
-    const parsed = tenantBillingSchema.safeParse(await request.json())
+    const raw = (await request.json()) as Record<string, unknown>
+    const parsed = tenantBillingSchema.safeParse(raw)
     if (!parsed.success) return errorResponse("Validation failed", 400, parsed.error.flatten())
     const b = parsed.data
+    // The fiscal identity is edited in "Datos del negocio" (PUT …/fiscal); only
+    // write it here when the body carries it, so this form never blanks it.
+    const sent = (key: string) => raw !== null && typeof raw === "object" && key in raw
     const values = {
-      ruc: b.ruc ?? null,
-      razonSocial: b.razonSocial ?? null,
-      direccionFiscal: b.direccionFiscal ?? null,
-      billingEmail: b.billingEmail ?? null,
+      ...(sent("ruc") ? { ruc: b.ruc ?? null } : {}),
+      ...(sent("razonSocial") ? { razonSocial: b.razonSocial ?? null } : {}),
+      ...(sent("direccionFiscal") ? { direccionFiscal: b.direccionFiscal ?? null } : {}),
+      ...(sent("billingEmail") ? { billingEmail: b.billingEmail ?? null } : {}),
+      ...(b.amountIncludesIgv !== undefined ? { amountIncludesIgv: b.amountIncludesIgv } : {}),
       contactoPagos: b.contactoPagos ?? null,
       monthlyAmount:
         b.monthlyAmount === null || b.monthlyAmount === undefined ? null : String(b.monthlyAmount),

@@ -6,6 +6,7 @@ import {
   FileText,
   Loader2,
   Paperclip,
+  Pencil,
   Plus,
   Receipt,
   Save,
@@ -20,6 +21,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import {
   BILLING_INTERVAL_LABEL,
@@ -31,6 +33,7 @@ import {
   formatYmd,
   periodLabel,
 } from "@/lib/admin/billing"
+import { splitIgv } from "@/lib/admin/issuers"
 
 type Config = {
   ruc: string | null
@@ -44,9 +47,12 @@ type Config = {
   billingDay: number | null
   billingMode: "advance" | "arrears"
   billingIntervalMonths: BillingInterval
+  amountIncludesIgv: boolean
+  isRetentionAgent: boolean
   notes: string | null
   updatedAt: string
 }
+type IssuerRef = { razonSocial: string; ruc: string }
 type Invoice = {
   id: string
   period: string
@@ -61,8 +67,17 @@ type Invoice = {
   note: string | null
   invoiceFile: { name: string } | null
   receiptFile: { name: string } | null
+  /** Who issued it, by the month of issue (Making Brands until Oct 2026). */
+  issuer: (IssuerRef & { current: boolean }) | null
 }
-type Data = { config: Config | null; outlook: BillingOutlook; invoices: Invoice[] }
+type Data = {
+  config: Config | null
+  outlook: BillingOutlook
+  /** Issuer in force today and the IGV rate of its regime (null until configured). */
+  issuer: IssuerRef | null
+  igvRate: number | null
+  invoices: Invoice[]
+}
 
 const STATUS_CLASS: Record<BillingStatus, string> = {
   sin_configurar: "bg-ent-panel-2 text-ent-fg-2 border-ent-line",
@@ -86,6 +101,12 @@ function money(amount: number | null, currency: "PEN" | "USD") {
   return `${currency === "USD" ? "US$" : "S/"} ${amount.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+/** "Base S/ 211.86 + IGV S/ 38.14 = total S/ 250.00" for an amount under the current IGV rate. */
+function igvHint(amount: number, includesIgv: boolean, igvRate: number, currency: "PEN" | "USD") {
+  const s = splitIgv(amount, includesIgv, igvRate)
+  return `Base ${money(s.base, currency)} + IGV ${money(s.igv, currency)} = total ${money(s.total, currency)}`
+}
+
 function firstFieldError(json: { details?: { fieldErrors?: Record<string, string[]> } }) {
   const fe = json.details?.fieldErrors
   if (!fe) return null
@@ -93,10 +114,6 @@ function firstFieldError(json: { details?: { fieldErrors?: Record<string, string
 }
 
 type FormState = {
-  ruc: string
-  razonSocial: string
-  direccionFiscal: string
-  billingEmail: string
   contactoPagos: string
   monthlyAmount: string
   currency: "PEN" | "USD"
@@ -104,6 +121,7 @@ type FormState = {
   billingDay: string
   billingMode: "advance" | "arrears"
   billingIntervalMonths: BillingInterval
+  amountIncludesIgv: boolean
   notes: string
 }
 
@@ -122,10 +140,6 @@ const PERIOD_EVERY: Record<BillingInterval, string> = {
 
 function formFrom(c: Config | null): FormState {
   return {
-    ruc: c?.ruc ?? "",
-    razonSocial: c?.razonSocial ?? "",
-    direccionFiscal: c?.direccionFiscal ?? "",
-    billingEmail: c?.billingEmail ?? "",
     contactoPagos: c?.contactoPagos ?? "",
     monthlyAmount:
       c?.monthlyAmount === null || c?.monthlyAmount === undefined ? "" : String(c.monthlyAmount),
@@ -134,6 +148,7 @@ function formFrom(c: Config | null): FormState {
     billingDay: c?.billingDay ? String(c.billingDay) : "",
     billingMode: c?.billingMode ?? "arrears",
     billingIntervalMonths: c?.billingIntervalMonths ?? 1,
+    amountIncludesIgv: c?.amountIncludesIgv ?? true,
     notes: c?.notes ?? "",
   }
 }
@@ -250,6 +265,57 @@ function FileSlot({
   )
 }
 
+/** Read-only billing identity of the merchant; it is edited in "Datos del negocio". */
+function FiscalSummary({
+  config,
+  onEditFiscal,
+}: {
+  config: Config | null
+  onEditFiscal?: () => void
+}) {
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold text-ent-fg-3 uppercase tracking-wide">
+          Datos de facturación
+        </h3>
+        {onEditFiscal && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-[12px] gap-1.5"
+            onClick={onEditFiscal}
+          >
+            <Pencil className="w-3.5 h-3.5" /> Editar en Datos del negocio
+          </Button>
+        )}
+      </div>
+      <dl className="grid grid-cols-[minmax(110px,34%)_1fr] text-[12.5px] border border-ent-line rounded-[4px] px-3">
+        {[
+          ["RUC", config?.ruc],
+          ["Razón social", config?.razonSocial],
+          ["Dirección fiscal", config?.direccionFiscal],
+          ["Correo para facturas", config?.billingEmail],
+          [
+            "Agente de retención",
+            config?.isRetentionAgent ? "Sí (3 % en facturas de más de S/ 700)" : "No",
+          ],
+        ].map(([label, value], idx, all) => {
+          const line = idx === all.length - 1 ? "" : "border-b border-ent-line"
+          return (
+            <div key={label} className="contents">
+              <dt className={`py-[7px] pr-3 text-ent-fg-3 ${line}`}>{label}</dt>
+              <dd className={`py-[7px] m-0 text-ent-fg min-w-0 break-words ${line}`}>
+                {value || <span className="text-ent-fg-3">Sin registrar</span>}
+              </dd>
+            </div>
+          )
+        })}
+      </dl>
+    </>
+  )
+}
+
 /**
  * "Facturación" section of the tenant page: fiscal data, service start and
  * monthly fee (one form), the calendar outlook, and the invoice log with the
@@ -259,9 +325,15 @@ function FileSlot({
 export function TenantBillingSection({
   tenantId,
   tenantName,
+  refreshKey = 0,
+  onEditFiscal,
 }: {
   tenantId: string
   tenantName: string
+  /** Bumped when "Datos de facturación" is saved elsewhere: re-read without touching this form. */
+  refreshKey?: number
+  /** Opens "Datos del negocio", where the fiscal identity is edited. */
+  onEditFiscal?: () => void
 }) {
   const [data, setData] = useState<Data | null>(null)
   const [form, setForm] = useState<FormState>(formFrom(null))
@@ -280,21 +352,28 @@ export function TenantBillingSection({
   })
   const [creating, setCreating] = useState(false)
 
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/admin/tenants/${tenantId}/billing`)
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error)
-      setData(json.data)
-      setForm(formFrom(json.data.config))
-    } catch {
-      toast.error("No se pudo cargar la facturación")
-    }
-  }, [tenantId])
+  const load = useCallback(
+    async (resetForm: boolean) => {
+      try {
+        const res = await fetch(`/api/admin/tenants/${tenantId}/billing`)
+        const json = await res.json()
+        if (!json.success) throw new Error(json.error)
+        setData(json.data)
+        if (resetForm) setForm(formFrom(json.data.config))
+      } catch {
+        toast.error("No se pudo cargar la facturación")
+      }
+    },
+    [tenantId],
+  )
 
   useEffect(() => {
-    load()
+    load(true)
   }, [load])
+  // The fiscal identity changed in "Datos del negocio": refresh the summary, keep unsaved edits here.
+  useEffect(() => {
+    if (refreshKey > 0) load(false)
+  }, [refreshKey, load])
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -429,6 +508,8 @@ export function TenantBillingSection({
 
   const o = data.outlook
   const currency = data.config?.currency ?? "PEN"
+  const igvRate = data.igvRate
+  const includesIgv = data.config?.amountIncludesIgv ?? true
   const service = serviceLine(data.config, o)
 
   return (
@@ -469,6 +550,11 @@ export function TenantBillingSection({
           <div className="text-sm font-semibold text-ent-fg flex items-center gap-2">
             <Receipt className="w-4 h-4" /> Registrar factura emitida a {tenantName}
           </div>
+          {data.issuer && (
+            <p className="text-[12px] text-ent-fg-3">
+              Emisor: {data.issuer.razonSocial} · RUC {data.issuer.ruc}
+            </p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
               <Label className="text-xs">Periodo (AAAA-MM)</Label>
@@ -537,6 +623,11 @@ export function TenantBillingSection({
                 value={inv.amount}
                 onChange={(e) => setInv({ ...inv, amount: e.target.value })}
               />
+              {igvRate !== null && inv.amount !== "" && Number(inv.amount) > 0 && (
+                <p className="text-[11px] text-ent-fg-3">
+                  {igvHint(Number(inv.amount), includesIgv, igvRate, currency)}
+                </p>
+              )}
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Estado</Label>
@@ -586,37 +677,7 @@ export function TenantBillingSection({
       {/* Config */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-3">
-          <h3 className="text-xs font-semibold text-ent-fg-3 uppercase tracking-wide">
-            Datos fiscales
-          </h3>
-          <div className="space-y-1">
-            <Label className="text-xs">RUC</Label>
-            <Input
-              value={form.ruc}
-              onChange={(e) => set("ruc", e.target.value)}
-              placeholder="20123456789"
-              inputMode="numeric"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Razón social</Label>
-            <Input value={form.razonSocial} onChange={(e) => set("razonSocial", e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Dirección fiscal</Label>
-            <Input
-              value={form.direccionFiscal}
-              onChange={(e) => set("direccionFiscal", e.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Correo para facturas</Label>
-            <Input
-              type="email"
-              value={form.billingEmail}
-              onChange={(e) => set("billingEmail", e.target.value)}
-            />
-          </div>
+          <FiscalSummary config={data.config} onEditFiscal={onEditFiscal} />
           <div className="space-y-1">
             <Label className="text-xs">Contacto de pagos</Label>
             <Input
@@ -720,6 +781,22 @@ export function TenantBillingSection({
               </select>
             </div>
           </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={form.amountIncludesIgv}
+              onCheckedChange={(v) => set("amountIncludesIgv", v)}
+            />
+            <span className="text-[12.5px] text-ent-fg-2">
+              {form.amountIncludesIgv
+                ? "El monto incluye IGV"
+                : "El monto no incluye IGV (se suma)"}
+            </span>
+          </div>
+          {igvRate !== null && form.monthlyAmount !== "" && Number(form.monthlyAmount) > 0 && (
+            <p className="text-[11px] text-ent-fg-3">
+              {igvHint(Number(form.monthlyAmount), form.amountIncludesIgv, igvRate, form.currency)}
+            </p>
+          )}
           <div className="space-y-1">
             <Label className="text-xs">Notas de facturación</Label>
             <Textarea
@@ -778,7 +855,19 @@ export function TenantBillingSection({
                         {periodLabel(i.period, i.months)}
                       </td>
                       <td className="py-2 pr-3 text-ent-fg-2">{formatYmd(i.issuedOn)}</td>
-                      <td className="py-2 pr-3 text-ent-fg-2">{i.number ?? "—"}</td>
+                      <td className="py-2 pr-3 text-ent-fg-2">
+                        {i.number ?? "—"}
+                        {i.issuer && (
+                          <span
+                            className="block text-[11px] text-ent-fg-3"
+                            title={`RUC ${i.issuer.ruc}`}
+                          >
+                            {i.issuer.current
+                              ? i.issuer.razonSocial
+                              : `${i.issuer.razonSocial} (histórico)`}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-2 pr-3 text-right tabular-nums">
                         {money(i.amount, i.currency)}
                       </td>
