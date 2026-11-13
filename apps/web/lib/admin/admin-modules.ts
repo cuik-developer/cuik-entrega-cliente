@@ -1,6 +1,7 @@
 import {
   BookOpen,
   Building2,
+  Calculator,
   ClipboardList,
   CreditCard,
   Download,
@@ -185,6 +186,7 @@ export const ADMIN_MODULES: AdminModule[] = [
       {
         title: "Contabilidad",
         items: [
+          { href: "/admin/finanzas/contabilidad", label: "Resumen fiscal", icon: Calculator },
           { href: "/admin/finanzas/ventas", label: "Ventas", icon: FileOutput },
           { href: "/admin/finanzas/compras", label: "Compras", icon: FileInput },
         ],

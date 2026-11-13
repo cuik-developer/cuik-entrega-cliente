@@ -51,7 +51,7 @@ export function isDocumentNumberConflict(err: unknown): boolean {
 }
 
 /** USD→PEN of a month: the typed one, else the latest earlier, else the default. */
-async function fxForMonth(conn: Conn, month: string): Promise<number> {
+export async function fxForMonth(conn: Conn, month: string): Promise<number> {
   const rows = await conn.select({ month: fxRates.month, usdPen: fxRates.usdPen }).from(fxRates)
   const rates: Record<string, number> = {}
   for (const r of rows) rates[r.month] = Number(r.usdPen)
