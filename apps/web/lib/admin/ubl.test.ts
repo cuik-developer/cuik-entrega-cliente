@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { parseUbl, UblError } from "./ubl"
+import { decodeXmlBytes, parseUbl, UblError } from "./ubl"
 import { parseXml, textAt, XmlError } from "./xml-lite"
 
 const NS = `xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"`
@@ -167,8 +167,43 @@ describe("parseUbl", () => {
       `<cbc:PrepaidAmount currencyID="PEN">450.00</cbc:PrepaidAmount><cbc:PayableAmount currencyID="PEN">1000.00</cbc:PayableAmount>`,
     )
     const d = parseUbl(xml)
+    // The invoice value (TaxInclusiveAmount), so base + IGV = total and it can be saved.
+    expect(d.total).toBe(1450)
     expect(d.baseNoGravada).toBe(0)
     expect(d.warnings[0]).toMatch(/anticipos/)
+    const noInclusive = xml.replace(
+      /<cbc:TaxInclusiveAmount[^>]*>[^<]*<\/cbc:TaxInclusiveAmount>/,
+      "",
+    )
+    expect(parseUbl(noInclusive).total).toBe(1450)
+  })
+
+  it("takes the currency from the amounts when the code is missing", () => {
+    const xml = FACTURA.replace(
+      /<cbc:DocumentCurrencyCode[^>]*>PEN<\/cbc:DocumentCurrencyCode>/,
+      "",
+    )
+      .split('currencyID="PEN"')
+      .join('currencyID="USD"')
+    expect(parseUbl(xml).currency).toBe("USD")
+  })
+
+  it("takes total − IGV as the base when the XML has no taxable amounts (UBL 2.0)", () => {
+    const xml = FACTURA.split(
+      '<cbc:TaxableAmount currencyID="PEN">1228.81</cbc:TaxableAmount>',
+    ).join("")
+    const d = parseUbl(xml)
+    expect(d.baseGravada).toBe(1228.81)
+    expect(d.baseNoGravada).toBe(0)
+    expect(d.warnings[0]).toMatch(/base gravada/)
+  })
+
+  it("decodes an ISO-8859-1 XML as declared", () => {
+    const text = '<?xml version="1.0" encoding="ISO-8859-1"?><a>COMPAÑÍA</a>'
+    const latin1 = Uint8Array.from([...text].map((c) => c.charCodeAt(0)))
+    expect(decodeXmlBytes(latin1)).toBe(text)
+    const utf8 = new TextEncoder().encode('<?xml version="1.0"?><a>COMPAÑÍA</a>')
+    expect(decodeXmlBytes(utf8)).toContain("COMPAÑÍA")
   })
 
   it("refuses what is not a SUNAT document", () => {

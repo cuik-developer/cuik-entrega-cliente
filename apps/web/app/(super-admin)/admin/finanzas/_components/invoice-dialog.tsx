@@ -25,6 +25,8 @@ export type InvoicePrefill = {
   months: number
   amount: number | null
   issuedOn?: string
+  /** Serie-número already known (from the invoice's XML). */
+  number?: string
 }
 
 /** What the dialog needs from Cobranza: the merchants and the fiscal rules. */
@@ -86,7 +88,7 @@ function initialForm(
     months: prefill?.months || terms?.months || 1,
     recognition: "spread",
     issuedOn: prefill?.issuedOn ?? today,
-    number: "",
+    number: prefill?.number ?? "",
     amount: amount === null ? "" : String(amount),
     status: "pending",
     paidOn: today,

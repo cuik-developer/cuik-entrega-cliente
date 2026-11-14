@@ -47,7 +47,7 @@ import {
 import type { DocumentsPage } from "@/lib/admin/documents-data"
 import { apiCall as api, money, soles, todayLima, ymd } from "@/lib/admin/format"
 import { monthShort, splitIgv } from "@/lib/admin/issuers"
-import { parseUbl, type UblDocument, UblError } from "@/lib/admin/ubl"
+import { decodeXmlBytes, parseUbl, type UblDocument, UblError } from "@/lib/admin/ubl"
 import { InvoiceDialog, type InvoicePrefill } from "./invoice-dialog"
 import { SuppliersPanel } from "./suppliers-panel"
 import { uploadDocumentFile, XmlFill, type XmlFillState } from "./xml-fill"
@@ -347,9 +347,9 @@ export function DocumentsClient({ direction }: { direction: Direction }) {
             else refresh()
           }}
           onSuppliersChanged={refresh}
-          onMerchantInvoice={(tenantId) => {
+          onMerchantInvoice={(tenantId, fromXml) => {
             setEditing(null)
-            setInvoiceDialog({ tenantId })
+            setInvoiceDialog({ tenantId, fromXml })
           }}
         />
       )}
@@ -368,8 +368,11 @@ export function DocumentsClient({ direction }: { direction: Direction }) {
   )
 }
 
+/** A merchant invoice's number, date and amount read from its XML in "Otro comprobante". */
+type FromXml = { number: string; issuedOn: string; amount: number }
+
 type InvoiceDialogState =
-  | { tenantId: string | null }
+  | { tenantId: string | null; fromXml?: FromXml | null }
   | { edit: { tenantId: string; invoiceId: string } }
 
 /** A new merchant invoice is issued in the month on screen: today in this month, else its first day. */
@@ -384,8 +387,9 @@ function invoicePrefillFor(
     // The merchant's billing rule decides the period (as in its Facturación tab).
     period: null,
     months: 0,
-    amount: null,
-    issuedOn: month === thisMonth ? todayLima() : `${month}-01`,
+    amount: state.fromXml?.amount ?? null,
+    issuedOn: state.fromXml?.issuedOn ?? (month === thisMonth ? todayLima() : `${month}-01`),
+    number: state.fromXml?.number,
   }
 }
 
@@ -894,7 +898,9 @@ function purchaseFromUbl(doc: UblDocument, data: DocumentsPage, p: Form) {
   if (doc.docType === "03") {
     warnings.push("Una boleta no da crédito fiscal: queda como «Sin crédito fiscal».")
   }
-  const s = data.suppliers.find((x) => x.docNumber === doc.supplier.doc)
+  const s = doc.supplier.doc
+    ? data.suppliers.find((x) => x.docNumber === doc.supplier.doc)
+    : undefined
   const form = s ? withSupplier(p, s.id, s) : { ...p, supplierId: "" }
   const newSupplier =
     !s && doc.supplier.doc ? { ruc: doc.supplier.doc, name: doc.supplier.name } : null
@@ -912,6 +918,11 @@ function saleFromUbl(doc: UblDocument, data: DocumentsPage, p: Form) {
     warnings.push(`Este XML no lo emitió ${data.issuer.razonSocial}: no es una venta de Cuik.`)
   }
   const t = data.tenants.find((x) => x.ruc && x.ruc === doc.customer.doc)
+  if (t && (doc.docType === "01" || doc.docType === "03")) {
+    warnings.push(
+      `Es una factura a ${t.name}: regístrala con «Registrar factura del comercio» (lleva estos datos) y luego adjunta el XML a su venta desde la lista.`,
+    )
+  }
   const form: Form = {
     ...p,
     tenantId: t?.id ?? "",
@@ -922,7 +933,13 @@ function saleFromUbl(doc: UblDocument, data: DocumentsPage, p: Form) {
 }
 
 /** The form filled from a SUNAT XML: what it says wins over what was typed. */
-function fillFromUbl(doc: UblDocument, direction: Direction, data: DocumentsPage, p: Form) {
+function fillFromUbl(
+  doc: UblDocument,
+  direction: Direction,
+  data: DocumentsPage,
+  p: Form,
+  editing: boolean,
+) {
   const party = direction === "purchase" ? purchaseFromUbl(doc, data, p) : saleFromUbl(doc, data, p)
   const form: Form = {
     ...party.form,
@@ -930,7 +947,7 @@ function fillFromUbl(doc: UblDocument, direction: Direction, data: DocumentsPage
     serie: doc.serie,
     numero: doc.numero,
     issueDate: doc.issueDate,
-    taxPeriod: doc.issueDate.slice(0, 7),
+    taxPeriod: editing ? p.taxPeriod : doc.issueDate.slice(0, 7),
     currency: doc.currency,
     baseGravada: String(doc.baseGravada),
     baseNoGravada: String(doc.baseNoGravada),
@@ -962,7 +979,7 @@ function DocumentDialog({
   onSaved: (taxPeriod: string) => void
   onSuppliersChanged: () => void
   /** A new invoice to a merchant: switch to the merchant invoice dialog. */
-  onMerchantInvoice: (tenantId: string) => void
+  onMerchantInvoice: (tenantId: string, fromXml: FromXml | null) => void
 }) {
   const [f, setF] = useState<Form>(() => formFrom(doc, direction, data.month))
   const [busy, setBusy] = useState(false)
@@ -992,11 +1009,14 @@ function DocumentDialog({
 
   // "Llenar desde XML": the parsed document, attached when saving.
   const [xml, setXml] = useState<XmlFillState | null>(null)
+  const [beforeXml, setBeforeXml] = useState<Form | null>(null)
   const [addingSupplier, setAddingSupplier] = useState(false)
   async function pickXml(file: File) {
     try {
-      const parsed = parseUbl(await file.text())
-      const r = fillFromUbl(parsed, direction, data, f)
+      const parsed = parseUbl(decodeXmlBytes(new Uint8Array(await file.arrayBuffer())))
+      const base = beforeXml ?? f
+      setBeforeXml(base)
+      const r = fillFromUbl(parsed, direction, data, base, !!doc)
       setF(r.form)
       setXml({ file, doc: parsed, warnings: r.warnings, newSupplier: r.newSupplier })
     } catch (e) {
@@ -1195,7 +1215,18 @@ function DocumentDialog({
                     <button
                       type="button"
                       className="text-ent-accent hover:underline"
-                      onClick={() => onMerchantInvoice(f.tenantId)}
+                      onClick={() =>
+                        onMerchantInvoice(
+                          f.tenantId,
+                          xml
+                            ? {
+                                number: `${xml.doc.serie}-${xml.doc.numero}`,
+                                issuedOn: xml.doc.issueDate,
+                                amount: xml.doc.total,
+                              }
+                            : null,
+                        )
+                      }
                     >
                       Registrar factura del comercio
                     </button>

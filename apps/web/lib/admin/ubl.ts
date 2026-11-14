@@ -104,6 +104,48 @@ function detraccion(root: XmlElement): number | null {
   return null
 }
 
+/** Document currency; when the code is missing, the one on the amounts. */
+function currencyOf(root: XmlElement): UblDocument["currency"] {
+  const declared =
+    textAt(root, "DocumentCurrencyCode") ??
+    at(root, "LegalMonetaryTotal", "PayableAmount")?.attrs.currencyID ??
+    at(root, "RequestedMonetaryTotal", "PayableAmount")?.attrs.currencyID ??
+    "PEN"
+  const code = declared.trim().toUpperCase()
+  if (code !== "PEN" && code !== "USD") {
+    throw new UblError(`Moneda ${code} no soportada (solo soles o dólares)`)
+  }
+  return code
+}
+
+/**
+ * Base, no gravado, IGV and total that add up. The total is the payable
+ * amount; when advances or discounts take it below base + IGV, the invoice
+ * value (TaxInclusiveAmount) or base + IGV is used instead. An old UBL 2.0
+ * XML without taxable amounts takes total − IGV as the base.
+ */
+function amountsOf(root: XmlElement, warnings: string[]) {
+  const monetary = at(root, "LegalMonetaryTotal") ?? at(root, "RequestedMonetaryTotal")
+  const t = taxes(root)
+  let base = t.base
+  let total = round2(amount(monetary, "PayableAmount"))
+  if (base === 0 && t.igv > 0) {
+    base = round2(total - t.igv)
+    warnings.push("El XML no detalla la base gravada: se tomó el total menos el IGV.")
+  }
+  if (total < base + t.igv - 0.005) {
+    const inclusive = round2(amount(monetary, "TaxInclusiveAmount"))
+    total = inclusive >= base + t.igv - 0.005 ? inclusive : round2(base + t.igv)
+    warnings.push(
+      "El total a pagar es menor que base + IGV (anticipos o descuentos): se registró el valor de la factura; revisa los montos.",
+    )
+  }
+  if (t.taxTotal - t.igv > 0.005) {
+    warnings.push("Trae otros tributos además del IGV (ISC o ICBPER): van como no gravado.")
+  }
+  return { base, igv: t.igv, total, noGravada: Math.max(0, round2(total - base - t.igv)) }
+}
+
 /** Reads a SUNAT UBL XML. Throws UblError (Spanish message) when it cannot. */
 export function parseUbl(xml: string): UblDocument {
   let root: XmlElement
@@ -120,39 +162,41 @@ export function parseUbl(xml: string): UblDocument {
   if (!issueDate || !/^\d{4}-\d{2}-\d{2}$/.test(issueDate)) {
     throw new UblError("El XML no trae la fecha de emisión")
   }
-  const currencyCode = (textAt(root, "DocumentCurrencyCode") ?? "PEN").toUpperCase()
-  if (currencyCode !== "PEN" && currencyCode !== "USD") {
-    throw new UblError(`Moneda ${currencyCode} no soportada (solo soles o dólares)`)
-  }
-  const monetary = at(root, "LegalMonetaryTotal") ?? at(root, "RequestedMonetaryTotal")
-  const total = round2(amount(monetary, "PayableAmount"))
-  const t = taxes(root)
+  const currency = currencyOf(root)
   const warnings: string[] = []
-  let baseNoGravada = round2(total - t.base - t.igv)
-  if (baseNoGravada < 0) {
-    // Advances (anticipos) or global discounts lower the payable amount below base + IGV.
-    warnings.push(
-      "El total a pagar es menor que base + IGV (anticipos o descuentos): revisa los montos.",
-    )
-    baseNoGravada = 0
-  }
-  if (t.taxTotal - t.igv > 0.005) {
-    warnings.push("Trae otros tributos además del IGV (ISC o ICBPER): van como no gravado.")
-  }
+  const a = amountsOf(root, warnings)
   return {
     docType,
     serie: (m[1] as string).toUpperCase(),
     numero: m[2] as string,
     issueDate,
-    currency: currencyCode,
+    currency,
     supplier: party(root, "AccountingSupplierParty"),
     customer: party(root, "AccountingCustomerParty"),
-    baseGravada: t.base,
-    baseNoGravada,
-    igv: t.igv,
-    total,
+    baseGravada: a.base,
+    baseNoGravada: a.noGravada,
+    igv: a.igv,
+    total: a.total,
     detraccionPct: detraccion(root),
     reference: textAt(root, "BillingReference", "InvoiceDocumentReference", "ID"),
     warnings,
   }
+}
+
+/**
+ * The text of an XML file in the encoding its declaration names (SUNAT
+ * issuers often write ISO-8859-1, which read as UTF-8 garbles Ñ and
+ * accents); UTF-8 when it names none or an unknown one.
+ */
+export function decodeXmlBytes(bytes: Uint8Array): string {
+  const head = new TextDecoder("latin1").decode(bytes.subarray(0, 200))
+  const declared = head.match(/<\?xml[^>]*encoding\s*=\s*["']([A-Za-z0-9._-]+)["']/i)?.[1]
+  if (declared && !/^utf-?8$/i.test(declared)) {
+    try {
+      return new TextDecoder(declared.toLowerCase()).decode(bytes)
+    } catch {
+      // Unknown label: UTF-8 below.
+    }
+  }
+  return new TextDecoder("utf-8").decode(bytes)
 }
