@@ -1,7 +1,17 @@
 "use client"
 
 import { FINANCE_COST_CATEGORIES } from "@cuik/shared/validators"
-import { Ban, FileText, Loader2, Pencil, Plus, RotateCcw, Trash2, Upload } from "lucide-react"
+import {
+  Ban,
+  Download,
+  FileText,
+  Loader2,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Trash2,
+  Upload,
+} from "lucide-react"
 import Link from "next/link"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -185,6 +195,11 @@ export function DocumentsClient({ direction }: { direction: Direction }) {
             className="h-7 w-[180px] text-[12px]"
             aria-label="Periodo"
           />
+          <Button asChild size="sm" variant="outline" className="h-7 text-[12px] gap-1.5">
+            <a href={`/api/admin/finance/documents/export?direction=${direction}&month=${month}`}>
+              <Download className="w-3.5 h-3.5" /> Exportar registro
+            </a>
+          </Button>
           <Button size="sm" className="h-7 text-[12px] gap-1.5" onClick={() => setEditing("new")}>
             <Plus className="w-3.5 h-3.5" /> Registrar comprobante
           </Button>
