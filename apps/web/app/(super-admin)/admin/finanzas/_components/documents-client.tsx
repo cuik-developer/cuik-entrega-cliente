@@ -47,8 +47,10 @@ import {
 import type { DocumentsPage } from "@/lib/admin/documents-data"
 import { apiCall as api, money, soles, todayLima, ymd } from "@/lib/admin/format"
 import { monthShort, splitIgv } from "@/lib/admin/issuers"
+import { parseUbl, type UblDocument, UblError } from "@/lib/admin/ubl"
 import { InvoiceDialog, type InvoicePrefill } from "./invoice-dialog"
 import { SuppliersPanel } from "./suppliers-panel"
+import { uploadDocumentFile, XmlFill, type XmlFillState } from "./xml-fill"
 
 type Direction = "sale" | "purchase"
 type Doc = DocumentsPage["docs"][number]
@@ -860,6 +862,90 @@ function formFrom(doc: Doc | null, direction: Direction, month: string): Form {
   }
 }
 
+type Supplier = DocumentsPage["suppliers"][number]
+
+/** The form with a supplier chosen: its default IGV treatment and category; foreign ones are "del exterior". */
+function withSupplier(p: Form, id: string, s: Supplier | undefined): Form {
+  return {
+    ...p,
+    supplierId: id,
+    ...(s?.defaultIgvTreatment ? { igvTreatment: s.defaultIgvTreatment } : {}),
+    ...(s && !s.domiciled
+      ? { docType: "91" as DocType, igvTreatment: "no_domiciliado" as const }
+      : {}),
+    // Back to a Peruvian supplier: drop what only fits a foreign one.
+    ...(s?.domiciled && p.docType === "91" ? { docType: "01" as DocType } : {}),
+    ...(s?.domiciled && !s.defaultIgvTreatment && p.igvTreatment === "no_domiciliado"
+      ? { igvTreatment: "credito" as const }
+      : {}),
+    ...(s?.defaultCategory ? { category: s.defaultCategory } : {}),
+  }
+}
+
+/** Purchases: the supplier by its RUC (or one to add), and whether the invoice is addressed to Cuik. */
+function purchaseFromUbl(doc: UblDocument, data: DocumentsPage, p: Form) {
+  const warnings: string[] = []
+  const issuer = data.issuer
+  if (issuer && doc.customer.doc && doc.customer.doc !== issuer.ruc) {
+    warnings.push(
+      `Está a nombre de ${doc.customer.name || doc.customer.doc}, no de ${issuer.razonSocial}: no da crédito fiscal ni es gasto de Cuik.`,
+    )
+  }
+  if (doc.docType === "03") {
+    warnings.push("Una boleta no da crédito fiscal: queda como «Sin crédito fiscal».")
+  }
+  const s = data.suppliers.find((x) => x.docNumber === doc.supplier.doc)
+  const form = s ? withSupplier(p, s.id, s) : { ...p, supplierId: "" }
+  const newSupplier =
+    !s && doc.supplier.doc ? { ruc: doc.supplier.doc, name: doc.supplier.name } : null
+  return {
+    form: doc.docType === "03" ? { ...form, igvTreatment: "sin_credito" as const } : form,
+    warnings,
+    newSupplier,
+  }
+}
+
+/** Sales: the merchant by its RUC, else the customer as written; issued by Cuik. */
+function saleFromUbl(doc: UblDocument, data: DocumentsPage, p: Form) {
+  const warnings: string[] = []
+  if (data.issuer && doc.supplier.doc !== data.issuer.ruc) {
+    warnings.push(`Este XML no lo emitió ${data.issuer.razonSocial}: no es una venta de Cuik.`)
+  }
+  const t = data.tenants.find((x) => x.ruc && x.ruc === doc.customer.doc)
+  const form: Form = {
+    ...p,
+    tenantId: t?.id ?? "",
+    counterpartyDoc: t ? "" : (doc.customer.doc ?? ""),
+    counterpartyName: t ? "" : doc.customer.name,
+  }
+  return { form, warnings, newSupplier: null }
+}
+
+/** The form filled from a SUNAT XML: what it says wins over what was typed. */
+function fillFromUbl(doc: UblDocument, direction: Direction, data: DocumentsPage, p: Form) {
+  const party = direction === "purchase" ? purchaseFromUbl(doc, data, p) : saleFromUbl(doc, data, p)
+  const form: Form = {
+    ...party.form,
+    docType: doc.docType,
+    serie: doc.serie,
+    numero: doc.numero,
+    issueDate: doc.issueDate,
+    taxPeriod: doc.issueDate.slice(0, 7),
+    currency: doc.currency,
+    baseGravada: String(doc.baseGravada),
+    baseNoGravada: String(doc.baseNoGravada),
+    igv: String(doc.igv),
+    total: String(doc.total),
+    detraccionPct: doc.detraccionPct ? String(doc.detraccionPct) : party.form.detraccionPct,
+    notes: doc.reference && !p.notes ? `Modifica ${doc.reference}` : party.form.notes,
+  }
+  const warnings = [...doc.warnings, ...party.warnings]
+  if (doc.currency === "USD" && !form.fxRate) {
+    warnings.push("Está en dólares: escribe el tipo de cambio SUNAT de la fecha de emisión.")
+  }
+  return { form, warnings, newSupplier: party.newSupplier }
+}
+
 function DocumentDialog({
   direction,
   data,
@@ -895,21 +981,49 @@ function DocumentDialog({
   }
 
   function pickSupplier(id: string) {
-    const s = data.suppliers.find((x) => x.id === id)
-    setF((p) => ({
-      ...p,
-      supplierId: id,
-      ...(s?.defaultIgvTreatment ? { igvTreatment: s.defaultIgvTreatment } : {}),
-      ...(s && !s.domiciled
-        ? { docType: "91" as DocType, igvTreatment: "no_domiciliado" as const }
-        : {}),
-      // Back to a Peruvian supplier: drop what only fits a foreign one.
-      ...(s?.domiciled && p.docType === "91" ? { docType: "01" as DocType } : {}),
-      ...(s?.domiciled && !s.defaultIgvTreatment && p.igvTreatment === "no_domiciliado"
-        ? { igvTreatment: "credito" as const }
-        : {}),
-      ...(s?.defaultCategory ? { category: s.defaultCategory } : {}),
-    }))
+    setF((p) =>
+      withSupplier(
+        p,
+        id,
+        data.suppliers.find((x) => x.id === id),
+      ),
+    )
+  }
+
+  // "Llenar desde XML": the parsed document, attached when saving.
+  const [xml, setXml] = useState<XmlFillState | null>(null)
+  const [addingSupplier, setAddingSupplier] = useState(false)
+  async function pickXml(file: File) {
+    try {
+      const parsed = parseUbl(await file.text())
+      const r = fillFromUbl(parsed, direction, data, f)
+      setF(r.form)
+      setXml({ file, doc: parsed, warnings: r.warnings, newSupplier: r.newSupplier })
+    } catch (e) {
+      toast.error(e instanceof UblError ? e.message : "No se pudo leer el XML")
+    }
+  }
+  async function addXmlSupplier() {
+    const ns = xml?.newSupplier
+    if (!ns) return
+    setAddingSupplier(true)
+    try {
+      const r = await api<{ id: string | null }>("POST", "/api/admin/finance/suppliers", {
+        docType: "ruc",
+        docNumber: ns.ruc,
+        name: ns.name || ns.ruc,
+        country: "PE",
+        domiciled: true,
+      })
+      onSuppliersChanged()
+      if (r.id) set("supplierId", r.id)
+      setXml((x) => (x ? { ...x, newSupplier: null } : x))
+      toast.success("Proveedor agregado")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo agregar el proveedor")
+    } finally {
+      setAddingSupplier(false)
+    }
   }
 
   async function save() {
@@ -950,18 +1064,27 @@ function DocumentDialog({
             ? f.costLink
             : null,
       }
+      let id = doc?.id ?? null
       if (doc) await api("PUT", `/api/admin/finance/documents/${doc.id}`, body)
-      else await api("POST", "/api/admin/finance/documents", body)
-      toast.success(
-        doc
-          ? "Comprobante actualizado"
-          : "Comprobante registrado: adjunta el PDF y el XML desde la lista",
-      )
+      else id = (await api<{ id: string | null }>("POST", "/api/admin/finance/documents", body)).id
+      toast.success(await savedMessage(!!doc, id, xml?.file ?? null))
       onSaved(f.taxPeriod)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo guardar")
     } finally {
       setBusy(false)
+    }
+  }
+
+  /** Attaches the XML (if one was used) and says what was saved. */
+  async function savedMessage(edited: boolean, id: string | null, file: File | null) {
+    const done = edited ? "Comprobante actualizado" : "Comprobante registrado"
+    if (!file || !id) return edited ? done : `${done}: adjunta el PDF y el XML desde la lista`
+    try {
+      await uploadDocumentFile(id, "xml", file)
+      return `${done} con su XML${edited ? "" : ": adjunta el PDF desde la lista"}`
+    } catch (e) {
+      return `${done}, pero el XML no se adjuntó (${e instanceof Error ? e.message : "error"}): súbelo desde la lista`
     }
   }
 
@@ -990,6 +1113,13 @@ function DocumentDialog({
           </DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[12.5px]">
+          <XmlFill
+            state={xml}
+            onPick={pickXml}
+            onClear={() => setXml(null)}
+            onAddSupplier={addXmlSupplier}
+            addingSupplier={addingSupplier}
+          />
           <div className="space-y-1">
             <Label className="text-xs">Tipo</Label>
             <select
