@@ -430,7 +430,7 @@ function ActionsPanel({ d, onChanged }: { d: Detail; onChanged: () => void }) {
 
 function ReservePanel({ d, onChanged }: { d: Detail; onChanged: () => void }) {
   const [f, setF] = useState({
-    dueDate: d.period?.dueDate ?? "",
+    dueDate: d.period?.dueDate ?? d.calendarDue ?? "",
     reserveMovedOn: d.period?.reserveMovedOn ?? "",
     reserveAmount:
       d.period?.reserveAmount !== null && d.period?.reserveAmount !== undefined
@@ -507,9 +507,9 @@ function ReservePanel({ d, onChanged }: { d: Detail; onChanged: () => void }) {
         </div>
       </div>
       <p className="px-3 pb-3 text-[12px] text-ent-fg-3">
-        El vencimiento lo marca el cronograma de SUNAT por el último dígito del RUC (5 para CUIK
-        E.I.R.L.). La reserva es el 10 % que se mueve a la cuenta para la renta anual: márcala el
-        día que la separas.
+        El vencimiento viene del cronograma de SUNAT por el último dígito del RUC (5 para CUIK
+        E.I.R.L.); cámbialo solo si SUNAT lo modifica. La reserva es el 10 % que se mueve a la
+        cuenta para la renta anual: márcala el día que la separas.
       </p>
     </Panel>
   )

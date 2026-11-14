@@ -6,6 +6,7 @@ import { monthLabel, tenantsMissingLastMonth } from "@/lib/loyalty/impact/remind
 import { connectorsNeedingAttention } from "@/lib/pos/sync"
 import { daysBetween, formatYmd, periodLabel, todayYmd } from "./billing"
 import { billingDueRows, summarize } from "./billing-overview"
+import { collectFinanceAlerts, financeAlertIsDaily } from "./finance-agenda"
 import { getInternalTenantIds } from "./internal-tenants"
 
 /**
@@ -187,15 +188,13 @@ async function posAlerts(
   return out
 }
 
-export async function collectAdminAlerts(now = new Date()): Promise<AdminAlert[]> {
-  const today = todayYmd(now)
-  const internal = new Set(await getInternalTenantIds())
-  const base = appUrl()
-  const tenantHref = (id: string, tab?: string) =>
-    `${base}/admin/tenants/${id}${tab ? `?tab=${tab}` : ""}`
+/** Merchant invoices to issue: overdue ones and the ones due within 3 days. */
+export async function collectBillingAlerts(
+  base: string,
+  today: string,
+  internal: Set<string>,
+): Promise<AdminAlert[]> {
   const out: AdminAlert[] = []
-
-  // ── Billing (every day while it applies) ──
   const billing = summarize(await billingDueRows(today))
   for (const r of billing.overdue) {
     if (internal.has(r.tenantId)) continue
@@ -206,7 +205,7 @@ export async function collectAdminAlerts(now = new Date()): Promise<AdminAlert[]
       severity: "critical",
       who: r.tenantName,
       text: `Sin factura registrada para el periodo ${r.outlook.currentPeriod ? periodLabel(r.outlook.currentPeriod, r.outlook.intervalMonths) : "actual"}, ${d ? `hace ${plural(d, "día", "días")}` : "vence hoy"}.`,
-      href: tenantHref(r.tenantId, "facturacion"),
+      href: `${base}/admin/finanzas/cobranza`,
       days: -d,
     })
   }
@@ -220,9 +219,30 @@ export async function collectAdminAlerts(now = new Date()): Promise<AdminAlert[]
       severity: "warning",
       who: r.tenantName,
       text: `Factura por emitir ${d === 0 ? "hoy" : d === 1 ? "mañana" : `en ${d} días`} (${formatYmd(r.outlook.nextDue ?? today)}).`,
-      href: tenantHref(r.tenantId, "facturacion"),
+      href: `${base}/admin/finanzas/cobranza`,
       days: d,
     })
+  }
+
+  return out
+}
+
+export async function collectAdminAlerts(now = new Date()): Promise<AdminAlert[]> {
+  const today = todayYmd(now)
+  const internal = new Set(await getInternalTenantIds())
+  const base = appUrl()
+  const tenantHref = (id: string, tab?: string) =>
+    `${base}/admin/tenants/${id}${tab ? `?tab=${tab}` : ""}`
+  const out: AdminAlert[] = []
+
+  // ── Billing (every day while it applies) ──
+  out.push(...(await collectBillingAlerts(base, today, internal)))
+
+  // ── Finance: PDT due dates, reserve, late receivables, invoices without sale ──
+  try {
+    out.push(...(await collectFinanceAlerts(base, now)))
+  } catch (err) {
+    console.error("[admin-digest] finance alerts", err)
   }
 
   // ── Tenants: cold, demos, certificates ──
@@ -367,6 +387,15 @@ export async function collectAdminAlerts(now = new Date()): Promise<AdminAlert[]
 const RUN_KEY = "admin_digest"
 type DigestState = { lastRunYmd?: string; sent?: Record<string, string> }
 
+/**
+ * Whether the daily digest ran today or yesterday: it already carries the
+ * billing reminders, so the separate billing email stands down (one email).
+ */
+export async function digestIsRunning(today: string): Promise<boolean> {
+  const last = (await loadState()).lastRunYmd
+  return !!last && daysBetween(last, today) <= 1
+}
+
 async function loadState(): Promise<DigestState> {
   const [row] = await db
     .select({ value: globalConfig.value })
@@ -394,9 +423,12 @@ export function dueToday(
 ): AdminAlert[] {
   return alerts.filter((a) => {
     if (a.kind === "billing") return true
+    if (a.kind === "finance" && financeAlertIsDaily(a.key)) return true
     const last = sent[a.key]
     if (!last) return true
-    if (a.kind === "cold") return daysBetween(last, today) >= COLD_REPEAT_DAYS
+    if (a.kind === "cold" || a.kind === "finance") {
+      return daysBetween(last, today) >= COLD_REPEAT_DAYS
+    }
     return false
   })
 }
@@ -416,6 +448,7 @@ export function composeDigest(alerts: AdminAlert[]) {
       `${n("cold")} comercio${n("cold") === 1 ? "" : "s"} frío${n("cold") === 1 ? "" : "s"}`,
     )
   if (n("billing")) parts.push(`${n("billing")} de facturación`)
+  if (n("finance")) parts.push(`${n("finance")} de finanzas`)
   if (n("demo")) parts.push(`${n("demo")} demo${n("demo") === 1 ? "" : "s"}`)
   if (n("campaign"))
     parts.push(

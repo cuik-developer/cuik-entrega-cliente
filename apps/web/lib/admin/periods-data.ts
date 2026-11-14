@@ -19,6 +19,7 @@ import { currentMonthLima } from "./company-data"
 import { DocumentError } from "./document-error"
 import { docSign, toPen } from "./documents"
 import { lockPeriod } from "./period-lock"
+import { pdtDueDate } from "./sunat-calendar"
 import { loadFiscalRun } from "./tax-data"
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
@@ -123,7 +124,9 @@ export async function loadClosesPage(selected: string | null) {
       month: r.month,
       status: p?.status ?? "open",
       declared: !!r.declared,
-      dueDate: p?.dueDate ?? null,
+      // Typed in Cierres, else SUNAT's schedule for the RUC's last digit.
+      dueDate: p?.dueDate ?? pdtDueDate(r.month, issuer.ruc),
+      dueFromCalendar: !p?.dueDate,
       igvToPay: r.igvToPay,
       incomeAdvance: r.incomeAdvance,
       payToSunat: r.payToSunat,
@@ -180,6 +183,8 @@ async function loadCloseDetail(
   return {
     month,
     status: period?.status ?? "open",
+    /** SUNAT schedule date for this month (prefills the due date). */
+    calendarDue: pdtDueDate(month, run.issuer.ruc),
     row,
     period: period
       ? {

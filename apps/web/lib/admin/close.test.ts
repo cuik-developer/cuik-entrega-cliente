@@ -122,3 +122,15 @@ describe("duplicates and thousands", () => {
     expect(parseAmount("1.23")).toBe(1.23)
   })
 })
+
+describe("SUNAT calendar", async () => {
+  const { pdtDueDate } = await import("./sunat-calendar")
+  it("gives CUIK E.I.R.L. (RUC ending in 5) its 2026 dates", () => {
+    expect(pdtDueDate("2026-11", "20606652055")).toBe("2026-12-22")
+    expect(pdtDueDate("2026-12", "20606652055")).toBe("2027-01-21")
+    expect(pdtDueDate("2026-03", "20100047210")).toBe("2026-04-17")
+  })
+  it("returns null for a year not loaded", () => {
+    expect(pdtDueDate("2027-01", "20606652055")).toBeNull()
+  })
+})

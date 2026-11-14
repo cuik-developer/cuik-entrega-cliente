@@ -23,6 +23,7 @@ export type HomePending = {
 
 const ALERT_MODULE: Record<AlertKind, AdminModuleKey> = {
   billing: "finanzas",
+  finance: "finanzas",
   cold: "comercios",
   demo: "crm",
   cert: "comercios",

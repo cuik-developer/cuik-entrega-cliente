@@ -1,6 +1,7 @@
 import { db, eq, globalConfig, user } from "@cuik/db"
 import { MensajePersonalizado, sendEmail } from "@cuik/email"
 import { createElement } from "react"
+import { digestIsRunning } from "./admin-digest"
 import { daysBetween, formatYmd, periodLabel, todayYmd } from "./billing"
 import { type BillingDueRow, billingDueRows } from "./billing-overview"
 
@@ -8,7 +9,10 @@ import { type BillingDueRow, billingDueRows } from "./billing-overview"
 export const REMINDER_DAYS_BEFORE = 3
 
 export type ReminderRunResult =
-  | { status: "skipped"; reason: "nothing_due" | "no_recipients" | "already_sent_today" }
+  | {
+      status: "skipped"
+      reason: "nothing_due" | "no_recipients" | "already_sent_today" | "in_daily_digest"
+    }
   | { status: "sent"; to: string[]; upcoming: number; overdue: number }
   | { status: "error"; error: string }
 
@@ -119,6 +123,12 @@ export async function sendBillingReminders(
   const last = await lastRunYmd()
   if (last === today && !opts.force) return { status: "skipped", reason: "already_sent_today" }
   const missedDays = last && last < today ? Math.max(0, daysBetween(last, today) - 1) : 0
+  // The daily digest already lists invoices to issue and overdue ones (with
+  // the rest of the finance agenda): one email instead of two.
+  if (!opts.force && (await digestIsRunning(today))) {
+    await markRun(today)
+    return { status: "skipped", reason: "in_daily_digest" }
+  }
 
   const rows = await billingDueRows(today)
   const composed = composeReminder(rows, today, missedDays)
