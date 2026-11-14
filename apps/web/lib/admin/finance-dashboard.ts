@@ -5,17 +5,24 @@ import {
   buildLedger,
   type Currency,
   type ExpectedBillingLike,
+  type FxRates,
   fxFor,
   investmentRecovery,
   type LedgerRow,
   type LedgerTotals,
   loanBalanceAt,
+  projectTaxes,
   round2,
   sumLedger,
+  type TaxLike,
+  type TaxRatesLike,
   withCumulative,
 } from "./finance"
 import { loadLedgerInputs } from "./finance-data"
+import { profileForMonth } from "./issuers"
 import { type ProspectLike, prospectMonthlyPen, prospectsToExpected } from "./prospects"
+import { reserveRate } from "./tax"
+import { loadFiscalRun } from "./tax-data"
 
 /** Fallback ticket when no merchant pays yet: the basic plan (S/ 79). */
 const DEFAULT_TICKET_PEN = 79
@@ -30,6 +37,10 @@ export type ExpectedMerchant = ExpectedBillingLike & {
   status: string
   /** Income per month in soles at today's rate (amount / interval). */
   monthlyPen: number
+  /** The tariff already includes IGV (every current one does). */
+  includesIgv: boolean
+  /** Invoiced by another razón social (e.g. Making Brands): not Cuik's taxes. */
+  issuerOverride: string | null
 }
 
 export type FinanceDashboard = {
@@ -66,6 +77,8 @@ export type FinanceDashboard = {
     outflowPen: number
     ticketPen: number
     ticketIsDefault: boolean
+    /** What is left of the ticket after IGV, the 1 % and the 10 % reserve. */
+    ticketNetPen: number
     merchantsNeeded: number | null
   }
   loans: {
@@ -106,6 +119,8 @@ export async function loadExpectedBilling(): Promise<ExpectedMerchant[]> {
       interval: tenantBilling.billingIntervalMonths,
       mode: tenantBilling.billingMode,
       start: tenantBilling.serviceStartOn,
+      includesIgv: tenantBilling.amountIncludesIgv,
+      issuerOverride: tenantBilling.issuerId,
     })
     .from(tenantBilling)
     .innerJoin(tenants, eq(tenants.id, tenantBilling.tenantId))
@@ -141,6 +156,8 @@ export async function loadExpectedBilling(): Promise<ExpectedMerchant[]> {
       billingMode: c.mode,
       startMonth,
       firstUncovered: coveredThrough(startMonth, byTenant.get(c.tenantId) ?? []),
+      includesIgv: c.includesIgv,
+      issuerOverride: c.issuerOverride,
       monthlyPen: 0, // filled by the dashboard with the month's rate
     }
   })
@@ -183,6 +200,46 @@ function minMonth(months: (string | null | undefined)[]): string | null {
 function monthIndex(ym: string): number {
   const [y, m] = ym.split("-").map(Number)
   return y * 12 + m
+}
+
+/**
+ * Taxes for the ledger: each month with a regime takes its documents' IGV
+ * to pay + pago a cuenta and the 10 % reserve (declared figures when closed);
+ * months still projected add the estimate of what is left to invoice. Also
+ * the share of a tariff (with IGV) Cuik keeps after all of that.
+ */
+async function loadLedgerTaxes(
+  expected: (ExpectedBillingLike & { includesIgv?: boolean; issuerOverride?: string | null })[],
+  rates: FxRates,
+  w: { from: string; to: string; todayMonth: string },
+) {
+  // The Tablero must never fail because the fiscal tables are missing or empty.
+  const run = await loadFiscalRun(w.todayMonth).catch((err) => {
+    console.error("[finance-dashboard] fiscal run", err)
+    return null
+  })
+  if (!run?.profile) return { list: [] as TaxLike[], keepShare: 1 }
+  const issuerId = run.issuer.id
+  const rateFor = (m: string): TaxRatesLike | null => {
+    const p = profileForMonth(run.profiles, issuerId, m)
+    return p
+      ? { igvRate: p.igvRate, monthlyRate: p.monthlyRate, reserveRate: reserveRate(p) }
+      : null
+  }
+  const real: TaxLike[] = run.allRows.map((r) => ({
+    month: r.month,
+    sunat: r.payToSunat,
+    reserve: r.annualReserve,
+    estimated: false,
+  }))
+  // Merchants invoiced by another razón social (Dfrios) are not Cuik's taxes.
+  const own = expected.filter((e) => !e.issuerOverride || e.issuerOverride === issuerId)
+  const projected = projectTaxes(own, rates, w, rateFor)
+  const now = rateFor(w.todayMonth)
+  const keepShare = now
+    ? 1 - (now.igvRate + now.monthlyRate + now.reserveRate) / (1 + now.igvRate)
+    : 1
+  return { list: [...real, ...projected], keepShare }
 }
 
 /** Everything the Tablero shows for a window, in soles. */
@@ -250,6 +307,13 @@ export async function buildFinanceDashboard(opts: {
   // the current month do not depend on the window the user is looking at.
   const historyFrom = minMonth([earliest, from, todayMonth]) as string
   const historyTo = [to, todayMonth].sort()[1]
+  // Cuik's taxes: real months from its documents (declared when closed),
+  // projected months estimated from the income still to invoice.
+  const taxes = await loadLedgerTaxes([...expected, ...prospectExpected], inputs.rates, {
+    from: historyFrom,
+    to: historyTo,
+    todayMonth,
+  })
   const history = withCumulative(
     buildLedger({
       ...inputs,
@@ -257,6 +321,7 @@ export async function buildFinanceDashboard(opts: {
       from: historyFrom,
       to: historyTo,
       todayMonth,
+      taxes: taxes.list,
     }),
   )
   const rows = history.filter((r) => r.month >= from && r.month <= to)
@@ -335,7 +400,10 @@ export async function buildFinanceDashboard(opts: {
       outflowPen,
       ticketPen,
       ticketIsDefault,
-      merchantsNeeded: outflowPen > 0 ? breakEvenMerchants(outflowPen, ticketPen) : null,
+      /** What is left of the ticket after IGV, the 1 % and the 10 % reserve. */
+      ticketNetPen: round2(ticketPen * taxes.keepShare),
+      merchantsNeeded:
+        outflowPen > 0 ? breakEvenMerchants(outflowPen, round2(ticketPen * taxes.keepShare)) : null,
     },
     loans,
     recovery: {

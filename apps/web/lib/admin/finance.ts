@@ -106,6 +106,66 @@ export type MonthRow = {
   netAccrual: number
   /** True when some USD amount used the default rate (no rate typed yet). */
   fxEstimated: boolean
+  /**
+   * Paid to SUNAT for the month's sales: IGV net of the purchases' credit plus
+   * the 1 % pago a cuenta. Accrual in the tax month; cash the month after
+   * (the PDT 621 is filed then). Estimated for projected months.
+   */
+  taxCash: number
+  taxAccrual: number
+  /** The 10 % set aside for the annual income tax, same timing. Not spendable. */
+  reserveCash: number
+  reserveAccrual: number
+  /** True when some tax figure is an estimate (projected sales, not documents). */
+  taxEstimated: boolean
+}
+
+/** Taxes of one tax month as the ledger takes them (soles). */
+export type TaxLike = {
+  /** "YYYY-MM" the sales belong to (the PDT is paid the month after). */
+  month: string
+  /** IGV to pay + pago a cuenta. */
+  sunat: number
+  /** Annual income-tax reserve set aside. */
+  reserve: number
+  estimated: boolean
+}
+
+/** Rates of the regime in force a month; null before there is one. */
+export type TaxRatesLike = { igvRate: number; monthlyRate: number; reserveRate: number }
+
+/**
+ * Estimated taxes of the merchant income still to invoice (projected), by the
+ * month it would be invoiced. Tariffs include IGV unless the merchant says
+ * otherwise; purchases are not projected, so the IGV is gross (conservative).
+ */
+export function projectTaxes(
+  expected: (ExpectedBillingLike & { includesIgv?: boolean })[],
+  rates: FxRates,
+  w: { from: string; to: string; todayMonth: string },
+  rateFor: (month: string) => TaxRatesLike | null,
+): TaxLike[] {
+  const out = new Map<string, TaxLike>()
+  for (const t of expected) {
+    const buckets = new Map<string, Bucket>()
+    projectExpected(buckets, t, rates, w)
+    for (const [month, b] of buckets) {
+      const r = rateFor(month)
+      if (!r || b.cash <= 0) continue
+      const base = t.includesIgv === false ? b.cash : b.cash / (1 + r.igvRate)
+      const prev = out.get(month) ?? { month, sunat: 0, reserve: 0, estimated: true }
+      // A tariff without IGV is counted as income without it, so the IGV
+      // charged on top is in and out at once: only the 1 % is Cuik's cost.
+      prev.sunat += base * ((t.includesIgv === false ? 0 : r.igvRate) + r.monthlyRate)
+      prev.reserve += base * r.reserveRate
+      out.set(month, prev)
+    }
+  }
+  return [...out.values()].map((x) => ({
+    ...x,
+    sunat: round2(x.sunat),
+    reserve: round2(x.reserve),
+  }))
 }
 
 export function monthRange(from: string, to: string): string[] {
@@ -247,6 +307,33 @@ function projectExpected(
   }
 }
 
+/**
+ * Taxes by ledger month: accrual in the tax month; cash when the PDT is paid,
+ * the month after.
+ */
+function taxBuckets(taxes: TaxLike[]) {
+  const tax = new Map<string, Bucket>()
+  const reserve = new Map<string, Bucket>()
+  for (const t of taxes) {
+    // Accrual in the tax month; cash when the PDT is paid, the month after.
+    for (const [map, amount] of [
+      [tax, t.sunat],
+      [reserve, t.reserve],
+    ] as const) {
+      const a = map.get(t.month) ?? emptyBucket()
+      a.accrual += amount
+      a.estimated = a.estimated || t.estimated
+      map.set(t.month, a)
+      const next = shiftMonth(t.month, 1)
+      const c = map.get(next) ?? emptyBucket()
+      c.cash += amount
+      c.estimated = c.estimated || t.estimated
+      map.set(next, c)
+    }
+  }
+  return { tax, reserve }
+}
+
 export function buildLedger(input: {
   from: string
   to: string
@@ -259,8 +346,11 @@ export function buildLedger(input: {
   expected?: ExpectedBillingLike[]
   /** First month the projection may fill ("YYYY-MM"); earlier uncovered months stay empty. */
   todayMonth?: string
+  /** Taxes per tax month (documents for real months, estimates for projected ones). */
+  taxes?: TaxLike[]
 }): MonthRow[] {
   const { from, to, rates } = input
+  const { tax, reserve } = taxBuckets(input.taxes ?? [])
   const income = new Map<string, Bucket>()
   const projected = new Map<string, Bucket>()
   const cost = new Map<string, Bucket>()
@@ -363,9 +453,11 @@ export function buildLedger(input: {
     const c = cost.get(month) ?? emptyBucket()
     const l = loan.get(month) ?? emptyBucket()
     const p = projected.get(month) ?? emptyBucket()
+    const tx = tax.get(month) ?? emptyBucket()
+    const rs = reserve.get(month) ?? emptyBucket()
     const contributions = round2(contrib.get(month) ?? 0)
     const returns = round2(ret.get(month) ?? 0)
-    const netCash = round2(i.cash + p.cash - c.cash - l.cash)
+    const netCash = round2(i.cash + p.cash - c.cash - l.cash - tx.cash - rs.cash)
     return {
       month,
       incomeCash: round2(i.cash),
@@ -375,12 +467,19 @@ export function buildLedger(input: {
       loanPayments: round2(l.cash),
       contributions,
       returns,
-      autoContribution: round2(Math.max(0, -netCash - contributions)),
+      // The reserve is still Cuik's money (set aside, not spent): a month short
+      // only because of it does not count as the partner putting money in.
+      autoContribution: round2(Math.max(0, -(netCash + rs.cash) - contributions)),
       projectedCash: round2(p.cash),
       projectedAccrual: round2(p.accrual),
       netCash,
-      netAccrual: round2(i.accrual + p.accrual - c.accrual - l.cash),
+      netAccrual: round2(i.accrual + p.accrual - c.accrual - l.cash - tx.accrual - rs.accrual),
       fxEstimated: i.estimated || c.estimated || l.estimated || p.estimated,
+      taxCash: round2(tx.cash),
+      taxAccrual: round2(tx.accrual),
+      reserveCash: round2(rs.cash),
+      reserveAccrual: round2(rs.accrual),
+      taxEstimated: tx.estimated || rs.estimated,
     }
   })
 }
@@ -411,6 +510,10 @@ export type LedgerTotals = {
   projectedAccrual: number
   netCash: number
   netAccrual: number
+  taxCash: number
+  taxAccrual: number
+  reserveCash: number
+  reserveAccrual: number
 }
 
 export function sumLedger(rows: MonthRow[]): LedgerTotals {
@@ -427,8 +530,16 @@ export function sumLedger(rows: MonthRow[]): LedgerTotals {
     projectedAccrual: 0,
     netCash: 0,
     netAccrual: 0,
+    taxCash: 0,
+    taxAccrual: 0,
+    reserveCash: 0,
+    reserveAccrual: 0,
   }
   for (const r of rows) {
+    t.taxCash += r.taxCash
+    t.taxAccrual += r.taxAccrual
+    t.reserveCash += r.reserveCash
+    t.reserveAccrual += r.reserveAccrual
     t.incomeCash += r.incomeCash
     t.incomeAccrual += r.incomeAccrual
     t.costCash += r.costCash

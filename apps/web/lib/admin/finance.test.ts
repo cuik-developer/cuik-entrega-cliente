@@ -7,6 +7,7 @@ import {
   loanBalanceAt,
   loanSchedule,
   monthRange,
+  projectTaxes,
   recurringChargeMonths,
   sumLedger,
   withCumulative,
@@ -518,5 +519,43 @@ describe("ledger", () => {
     expect(rec.outstanding).toBe(600)
     expect(rec.recoveredIn).toBe("2026-12") // Σ net: −600, −300, +100
     expect(rec.cashOnHand).toBe(700) // 600 contributed + 100 generated
+  })
+})
+
+describe("taxes in the ledger", () => {
+  const base = { rates: {}, recurring: [], entries: [], loans: [], invoices: [] }
+  it("subtracts SUNAT and the reserve the month after the tax month (cash) and in it (accrual)", () => {
+    const rows = buildLedger({
+      ...base,
+      from: "2026-11",
+      to: "2026-12",
+      taxes: [{ month: "2026-11", sunat: 31, reserve: 21.19, estimated: false }],
+    })
+    expect(rows[0]).toMatchObject({ taxCash: 0, taxAccrual: 31, reserveAccrual: 21.19, netCash: 0 })
+    expect(rows[0]?.netAccrual).toBe(-52.19)
+    expect(rows[1]).toMatchObject({ taxCash: 31, reserveCash: 21.19, netCash: -52.19 })
+    // Short only by SUNAT counts as the partner's money; the reserve is still Cuik's.
+    expect(rows[1]?.autoContribution).toBe(31)
+  })
+  it("estimates taxes of projected income by the regime of each month", () => {
+    const taxes = projectTaxes(
+      [
+        {
+          amount: 250,
+          currency: "PEN",
+          intervalMonths: 1,
+          billingMode: "arrears",
+          startMonth: "2026-10",
+          firstUncovered: "2026-11",
+          includesIgv: true,
+        },
+      ],
+      {},
+      { from: "2026-11", to: "2027-01", todayMonth: "2026-12" },
+      (m) => (m >= "2026-11" ? { igvRate: 0.18, monthlyRate: 0.01, reserveRate: 0.1 } : null),
+    )
+    // Nov (arrears) is invoiced in Dec: base 211.86 → IGV 38.14 + 1 % 2.12; reserve 21.19.
+    const dec = taxes.find((t) => t.month === "2026-12")
+    expect(dec).toMatchObject({ sunat: 40.25, reserve: 21.19, estimated: true })
   })
 })

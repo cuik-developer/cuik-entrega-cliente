@@ -175,12 +175,15 @@ export function TableroClient() {
     income: isCash ? r.incomeCash : r.incomeAccrual,
     projected: isCash ? r.projectedCash : r.projectedAccrual,
     cost: isCash ? r.costCash : r.costAccrual,
+    tax: isCash ? r.taxCash : r.taxAccrual,
+    reserve: isCash ? r.reserveCash : r.reserveAccrual,
     net: isCash ? r.netCash : r.netAccrual,
     cumulative: isCash ? r.cumulativeCash : r.cumulativeAccrual,
   })
   const curPick = cur ? pick(cur) : null
   const curIncome = curPick ? curPick.income + curPick.projected : 0
-  const curOut = curPick && cur ? curPick.cost + cur.loanPayments : 0
+  const curOut =
+    curPick && cur ? curPick.cost + cur.loanPayments + curPick.tax + curPick.reserve : 0
   const curNet = curPick?.net ?? 0
   const loanBalancePen = d.loans.reduce((a, l) => a + l.balancePen, 0)
   const remaining = d.loans.reduce((a, l) => a + l.remaining, 0)
@@ -213,7 +216,7 @@ export function TableroClient() {
     {
       label: "Salidas del mes",
       value: soles(curOut),
-      hint: cur && cur.loanPayments > 0 ? `${soles(cur.loanPayments)} en cuotas` : "sin cuotas",
+      hint: outHint(curPick, cur?.loanPayments ?? 0),
     },
     {
       label: "Punto de equilibrio",
@@ -223,7 +226,7 @@ export function TableroClient() {
         gap === null
           ? undefined
           : gap > 0
-            ? `faltan ${gap} a ${soles(d.breakEven.ticketPen)}`
+            ? `faltan ${gap} a ${soles(d.breakEven.ticketPen)} (quedan ${soles(d.breakEven.ticketNetPen)})`
             : "alcanzado",
       tone: gap !== null && gap > 0 ? "warn" : "ok",
     },
@@ -270,7 +273,7 @@ export function TableroClient() {
       month: r.month,
       label: monthLabel(r.month, false),
       ingresos: p.income + p.projected,
-      salidas: p.cost + r.loanPayments,
+      salidas: p.cost + r.loanPayments + p.tax + p.reserve,
       acumulado: p.cumulative,
       projected: r.month > todayMonth,
     }
@@ -489,6 +492,15 @@ export function TableroClient() {
                 <Th className="text-right">Ingresos</Th>
                 <Th className="text-right">Costos</Th>
                 <Th className="text-right">Cuotas</Th>
+                <Th
+                  className="text-right"
+                  title="IGV neto del crédito de compras + pago a cuenta 1 %"
+                >
+                  SUNAT
+                </Th>
+                <Th className="text-right" title="10 % separado para la renta anual">
+                  Reserva
+                </Th>
                 <Th className="text-right">Neto</Th>
                 <Th className="text-right">Acumulado</Th>
                 <Th className="text-right">Pone el socio</Th>
@@ -523,6 +535,7 @@ export function TableroClient() {
                     </Td>
                     <Td className="text-right tabular-nums">{soles(p.cost)}</Td>
                     <Td className="text-right tabular-nums">{soles(r.loanPayments)}</Td>
+                    <TaxCells tax={p.tax} reserve={p.reserve} estimated={r.taxEstimated} />
                     <Td
                       className={cn(
                         "text-right tabular-nums font-medium",
@@ -551,52 +564,20 @@ export function TableroClient() {
               })}
             </tbody>
             <tfoot>
-              <tr className="border-t border-ent-line-strong font-medium">
-                <Td>Hasta hoy</Td>
-                <Td className="text-right tabular-nums">
-                  {soles(
-                    (isCash ? d.totals.toDate.incomeCash : d.totals.toDate.incomeAccrual) +
-                      (isCash ? d.totals.toDate.projectedCash : d.totals.toDate.projectedAccrual),
-                  )}
-                </Td>
-                <Td className="text-right tabular-nums">
-                  {soles(isCash ? d.totals.toDate.costCash : d.totals.toDate.costAccrual)}
-                </Td>
-                <Td className="text-right tabular-nums">{soles(d.totals.toDate.loanPayments)}</Td>
-                <Td className="text-right tabular-nums">
-                  {soles(isCash ? d.totals.toDate.netCash : d.totals.toDate.netAccrual, {
-                    sign: true,
-                  })}
-                </Td>
-                <Td />
-                <Td className="text-right tabular-nums">
-                  {soles(d.totals.toDate.contributions + d.totals.toDate.autoContribution)}
-                </Td>
-              </tr>
-              <tr className="text-ent-fg-3">
-                <Td>Proyección</Td>
-                <Td className="text-right tabular-nums">
-                  {soles(
-                    (isCash ? d.totals.projected.incomeCash : d.totals.projected.incomeAccrual) +
-                      (isCash
-                        ? d.totals.projected.projectedCash
-                        : d.totals.projected.projectedAccrual),
-                  )}
-                </Td>
-                <Td className="text-right tabular-nums">
-                  {soles(isCash ? d.totals.projected.costCash : d.totals.projected.costAccrual)}
-                </Td>
-                <Td className="text-right tabular-nums">
-                  {soles(d.totals.projected.loanPayments)}
-                </Td>
-                <Td className="text-right tabular-nums">
-                  {soles(isCash ? d.totals.projected.netCash : d.totals.projected.netAccrual, {
-                    sign: true,
-                  })}
-                </Td>
-                <Td />
-                <Td />
-              </tr>
+              <TotalsRow
+                label="Hasta hoy"
+                t={d.totals.toDate}
+                isCash={isCash}
+                partner={d.totals.toDate.contributions + d.totals.toDate.autoContribution}
+                className="border-t border-ent-line-strong font-medium"
+              />
+              <TotalsRow
+                label="Proyección"
+                t={d.totals.projected}
+                isCash={isCash}
+                partner={null}
+                className="text-ent-fg-3"
+              />
             </tfoot>
           </DataTable>
         </Panel>
@@ -659,6 +640,15 @@ export function TableroClient() {
                   </span>
                 </span>
               </div>
+              {d.breakEven.ticketNetPen < d.breakEven.ticketPen && (
+                <div className="flex justify-between gap-2">
+                  <span>Queda por comercio</span>
+                  <span className="tabular-nums text-ent-fg">
+                    {soles(d.breakEven.ticketNetPen)}
+                    <span className="text-ent-fg-3 text-[11px]"> sin IGV, 1 % ni reserva</span>
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between gap-2">
                 <span>Comercios necesarios</span>
                 <span className="tabular-nums text-ent-fg">
@@ -709,4 +699,79 @@ export function TableroClient() {
       </div>
     </div>
   )
+}
+
+/** SUNAT (IGV net of purchases + 1 %) and the 10 % reserve of a month; "est." when projected. */
+function TaxCells({
+  tax,
+  reserve,
+  estimated,
+}: {
+  tax: number
+  reserve: number
+  estimated: boolean
+}) {
+  return (
+    <>
+      <Td className="text-right tabular-nums">
+        {tax > 0 ? soles(tax) : ""}
+        {tax > 0 && estimated && <span className="ml-1 text-[10.5px] text-ent-fg-3">est.</span>}
+      </Td>
+      <Td className="text-right tabular-nums">{reserve > 0 ? soles(reserve) : ""}</Td>
+    </>
+  )
+}
+
+/** A footer row of the month table in the chosen view (caja or devengado). */
+function TotalsRow({
+  label,
+  t,
+  isCash,
+  partner,
+  className,
+}: {
+  label: string
+  t: FinanceDashboard["totals"]["toDate"]
+  isCash: boolean
+  partner: number | null
+  className?: string
+}) {
+  const v = isCash
+    ? {
+        income: t.incomeCash + t.projectedCash,
+        cost: t.costCash,
+        tax: t.taxCash,
+        reserve: t.reserveCash,
+        net: t.netCash,
+      }
+    : {
+        income: t.incomeAccrual + t.projectedAccrual,
+        cost: t.costAccrual,
+        tax: t.taxAccrual,
+        reserve: t.reserveAccrual,
+        net: t.netAccrual,
+      }
+  return (
+    <tr className={className}>
+      <Td>{label}</Td>
+      <Td className="text-right tabular-nums">{soles(v.income)}</Td>
+      <Td className="text-right tabular-nums">{soles(v.cost)}</Td>
+      <Td className="text-right tabular-nums">{soles(t.loanPayments)}</Td>
+      <Td className="text-right tabular-nums">{soles(v.tax)}</Td>
+      <Td className="text-right tabular-nums">{soles(v.reserve)}</Td>
+      <Td className="text-right tabular-nums">{soles(v.net, { sign: true })}</Td>
+      <Td />
+      <Td className="text-right tabular-nums">{partner === null ? "" : soles(partner)}</Td>
+    </tr>
+  )
+}
+
+/** What the month's outflow is made of (loan, SUNAT, reserve), short. */
+function outHint(p: { tax: number; reserve: number } | null, loan: number): string {
+  const parts = [
+    loan > 0 ? `${soles(loan)} cuotas` : null,
+    p && p.tax > 0 ? `${soles(p.tax)} SUNAT` : null,
+    p && p.reserve > 0 ? `${soles(p.reserve)} reserva` : null,
+  ].filter(Boolean)
+  return parts.length > 0 ? parts.join(" · ") : "sin cuotas"
 }
