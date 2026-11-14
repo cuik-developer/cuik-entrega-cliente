@@ -1000,7 +1000,12 @@ export function TenantBillingSection({
                               onClick={() =>
                                 patchInvoice(
                                   i.id,
-                                  { status: "paid" },
+                                  {
+                                    status: "paid",
+                                    paidOn: new Date().toLocaleDateString("en-CA", {
+                                      timeZone: "America/Lima",
+                                    }),
+                                  },
                                   "Factura marcada como pagada",
                                 )
                               }
