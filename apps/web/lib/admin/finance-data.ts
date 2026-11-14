@@ -2,11 +2,13 @@ import {
   asc,
   db,
   desc,
+  documents,
   eq,
   financeEntries,
   fxRates,
   loans,
   recurringItems,
+  sql,
   tenantInvoices,
   tenants,
 } from "@cuik/db"
@@ -15,7 +17,7 @@ import type { EntryLike, FxRates, InvoiceLike, LoanLike, RecurringLike } from ".
 
 /** Everything the finance screens and the ledger need, as plain numbers. */
 export async function loadFinance() {
-  const [rates, recurring, entries, loanRows] = await Promise.all([
+  const [rates, recurring, entries, loanRows, linkedDocs] = await Promise.all([
     db.select().from(fxRates).orderBy(desc(fxRates.month)),
     db.select().from(recurringItems).orderBy(asc(recurringItems.type), asc(recurringItems.name)),
     db
@@ -38,7 +40,37 @@ export async function loadFinance() {
       .leftJoin(tenants, eq(tenants.id, financeEntries.tenantId))
       .orderBy(desc(financeEntries.month), desc(financeEntries.createdAt)),
     db.select().from(loans).orderBy(asc(loans.firstMonth)),
+    // Purchases (Compras) tied to a cost here: the receipt of a fixed cost, or
+    // the variable cost the purchase created.
+    db
+      .select({
+        id: documents.id,
+        serie: documents.serie,
+        numero: documents.numero,
+        issueDate: documents.issueDate,
+        taxPeriod: documents.taxPeriod,
+        recurringItemId: documents.recurringItemId,
+        entryId: documents.entryId,
+      })
+      .from(documents)
+      .where(
+        sql`${documents.status} = 'registered' AND (${documents.recurringItemId} IS NOT NULL OR ${documents.entryId} IS NOT NULL)`,
+      )
+      .orderBy(desc(documents.issueDate)),
   ])
+  const receipt = (d: (typeof linkedDocs)[number]) => ({
+    number: `${d.serie}-${d.numero}`,
+    month: d.issueDate.slice(0, 7),
+    taxPeriod: d.taxPeriod,
+  })
+  const receiptsOf = new Map<string, ReturnType<typeof receipt>[]>()
+  const receiptOfEntry = new Map<string, ReturnType<typeof receipt>>()
+  for (const d of linkedDocs) {
+    if (d.recurringItemId) {
+      receiptsOf.set(d.recurringItemId, [...(receiptsOf.get(d.recurringItemId) ?? []), receipt(d)])
+    }
+    if (d.entryId) receiptOfEntry.set(d.entryId, receipt(d))
+  }
   return {
     rates: rates.map((r) => ({
       month: r.month,
@@ -58,6 +90,8 @@ export async function loadFinance() {
       recognition: r.recognition,
       notes: r.notes,
       active: r.active,
+      /** Purchases registered as this fixed cost's receipts, newest first. */
+      receipts: receiptsOf.get(r.id) ?? [],
     })),
     entries: entries.map((e) => ({
       id: e.id,
@@ -72,6 +106,8 @@ export async function loadFinance() {
       tenantId: e.tenantId,
       tenantName: e.tenantName,
       notes: e.notes,
+      /** The purchase (Compras) this cost was created from. */
+      receipt: receiptOfEntry.get(e.id) ?? null,
     })),
     loans: loanRows.map((l) => ({
       id: l.id,

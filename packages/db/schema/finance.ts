@@ -294,6 +294,10 @@ export const documents = financeSchema.table(
     cdrKey: text("cdr_key"),
     cdrName: text("cdr_name"),
     entryId: uuid("entry_id").references(() => financeEntries.id, { onDelete: "set null" }),
+    /** The fixed cost (Costos e ingresos) this purchase is the receipt of. Migration 0051. */
+    recurringItemId: uuid("recurring_item_id").references(() => recurringItems.id, {
+      onDelete: "set null",
+    }),
     notes: text("notes"),
     createdBy: text("created_by").references(() => user.id),
     createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -317,6 +317,11 @@ export const documentSchema = z
     notes: optionalText(1000),
     /** Purchases: also create the cost in Costos e ingresos (management ledger). */
     createCostEntry: z.boolean().optional(),
+    /**
+     * Purchases: the fixed cost of Costos e ingresos this is the receipt of
+     * (no new cost is created). Omitted = unchanged on edit.
+     */
+    recurringItemId: z.preprocess(emptyToNull, z.string().uuid().nullable().optional()),
   })
   .refine(
     (v) => Math.abs(Math.round((v.baseGravada + v.baseNoGravada + v.igv - v.total) * 100)) <= 2,

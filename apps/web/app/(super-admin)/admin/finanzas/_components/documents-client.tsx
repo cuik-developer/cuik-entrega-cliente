@@ -32,7 +32,6 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DOCUMENT_FILE_RULES, type DocumentFileKind } from "@/lib/admin/document-files"
 import {
@@ -455,6 +454,9 @@ function DocRow({
         {d.counterpartyDoc ? (
           <span className="block text-[11px] text-ent-fg-3">{d.counterpartyDoc}</span>
         ) : null}
+        {d.recurringName ? (
+          <span className="block text-[11px] text-ent-fg-3">Costo fijo: {d.recurringName}</span>
+        ) : null}
       </Td>
       <Td align="right">{money(sign * (d.baseGravada + d.baseNoGravada), d.currency)}</Td>
       <Td align="right">{money(sign * d.igv, d.currency)}</Td>
@@ -677,6 +679,54 @@ function FileSlot({
 
 /* ───────────────────────── Form ───────────────────────── */
 
+/**
+ * Where a purchase goes in Costos e ingresos, so nothing is entered twice:
+ * a new variable cost, the receipt of a fixed cost already there (Hetzner,
+ * Apple…), or nowhere.
+ */
+function CostLinkSelect({
+  value,
+  editing,
+  hadEntry,
+  costs,
+  onChange,
+}: {
+  value: string
+  editing: boolean
+  hadEntry: boolean
+  costs: DocumentsPage["recurringCosts"]
+  onChange: (v: string) => void
+}) {
+  return (
+    <div className="space-y-1 col-span-2 sm:col-span-4">
+      <Label className="text-xs">En Costos e ingresos</Label>
+      <select className={sel} value={value} onChange={(e) => onChange(e.target.value)}>
+        {(!editing || hadEntry) && (
+          <option value="new">
+            {editing
+              ? "Costo variable creado con esta compra"
+              : "Registrar como costo variable nuevo"}
+          </option>
+        )}
+        {costs.length > 0 && (
+          <optgroup label="Es el comprobante de un costo fijo">
+            {costs.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} · {money(c.amount, c.currency)}
+              </option>
+            ))}
+          </optgroup>
+        )}
+        <option value="none">No registrar en Costos</option>
+      </select>
+      <p className="text-[11px] text-ent-fg-3">
+        Si es un costo fijo que ya está en Costos e ingresos, elígelo: no se crea otro y el costo
+        fijo queda con su comprobante del mes.
+      </p>
+    </div>
+  )
+}
+
 type Form = {
   docType: DocType
   serie: string
@@ -700,7 +750,8 @@ type Form = {
   detraccionConstancia: string
   paidOn: string
   notes: string
-  createCostEntry: boolean
+  /** Purchases: "new" (create a variable cost), "none", or the id of a fixed cost this is the receipt of. */
+  costLink: string
 }
 
 function formFrom(doc: Doc | null, direction: Direction, month: string): Form {
@@ -730,7 +781,7 @@ function formFrom(doc: Doc | null, direction: Direction, month: string): Form {
       detraccionConstancia: "",
       paidOn: "",
       notes: "",
-      createCostEntry: direction === "purchase",
+      costLink: direction === "purchase" ? "new" : "none",
     }
   }
   return {
@@ -756,7 +807,7 @@ function formFrom(doc: Doc | null, direction: Direction, month: string): Form {
     detraccionConstancia: doc.detraccionConstancia ?? "",
     paidOn: doc.paidOn ?? "",
     notes: doc.notes ?? "",
-    createCostEntry: false,
+    costLink: doc.recurringItemId ?? (doc.entryId ? "new" : "none"),
   }
 }
 
@@ -838,7 +889,11 @@ function DocumentDialog({
         detraccionConstancia: f.detraccionConstancia,
         paidOn: f.paidOn,
         notes: f.notes,
-        createCostEntry: !doc && direction === "purchase" ? f.createCostEntry : false,
+        createCostEntry: !doc && direction === "purchase" && f.costLink === "new",
+        recurringItemId:
+          direction === "purchase" && f.costLink !== "new" && f.costLink !== "none"
+            ? f.costLink
+            : null,
       }
       if (doc) await api("PUT", `/api/admin/finance/documents/${doc.id}`, body)
       else await api("POST", "/api/admin/finance/documents", body)
@@ -1160,18 +1215,14 @@ function DocumentDialog({
             <Label className="text-xs">Notas</Label>
             <Input value={f.notes} onChange={(e) => set("notes", e.target.value)} />
           </div>
-          {!doc && direction === "purchase" && f.docType !== "07" && (
-            <div className="col-span-2 sm:col-span-4 flex items-center gap-2">
-              <Switch
-                checked={f.createCostEntry}
-                onCheckedChange={(v) => set("createCostEntry", v)}
-              />
-              <span className="text-[12.5px] text-ent-fg-2">
-                {f.createCostEntry
-                  ? "También registrar el total como costo en Costos e ingresos"
-                  : "No registrar como costo (ya está, por ejemplo, como costo fijo)"}
-              </span>
-            </div>
+          {direction === "purchase" && f.docType !== "07" && (
+            <CostLinkSelect
+              value={f.costLink}
+              editing={!!doc}
+              hadEntry={!!doc?.entryId}
+              costs={data.recurringCosts}
+              onChange={(v) => set("costLink", v)}
+            />
           )}
           {direction === "sale" && Number(f.total) > 700 && (
             <p className="col-span-2 sm:col-span-4 text-[11.5px] text-ent-fg-3">

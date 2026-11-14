@@ -8,6 +8,7 @@ import {
   financeEntries,
   fxRates,
   issuers,
+  recurringItems,
   suppliers,
   taxProfiles,
   tenantBilling,
@@ -309,12 +310,14 @@ export async function loadDocumentsPage(direction: "sale" | "purchase", month: s
       invoiceStatus: tenantInvoices.status,
       invoicePeriod: tenantInvoices.period,
       invoiceFileKey: tenantInvoices.invoiceFileKey,
+      recurringName: recurringItems.name,
     })
     .from(documents)
     .innerJoin(issuers, eq(issuers.id, documents.issuerId))
     .leftJoin(tenants, eq(tenants.id, documents.tenantId))
     .leftJoin(suppliers, eq(suppliers.id, documents.supplierId))
     .leftJoin(tenantInvoices, eq(tenantInvoices.documentId, documents.id))
+    .leftJoin(recurringItems, eq(recurringItems.id, documents.recurringItemId))
     .where(and(eq(documents.direction, direction), eq(documents.taxPeriod, month)))
     .orderBy(desc(documents.issueDate), desc(documents.createdAt))
 
@@ -350,6 +353,9 @@ export async function loadDocumentsPage(direction: "sale" | "purchase", month: s
     paidOn: d.paidOn,
     notes: d.notes,
     entryId: d.entryId,
+    /** Fixed cost of Costos e ingresos this purchase is the receipt of. */
+    recurringItemId: d.recurringItemId,
+    recurringName: r.recurringName,
     files: {
       pdf: d.pdfKey ? { name: d.pdfName ?? "comprobante" } : null,
       xml: d.xmlKey ? { name: d.xmlName ?? "xml" } : null,
@@ -366,7 +372,7 @@ export async function loadDocumentsPage(direction: "sale" | "purchase", month: s
       : null,
   }))
 
-  const [issuerRows, supplierRows, tenantRows] = await Promise.all([
+  const [issuerRows, supplierRows, tenantRows, recurringRows] = await Promise.all([
     loadIssuers(),
     direction === "purchase" ? loadSuppliers() : Promise.resolve([]),
     direction === "sale"
@@ -380,6 +386,19 @@ export async function loadDocumentsPage(direction: "sale" | "purchase", month: s
           .from(tenants)
           .leftJoin(tenantBilling, eq(tenantBilling.tenantId, tenants.id))
           .orderBy(asc(tenants.name))
+      : Promise.resolve([]),
+    direction === "purchase"
+      ? db
+          .select({
+            id: recurringItems.id,
+            name: recurringItems.name,
+            amount: recurringItems.amount,
+            currency: recurringItems.currency,
+            category: recurringItems.category,
+          })
+          .from(recurringItems)
+          .where(and(eq(recurringItems.type, "cost"), eq(recurringItems.active, true)))
+          .orderBy(asc(recurringItems.name))
       : Promise.resolve([]),
   ])
   const issuer = issuerForMonth(issuerRows, month)
@@ -402,6 +421,14 @@ export async function loadDocumentsPage(direction: "sale" | "purchase", month: s
     pendingInvoices,
     totals: documentTotals(docs),
     suppliers: supplierRows,
+    /** Active fixed costs a purchase can be the receipt of (purchases only). */
+    recurringCosts: recurringRows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      amount: Number(r.amount),
+      currency: r.currency,
+      category: r.category,
+    })),
     tenants: tenantRows,
   }
 }
@@ -462,6 +489,14 @@ async function documentValues(conn: Conn, v: DocumentInput, userId: string) {
   await assertPeriodOpen(conn, issuer.id, v.taxPeriod)
 
   const { counterpartyDoc, counterpartyName } = await resolveCounterparty(conn, v)
+  if (v.recurringItemId) {
+    const [r] = await conn
+      .select({ type: recurringItems.type })
+      .from(recurringItems)
+      .where(eq(recurringItems.id, v.recurringItemId))
+      .limit(1)
+    if (!r || r.type !== "cost") throw new DocumentError("Costo fijo no encontrado", 404)
+  }
 
   return {
     direction: v.direction,
@@ -488,6 +523,10 @@ async function documentValues(conn: Conn, v: DocumentInput, userId: string) {
     detraccionConstancia: v.detraccionConstancia ?? null,
     // Omitted = keep the current link (the form does not edit it).
     ...(v.relatedDocumentId !== undefined ? { relatedDocumentId: v.relatedDocumentId } : {}),
+    // Purchases only: the fixed cost this is the receipt of. Omitted = unchanged.
+    ...(v.direction === "purchase" && v.recurringItemId !== undefined
+      ? { recurringItemId: v.recurringItemId }
+      : {}),
     paidOn: v.paidOn ?? null,
     notes: v.notes ?? null,
     updatedBy: userId,
@@ -520,7 +559,13 @@ export async function createDocument(v: DocumentInput, userId: string) {
   return db.transaction(async (tx) => {
     const values = await documentValues(tx, v, userId)
     let entryId: string | null = null
-    if (v.direction === "purchase" && v.createCostEntry && v.docType !== "07") {
+    // The receipt of a fixed cost already in Costos e ingresos creates no new cost.
+    if (
+      v.direction === "purchase" &&
+      v.createCostEntry &&
+      v.docType !== "07" &&
+      !v.recurringItemId
+    ) {
       const [entry] = await tx
         .insert(financeEntries)
         .values({
@@ -560,7 +605,9 @@ export async function updateDocument(id: string, v: DocumentInput, userId: strin
     const values = await documentValues(tx, v, userId)
     await tx.update(documents).set(values).where(eq(documents.id, id))
     if (row.entryId) {
-      if (v.docType === "07") {
+      if (v.docType === "07" || v.recurringItemId) {
+        // A credit note is no cost, and the receipt of a fixed cost must not
+        // add a second one: the cost this document created goes.
         // Turned into a credit note: it no longer is a cost.
         await tx.update(documents).set({ entryId: null }).where(eq(documents.id, id))
         await tx.delete(financeEntries).where(eq(financeEntries.id, row.entryId))

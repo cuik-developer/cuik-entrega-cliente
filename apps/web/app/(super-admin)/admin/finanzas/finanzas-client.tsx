@@ -2,6 +2,7 @@
 
 import { FINANCE_COST_CATEGORIES, FINANCE_INCOME_CATEGORIES } from "@cuik/shared/validators"
 import { Loader2, Plus, Trash2 } from "lucide-react"
+import Link from "next/link"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
@@ -154,6 +155,36 @@ export function FinanzasClient() {
 }
 
 /* ───────────────────────── Recurring (fixed costs / recurring incomes) ───────────────────────── */
+
+/**
+ * Receipt state of a fixed cost: this month's purchase registered in Compras
+ * (linked as its receipt), or the last one and a link to register it.
+ */
+function ReceiptCell({
+  receipts,
+  active,
+}: {
+  receipts: FinanceData["recurring"][number]["receipts"]
+  active: boolean
+}) {
+  const last = receipts[0]
+  if (last && last.month === TODAY_MONTH) {
+    return (
+      <Link href={`/admin/finanzas/compras?month=${last.taxPeriod}`} className="hover:underline">
+        <StatusChip tone="ok">{last.number}</StatusChip>
+      </Link>
+    )
+  }
+  if (!active) return <span className="text-[12px] text-ent-fg-3">—</span>
+  return (
+    <span className="text-[12px] text-ent-fg-3">
+      {last ? `Último: ${last.number} (${monthLabel(last.month)}). ` : "Sin comprobantes. "}
+      <Link href="/admin/finanzas/compras" className="text-ent-accent hover:underline">
+        Registrar en Compras
+      </Link>
+    </span>
+  )
+}
 
 function RecurringPanel({
   type,
@@ -344,6 +375,7 @@ function RecurringPanel({
               <Th align="right">Monto</Th>
               <Th>Cada</Th>
               <Th>Vigencia</Th>
+              {type === "cost" && <Th>Comprobante</Th>}
               <Th>Estado</Th>
               <Th align="right"> </Th>
             </tr>
@@ -368,6 +400,11 @@ function RecurringPanel({
                   {monthLabel(r.fromMonth)}
                   {r.toMonth ? ` – ${monthLabel(r.toMonth)}` : " en adelante"}
                 </Td>
+                {type === "cost" && (
+                  <Td>
+                    <ReceiptCell receipts={r.receipts} active={r.active} />
+                  </Td>
+                )}
                 <Td>
                   <button
                     type="button"
@@ -605,6 +642,14 @@ function EntriesPanel({
                 <Td className="font-medium">
                   {e.name}
                   {e.tenantName ? <span className="text-ent-fg-3"> · {e.tenantName}</span> : null}
+                  {e.receipt ? (
+                    <Link
+                      href={`/admin/finanzas/compras?month=${e.receipt.taxPeriod}`}
+                      className="block text-[11px] font-normal text-ent-accent hover:underline"
+                    >
+                      Comprobante {e.receipt.number}
+                    </Link>
+                  ) : null}
                 </Td>
                 {!partner && <Td className="text-ent-fg-2">{e.category}</Td>}
                 <Td align="right" className="tabular-nums">
