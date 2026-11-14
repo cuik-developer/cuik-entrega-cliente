@@ -481,15 +481,17 @@ async function resolveCounterparty(conn: Conn, v: DocumentInput) {
   return { counterpartyDoc: t.ruc, counterpartyName: t.razonSocial ?? t.name }
 }
 
-/** Columns from the validated input: counterparty snapshot and issuer by the issue month. */
-async function documentValues(conn: Conn, v: DocumentInput, userId: string) {
-  const issueMonth = v.issueDate.slice(0, 7)
-  const issuer = issuerForMonth(await conn.select().from(issuers), issueMonth)
-  if (!issuer) throw new DocumentError("Ningún emisor cubre la fecha del comprobante")
-  await assertPeriodOpen(conn, issuer.id, v.taxPeriod)
-
-  const { counterpartyDoc, counterpartyName } = await resolveCounterparty(conn, v)
-  if (v.recurringItemId) {
+/** The fixed cost a purchase links to must be a cost; a link kept as it was stays valid. */
+async function assertRecurringLink(
+  conn: Conn,
+  v: DocumentInput,
+  currentRecurringId: string | null,
+): Promise<void> {
+  if (v.recurringItemId && v.docType === "07") {
+    throw new DocumentError("Una nota de crédito no es el comprobante de un costo fijo")
+  }
+  // A link kept as it was stays valid even if that fixed cost was ended since.
+  if (v.recurringItemId && v.recurringItemId !== currentRecurringId) {
     const [r] = await conn
       .select({ type: recurringItems.type })
       .from(recurringItems)
@@ -497,6 +499,22 @@ async function documentValues(conn: Conn, v: DocumentInput, userId: string) {
       .limit(1)
     if (!r || r.type !== "cost") throw new DocumentError("Costo fijo no encontrado", 404)
   }
+}
+
+/** Columns from the validated input: counterparty snapshot and issuer by the issue month. */
+async function documentValues(
+  conn: Conn,
+  v: DocumentInput,
+  userId: string,
+  currentRecurringId: string | null = null,
+) {
+  const issueMonth = v.issueDate.slice(0, 7)
+  const issuer = issuerForMonth(await conn.select().from(issuers), issueMonth)
+  if (!issuer) throw new DocumentError("Ningún emisor cubre la fecha del comprobante")
+  await assertPeriodOpen(conn, issuer.id, v.taxPeriod)
+
+  const { counterpartyDoc, counterpartyName } = await resolveCounterparty(conn, v)
+  await assertRecurringLink(conn, v, currentRecurringId)
 
   return {
     direction: v.direction,
@@ -590,7 +608,9 @@ export async function createDocument(v: DocumentInput, userId: string) {
 /**
  * Replace a document (not one owned by a merchant invoice: that one is edited
  * in Facturación). The cost it created follows the new amount, date and
- * category.
+ * category; it goes when the purchase becomes a credit note, the receipt of a
+ * fixed cost or "not a cost" (createCostEntry false), and is created when an
+ * edit asks for it (createCostEntry true) on a purchase that had none.
  */
 export async function updateDocument(id: string, v: DocumentInput, userId: string) {
   return db.transaction(async (tx) => {
@@ -602,13 +622,17 @@ export async function updateDocument(id: string, v: DocumentInput, userId: strin
       throw new DocumentError("Este comprobante se edita desde Facturación del comercio", 409)
     }
     await assertPeriodOpen(tx, row.issuerId, row.taxPeriod)
-    const values = await documentValues(tx, v, userId)
+    const values = await documentValues(tx, v, userId, row.recurringItemId)
     await tx.update(documents).set(values).where(eq(documents.id, id))
+    const noCost =
+      v.direction !== "purchase" ||
+      v.docType === "07" ||
+      !!v.recurringItemId ||
+      v.createCostEntry === false
     if (row.entryId) {
-      if (v.docType === "07" || v.recurringItemId) {
-        // A credit note is no cost, and the receipt of a fixed cost must not
-        // add a second one: the cost this document created goes.
-        // Turned into a credit note: it no longer is a cost.
+      if (noCost) {
+        // A credit note is no cost, the receipt of a fixed cost must not add
+        // a second one, and "not a cost" means not a cost: the cost goes.
         await tx.update(documents).set({ entryId: null }).where(eq(documents.id, id))
         await tx.delete(financeEntries).where(eq(financeEntries.id, row.entryId))
       } else {
@@ -617,6 +641,19 @@ export async function updateDocument(id: string, v: DocumentInput, userId: strin
           .set(costEntryValues(v, values))
           .where(eq(financeEntries.id, row.entryId))
       }
+    } else if (!noCost && v.createCostEntry) {
+      const [entry] = await tx
+        .insert(financeEntries)
+        .values({
+          type: "cost",
+          ...costEntryValues(v, values),
+          months: 1,
+          recognition: "cash",
+          notes: "Creado al editar el comprobante en Compras",
+          createdBy: userId,
+        })
+        .returning({ id: financeEntries.id })
+      if (entry) await tx.update(documents).set({ entryId: entry.id }).where(eq(documents.id, id))
     }
   })
 }

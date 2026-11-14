@@ -662,27 +662,30 @@ function CostLinkSelect({
   editing,
   hadEntry,
   costs,
+  current,
   onChange,
 }: {
   value: string
   editing: boolean
   hadEntry: boolean
   costs: DocumentsPage["recurringCosts"]
+  /** The fixed cost this purchase is linked to, listed even if it has ended. */
+  current: { id: string; name: string } | null
   onChange: (v: string) => void
 }) {
+  const ended = current && !costs.some((c) => c.id === current.id) ? current : null
   return (
     <div className="space-y-1 col-span-2 sm:col-span-4">
       <Label className="text-xs">En Costos e ingresos</Label>
       <select className={sel} value={value} onChange={(e) => onChange(e.target.value)}>
-        {(!editing || hadEntry) && (
-          <option value="new">
-            {editing
-              ? "Costo variable creado con esta compra"
-              : "Registrar como costo variable nuevo"}
-          </option>
-        )}
-        {costs.length > 0 && (
+        <option value="new">
+          {editing && hadEntry
+            ? "Costo variable creado con esta compra"
+            : "Registrar como costo variable nuevo"}
+        </option>
+        {(costs.length > 0 || ended) && (
           <optgroup label="Es el comprobante de un costo fijo">
+            {ended && <option value={ended.id}>{ended.name} · terminado</option>}
             {costs.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name} · {money(c.amount, c.currency)}
@@ -862,9 +865,12 @@ function DocumentDialog({
         detraccionConstancia: f.detraccionConstancia,
         paidOn: f.paidOn,
         notes: f.notes,
-        createCostEntry: !doc && direction === "purchase" && f.costLink === "new",
+        createCostEntry: direction === "purchase" && f.docType !== "07" && f.costLink === "new",
         recurringItemId:
-          direction === "purchase" && f.costLink !== "new" && f.costLink !== "none"
+          direction === "purchase" &&
+          f.docType !== "07" &&
+          f.costLink !== "new" &&
+          f.costLink !== "none"
             ? f.costLink
             : null,
       }
@@ -1194,6 +1200,11 @@ function DocumentDialog({
               editing={!!doc}
               hadEntry={!!doc?.entryId}
               costs={data.recurringCosts}
+              current={
+                doc?.recurringItemId
+                  ? { id: doc.recurringItemId, name: doc.recurringName ?? "Costo fijo" }
+                  : null
+              }
               onChange={(v) => set("costLink", v)}
             />
           )}

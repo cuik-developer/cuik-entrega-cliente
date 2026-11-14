@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { BILLING_INTERVAL_LABEL, type BillingInterval } from "@/lib/admin/billing"
-import { fxFor, loanBalanceAt, loanSchedule } from "@/lib/admin/finance"
+import { fxFor, loanBalanceAt, loanSchedule, recurringChargeMonths } from "@/lib/admin/finance"
 import type { FinanceData } from "@/lib/admin/finance-data"
 
 type Currency = "PEN" | "USD"
@@ -160,14 +160,12 @@ export function FinanzasClient() {
  * Receipt state of a fixed cost: this month's purchase registered in Compras
  * (linked as its receipt), or the last one and a link to register it.
  */
-function ReceiptCell({
-  receipts,
-  active,
-}: {
-  receipts: FinanceData["recurring"][number]["receipts"]
-  active: boolean
-}) {
-  const last = receipts[0]
+/**
+ * The fixed cost's receipt of this month, or the last one; "Registrar en
+ * Compras" only in a month the cost is charged (a yearly one asks once a year).
+ */
+function ReceiptCell({ item }: { item: FinanceData["recurring"][number] }) {
+  const last = item.receipts[0]
   if (last && last.month === TODAY_MONTH) {
     return (
       <Link href={`/admin/finanzas/compras?month=${last.taxPeriod}`} className="hover:underline">
@@ -175,7 +173,14 @@ function ReceiptCell({
       </Link>
     )
   }
-  if (!active) return <span className="text-[12px] text-ent-fg-3">—</span>
+  const due = recurringChargeMonths(item, TODAY_MONTH, TODAY_MONTH).length > 0
+  if (!due) {
+    return (
+      <span className="text-[12px] text-ent-fg-3">
+        {last ? `Último: ${last.number} (${monthLabel(last.month)})` : "—"}
+      </span>
+    )
+  }
   return (
     <span className="text-[12px] text-ent-fg-3">
       {last ? `Último: ${last.number} (${monthLabel(last.month)}). ` : "Sin comprobantes. "}
@@ -402,7 +407,7 @@ function RecurringPanel({
                 </Td>
                 {type === "cost" && (
                   <Td>
-                    <ReceiptCell receipts={r.receipts} active={r.active} />
+                    <ReceiptCell item={r} />
                   </Td>
                 )}
                 <Td>

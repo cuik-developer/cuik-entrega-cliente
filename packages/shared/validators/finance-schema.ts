@@ -315,7 +315,10 @@ export const documentSchema = z
         .optional(),
     ),
     notes: optionalText(1000),
-    /** Purchases: also create the cost in Costos e ingresos (management ledger). */
+    /**
+     * Purchases: create the cost in Costos e ingresos (management ledger). On
+     * edit, false removes the cost the purchase created; omitted keeps it.
+     */
     createCostEntry: z.boolean().optional(),
     /**
      * Purchases: the fixed cost of Costos e ingresos this is the receipt of
