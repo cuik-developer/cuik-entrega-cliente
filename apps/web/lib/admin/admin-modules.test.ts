@@ -21,6 +21,7 @@ describe("moduleForPath", () => {
     expect(moduleForPath("/admin/finanzas/ventas")?.item.label).toBe("Ventas")
     expect(moduleForPath("/admin/finanzas/contabilidad")?.item.label).toBe("Resumen fiscal")
     expect(moduleForPath("/admin/finanzas/compras")?.item.label).toBe("Compras")
+    expect(moduleForPath("/admin/finanzas/cierres")?.item.label).toBe("Cierres")
     expect(moduleForPath("/admin/reclamaciones")?.module.key).toBe("reclamaciones")
     expect(moduleForPath("/admin/equipo")?.module.key).toBe("sistema")
     expect(moduleForPath("/admin")).toBeNull()

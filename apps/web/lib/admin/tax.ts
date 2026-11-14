@@ -48,6 +48,8 @@ export const EMPTY_MONTH: MonthDocs = {
 
 export type MonthTax = MonthDocs & {
   month: string
+  /** True when the month is closed and its PDT figures come from the accountant. */
+  declared?: boolean
   /** Saldo a favor de IGV coming from the previous month. */
   igvCreditCarried: number
   /** IGV to pay this month (PDT, whole soles). */
@@ -126,10 +128,37 @@ export function monthTax(
  * Month after month from the first one, carrying the IGV saldo a favor.
  * `profileFor` returns null for a month without regime (skipped: no carry).
  */
+/** What the accountant declared for a closed month (whole soles, as filed). */
+export type DeclaredFigures = {
+  igvToPay?: number
+  incomeAdvance?: number
+  igvCreditNext?: number
+}
+
+/** A month with the accountant's declared figures in place of the panel's. */
+export function applyDeclared(row: MonthTax, d: DeclaredFigures): MonthTax {
+  const igvToPay = d.igvToPay ?? row.igvToPay
+  const incomeAdvance = d.incomeAdvance ?? row.incomeAdvance
+  const payToSunat = igvToPay + incomeAdvance
+  const totalSetAside = round2(payToSunat + row.annualReserve)
+  return {
+    ...row,
+    declared: true,
+    igvToPay,
+    incomeAdvance,
+    igvCreditNext: d.igvCreditNext ?? row.igvCreditNext,
+    payToSunat,
+    totalSetAside,
+    netForCuik: round2(row.salesTotal - totalSetAside),
+  }
+}
+
 export function monthsTax(
   months: string[],
   docsFor: (month: string) => MonthDocs,
   profileFor: (month: string) => TaxProfileLike | null,
+  /** Closed months: what was declared replaces the panel and carries to the next month. */
+  declaredFor: (month: string) => DeclaredFigures | null = () => null,
 ): MonthTax[] {
   const out: MonthTax[] = []
   let carried = 0
@@ -139,7 +168,9 @@ export function monthsTax(
       carried = 0
       continue
     }
-    const row = monthTax(m, docsFor(m), profile, carried)
+    const computed = monthTax(m, docsFor(m), profile, carried)
+    const declared = declaredFor(m)
+    const row = declared ? applyDeclared(computed, declared) : computed
     carried = row.igvCreditNext
     out.push(row)
   }
@@ -198,4 +229,40 @@ export function annualEstimate(rows: MonthTax[], profile: TaxProfileLike, uit: n
     /** Reserve left after paying the estimated balance (negative = short). */
     reserveMargin: balanceDue === null ? null : round2(reserved - balanceDue),
   }
+}
+
+/**
+ * The fixed figures of a closed month, as the monthly run uses them: what the
+ * accountant declared, else what the panel computed when it was closed.
+ */
+export function declaredFigures(
+  declared: Record<string, unknown> | null | undefined,
+  snapshot?: Record<string, unknown> | null,
+): DeclaredFigures | null {
+  // What the accountant declared wins; what the panel computed when the month
+  // was closed fills any gap, so a closed month never moves again.
+  const pick = (k: string) => {
+    for (const src of [declared, snapshot]) {
+      const v = src?.[k]
+      if (typeof v === "number" && Number.isFinite(v)) return v
+    }
+    return undefined
+  }
+  const declaredNum = (k: string) =>
+    typeof declared?.[k] === "number" ? (declared[k] as number) : undefined
+  const igvToPay = pick("IGV_A_PAGAR")
+  // A declared IGV payment means no saldo a favor left, unless one was declared too.
+  const igvCreditNext =
+    declaredNum("SALDO_FAVOR_SIGUIENTE") ??
+    ((declaredNum("IGV_A_PAGAR") ?? 0) > 0 ? 0 : pick("SALDO_FAVOR_SIGUIENTE"))
+  const out: DeclaredFigures = {
+    igvToPay,
+    incomeAdvance: pick("PAGO_A_CUENTA_RENTA"),
+    igvCreditNext,
+  }
+  return out.igvToPay === undefined &&
+    out.incomeAdvance === undefined &&
+    out.igvCreditNext === undefined
+    ? null
+    : out
 }

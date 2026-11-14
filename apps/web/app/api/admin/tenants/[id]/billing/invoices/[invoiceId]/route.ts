@@ -133,6 +133,8 @@ export async function DELETE(request: Request, ctx: Ctx) {
     }
     return successResponse(await loadBilling(g.id))
   } catch (error) {
+    // A sale in a closed month cannot go (the delete rolled back).
+    if (error instanceof DocumentError) return errorResponse(error.message, error.status)
     console.error("[DELETE /api/admin/tenants/[id]/billing/invoices/[invoiceId]]", error)
     return errorResponse("Internal server error", 500)
   }

@@ -3,6 +3,7 @@ import { splitIgv } from "./issuers"
 import {
   annualEstimate,
   annualIncomeTax,
+  declaredFigures,
   EMPTY_MONTH,
   type MonthDocs,
   monthsTax,
@@ -119,5 +120,38 @@ describe("pago a cuenta rounding", () => {
     const t = monthTax("2026-11", { ...EMPTY_MONTH, salesBase: 249.5, salesTotal: 294.41 }, RMT, 0)
     expect(t.incomeAdvanceExact).toBe(2.5)
     expect(t.incomeAdvance).toBe(2)
+  })
+})
+
+describe("declared figures of closed months", () => {
+  it("replace the panel and carry the declared saldo a favor", () => {
+    const rows = monthsTax(
+      ["2026-11", "2026-12"],
+      () => exampleMonth(),
+      () => RMT,
+      (m) => (m === "2026-11" ? { igvToPay: 0, incomeAdvance: 3, igvCreditNext: 20 } : null),
+    )
+    expect(rows[0]?.declared).toBe(true)
+    expect(rows[0]?.payToSunat).toBe(3)
+    expect(rows[1]?.igvCreditCarried).toBe(20)
+    expect(rows[1]?.igvToPay).toBe(30)
+    expect(rows[1]?.declared).toBeUndefined()
+  })
+})
+
+describe("declaredFigures", () => {
+  it("prefers the declaration and fills gaps with the closing snapshot", () => {
+    expect(
+      declaredFigures(
+        { IGV_A_PAGAR: 36 },
+        { IGV_A_PAGAR: 38, PAGO_A_CUENTA_RENTA: 2, SALDO_FAVOR_SIGUIENTE: 5 },
+      ),
+    ).toEqual({ igvToPay: 36, incomeAdvance: 2, igvCreditNext: 0 })
+  })
+  it("freezes a month closed without an import", () => {
+    expect(
+      declaredFigures(null, { IGV_A_PAGAR: 0, PAGO_A_CUENTA_RENTA: 3, SALDO_FAVOR_SIGUIENTE: 12 }),
+    ).toEqual({ igvToPay: 0, incomeAdvance: 3, igvCreditNext: 12 })
+    expect(declaredFigures(null, null)).toBeNull()
   })
 })

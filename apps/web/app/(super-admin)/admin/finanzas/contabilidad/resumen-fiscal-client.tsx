@@ -141,6 +141,16 @@ function Summary({ data }: { data: Available }) {
           estimado.
         </Notice>
       )}
+      {data.closed && (
+        <Notice tone="info">
+          {monthShort(data.month)} está cerrado : sus cifras quedaron fijas (lo declarado por el
+          contador o, si no se importó, lo calculado al cerrar).{" "}
+          <Link href={`/admin/finanzas/cierres?month=${data.month}`} className="underline">
+            Ver cierre
+          </Link>
+        </Notice>
+      )}
+      <IncomeLimitNotice data={data} />
       {data.pendingInvoices.length > 0 && (
         <Notice tone="warn">
           {data.pendingInvoices.length === 1
@@ -185,6 +195,34 @@ function Summary({ data }: { data: Available }) {
       <AnnualPanel data={data} />
     </>
   )
+}
+
+/**
+ * MYPE Tributario: the 1 % pago a cuenta applies while the year's net income
+ * stays within 300 UIT; above it the rate changes (the accountant decides).
+ */
+function IncomeLimitNotice({ data }: { data: Available }) {
+  const limit = data.annual.advanceIncomeLimit
+  if (limit === null) return null
+  const income = data.annual.income
+  if (income >= limit) {
+    return (
+      <Notice tone="bad">
+        Los ingresos de {data.annual.year} ({soles(income)}) pasaron las 300 UIT ({soles(limit)}):
+        el pago a cuenta ya no es 1 %. Consulta al contador y actualiza la tasa en Empresa y
+        régimen.
+      </Notice>
+    )
+  }
+  if (income >= limit * 0.8) {
+    return (
+      <Notice tone="warn">
+        Los ingresos de {data.annual.year} van en {soles(income)}, cerca del tope de 300 UIT (
+        {soles(limit)}) para el pago a cuenta de 1 %.
+      </Notice>
+    )
+  }
+  return null
 }
 
 function MonthPanel({ data }: { data: Available }) {

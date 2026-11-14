@@ -312,3 +312,74 @@ export const documents = financeSchema.table(
       .where(sql`direction = 'purchase'`),
   ],
 )
+
+/** Codes of the accountant's monthly close (PDT 621 concepts), amounts in soles. */
+export type DeclaredSummary = Partial<Record<string, number | string>>
+
+/**
+ * One tax month of an issuer: open or closed. A closed month locks its
+ * documents and keeps what the panel computed and what the accountant
+ * declared (the declared figures carry to the next month), the annual-tax
+ * reserve actually moved to the bank and the filing receipt. Migration 0049.
+ */
+export const taxPeriods = financeSchema.table(
+  "tax_periods",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    issuerId: uuid("issuer_id")
+      .notNull()
+      .references(() => issuers.id),
+    month: text("month").notNull(),
+    status: text("status").$type<"open" | "closed">().default("open").notNull(),
+    dueDate: date("due_date"),
+    reserveMovedOn: date("reserve_moved_on"),
+    reserveAmount: numeric("reserve_amount", { precision: 12, scale: 2 }),
+    panelSnapshot: jsonb("panel_snapshot").$type<Record<string, number>>(),
+    declared: jsonb("declared").$type<DeclaredSummary>(),
+    constanciaKey: text("constancia_key"),
+    constanciaName: text("constancia_name"),
+    notes: text("notes"),
+    closedAt: timestamp("closed_at"),
+    closedBy: text("closed_by").references(() => user.id),
+    reopenedReason: text("reopened_reason"),
+    updatedBy: text("updated_by").references(() => user.id),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [unique("tax_periods_issuer_id_month_key").on(t.issuerId, t.month)],
+)
+
+/** One row of the accountant's registro de ventas / compras. */
+export type AccountantLine = {
+  book: "V" | "C"
+  docType: string
+  serie: string
+  numero: string
+  date: string | null
+  counterpartyDoc: string | null
+  counterpartyName: string | null
+  currency: "PEN" | "USD"
+  fxRate: number | null
+  base: number
+  igv: number
+  noGravado: number
+  total: number
+  note: string | null
+}
+
+/** Each import of the accountant's close (the latest is in force). Migration 0049. */
+export const accountantCloses = financeSchema.table(
+  "accountant_closes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    periodId: uuid("period_id")
+      .notNull()
+      .references(() => taxPeriods.id, { onDelete: "cascade" }),
+    fileKey: text("file_key"),
+    fileName: text("file_name"),
+    summary: jsonb("summary").$type<DeclaredSummary>().default({}).notNull(),
+    lines: jsonb("lines").$type<AccountantLine[]>().default([]).notNull(),
+    importedBy: text("imported_by").references(() => user.id),
+    importedAt: timestamp("imported_at").defaultNow().notNull(),
+  },
+  (t) => [index("finance_accountant_closes_period_idx").on(t.periodId, t.importedAt.desc())],
+)

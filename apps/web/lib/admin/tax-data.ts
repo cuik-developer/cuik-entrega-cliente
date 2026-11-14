@@ -10,6 +10,7 @@ import {
   lte,
   ne,
   sql,
+  taxPeriods,
   taxProfiles,
   tenantBilling,
   tenantInvoices,
@@ -24,6 +25,7 @@ import { monthRange } from "./finance"
 import { issuerForMonth, profileForMonth, splitIgv } from "./issuers"
 import {
   annualEstimate,
+  declaredFigures,
   EMPTY_MONTH,
   type MonthDocs,
   monthsTax,
@@ -222,11 +224,12 @@ async function toBillIn(month: string, igvRate: number) {
 }
 
 /**
- * Finanzas › Resumen fiscal for `month`: the month's taxes with what is
- * registered and with what is still to invoice, the year month by month and
- * the annual estimate against the reserve.
+ * Everything the fiscal screens share for `month`: the issuer and its regime,
+ * the documents per month, the tax periods, and the month-by-month run from
+ * the first month with a regime up to `month` (IGV saldo a favor carries
+ * across years; closed months use what the accountant declared).
  */
-export async function loadTaxSummary(month: string) {
+export async function loadFiscalRun(month: string) {
   const issuerRows = await db.select().from(issuers)
   const issuer = issuerForMonth(issuerRows, month)
   const profileRows = issuer
@@ -243,18 +246,8 @@ export async function loadTaxSummary(month: string) {
     annualBrackets: p.annualBrackets ?? [],
   }))
   const profile = issuer ? profileForMonth(profiles, issuer.id, month) : null
-  if (!issuer || !profile) {
-    return {
-      month,
-      today: currentMonthLima(),
-      available: false as const,
-      issuer: issuer ? { razonSocial: issuer.razonSocial, ruc: issuer.ruc } : null,
-    }
-  }
+  if (!issuer || !profile) return { issuer, profile: null } as const
 
-  // IGV saldo a favor carries across years, so the run starts at the first
-  // month with a regime; the year panels then keep only this year.
-  const year = month.slice(0, 4)
   const firstProfileMonth = profiles
     .map((p) => p.fromMonth)
     .filter((m) => m <= month)
@@ -263,8 +256,39 @@ export async function loadTaxSummary(month: string) {
   const months = monthRange(from, month)
   const profileFor = (m: string): TaxProfileLike | null => profileForMonth(profiles, issuer.id, m)
 
-  const [byMonth, pendingInvoices, uitRow, toBill] = await Promise.all([
+  const [byMonth, periodRows] = await Promise.all([
     docsByMonth(issuer.id, from, month),
+    db.select().from(taxPeriods).where(eq(taxPeriods.issuerId, issuer.id)),
+  ])
+  const periods = new Map(periodRows.map((p) => [p.month, p]))
+  const docsFor = (m: string) => byMonth.get(m) ?? EMPTY_MONTH
+  const declaredFor = (m: string) => {
+    const p = periods.get(m)
+    return p?.status === "closed" ? declaredFigures(p.declared, p.panelSnapshot) : null
+  }
+  const allRows = monthsTax(months, docsFor, profileFor, declaredFor)
+  return { issuer, profile, profiles, months, docsFor, allRows, periods } as const
+}
+
+/**
+ * Finanzas › Resumen fiscal for `month`: the month's taxes with what is
+ * registered and with what is still to invoice, the year month by month and
+ * the annual estimate against the reserve.
+ */
+export async function loadTaxSummary(month: string) {
+  const run = await loadFiscalRun(month)
+  if (!run.profile) {
+    return {
+      month,
+      today: currentMonthLima(),
+      available: false as const,
+      issuer: run.issuer ? { razonSocial: run.issuer.razonSocial, ruc: run.issuer.ruc } : null,
+    }
+  }
+  const { issuer, profile, docsFor, allRows, periods } = run
+  const year = month.slice(0, 4)
+
+  const [pendingInvoices, uitRow, toBill] = await Promise.all([
     invoicesWithoutSale(month),
     db
       .select()
@@ -275,24 +299,28 @@ export async function loadTaxSummary(month: string) {
       .limit(1),
     toBillIn(month, profile.igvRate),
   ])
-  const docsFor = (m: string) => byMonth.get(m) ?? EMPTY_MONTH
-  const allRows = monthsTax(months, docsFor, profileFor)
   const yearRows = allRows.filter((r) => r.month.startsWith(`${year}-`))
   const current = allRows.find((r) => r.month === month) ?? monthTax(month, EMPTY_MONTH, profile, 0)
+  const closed = periods.get(month)?.status === "closed"
 
   const projectedDocs: MonthDocs = toBill.reduce(
     (acc, t) =>
       sumMonths(acc, { ...EMPTY_MONTH, salesBase: t.base, salesIgv: t.igv, salesTotal: t.total }),
     docsFor(month),
   )
-  const projected = monthTax(month, projectedDocs, profile, current.igvCreditCarried)
+  // A closed month has nothing left to project.
+  const projected = closed
+    ? current
+    : monthTax(month, projectedDocs, profile, current.igvCreditCarried)
   const uit = uitRow[0] ? Number(uitRow[0].value) : null
   const uitYear = uitRow[0]?.year ?? null
+  const annual = annualEstimate(yearRows, profile, uit)
 
   return {
     month,
     today: currentMonthLima(),
     available: true as const,
+    closed,
     issuer: { razonSocial: issuer.razonSocial, ruc: issuer.ruc },
     profile: {
       regime: profile.regime,
@@ -304,10 +332,17 @@ export async function loadTaxSummary(month: string) {
     },
     current,
     projected,
-    toBill,
-    pendingInvoices,
+    toBill: closed ? [] : toBill,
+    pendingInvoices: closed ? [] : pendingInvoices,
     yearRows,
-    annual: { year, uit, uitYear, ...annualEstimate(yearRows, profile, uit) },
+    annual: {
+      year,
+      uit,
+      uitYear,
+      ...annual,
+      /** Pago a cuenta at the monthly rate applies up to 300 UIT of net income a year (MYPE). */
+      advanceIncomeLimit: uit === null ? null : 300 * uit,
+    },
     reserveTotal: round2(yearRows.reduce((a, r) => a + r.annualReserve, 0)),
   }
 }

@@ -5,6 +5,7 @@ import {
   type DocumentFileKind,
   documentFileExt,
 } from "@/lib/admin/document-files"
+import { isPeriodClosed } from "@/lib/admin/period-lock"
 import { requireSuperAdmin, UUID_RE } from "@/lib/admin/route-guard"
 import { errorResponse, successResponse } from "@/lib/api-utils"
 import { deleteAsset, uploadAsset } from "@/lib/storage"
@@ -45,6 +46,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const ext = documentFileExt(kind as DocumentFileKind, file.name, file.type)
     if (!ext) return errorResponse(DOCUMENT_FILE_RULES[kind as DocumentFileKind].error, 400)
 
+    const previousKey = kind === "pdf" ? row.pdfKey : kind === "xml" ? row.xmlKey : row.cdrKey
+    // A declared month keeps its evidence: missing files can be added, not replaced.
+    if (previousKey && (await isPeriodClosed(db, row.issuerId, row.taxPeriod))) {
+      return errorResponse(
+        "El mes está cerrado: puedes agregar archivos que falten, no reemplazarlos",
+        409,
+      )
+    }
     const key = `finance/documents/${row.taxPeriod}/${id}-${kind}-${randomUUID()}.${ext}`
     await uploadAsset(
       key,
@@ -53,7 +62,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     )
 
     const name = file.name.slice(0, 200)
-    const previous = kind === "pdf" ? row.pdfKey : kind === "xml" ? row.xmlKey : row.cdrKey
     await db
       .update(documents)
       .set(
@@ -64,7 +72,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             : { cdrKey: key, cdrName: name },
       )
       .where(eq(documents.id, id))
-    if (previous) await deleteAsset(previous).catch(() => undefined)
+    if (previousKey) await deleteAsset(previousKey).catch(() => undefined)
     return successResponse({ id }, 201)
   } catch (err) {
     console.error("[POST /api/admin/finance/documents/[id]/files]", err)

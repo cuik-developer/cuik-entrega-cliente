@@ -16,6 +16,7 @@ import {
 } from "@cuik/db"
 import type { DocumentInput } from "@cuik/shared/validators"
 import { currentMonthLima, loadIssuers } from "./company-data"
+import { DocumentError } from "./document-error"
 import {
   DOC_TYPE_LABEL,
   type DocType,
@@ -26,19 +27,12 @@ import {
 } from "./documents"
 import { fxFor } from "./finance"
 import { issuerForMonth, profileForMonth } from "./issuers"
+import { assertPeriodOpen, isPeriodClosed } from "./period-lock"
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
 type Conn = Tx | typeof db
 
-/** Error with a Spanish message for the user and an HTTP status. */
-export class DocumentError extends Error {
-  constructor(
-    message: string,
-    readonly status = 400,
-  ) {
-    super(message)
-  }
-}
+export { DocumentError }
 
 /** True when a write hit one of the "number exists once" unique indexes. */
 export function isDocumentNumberConflict(err: unknown): boolean {
@@ -83,6 +77,30 @@ export async function fiscalIssuerFor(conn: Conn, month: string) {
 type InvoiceRow = typeof tenantInvoices.$inferSelect
 
 /**
+ * A closed month only lets the paid date of its sale move: a new sale, a new
+ * amount, number, date or void status would change books already declared.
+ */
+async function assertSyncAllowed(
+  tx: Tx,
+  existing: DocRow | undefined,
+  next: { serie: string; numero: string; issueDate: string; status: "registered" | "void" },
+  amountChanged: boolean,
+  issuerId: string,
+  month: string,
+) {
+  const changesBooks =
+    !existing ||
+    amountChanged ||
+    existing.serie !== next.serie ||
+    existing.numero !== next.numero ||
+    existing.issueDate !== next.issueDate ||
+    existing.status !== next.status
+  if (!changesBooks) return
+  if (existing) await assertPeriodOpen(tx, existing.issuerId, existing.taxPeriod)
+  await assertPeriodOpen(tx, issuerId, month)
+}
+
+/**
  * Creates or updates the sale document of a merchant invoice registered in
  * Facturación, inside the caller's transaction. Only for months whose issuer
  * has a regime (Cuik); returns the document id or null when it does not
@@ -103,10 +121,15 @@ export async function syncSaleFromInvoice(
   const month = invoice.issuedOn.slice(0, 7)
   const fiscal = await fiscalIssuerFor(tx, month)
 
+  const [existing] = invoice.documentId
+    ? await tx.select().from(documents).where(eq(documents.id, invoice.documentId)).limit(1)
+    : []
+
   if (!fiscal) {
     // Moved back into a Making Brands month: void the document and release it
     // (it can then be deleted from Ventas, which frees its number).
     if (invoice.documentId) {
+      if (existing) await assertPeriodOpen(tx, existing.issuerId, existing.taxPeriod)
       await tx
         .update(documents)
         .set({ status: "void", updatedBy: userId, updatedAt: new Date() })
@@ -138,6 +161,10 @@ export async function syncSaleFromInvoice(
     updatedBy: userId,
     updatedAt: new Date(),
   }
+  // An older invoice of a closed month with no sale yet: marking it paid or
+  // void must not try to create a sale in declared books.
+  if (!existing && !strict && (await isPeriodClosed(tx, fiscal.issuer.id, month))) return null
+  await assertSyncAllowed(tx, existing, common, amountChanged, fiscal.issuer.id, month)
   if (invoice.documentId && !amountChanged) {
     await tx.update(documents).set(common).where(eq(documents.id, invoice.documentId))
     return invoice.documentId
@@ -308,7 +335,9 @@ export async function loadDocumentsPage(direction: "sale" | "purchase", month: s
   ])
   const issuer = issuerForMonth(issuerRows, month)
   const fiscal = await fiscalIssuerFor(db, month)
-  const pendingInvoices = direction === "sale" ? await invoicesWithoutSale(month) : []
+  const closed = fiscal ? await isPeriodClosed(db, fiscal.issuer.id, month) : false
+  // A closed month takes no new sales: nothing to offer.
+  const pendingInvoices = direction === "sale" && !closed ? await invoicesWithoutSale(month) : []
 
   return {
     direction,
@@ -317,6 +346,8 @@ export async function loadDocumentsPage(direction: "sale" | "purchase", month: s
     issuer: issuer ? { id: issuer.id, razonSocial: issuer.razonSocial, ruc: issuer.ruc } : null,
     /** IGV rate of the regime in force that month (suggests the split in the form); null before Cuik. */
     igvRate: fiscal?.igvRate ?? null,
+    /** The tax month is closed: its documents are read-only (files can still be added). */
+    closed,
     docs,
     /** Facturación invoices of this Cuik month still without their sale. */
     pendingInvoices,
@@ -379,6 +410,7 @@ async function documentValues(conn: Conn, v: DocumentInput, userId: string) {
   const issueMonth = v.issueDate.slice(0, 7)
   const issuer = issuerForMonth(await conn.select().from(issuers), issueMonth)
   if (!issuer) throw new DocumentError("Ningún emisor cubre la fecha del comprobante")
+  await assertPeriodOpen(conn, issuer.id, v.taxPeriod)
 
   const { counterpartyDoc, counterpartyName } = await resolveCounterparty(conn, v)
 
@@ -475,6 +507,7 @@ export async function updateDocument(id: string, v: DocumentInput, userId: strin
     if (await linkedInvoice(tx, id)) {
       throw new DocumentError("Este comprobante se edita desde Facturación del comercio", 409)
     }
+    await assertPeriodOpen(tx, row.issuerId, row.taxPeriod)
     const values = await documentValues(tx, v, userId)
     await tx.update(documents).set(values).where(eq(documents.id, id))
     if (row.entryId) {
@@ -496,7 +529,7 @@ export async function updateDocument(id: string, v: DocumentInput, userId: strin
 export async function setDocumentStatus(id: string, status: "registered" | "void", userId: string) {
   await db.transaction(async (tx) => {
     const [row] = await tx
-      .select({ id: documents.id })
+      .select({ id: documents.id, issuerId: documents.issuerId, taxPeriod: documents.taxPeriod })
       .from(documents)
       .where(eq(documents.id, id))
       .limit(1)
@@ -504,6 +537,7 @@ export async function setDocumentStatus(id: string, status: "registered" | "void
     if (await linkedInvoice(tx, id)) {
       throw new DocumentError("Anúlalo desde Facturación del comercio", 409)
     }
+    await assertPeriodOpen(tx, row.issuerId, row.taxPeriod)
     await tx
       .update(documents)
       .set({ status, updatedBy: userId, updatedAt: new Date() })
@@ -519,6 +553,7 @@ export async function setDocumentStatus(id: string, status: "registered" | "void
 export async function deleteDocumentRow(tx: Tx, id: string): Promise<string[]> {
   const [row] = await tx.select().from(documents).where(eq(documents.id, id)).limit(1)
   if (!row) return []
+  await assertPeriodOpen(tx, row.issuerId, row.taxPeriod)
   await tx
     .update(documents)
     .set({ relatedDocumentId: null })

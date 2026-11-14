@@ -248,6 +248,7 @@ export function DocumentsClient({ direction }: { direction: Direction }) {
                 onStatus={(s) => setStatus(d, s)}
                 onDelete={() => remove(d)}
                 onChanged={refresh}
+                closed={data.closed}
               />
             ))}
           </tbody>
@@ -258,6 +259,12 @@ export function DocumentsClient({ direction }: { direction: Direction }) {
 
   const body = (
     <div className="space-y-3">
+      {data.closed && (
+        <Notice tone="info">
+          {monthShort(month)} está cerrado: sus comprobantes son de solo lectura (puedes agregar
+          archivos que falten). Para cambiarlos, reábrelo en Finanzas › Cierres.
+        </Notice>
+      )}
       {!data.issuer && (
         <Notice tone="warn">
           Ningún emisor cubre {monthShort(month)}. Revisa Finanzas › Empresa y régimen.
@@ -401,6 +408,7 @@ function DocRow({
   onStatus,
   onDelete,
   onChanged,
+  closed,
 }: {
   d: Doc
   direction: Direction
@@ -408,6 +416,7 @@ function DocRow({
   onStatus: (s: "registered" | "void") => void
   onDelete: () => void
   onChanged: () => void
+  closed: boolean
 }) {
   const sign = docSign(d.docType)
   return (
@@ -444,7 +453,7 @@ function DocRow({
       </Td>
       <Td>{direction === "sale" ? <CollectionCell d={d} /> : <IgvCell d={d} />}</Td>
       <FilesCell d={d} direction={direction} onChanged={onChanged} />
-      <ActionsCell d={d} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete} />
+      <ActionsCell d={d} closed={closed} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete} />
     </Tr>
   )
 }
@@ -511,17 +520,22 @@ function FilesCell({
 /** Edit / void / delete; locked for documents owned by a Facturación invoice. */
 function ActionsCell({
   d,
+  closed,
   onEdit,
   onStatus,
   onDelete,
 }: {
   d: Doc
+  closed: boolean
   onEdit: () => void
   onStatus: (s: "registered" | "void") => void
   onDelete: () => void
 }) {
-  const linked = !!d.invoice
-  const lockedTitle = "Se edita desde Facturación del comercio"
+  // Locked when a Facturación invoice owns it or the month is closed.
+  const linked = !!d.invoice || closed
+  const lockedTitle = closed
+    ? "Mes cerrado: reábrelo en Cierres para cambiarlo"
+    : "Se edita desde Facturación del comercio"
   return (
     <Td align="right" className="whitespace-nowrap">
       <Button
