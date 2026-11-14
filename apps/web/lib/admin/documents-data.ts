@@ -612,16 +612,29 @@ export async function createDocument(v: DocumentInput, userId: string) {
  * fixed cost or "not a cost" (createCostEntry false), and is created when an
  * edit asks for it (createCostEntry true) on a purchase that had none.
  */
-export async function updateDocument(id: string, v: DocumentInput, userId: string) {
+export async function updateDocument(id: string, input: DocumentInput, userId: string) {
   return db.transaction(async (tx) => {
-    const [row] = await tx.select().from(documents).where(eq(documents.id, id)).limit(1)
+    // Locked: two saves at once must not both create the cost.
+    const [row] = await tx
+      .select()
+      .from(documents)
+      .where(eq(documents.id, id))
+      .limit(1)
+      .for("update")
     if (!row) throw new DocumentError("Comprobante no encontrado", 404)
-    if (row.direction !== v.direction)
+    if (row.direction !== input.direction)
       throw new DocumentError("No se puede cambiar de venta a compra")
     if (await linkedInvoice(tx, id)) {
       throw new DocumentError("Este comprobante se edita desde Facturación del comercio", 409)
     }
     await assertPeriodOpen(tx, row.issuerId, row.taxPeriod)
+    // The fixed cost link as it will be: omitted keeps the stored one, and a
+    // credit note drops it (an explicit one is refused by assertRecurringLink).
+    const kept = input.recurringItemId !== undefined ? input.recurringItemId : row.recurringItemId
+    const v: DocumentInput = {
+      ...input,
+      recurringItemId: input.docType === "07" ? (input.recurringItemId ?? null) : kept,
+    }
     const values = await documentValues(tx, v, userId, row.recurringItemId)
     await tx.update(documents).set(values).where(eq(documents.id, id))
     const noCost =
