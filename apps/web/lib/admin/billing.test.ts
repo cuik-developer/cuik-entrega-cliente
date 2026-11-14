@@ -11,6 +11,7 @@ import {
   monthsOfService,
   periodLabel,
   periodOf,
+  periodToInvoice,
 } from "./billing"
 
 // Service started 16 Aug 2026 → invoices on the 16th of every month.
@@ -298,5 +299,28 @@ describe("activeTimeLabel", () => {
   })
   it("handles a future start", () => {
     expect(activeTimeLabel("2026-12-01", "2026-10-09")).toBe("Empieza el 1 dic. 2026")
+  })
+})
+
+describe("periodToInvoice", () => {
+  it("proposes the current period while it lacks an invoice", () => {
+    expect(
+      periodToInvoice({ status: "vencida", currentPeriod: "2026-10", nextPeriod: "2026-10" }),
+    ).toBe("2026-10")
+  })
+
+  it("proposes the next period when the current one is invoiced", () => {
+    expect(
+      periodToInvoice({ status: "al_dia", currentPeriod: "2026-10", nextPeriod: "2026-11" }),
+    ).toBe("2026-11")
+  })
+
+  it("before the service starts, the next period even if the first is already invoiced", () => {
+    expect(
+      periodToInvoice({ status: "sin_iniciar", currentPeriod: "2026-12", nextPeriod: "2027-01" }),
+    ).toBe("2027-01")
+    expect(
+      periodToInvoice({ status: "sin_iniciar", currentPeriod: null, nextPeriod: "2026-12" }),
+    ).toBe("2026-12")
   })
 })

@@ -31,6 +31,7 @@ import {
   type BillingStatus,
   formatYmd,
   periodLabel,
+  periodToInvoice,
 } from "@/lib/admin/billing"
 import { splitIgv } from "@/lib/admin/issuers"
 
@@ -499,10 +500,7 @@ export function TenantBillingSection({
     const o = data?.outlook
     const todayLima = new Date().toLocaleDateString("en-CA", { timeZone: "America/Lima" })
     // Current period when it still lacks an invoice; otherwise the next one.
-    const period =
-      (o?.status === "al_dia" ? o.nextPeriod : o?.currentPeriod) ??
-      o?.nextPeriod ??
-      todayLima.slice(0, 7)
+    const period = (o ? periodToInvoice(o) : null) ?? todayLima.slice(0, 7)
     const amount = data?.config?.monthlyAmount
     setInv({
       period,

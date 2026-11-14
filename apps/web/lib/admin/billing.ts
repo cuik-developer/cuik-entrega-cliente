@@ -238,6 +238,18 @@ function dueForPeriod(rule: BillingRule, periodStart: string, months: BillingInt
  * advance, after its end in arrears). Gaps in old history are ignored: only
  * the furthest coverage counts.
  */
+/**
+ * The period a merchant's next invoice covers: the current one while it
+ * lacks an invoice, else the next (also before the service starts, when the
+ * current one may already be invoiced in advance).
+ */
+export function periodToInvoice(
+  o: Pick<BillingOutlook, "status" | "currentPeriod" | "nextPeriod">,
+): string | null {
+  const invoiced = o.status === "al_dia" || o.status === "sin_iniciar"
+  return (invoiced ? o.nextPeriod : o.currentPeriod) ?? o.nextPeriod
+}
+
 export function billingOutlook(
   rule: BillingRule,
   invoices: Iterable<string | InvoicedPeriod>,

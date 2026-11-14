@@ -1,5 +1,5 @@
 import { db, desc, eq, fxRates, ne, tenantBilling, tenantInvoices, tenants } from "@cuik/db"
-import { asInterval, daysBetween, periodLabel, todayYmd } from "./billing"
+import { asInterval, daysBetween, periodLabel, periodToInvoice, todayYmd } from "./billing"
 import { billingDueRows, summarize } from "./billing-overview"
 import { currentMonthLima, loadIssuers } from "./company-data"
 import { fiscalIssuerFor } from "./documents-data"
@@ -89,8 +89,7 @@ export async function loadCollections() {
    */
   const nextPeriodOf = new Map<string, string>()
   for (const r of dueRows) {
-    const o = r.outlook
-    const p = (o.status === "al_dia" ? o.nextPeriod : o.currentPeriod) ?? o.nextPeriod
+    const p = periodToInvoice(r.outlook)
     if (p) nextPeriodOf.set(r.tenantId, p)
   }
 
