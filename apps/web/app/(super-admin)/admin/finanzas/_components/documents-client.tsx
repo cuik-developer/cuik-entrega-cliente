@@ -370,7 +370,7 @@ type InvoiceDialogState =
   | { tenantId: string | null }
   | { edit: { tenantId: string; invoiceId: string } }
 
-/** A new merchant invoice opens in the month on screen: today in this month, else its first day. */
+/** A new merchant invoice is issued in the month on screen: today in this month, else its first day. */
 function invoicePrefillFor(
   state: InvoiceDialogState,
   month: string,
@@ -379,7 +379,8 @@ function invoicePrefillFor(
   if (!("tenantId" in state)) return null
   return {
     tenantId: state.tenantId ?? "",
-    period: month,
+    // The merchant's billing rule decides the period (as in its Facturación tab).
+    period: null,
     months: 0,
     amount: null,
     issuedOn: month === thisMonth ? todayLima() : `${month}-01`,

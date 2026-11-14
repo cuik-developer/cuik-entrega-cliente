@@ -56,6 +56,7 @@ export async function loadCollections() {
         monthlyAmount: tenantBilling.monthlyAmount,
         currency: tenantBilling.currency,
         interval: tenantBilling.billingIntervalMonths,
+        billingMode: tenantBilling.billingMode,
         includesIgv: tenantBilling.amountIncludesIgv,
         issuerOverride: tenantBilling.issuerId,
         ruc: tenantBilling.ruc,
@@ -79,6 +80,18 @@ export async function loadCollections() {
         ? issuerRows.find((x) => x.id === override)
         : issuerForMonth(issuerRows, ymd.slice(0, 7))
     return i?.razonSocial ?? null
+  }
+
+  /**
+   * The period each merchant's next invoice covers by its billing rule (in
+   * advance or in arrears, every N months), as its Facturación tab proposes
+   * it: the current period while it lacks an invoice, else the next one.
+   */
+  const nextPeriodOf = new Map<string, string>()
+  for (const r of dueRows) {
+    const o = r.outlook
+    const p = (o.status === "al_dia" ? o.nextPeriod : o.currentPeriod) ?? o.nextPeriod
+    if (p) nextPeriodOf.set(r.tenantId, p)
   }
 
   const { overdue, dueSoon } = summarize(dueRows)
@@ -175,6 +188,9 @@ export async function loadCollections() {
           amount: b.monthlyAmount === null ? null : Number(b.monthlyAmount),
           currency: b.currency,
           months: asInterval(b.interval),
+          /** Period of its next invoice by its billing rule; null without a service start. */
+          nextPeriod: nextPeriodOf.get(b.tenantId) ?? null,
+          billingMode: b.billingMode,
           includesIgv: b.includesIgv,
           issuer: issuerName(b.tenantId, today),
           /** Its invoices from `fiscalFromMonth` on are CUIK sales: the number must read F001-123. */

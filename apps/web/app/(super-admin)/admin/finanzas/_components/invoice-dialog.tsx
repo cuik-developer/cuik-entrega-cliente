@@ -33,11 +33,20 @@ export type InvoiceContext = Pick<Collections, "merchants" | "igvRate" | "fiscal
 type Billing = Awaited<ReturnType<typeof loadBilling>>
 type Invoice = Billing["invoices"][number]
 type Status = "pending" | "paid" | "void"
+type Recognition = "spread" | "cash"
+type Merchant = InvoiceContext["merchants"][number]
+
+/** "Por adelantado, mensual" — the merchant's billing rule in words. */
+function ruleText(m: Merchant): string {
+  const mode = m.billingMode === "advance" ? "por adelantado" : "a periodo vencido"
+  return `${mode}, ${m.months === 1 ? "mensual" : `cada ${m.months} meses`}`
+}
 
 type Form = {
   tenantId: string
   period: string
   months: number
+  recognition: Recognition
   issuedOn: string
   number: string
   amount: string
@@ -59,6 +68,7 @@ function initialForm(
       tenantId,
       period: invoice.period,
       months: invoice.months,
+      recognition: invoice.recognition,
       issuedOn: invoice.issuedOn,
       number: invoice.number ?? "",
       amount: String(invoice.amount),
@@ -71,8 +81,10 @@ function initialForm(
   const amount = prefill?.amount ?? terms?.amount ?? null
   return {
     tenantId: prefill?.tenantId ?? "",
-    period: prefill?.period ?? today.slice(0, 7),
+    // The "Por emitir" row's period, else the merchant's rule, else the month it opened in.
+    period: prefill?.period ?? terms?.nextPeriod ?? (prefill?.issuedOn ?? today).slice(0, 7),
     months: prefill?.months || terms?.months || 1,
+    recognition: "spread",
     issuedOn: prefill?.issuedOn ?? today,
     number: "",
     amount: amount === null ? "" : String(amount),
@@ -104,6 +116,7 @@ function editPatch(invoice: Invoice, f: Form): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   if (f.period !== invoice.period) out.period = f.period
   if (f.months !== invoice.months) out.months = f.months
+  if (f.recognition !== invoice.recognition) out.recognition = f.recognition
   if (f.issuedOn !== invoice.issuedOn) out.issuedOn = f.issuedOn
   if (f.number.trim() !== (invoice.number ?? "")) out.number = f.number
   if (Number(f.amount) !== invoice.amount) out.amount = Number(f.amount)
@@ -187,6 +200,17 @@ export function InvoiceDialog({
   )
 }
 
+/** Under "Periodo que cubre": what the merchant's billing rule proposes. */
+function PeriodHint({ merchant, period }: { merchant: Merchant; period: string }) {
+  const text =
+    merchant.nextPeriod === null
+      ? "Sin inicio de servicio en su Facturación: elige el periodo."
+      : period === merchant.nextPeriod
+        ? `Según su regla: ${ruleText(merchant)}.`
+        : `Su regla propone ${merchant.nextPeriod} (${ruleText(merchant)}).`
+  return <p className="text-[11px] text-ent-fg-3">{text}</p>
+}
+
 function InvoiceForm({
   ctx,
   invoice,
@@ -219,12 +243,11 @@ function InvoiceForm({
 
   function pick(id: string) {
     const m = ctx.merchants.find((x) => x.tenantId === id)
-    // Another merchant: its own terms, nothing carried from the previous one.
+    // Another merchant: its own terms and the period its billing rule invoices next.
     setF((p) => ({
       ...p,
       tenantId: id,
-      // Opened for a month (Ventas): keep it; else this month.
-      period: prefill?.issuedOn ? p.period : todayLima().slice(0, 7),
+      period: m?.nextPeriod ?? (prefill?.issuedOn ?? todayLima()).slice(0, 7),
       months: m?.months ?? 1,
       amount: m?.amount != null ? String(m.amount) : "",
     }))
@@ -252,7 +275,7 @@ function InvoiceForm({
           status: f.status,
           paidOn: f.status === "paid" ? f.paidOn : null,
           note: f.note,
-          recognition: "spread",
+          recognition: f.recognition,
           currency,
         })
       }
@@ -335,6 +358,7 @@ function InvoiceForm({
         <div className="space-y-1">
           <Label className="text-xs">Periodo que cubre</Label>
           <Input type="month" value={f.period} onChange={(e) => set("period", e.target.value)} />
+          {merchant && !editing && <PeriodHint merchant={merchant} period={f.period} />}
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Meses</Label>
@@ -348,6 +372,17 @@ function InvoiceForm({
                 {n === 1 ? "1 mes" : `${n} meses`}
               </option>
             ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">En finanzas cuenta</Label>
+          <select
+            className={sel}
+            value={f.recognition}
+            onChange={(e) => set("recognition", e.target.value as Recognition)}
+          >
+            <option value="spread">Repartido mes a mes</option>
+            <option value="cash">Todo en el mes del cobro</option>
           </select>
         </div>
         <div className="space-y-1">
