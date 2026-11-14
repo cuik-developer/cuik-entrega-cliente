@@ -62,6 +62,8 @@ export type InvoiceLike = {
   /** "YYYY-MM-DD" | null */
   paidOn: string | null
   issuedOn: string
+  /** Tax month of its sale in Ventas (a Cuik sale); null when it is not one. */
+  taxMonth?: string | null
 }
 /** A merchant's billing terms, used for the months no invoice covers yet. */
 export type ExpectedBillingLike = {
@@ -100,16 +102,18 @@ export type MonthRow = {
   /** Merchant income expected from billing terms for months no invoice covers yet (from `todayMonth` on). */
   projectedCash: number
   projectedAccrual: number
-  /** incomeCash + projectedCash − costCash − loanPayments: what the month needs from the partner when negative. */
+  /** incomeCash + projectedCash − costCash − loanPayments − taxCash − reserveCash: what the month needs from the partner when negative. */
   netCash: number
-  /** incomeAccrual + projectedAccrual − costAccrual − loanPayments. */
+  /** incomeAccrual + projectedAccrual − costAccrual − loanPayments − taxAccrual − reserveAccrual. */
   netAccrual: number
   /** True when some USD amount used the default rate (no rate typed yet). */
   fxEstimated: boolean
   /**
    * Paid to SUNAT for the month's sales: IGV net of the purchases' credit plus
-   * the 1 % pago a cuenta. Accrual in the tax month; cash the month after
-   * (the PDT 621 is filed then). Estimated for projected months.
+   * the 1 % pago a cuenta, set aside from the income it comes from: accrual
+   * in the tax month; cash in the months that month's invoices are collected
+   * (the PDT 621 is paid the month after, but that money is no longer Cuik's).
+   * Estimated for projected months.
    */
   taxCash: number
   taxAccrual: number
@@ -307,24 +311,59 @@ function projectExpected(
   }
 }
 
+/** The month an invoice's money counts in cash, as its income does: paid → that month; unpaid → now (or its issue month if later). */
+function invoiceCashMonth(inv: InvoiceLike, todayMonth: string): string {
+  const pay = (inv.paidOn ?? inv.issuedOn).slice(0, 7)
+  return inv.status === "paid" || pay > todayMonth ? pay : todayMonth
+}
+
+/** Per tax month, the cash months its Cuik sales are collected in, with their weight. */
+function collectionShares(invoices: InvoiceLike[], rates: FxRates, todayMonth: string) {
+  const out = new Map<string, { month: string; pen: number }[]>()
+  for (const inv of invoices) {
+    if (inv.status === "void" || !inv.taxMonth) continue
+    const month = invoiceCashMonth(inv, todayMonth)
+    const pen = toPen(inv.amount, inv.currency, month, rates).pen
+    if (pen <= 0) continue
+    out.set(inv.taxMonth, [...(out.get(inv.taxMonth) ?? []), { month, pen }])
+  }
+  return out
+}
+
 /**
- * Taxes by ledger month, in the tax month in both views: what goes to SUNAT
- * and the reserve is set aside from the month's income when it comes in (the
- * PDT is paid the month after, but that money is no longer Cuik's to spend).
+ * Taxes by ledger month. Accrual: in the tax month. Cash: set aside from the
+ * income they come from, so in the months that tax month's invoices are
+ * collected, pro rata (an invoice of October paid in November carries its
+ * IGV and reserve to November); projected months and sales without an
+ * invoice stay in their month, where their income is.
  */
-function taxBuckets(taxes: TaxLike[]) {
+function taxBuckets(taxes: TaxLike[], invoices: InvoiceLike[], rates: FxRates, todayMonth: string) {
   const tax = new Map<string, Bucket>()
   const reserve = new Map<string, Bucket>()
+  const shares = collectionShares(invoices, rates, todayMonth)
+  const add = (
+    map: Map<string, Bucket>,
+    month: string,
+    cash: number,
+    accrual: number,
+    est: boolean,
+  ) => {
+    const b = map.get(month) ?? emptyBucket()
+    b.cash += cash
+    b.accrual += accrual
+    b.estimated = b.estimated || est
+    map.set(month, b)
+  }
   for (const t of taxes) {
+    const parts = t.estimated ? undefined : shares.get(t.month)
+    const total = parts?.reduce((a, p) => a + p.pen, 0) ?? 0
     for (const [map, amount] of [
       [tax, t.sunat],
       [reserve, t.reserve],
     ] as const) {
-      const a = map.get(t.month) ?? emptyBucket()
-      a.accrual += amount
-      a.cash += amount
-      a.estimated = a.estimated || t.estimated
-      map.set(t.month, a)
+      add(map, t.month, 0, amount, t.estimated)
+      if (!parts || total <= 0) add(map, t.month, amount, 0, t.estimated)
+      else for (const p of parts) add(map, p.month, (amount * p.pen) / total, 0, t.estimated)
     }
   }
   return { tax, reserve }
@@ -346,7 +385,12 @@ export function buildLedger(input: {
   taxes?: TaxLike[]
 }): MonthRow[] {
   const { from, to, rates } = input
-  const { tax, reserve } = taxBuckets(input.taxes ?? [])
+  const { tax, reserve } = taxBuckets(
+    input.taxes ?? [],
+    input.invoices,
+    rates,
+    input.todayMonth ?? from,
+  )
   const income = new Map<string, Bucket>()
   const projected = new Map<string, Bucket>()
   const cost = new Map<string, Bucket>()

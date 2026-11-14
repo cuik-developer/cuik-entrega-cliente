@@ -803,8 +803,8 @@ function taxHint(gross: number, p: MonthFigures): string {
 
 /** Under the net income of a month: the gross and what is still to be invoiced. */
 function GrossHint({ gross, toInvoice, p }: { gross: number; toInvoice: number; p: MonthFigures }) {
-  if (gross === 0 && toInvoice === 0) return null
   const taxed = p.tax > 0 || p.reserve > 0
+  if (gross === 0 && toInvoice === 0 && !taxed) return null
   return (
     <span className="block text-[10.5px] text-ent-fg-3">
       {taxed ? `de ${soles(gross)}` : null}

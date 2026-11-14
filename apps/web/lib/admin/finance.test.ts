@@ -543,6 +543,38 @@ describe("taxes in the ledger", () => {
     // Short only by SUNAT counts as the partner's money; the reserve is still Cuik's.
     expect(rows[0]?.autoContribution).toBe(31)
   })
+  it("in cash, carries a month's taxes to the months its invoices are collected", () => {
+    const inv = (amount: number, paidOn: string | null, status: "paid" | "pending") => ({
+      period: "2026-10",
+      months: 1,
+      amount,
+      currency: "PEN" as const,
+      recognition: "spread" as const,
+      status,
+      paidOn,
+      issuedOn: "2026-10-28",
+      taxMonth: "2026-10",
+    })
+    const rows = buildLedger({
+      ...base,
+      from: "2026-10",
+      to: "2026-12",
+      todayMonth: "2026-12",
+      invoices: [inv(300, "2026-11-03", "paid"), inv(100, null, "pending")],
+      taxes: [{ month: "2026-10", sunat: 40, reserve: 20, estimated: false }],
+    })
+    // Accrual stays in October.
+    expect(rows[0]).toMatchObject({
+      taxAccrual: 40,
+      reserveAccrual: 20,
+      taxCash: 0,
+      reserveCash: 0,
+    })
+    // Cash: 3/4 with the November payment, 1/4 with the unpaid one (expected now, December).
+    expect(rows[1]).toMatchObject({ taxCash: 30, reserveCash: 15, netCash: 300 - 45 })
+    expect(rows[2]).toMatchObject({ taxCash: 10, reserveCash: 5 })
+    expect(rows[0]?.autoContribution).toBe(0)
+  })
   it("estimates taxes of projected income by the regime of each month", () => {
     const taxes = projectTaxes(
       [

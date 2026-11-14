@@ -143,8 +143,12 @@ export async function loadLedgerInputs(): Promise<{
       status: tenantInvoices.status,
       paidOn: tenantInvoices.paidOn,
       issuedOn: tenantInvoices.issuedOn,
+      // Its sale in Ventas: the tax month whose IGV and reserve its payment carries.
+      taxPeriod: documents.taxPeriod,
+      saleStatus: documents.status,
     })
     .from(tenantInvoices)
+    .leftJoin(documents, eq(documents.id, tenantInvoices.documentId))
   const rates: FxRates = {}
   for (const r of data.rates) rates[r.month] = r.usdPen
   return {
@@ -161,6 +165,7 @@ export async function loadLedgerInputs(): Promise<{
       status: i.status,
       paidOn: i.paidOn,
       issuedOn: i.issuedOn,
+      taxMonth: i.saleStatus === "registered" ? i.taxPeriod : null,
     })),
   }
 }
