@@ -15,12 +15,16 @@ import { splitIgv } from "@/lib/admin/issuers"
 
 const sel = "h-9 w-full rounded-md border border-ent-line bg-white px-2 text-sm"
 
-/** A "Por emitir" row the dialog opens from: merchant, period and amount already chosen. */
+/**
+ * A "Por emitir" row the dialog opens from (merchant, period and amount
+ * already chosen), or the month Ventas is showing (`issuedOn` in it).
+ */
 export type InvoicePrefill = {
   tenantId: string
   period: string | null
   months: number
   amount: number | null
+  issuedOn?: string
 }
 
 /** What the dialog needs from Cobranza: the merchants and the fiscal rules. */
@@ -69,7 +73,7 @@ function initialForm(
     tenantId: prefill?.tenantId ?? "",
     period: prefill?.period ?? today.slice(0, 7),
     months: prefill?.months || terms?.months || 1,
-    issuedOn: today,
+    issuedOn: prefill?.issuedOn ?? today,
     number: "",
     amount: amount === null ? "" : String(amount),
     status: "pending",
@@ -89,6 +93,25 @@ async function loadDialog(
   ])
   const invoice = edit ? (billing?.invoices.find((i) => i.id === edit.invoiceId) ?? null) : null
   return { ctx, invoice }
+}
+
+/**
+ * The PATCH of an edit: only what changed, as Facturación does — a resent
+ * amount or number would count as a change of the books (refused in a
+ * closed month, and the sale's base/IGV split recomputed).
+ */
+function editPatch(invoice: Invoice, f: Form): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  if (f.period !== invoice.period) out.period = f.period
+  if (f.months !== invoice.months) out.months = f.months
+  if (f.issuedOn !== invoice.issuedOn) out.issuedOn = f.issuedOn
+  if (f.number.trim() !== (invoice.number ?? "")) out.number = f.number
+  if (Number(f.amount) !== invoice.amount) out.amount = Number(f.amount)
+  if (f.status !== invoice.status) out.status = f.status
+  // The paid date is kept when voiding or reopening (Facturación does the same).
+  if (f.status === "paid" && f.paidOn !== invoice.paidOn) out.paidOn = f.paidOn
+  if (f.note.trim() !== (invoice.note ?? "")) out.note = f.note
+  return out
 }
 
 /**
@@ -114,6 +137,9 @@ export function InvoiceDialog({
   const [ctx, setCtx] = useState<InvoiceContext | null>(givenCtx ?? null)
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // A file attached in the dialog changes the list behind: refresh it however it closes.
+  const [filesChanged, setFilesChanged] = useState(false)
+  const close = filesChanged ? onSaved : onClose
 
   useEffect(() => {
     let live = true
@@ -132,7 +158,7 @@ export function InvoiceDialog({
 
   const ready = ctx && (!edit || invoice)
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
+    <Dialog open onOpenChange={(o) => !o && close()}>
       <DialogContent className="sm:max-w-[620px]">
         <DialogHeader>
           <DialogTitle className="text-[15px]">
@@ -147,8 +173,9 @@ export function InvoiceDialog({
             invoice={invoice}
             tenantId={edit?.tenantId ?? null}
             prefill={prefill}
-            onClose={onClose}
+            onClose={close}
             onSaved={onSaved}
+            onFilesChanged={() => setFilesChanged(true)}
           />
         ) : (
           <div className="flex justify-center py-10">
@@ -167,6 +194,7 @@ function InvoiceForm({
   prefill,
   onClose,
   onSaved,
+  onFilesChanged,
 }: {
   ctx: InvoiceContext
   invoice: Invoice | null
@@ -174,6 +202,7 @@ function InvoiceForm({
   prefill: InvoicePrefill | null
   onClose: () => void
   onSaved: () => void
+  onFilesChanged: () => void
 }) {
   const editing = !!invoice
   const [f, setF] = useState<Form>(() => initialForm(invoice, tenantId ?? "", prefill, ctx))
@@ -194,7 +223,8 @@ function InvoiceForm({
     setF((p) => ({
       ...p,
       tenantId: id,
-      period: todayLima().slice(0, 7),
+      // Opened for a month (Ventas): keep it; else this month.
+      period: prefill?.issuedOn ? p.period : todayLima().slice(0, 7),
       months: m?.months ?? 1,
       amount: m?.amount != null ? String(m.amount) : "",
     }))
@@ -205,18 +235,27 @@ function InvoiceForm({
     if (!merchant && !editing) return
     setBusy(true)
     try {
-      const fields = {
-        period: f.period,
-        months: f.months,
-        issuedOn: f.issuedOn,
-        number: f.number,
-        amount: Number(f.amount),
-        status: f.status,
-        paidOn: f.status === "paid" ? f.paidOn : null,
-        note: f.note,
+      if (invoice) {
+        const patch = editPatch(invoice, f)
+        if (Object.keys(patch).length === 0) {
+          onClose()
+          return
+        }
+        await apiCall("PATCH", `${base}/${invoice.id}`, patch)
+      } else {
+        await apiCall("POST", base, {
+          period: f.period,
+          months: f.months,
+          issuedOn: f.issuedOn,
+          number: f.number,
+          amount: Number(f.amount),
+          status: f.status,
+          paidOn: f.status === "paid" ? f.paidOn : null,
+          note: f.note,
+          recognition: "spread",
+          currency,
+        })
       }
-      if (invoice) await apiCall("PATCH", `${base}/${invoice.id}`, fields)
-      else await apiCall("POST", base, { ...fields, recognition: "spread", currency })
       toast.success(
         invoice
           ? "Factura actualizada"
@@ -380,12 +419,14 @@ function InvoiceForm({
             invoiceId={invoice.id}
             kind="invoice"
             has={!!invoice.invoiceFile}
+            onChanged={onFilesChanged}
           />
           <InvoiceFile
             tenantId={f.tenantId}
             invoiceId={invoice.id}
             kind="receipt"
             has={!!invoice.receiptFile}
+            onChanged={onFilesChanged}
           />
         </div>
       ) : (

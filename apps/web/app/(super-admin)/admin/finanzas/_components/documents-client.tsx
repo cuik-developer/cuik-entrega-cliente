@@ -45,9 +45,9 @@ import {
   toPen,
 } from "@/lib/admin/documents"
 import type { DocumentsPage } from "@/lib/admin/documents-data"
-import { apiCall as api, money, soles, ymd } from "@/lib/admin/format"
+import { apiCall as api, money, soles, todayLima, ymd } from "@/lib/admin/format"
 import { monthShort, splitIgv } from "@/lib/admin/issuers"
-import { InvoiceDialog } from "./invoice-dialog"
+import { InvoiceDialog, type InvoicePrefill } from "./invoice-dialog"
 import { SuppliersPanel } from "./suppliers-panel"
 
 type Direction = "sale" | "purchase"
@@ -89,9 +89,7 @@ export function DocumentsClient({ direction }: { direction: Direction }) {
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState<Doc | "new" | null>(null)
   /** Merchant invoice dialog: a new one (optionally for a merchant) or one to edit. */
-  const [invoiceDialog, setInvoiceDialog] = useState<
-    { tenantId: string | null } | { edit: { tenantId: string; invoiceId: string } } | null
-  >(null)
+  const [invoiceDialog, setInvoiceDialog] = useState<InvoiceDialogState | null>(null)
   const copy = COPY[direction]
 
   // "?month=2026-11" (links from Facturación) opens that period.
@@ -356,11 +354,7 @@ export function DocumentsClient({ direction }: { direction: Direction }) {
       {invoiceDialog && (
         <InvoiceDialog
           edit={"edit" in invoiceDialog ? invoiceDialog.edit : null}
-          prefill={
-            "tenantId" in invoiceDialog && invoiceDialog.tenantId
-              ? { tenantId: invoiceDialog.tenantId, period: null, months: 0, amount: null }
-              : null
-          }
+          prefill={invoicePrefillFor(invoiceDialog, month, today)}
           onClose={() => setInvoiceDialog(null)}
           onSaved={() => {
             setInvoiceDialog(null)
@@ -370,6 +364,26 @@ export function DocumentsClient({ direction }: { direction: Direction }) {
       )}
     </div>
   )
+}
+
+type InvoiceDialogState =
+  | { tenantId: string | null }
+  | { edit: { tenantId: string; invoiceId: string } }
+
+/** A new merchant invoice opens in the month on screen: today in this month, else its first day. */
+function invoicePrefillFor(
+  state: InvoiceDialogState,
+  month: string,
+  thisMonth: string,
+): InvoicePrefill | null {
+  if (!("tenantId" in state)) return null
+  return {
+    tenantId: state.tenantId ?? "",
+    period: month,
+    months: 0,
+    amount: null,
+    issuedOn: month === thisMonth ? todayLima() : `${month}-01`,
+  }
 }
 
 /**
