@@ -308,27 +308,23 @@ function projectExpected(
 }
 
 /**
- * Taxes by ledger month: accrual in the tax month; cash when the PDT is paid,
- * the month after.
+ * Taxes by ledger month, in the tax month in both views: what goes to SUNAT
+ * and the reserve is set aside from the month's income when it comes in (the
+ * PDT is paid the month after, but that money is no longer Cuik's to spend).
  */
 function taxBuckets(taxes: TaxLike[]) {
   const tax = new Map<string, Bucket>()
   const reserve = new Map<string, Bucket>()
   for (const t of taxes) {
-    // Accrual in the tax month; cash when the PDT is paid, the month after.
     for (const [map, amount] of [
       [tax, t.sunat],
       [reserve, t.reserve],
     ] as const) {
       const a = map.get(t.month) ?? emptyBucket()
       a.accrual += amount
+      a.cash += amount
       a.estimated = a.estimated || t.estimated
       map.set(t.month, a)
-      const next = shiftMonth(t.month, 1)
-      const c = map.get(next) ?? emptyBucket()
-      c.cash += amount
-      c.estimated = c.estimated || t.estimated
-      map.set(next, c)
     }
   }
   return { tax, reserve }

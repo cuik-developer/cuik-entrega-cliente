@@ -181,9 +181,9 @@ export function TableroClient() {
     cumulative: isCash ? r.cumulativeCash : r.cumulativeAccrual,
   })
   const curPick = cur ? pick(cur) : null
-  const curIncome = curPick ? curPick.income + curPick.projected : 0
-  const curOut =
-    curPick && cur ? curPick.cost + cur.loanPayments + curPick.tax + curPick.reserve : 0
+  const curGross = curPick ? curPick.income + curPick.projected : 0
+  const curIncome = curPick ? netIncome(curPick) : 0
+  const curOut = curPick && cur ? curPick.cost + cur.loanPayments : 0
   const curNet = curPick?.net ?? 0
   const loanBalancePen = d.loans.reduce((a, l) => a + l.balancePen, 0)
   const remaining = d.loans.reduce((a, l) => a + l.remaining, 0)
@@ -209,14 +209,17 @@ export function TableroClient() {
       tone: curNet < 0 ? "bad" : "ok",
     },
     {
-      label: "Ingresos del mes",
+      label: "Ingresos netos del mes",
       value: soles(curIncome),
-      hint: `${d.merchants.paying} ${d.merchants.paying === 1 ? "comercio" : "comercios"}`,
+      hint:
+        curPick && curIncome !== curGross
+          ? taxHint(curGross, curPick)
+          : `${d.merchants.paying} ${d.merchants.paying === 1 ? "comercio" : "comercios"}`,
     },
     {
       label: "Salidas del mes",
       value: soles(curOut),
-      hint: outHint(curPick, cur?.loanPayments ?? 0),
+      hint: cur && cur.loanPayments > 0 ? `${soles(cur.loanPayments)} cuotas` : "sin cuotas",
     },
     {
       label: "Punto de equilibrio",
@@ -272,8 +275,8 @@ export function TableroClient() {
     return {
       month: r.month,
       label: monthLabel(r.month, false),
-      ingresos: p.income + p.projected,
-      salidas: p.cost + r.loanPayments + p.tax + p.reserve,
+      ingresos: netIncome(p),
+      salidas: p.cost + r.loanPayments,
       acumulado: p.cumulative,
       projected: r.month > todayMonth,
     }
@@ -335,7 +338,7 @@ export function TableroClient() {
           </div>
           <span className="text-[11.5px] text-ent-fg-3 hidden md:inline">
             {isCash
-              ? "Caja: el dinero en el mes en que se mueve."
+              ? "Caja: el dinero en el mes en que se mueve; lo de SUNAT y la reserva se separan el mes en que se cobra."
               : "Devengado: cada pago repartido en los meses que cubre."}
           </span>
           <label className="flex items-center gap-1.5 text-[12px] text-ent-fg-2 cursor-pointer select-none">
@@ -414,7 +417,7 @@ export function TableroClient() {
                   className="inline-block w-2.5 h-2.5 rounded-[2px]"
                   style={{ background: BLUE }}
                 />
-                Ingresos
+                Ingresos netos
               </span>
               <span className="flex items-center gap-1">
                 <i
@@ -489,16 +492,24 @@ export function TableroClient() {
             <thead>
               <tr>
                 <Th>Mes</Th>
-                <Th className="text-right">Ingresos</Th>
+                <Th
+                  className="text-right"
+                  title="Cobrado menos lo de SUNAT (IGV neto del crédito de compras + 1 %) y la reserva"
+                >
+                  Ingresos netos
+                </Th>
                 <Th className="text-right">Costos</Th>
                 <Th className="text-right">Cuotas</Th>
                 <Th
                   className="text-right"
-                  title="IGV neto del crédito de compras + pago a cuenta 1 %"
+                  title="IGV neto del crédito de compras + pago a cuenta 1 %; ya descontado de los ingresos"
                 >
                   SUNAT
                 </Th>
-                <Th className="text-right" title="10 % separado para la renta anual">
+                <Th
+                  className="text-right"
+                  title="10 % separado para la renta anual; ya descontado de los ingresos"
+                >
                   Reserva
                 </Th>
                 <Th className="text-right">Neto</Th>
@@ -526,12 +537,12 @@ export function TableroClient() {
                       )}
                     </Td>
                     <Td className="text-right tabular-nums">
-                      {soles(p.income + p.projected)}
-                      {p.projected > 0 && !future && (
-                        <span className="ml-1 text-[10.5px] text-ent-fg-3">
-                          {soles(p.projected)} por facturar
-                        </span>
-                      )}
+                      {soles(netIncome(p))}
+                      <GrossHint
+                        gross={p.income + p.projected}
+                        toInvoice={future ? 0 : p.projected}
+                        p={p}
+                      />
                     </Td>
                     <Td className="text-right tabular-nums">{soles(p.cost)}</Td>
                     <Td className="text-right tabular-nums">{soles(r.loanPayments)}</Td>
@@ -713,11 +724,13 @@ function TaxCells({
 }) {
   return (
     <>
-      <Td className="text-right tabular-nums">
-        {tax > 0 ? soles(tax) : ""}
-        {tax > 0 && estimated && <span className="ml-1 text-[10.5px] text-ent-fg-3">est.</span>}
+      <Td className="text-right tabular-nums text-ent-fg-3">
+        {tax > 0 ? `−${soles(tax)}` : ""}
+        {tax > 0 && estimated && <span className="ml-1 text-[10.5px]">est.</span>}
       </Td>
-      <Td className="text-right tabular-nums">{reserve > 0 ? soles(reserve) : ""}</Td>
+      <Td className="text-right tabular-nums text-ent-fg-3">
+        {reserve > 0 ? `−${soles(reserve)}` : ""}
+      </Td>
     </>
   )
 }
@@ -754,11 +767,15 @@ function TotalsRow({
   return (
     <tr className={className}>
       <Td>{label}</Td>
-      <Td className="text-right tabular-nums">{soles(v.income)}</Td>
+      <Td className="text-right tabular-nums">{soles(v.income - v.tax - v.reserve)}</Td>
       <Td className="text-right tabular-nums">{soles(v.cost)}</Td>
       <Td className="text-right tabular-nums">{soles(t.loanPayments)}</Td>
-      <Td className="text-right tabular-nums">{soles(v.tax)}</Td>
-      <Td className="text-right tabular-nums">{soles(v.reserve)}</Td>
+      <Td className="text-right tabular-nums text-ent-fg-3">
+        {v.tax > 0 ? `−${soles(v.tax)}` : ""}
+      </Td>
+      <Td className="text-right tabular-nums text-ent-fg-3">
+        {v.reserve > 0 ? `−${soles(v.reserve)}` : ""}
+      </Td>
       <Td className="text-right tabular-nums">{soles(v.net, { sign: true })}</Td>
       <Td />
       <Td className="text-right tabular-nums">{partner === null ? "" : soles(partner)}</Td>
@@ -766,12 +783,33 @@ function TotalsRow({
   )
 }
 
-/** What the month's outflow is made of (loan, SUNAT, reserve), short. */
-function outHint(p: { tax: number; reserve: number } | null, loan: number): string {
-  const parts = [
-    loan > 0 ? `${soles(loan)} cuotas` : null,
-    p && p.tax > 0 ? `${soles(p.tax)} SUNAT` : null,
-    p && p.reserve > 0 ? `${soles(p.reserve)} reserva` : null,
-  ].filter(Boolean)
-  return parts.length > 0 ? parts.join(" · ") : "sin cuotas"
+type MonthFigures = { income: number; projected: number; tax: number; reserve: number }
+
+/** What is left of the month's income after SUNAT (IGV net of the purchase credit + 1 %) and the reserve. */
+function netIncome(p: MonthFigures): number {
+  return p.income + p.projected - p.tax - p.reserve
+}
+
+/** "de S/ 329 · S/ 53 SUNAT · S/ 28 reserva": the gross and what was taken from it. */
+function taxHint(gross: number, p: MonthFigures): string {
+  return [
+    `de ${soles(gross)}`,
+    p.tax > 0 ? `${soles(p.tax)} SUNAT` : null,
+    p.reserve > 0 ? `${soles(p.reserve)} reserva` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ")
+}
+
+/** Under the net income of a month: the gross and what is still to be invoiced. */
+function GrossHint({ gross, toInvoice, p }: { gross: number; toInvoice: number; p: MonthFigures }) {
+  if (gross === 0 && toInvoice === 0) return null
+  const taxed = p.tax > 0 || p.reserve > 0
+  return (
+    <span className="block text-[10.5px] text-ent-fg-3">
+      {taxed ? `de ${soles(gross)}` : null}
+      {taxed && toInvoice > 0 ? " · " : null}
+      {toInvoice > 0 ? `${soles(toInvoice)} por facturar` : null}
+    </span>
+  )
 }

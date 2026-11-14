@@ -43,7 +43,11 @@ export async function buildFinanceExcel(d: FinanceDashboard): Promise<ArrayBuffe
     ["Costos del mes (caja)", cur?.costCash ?? 0, "Sin cuotas de préstamo"],
     ["Costos del mes (devengado)", cur?.costAccrual ?? 0, ""],
     ["Cuotas de préstamo del mes", cur?.loanPayments ?? 0, ""],
-    ["SUNAT del mes (caja)", cur?.taxCash ?? 0, "IGV neto + pago a cuenta del mes anterior"],
+    [
+      "SUNAT del mes",
+      cur?.taxCash ?? 0,
+      "IGV neto + pago a cuenta de las ventas del mes (se paga en el PDT del mes siguiente)",
+    ],
     ["Reserva renta anual (caja)", cur?.reserveCash ?? 0, "10 % separado, sigue siendo de Cuik"],
     ["Neto del mes (caja)", cur?.netCash ?? 0, "Negativo = lo que puso el socio"],
     ["Neto del mes (devengado)", cur?.netAccrual ?? 0, ""],

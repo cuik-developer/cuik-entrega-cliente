@@ -524,18 +524,24 @@ describe("ledger", () => {
 
 describe("taxes in the ledger", () => {
   const base = { rates: {}, recurring: [], entries: [], loans: [], invoices: [] }
-  it("subtracts SUNAT and the reserve the month after the tax month (cash) and in it (accrual)", () => {
+  it("subtracts SUNAT and the reserve in the tax month, in both views", () => {
     const rows = buildLedger({
       ...base,
       from: "2026-11",
       to: "2026-12",
       taxes: [{ month: "2026-11", sunat: 31, reserve: 21.19, estimated: false }],
     })
-    expect(rows[0]).toMatchObject({ taxCash: 0, taxAccrual: 31, reserveAccrual: 21.19, netCash: 0 })
-    expect(rows[0]?.netAccrual).toBe(-52.19)
-    expect(rows[1]).toMatchObject({ taxCash: 31, reserveCash: 21.19, netCash: -52.19 })
+    expect(rows[0]).toMatchObject({
+      taxCash: 31,
+      taxAccrual: 31,
+      reserveCash: 21.19,
+      reserveAccrual: 21.19,
+      netCash: -52.19,
+      netAccrual: -52.19,
+    })
+    expect(rows[1]).toMatchObject({ taxCash: 0, reserveCash: 0, netCash: 0 })
     // Short only by SUNAT counts as the partner's money; the reserve is still Cuik's.
-    expect(rows[1]?.autoContribution).toBe(31)
+    expect(rows[0]?.autoContribution).toBe(31)
   })
   it("estimates taxes of projected income by the regime of each month", () => {
     const taxes = projectTaxes(
