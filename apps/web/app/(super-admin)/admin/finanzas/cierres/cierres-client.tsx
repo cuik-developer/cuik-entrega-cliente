@@ -21,48 +21,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { LineMatch } from "@/lib/admin/close"
+import { apiCall, apiUpload, soles, solesInt, ymd } from "@/lib/admin/format"
 import { monthShort } from "@/lib/admin/issuers"
 import type { ClosesPage } from "@/lib/admin/periods-data"
 import { cn } from "@/lib/utils"
 
 type Available = Extract<ClosesPage, { available: true }>
 type Detail = NonNullable<Available["detail"]>
-
-function soles(n: number) {
-  const v = Math.abs(n) < 0.005 ? 0 : n
-  return `S/ ${v.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-function solesInt(n: number) {
-  return `S/ ${n.toLocaleString("es-PE", { maximumFractionDigits: 0 })}`
-}
-function ymd(d: string | null) {
-  if (!d) return "—"
-  const [y, m, day] = d.split("-")
-  return `${day}/${m}/${y}`
-}
-
-async function send(method: string, url: string, body?: unknown) {
-  const res = await fetch(url, {
-    method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  })
-  const json = await res.json().catch(() => null)
-  if (!res.ok || !json?.success) {
-    const fe = json?.details?.fieldErrors as Record<string, string[]> | undefined
-    throw new Error((fe && Object.values(fe).flat()[0]) ?? json?.error ?? "No se pudo guardar")
-  }
-  return json.data
-}
-
-async function upload(url: string, file: File) {
-  const fd = new FormData()
-  fd.set("file", file)
-  const res = await fetch(url, { method: "POST", body: fd })
-  const json = await res.json().catch(() => null)
-  if (!res.ok || !json?.success) throw new Error(json?.error ?? "No se pudo subir el archivo")
-  return json.data
-}
 
 /**
  * Finanzas › Cierres: each month's PDT 621 (IGV and 1 % pago a cuenta), the
@@ -279,7 +244,7 @@ function ActionsPanel({ d, onChanged }: { d: Detail; onChanged: () => void }) {
     await run(
       "import",
       async () => {
-        const res = await upload(`${base}/import`, file)
+        const res = await apiUpload<{ errors?: string[] }>(`${base}/import`, file)
         if (res.errors?.length)
           toast.warning(`${res.errors.length} filas con errores: ${res.errors[0]}`)
       },
@@ -293,14 +258,14 @@ function ActionsPanel({ d, onChanged }: { d: Detail; onChanged: () => void }) {
       : "Todavía no importaste el cierre del contador: se guardará solo lo calculado por el panel. "
     if (!confirm(`${warn}¿Cerrar ${monthShort(d.month)}? Sus comprobantes quedarán bloqueados.`))
       return
-    run("close", () => send("POST", `${base}/close`), `${monthShort(d.month)} cerrado`)
+    run("close", () => apiCall("POST", `${base}/close`), `${monthShort(d.month)} cerrado`)
   }
   function reopen() {
     const reason = prompt("Motivo para reabrir el mes (queda registrado):")
     if (!reason) return
     run(
       "reopen",
-      () => send("POST", `${base}/reopen`, { reason }),
+      () => apiCall("POST", `${base}/reopen`, { reason }),
       `${monthShort(d.month)} reabierto`,
     )
   }
@@ -419,7 +384,7 @@ function ActionsPanel({ d, onChanged }: { d: Detail; onChanged: () => void }) {
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0]
-            if (f) run("const", () => upload(`${base}/constancia`, f), "Constancia adjuntada")
+            if (f) run("const", () => apiUpload(`${base}/constancia`, f), "Constancia adjuntada")
             if (constRef.current) constRef.current.value = ""
           }}
         />
@@ -442,7 +407,7 @@ function ReservePanel({ d, onChanged }: { d: Detail; onChanged: () => void }) {
   async function save() {
     setBusy(true)
     try {
-      await send("PUT", `/api/admin/finance/periods/${d.month}`, {
+      await apiCall("PUT", `/api/admin/finance/periods/${d.month}`, {
         dueDate: f.dueDate || null,
         reserveMovedOn: f.reserveMovedOn || null,
         reserveAmount: f.reserveMovedOn ? Number(f.reserveAmount || 0) : null,

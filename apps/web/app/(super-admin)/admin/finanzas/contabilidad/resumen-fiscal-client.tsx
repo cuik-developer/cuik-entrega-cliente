@@ -17,6 +17,7 @@ import {
   Tr,
 } from "@/components/admin/enterprise"
 import { Input } from "@/components/ui/input"
+import { soles, solesInt } from "@/lib/admin/format"
 import { monthShort, REGIME_LABEL } from "@/lib/admin/issuers"
 import type { MonthTax } from "@/lib/admin/tax"
 import type { TaxSummary } from "@/lib/admin/tax-data"
@@ -24,15 +25,6 @@ import { cn } from "@/lib/utils"
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/
 
-function soles(n: number) {
-  // No "-0.00" when a subtraction is zero.
-  const v = Math.abs(n) < 0.005 ? 0 : n
-  return `S/ ${v.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-/** PDT amounts: whole soles. */
-function solesInt(n: number) {
-  return `S/ ${n.toLocaleString("es-PE", { maximumFractionDigits: 0 })}`
-}
 const pct = (r: number) => `${Math.round(r * 10000) / 100} %`
 
 type Available = Extract<TaxSummary, { available: true }>

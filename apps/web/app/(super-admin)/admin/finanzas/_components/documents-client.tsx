@@ -45,6 +45,7 @@ import {
   toPen,
 } from "@/lib/admin/documents"
 import type { DocumentsPage } from "@/lib/admin/documents-data"
+import { apiCall as api, money, soles, ymd } from "@/lib/admin/format"
 import { monthShort, splitIgv } from "@/lib/admin/issuers"
 import { SuppliersPanel } from "./suppliers-panel"
 
@@ -53,34 +54,6 @@ type Doc = DocumentsPage["docs"][number]
 
 const sel = "h-9 w-full rounded-md border border-ent-line bg-white px-2 text-sm"
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/
-
-export function soles(n: number) {
-  return `S/ ${n.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-function money(n: number, currency: "PEN" | "USD") {
-  return `${currency === "USD" ? "US$" : "S/"} ${n.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-function ymd(d: string) {
-  const [y, m, day] = d.split("-")
-  return `${day}/${m}/${y}`
-}
-
-/** fetch + JSON with the API's Spanish error (first field error first). */
-export async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  })
-  const json = await res.json().catch(() => null)
-  if (!res.ok || !json?.success) {
-    const fe = json?.details?.fieldErrors as Record<string, string[]> | undefined
-    const first = fe ? Object.values(fe).flat()[0] : undefined
-    const form = (json?.details?.formErrors as string[] | undefined)?.[0]
-    throw new Error(first ?? form ?? json?.error ?? "No se pudo guardar")
-  }
-  return json.data as T
-}
 
 const COPY: Record<
   Direction,

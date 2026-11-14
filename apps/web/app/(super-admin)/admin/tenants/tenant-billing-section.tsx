@@ -1,7 +1,6 @@
 "use client"
 
 import {
-  CalendarClock,
   Check,
   FileText,
   Loader2,
@@ -17,7 +16,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
-import { Badge } from "@/components/ui/badge"
+import { type ChipTone, DataTable, StatusChip, Td, Th, Tr } from "@/components/admin/enterprise"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -83,20 +82,17 @@ type Data = {
   invoices: Invoice[]
 }
 
-const STATUS_CLASS: Record<BillingStatus, string> = {
-  sin_configurar: "bg-ent-panel-2 text-ent-fg-2 border-ent-line",
-  sin_iniciar: "bg-blue-100 text-blue-700 border-blue-200",
-  al_dia: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  pendiente: "bg-amber-100 text-amber-700 border-amber-200",
-  vencida: "bg-red-100 text-red-700 border-red-200",
+const STATUS_TONE: Record<BillingStatus, ChipTone> = {
+  sin_configurar: "mute",
+  sin_iniciar: "info",
+  al_dia: "ok",
+  pendiente: "warn",
+  vencida: "bad",
 }
-const INVOICE_STATUS: Record<Invoice["status"], { label: string; className: string }> = {
-  pending: {
-    label: "Pendiente de pago",
-    className: "bg-amber-100 text-amber-700 border-amber-200",
-  },
-  paid: { label: "Pagada", className: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  void: { label: "Anulada", className: "bg-ent-panel-2 text-ent-fg-3 border-ent-line" },
+const INVOICE_STATUS: Record<Invoice["status"], { label: string; tone: ChipTone }> = {
+  pending: { label: "Pendiente de pago", tone: "warn" },
+  paid: { label: "Pagada", tone: "ok" },
+  void: { label: "Anulada", tone: "mute" },
 }
 const DAYS = Array.from({ length: 28 }, (_, i) => i + 1)
 
@@ -338,7 +334,7 @@ function SaleNumberHint({ show }: { show: boolean }) {
 /** Invoice number, who issued it, and the link to its sale in Finanzas › Ventas. */
 function InvoiceNumberCell({ invoice: i }: { invoice: Invoice }) {
   return (
-    <td className="py-2 pr-3 text-ent-fg-2">
+    <Td className="text-ent-fg-2">
       {i.number ?? "—"}
       {i.issuer && (
         <span className="block text-[11px] text-ent-fg-3" title={`RUC ${i.issuer.ruc}`}>
@@ -353,7 +349,7 @@ function InvoiceNumberCell({ invoice: i }: { invoice: Invoice }) {
           Ver en Ventas
         </a>
       )}
-    </td>
+    </Td>
   )
 }
 
@@ -608,18 +604,13 @@ export function TenantBillingSection({
   return (
     <div className="p-4 sm:p-6 space-y-6">
       {/* Outlook */}
-      <div className="rounded-[4px] border border-ent-line bg-ent-panel-2 p-4 flex flex-col sm:flex-row sm:items-center gap-4">
-        <div className="w-10 h-10 rounded-[4px] bg-white border border-ent-line flex items-center justify-center shrink-0">
-          <CalendarClock className="w-5 h-5 text-ent-accent" />
-        </div>
+      <div className="rounded-[4px] border border-ent-line bg-ent-panel-2 p-3 flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-ent-fg">{outlookTitle(o)}</span>
-            <Badge className={`text-[11px] border ${STATUS_CLASS[o.status]}`}>
-              {BILLING_STATUS_LABEL[o.status]}
-            </Badge>
+            <span className="text-[12.5px] font-semibold text-ent-fg">{outlookTitle(o)}</span>
+            <StatusChip tone={STATUS_TONE[o.status]}>{BILLING_STATUS_LABEL[o.status]}</StatusChip>
           </div>
-          <p className="text-xs text-ent-fg-3 mt-0.5">
+          <p className="text-[12px] text-ent-fg-3 mt-0.5">
             {o.status === "pendiente" || o.status === "vencida"
               ? `El periodo ${periodLabel(o.currentPeriod ?? "", o.intervalMonths)} venció el ${formatYmd(o.currentDue ?? "")} y no tiene factura registrada${o.daysOverdue ? ` (hace ${o.daysOverdue} días)` : ""}.`
               : data.config?.monthlyAmount !== null && data.config?.monthlyAmount !== undefined
@@ -639,7 +630,7 @@ export function TenantBillingSection({
 
       {/* New invoice form */}
       {showNew && (
-        <div className="rounded-[4px] border border-ent-accent/30 bg-ent-accent/5 p-4 space-y-3">
+        <div className="rounded-[4px] border border-ent-line bg-ent-panel-2 p-3 space-y-3">
           <div className="text-sm font-semibold text-ent-fg flex items-center gap-2">
             <Receipt className="w-4 h-4" /> Registrar factura emitida a {tenantName}
           </div>
@@ -928,17 +919,17 @@ export function TenantBillingSection({
             Todavía no hay facturas registradas para este comercio.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto border border-ent-line rounded-[4px]">
+            <DataTable>
               <thead>
-                <tr className="text-left text-xs text-ent-fg-3 border-b border-ent-line">
-                  <th className="py-2 pr-3 font-medium">Periodo</th>
-                  <th className="py-2 pr-3 font-medium">Emitida</th>
-                  <th className="py-2 pr-3 font-medium">Número</th>
-                  <th className="py-2 pr-3 font-medium text-right">Monto</th>
-                  <th className="py-2 pr-3 font-medium">Estado</th>
-                  <th className="py-2 pr-3 font-medium">Archivos</th>
-                  <th className="py-2 font-medium text-right">Acciones</th>
+                <tr>
+                  <Th>Periodo</Th>
+                  <Th>Emitida</Th>
+                  <Th>Número</Th>
+                  <Th align="right">Monto</Th>
+                  <Th>Estado</Th>
+                  <Th>Archivos</Th>
+                  <Th align="right">Acciones</Th>
                 </tr>
               </thead>
               <tbody>
@@ -946,27 +937,25 @@ export function TenantBillingSection({
                   const st = INVOICE_STATUS[i.status]
                   const busy = busyInvoice === i.id
                   return (
-                    <tr key={i.id} className="border-b border-slate-50 align-top">
-                      <td
-                        className="py-2 pr-3 font-medium text-ent-fg"
+                    <Tr key={i.id} className="align-top">
+                      <Td
+                        className="font-medium text-ent-fg"
                         title={`${i.period} · ${i.recognition === "cash" ? "todo en el mes del cobro" : "repartido mes a mes"}`}
                       >
                         {periodLabel(i.period, i.months)}
-                      </td>
-                      <td className="py-2 pr-3 text-ent-fg-2">{formatYmd(i.issuedOn)}</td>
+                      </Td>
+                      <Td className="text-ent-fg-2">{formatYmd(i.issuedOn)}</Td>
                       <InvoiceNumberCell invoice={i} />
-                      <td className="py-2 pr-3 text-right tabular-nums">
-                        {money(i.amount, i.currency)}
-                      </td>
-                      <td className="py-2 pr-3">
-                        <Badge className={`text-[10px] border ${st.className}`}>{st.label}</Badge>
+                      <Td align="right">{money(i.amount, i.currency)}</Td>
+                      <Td>
+                        <StatusChip tone={st.tone}>{st.label}</StatusChip>
                         {i.status === "paid" && i.paidOn ? (
                           <span className="ml-1 text-[11px] text-ent-fg-3">
                             {formatYmd(i.paidOn)}
                           </span>
                         ) : null}
-                      </td>
-                      <td className="py-2 pr-3">
+                      </Td>
+                      <Td>
                         <div className="flex flex-col gap-1">
                           <FileSlot
                             invoiceId={i.id}
@@ -987,8 +976,8 @@ export function TenantBillingSection({
                             onBusy={(b) => setBusyInvoice(b ? i.id : null)}
                           />
                         </div>
-                      </td>
-                      <td className="py-2 text-right">
+                      </Td>
+                      <Td align="right">
                         <div className="flex justify-end gap-1">
                           {i.status === "pending" && (
                             <Button
@@ -1030,7 +1019,7 @@ export function TenantBillingSection({
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-7 px-2 text-xs text-red-600"
+                              className="h-7 px-2 text-xs text-ent-bad"
                               disabled={busy}
                               title="Eliminar registro"
                               onClick={() => deleteInvoice(i.id)}
@@ -1039,12 +1028,12 @@ export function TenantBillingSection({
                             </Button>
                           )}
                         </div>
-                      </td>
-                    </tr>
+                      </Td>
+                    </Tr>
                   )
                 })}
               </tbody>
-            </table>
+            </DataTable>
           </div>
         )}
       </div>
