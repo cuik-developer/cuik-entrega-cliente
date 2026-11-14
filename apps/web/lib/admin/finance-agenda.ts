@@ -1,4 +1,4 @@
-import { and, db, eq, lte, tenantInvoices, tenants } from "@cuik/db"
+import { and, db, eq, sql, tenantInvoices, tenants } from "@cuik/db"
 import type { AdminAlert } from "./admin-alerts-types"
 import { collectBillingAlerts } from "./admin-digest"
 import { daysBetween, formatYmd, shiftMonth, todayYmd } from "./billing"
@@ -37,6 +37,17 @@ function periodAlerts(run: FiscalRun, today: string, month: string, base: string
     const period = run.periods.get(r.month)
     const closed = period?.status === "closed"
     const due = period?.dueDate ?? pdtDueDate(r.month, ruc)
+    if (!closed && !due && daysBetween(`${shiftMonth(r.month, 1)}-05`, today) >= 0) {
+      // No schedule loaded for this year and no date typed: still remind.
+      out.push({
+        key: `finance:pdt:${r.month}`,
+        kind: "finance",
+        severity: "warning",
+        who: "Cuik",
+        text: `PDT 621 de ${monthShort(r.month)} sin fecha de vencimiento: escríbela en Cierres (cronograma SUNAT del año).`,
+        href: `${base}/admin/finanzas/cierres?month=${r.month}`,
+      })
+    }
     if (!closed && due) {
       const days = daysBetween(today, due)
       if (days <= PDT_HEADS_UP_DAYS) {
@@ -82,8 +93,10 @@ export async function collectFinanceAlerts(base: string, now = new Date()): Prom
     out.push(...periodAlerts(run, today, month, base))
 
     // Facturación invoices of this month and the previous one that are not sales yet.
-    for (const m of [shiftMonth(month, -1), month]) {
-      const missing = await invoicesWithoutSale(m)
+    const months = [shiftMonth(month, -1), month]
+    const missingByMonth = await Promise.all(months.map((m) => invoicesWithoutSale(m)))
+    for (const [idx, m] of months.entries()) {
+      const missing = missingByMonth[idx] ?? []
       if (missing.length === 0) continue
       out.push({
         key: `finance:nosale:${m}`,
@@ -102,6 +115,7 @@ export async function collectFinanceAlerts(base: string, now = new Date()): Prom
   const late = await db
     .select({
       id: tenantInvoices.id,
+      tenantId: tenantInvoices.tenantId,
       tenantName: tenants.name,
       number: tenantInvoices.number,
       issuedOn: tenantInvoices.issuedOn,
@@ -113,10 +127,13 @@ export async function collectFinanceAlerts(base: string, now = new Date()): Prom
     .where(
       and(
         eq(tenantInvoices.status, "pending"),
-        lte(tenantInvoices.issuedOn, limit.toISOString().slice(0, 10)),
+        // More than 30 days, as Cobranza buckets them.
+        sql`${tenantInvoices.issuedOn} < ${limit.toISOString().slice(0, 10)}`,
       ),
     )
+  const internal = new Set(await getInternalTenantIds())
   for (const i of late) {
+    if (internal.has(i.tenantId)) continue
     const days = daysBetween(i.issuedOn, today)
     out.push({
       key: `finance:late:${i.id}`,
