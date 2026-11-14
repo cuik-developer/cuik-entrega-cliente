@@ -625,7 +625,10 @@ export async function updateDocument(id: string, input: DocumentInput, userId: s
     if (row.direction !== input.direction)
       throw new DocumentError("No se puede cambiar de venta a compra")
     if (await linkedInvoice(tx, id)) {
-      throw new DocumentError("Este comprobante se edita desde Facturación del comercio", 409)
+      throw new DocumentError(
+        "Es una factura de comercio: edítala con su lápiz en Ventas o Cobranza",
+        409,
+      )
     }
     await assertPeriodOpen(tx, row.issuerId, row.taxPeriod)
     // The fixed cost link as it will be: omitted keeps the stored one, and a
@@ -681,7 +684,10 @@ export async function setDocumentStatus(id: string, status: "registered" | "void
       .limit(1)
     if (!row) throw new DocumentError("Comprobante no encontrado", 404)
     if (await linkedInvoice(tx, id)) {
-      throw new DocumentError("Anúlalo desde Facturación del comercio", 409)
+      throw new DocumentError(
+        "Es una factura de comercio: anúlala con su lápiz en Ventas o Cobranza",
+        409,
+      )
     }
     await assertPeriodOpen(tx, row.issuerId, row.taxPeriod)
     await tx

@@ -47,6 +47,7 @@ import {
 import type { DocumentsPage } from "@/lib/admin/documents-data"
 import { apiCall as api, money, soles, ymd } from "@/lib/admin/format"
 import { monthShort, splitIgv } from "@/lib/admin/issuers"
+import { InvoiceDialog } from "./invoice-dialog"
 import { SuppliersPanel } from "./suppliers-panel"
 
 type Direction = "sale" | "purchase"
@@ -78,8 +79,8 @@ const COPY: Record<
 /**
  * Finanzas › Ventas / Compras: the fiscal documents of one tax period (like
  * Odoo's customer invoices and vendor bills) with their PDF, XML and CDR.
- * Merchant invoices registered in the tenant's Facturación appear here on
- * their own and are edited there.
+ * Merchant invoices are registered with "Factura a comercio" (the same record
+ * as Cobranza and the merchant's Facturación tab) and edited from here too.
  */
 export function DocumentsClient({ direction }: { direction: Direction }) {
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Lima" }).slice(0, 7)
@@ -87,6 +88,10 @@ export function DocumentsClient({ direction }: { direction: Direction }) {
   const [data, setData] = useState<DocumentsPage | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState<Doc | "new" | null>(null)
+  /** Merchant invoice dialog: a new one (optionally for a merchant) or one to edit. */
+  const [invoiceDialog, setInvoiceDialog] = useState<
+    { tenantId: string | null } | { edit: { tenantId: string; invoiceId: string } } | null
+  >(null)
   const copy = COPY[direction]
 
   // "?month=2026-11" (links from Facturación) opens that period.
@@ -172,8 +177,23 @@ export function DocumentsClient({ direction }: { direction: Direction }) {
               <Download className="w-3.5 h-3.5" /> Exportar registro
             </a>
           </Button>
-          <Button size="sm" className="h-7 text-[12px] gap-1.5" onClick={() => setEditing("new")}>
-            <Plus className="w-3.5 h-3.5" /> Registrar comprobante
+          {direction === "sale" && (
+            <Button
+              size="sm"
+              className="h-7 text-[12px] gap-1.5"
+              onClick={() => setInvoiceDialog({ tenantId: null })}
+            >
+              <Plus className="w-3.5 h-3.5" /> Factura a comercio
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant={direction === "sale" ? "outline" : "default"}
+            className="h-7 text-[12px] gap-1.5"
+            onClick={() => setEditing("new")}
+          >
+            <Plus className="w-3.5 h-3.5" />{" "}
+            {direction === "sale" ? "Otro comprobante" : "Registrar comprobante"}
           </Button>
         </>
       }
@@ -231,7 +251,11 @@ export function DocumentsClient({ direction }: { direction: Direction }) {
                 key={d.id}
                 d={d}
                 direction={direction}
-                onEdit={() => setEditing(d)}
+                onEdit={() =>
+                  d.invoice && d.tenantId
+                    ? setInvoiceDialog({ edit: { tenantId: d.tenantId, invoiceId: d.invoice.id } })
+                    : setEditing(d)
+                }
                 onStatus={(s) => setStatus(d, s)}
                 onDelete={() => remove(d)}
                 onChanged={refresh}
@@ -259,8 +283,9 @@ export function DocumentsClient({ direction }: { direction: Direction }) {
       )}
       {direction === "sale" && (
         <Notice tone="info">
-          Las facturas que registras en la pestaña Facturación de cada comercio aparecen aquí solas
-          desde noviembre 2026; se editan y anulan allá. Aquí registras las demás ventas.
+          Las facturas a comercios se registran con «Factura a comercio» (es la misma factura de
+          Cobranza y de la pestaña Facturación del comercio) y se editan con el lápiz. «Otro
+          comprobante» es para ventas a otros clientes y notas de crédito o débito.
         </Notice>
       )}
       <PendingInvoices invoices={data.pendingInvoices} onCreated={refresh} />
@@ -322,6 +347,25 @@ export function DocumentsClient({ direction }: { direction: Direction }) {
             else refresh()
           }}
           onSuppliersChanged={refresh}
+          onMerchantInvoice={(tenantId) => {
+            setEditing(null)
+            setInvoiceDialog({ tenantId })
+          }}
+        />
+      )}
+      {invoiceDialog && (
+        <InvoiceDialog
+          edit={"edit" in invoiceDialog ? invoiceDialog.edit : null}
+          prefill={
+            "tenantId" in invoiceDialog && invoiceDialog.tenantId
+              ? { tenantId: invoiceDialog.tenantId, period: null, months: 0, amount: null }
+              : null
+          }
+          onClose={() => setInvoiceDialog(null)}
+          onSaved={() => {
+            setInvoiceDialog(null)
+            refresh()
+          }}
         />
       )}
     </div>
@@ -507,7 +551,7 @@ function FilesCell({
   )
 }
 
-/** Edit / void / delete; locked for documents owned by a Facturación invoice. */
+/** Edit / void / delete; a merchant invoice opens its invoice dialog; all locked in a closed month. */
 function ActionsCell({
   d,
   closed,
@@ -521,11 +565,25 @@ function ActionsCell({
   onStatus: (s: "registered" | "void") => void
   onDelete: () => void
 }) {
-  // Locked when a Facturación invoice owns it or the month is closed.
-  const linked = !!d.invoice || closed
-  const lockedTitle = closed
-    ? "Mes cerrado: reábrelo en Cierres para cambiarlo"
-    : "Se edita desde Facturación del comercio"
+  const lockedTitle = "Mes cerrado: reábrelo en Cierres para cambiarlo"
+  if (d.invoice) {
+    // A merchant invoice: edited, voided or deleted in its invoice dialog.
+    return (
+      <Td align="right" className="whitespace-nowrap">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          title={closed ? lockedTitle : "Editar, anular o eliminar la factura"}
+          disabled={closed}
+          onClick={onEdit}
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </Button>
+      </Td>
+    )
+  }
+  const linked = closed
   return (
     <Td align="right" className="whitespace-nowrap">
       <Button
@@ -794,6 +852,7 @@ function DocumentDialog({
   onClose,
   onSaved,
   onSuppliersChanged,
+  onMerchantInvoice,
 }: {
   direction: Direction
   data: DocumentsPage
@@ -801,6 +860,8 @@ function DocumentDialog({
   onClose: () => void
   onSaved: (taxPeriod: string) => void
   onSuppliersChanged: () => void
+  /** A new invoice to a merchant: switch to the merchant invoice dialog. */
+  onMerchantInvoice: (tenantId: string) => void
 }) {
   const [f, setF] = useState<Form>(() => formFrom(doc, direction, data.month))
   const [busy, setBusy] = useState(false)
@@ -889,7 +950,11 @@ function DocumentDialog({
     }
   }
 
+  // Invoices and boletas to a merchant are its Facturación invoices (one record, in Cobranza too).
+  const merchantInvoice =
+    !doc && direction === "sale" && !!f.tenantId && (f.docType === "01" || f.docType === "03")
   const ready =
+    !merchantInvoice &&
     f.serie.trim() !== "" &&
     f.numero.trim() !== "" &&
     /^\d{4}-\d{2}-\d{2}$/.test(f.issueDate) &&
@@ -977,6 +1042,21 @@ function DocumentDialog({
                   ))}
                 </select>
               </div>
+              {merchantInvoice && (
+                <div className="col-span-2 sm:col-span-4">
+                  <Notice tone="info">
+                    Una factura a un comercio se registra como factura del comercio: así queda en su
+                    cobranza y aquí en Ventas, una sola vez.{" "}
+                    <button
+                      type="button"
+                      className="text-ent-accent hover:underline"
+                      onClick={() => onMerchantInvoice(f.tenantId)}
+                    >
+                      Registrar factura del comercio
+                    </button>
+                  </Notice>
+                </div>
+              )}
               {!f.tenantId && (
                 <>
                   <div className="space-y-1">
