@@ -48,6 +48,7 @@ type Config = {
   billingMode: "advance" | "arrears"
   billingIntervalMonths: BillingInterval
   amountIncludesIgv: boolean
+  issuerId: string | null
   isRetentionAgent: boolean
   notes: string | null
   updatedAt: string
@@ -77,6 +78,8 @@ type Data = {
   /** Issuer in force today and the IGV rate of its regime (null until configured). */
   issuer: IssuerRef | null
   igvRate: number | null
+  /** Razones sociales that can invoice. */
+  issuers: { id: string; razonSocial: string; ruc: string }[]
   invoices: Invoice[]
 }
 
@@ -123,6 +126,7 @@ type FormState = {
   billingMode: "advance" | "arrears"
   billingIntervalMonths: BillingInterval
   amountIncludesIgv: boolean
+  issuerId: string | null
   notes: string
 }
 
@@ -150,6 +154,7 @@ function formFrom(c: Config | null): FormState {
     billingMode: c?.billingMode ?? "arrears",
     billingIntervalMonths: c?.billingIntervalMonths ?? 1,
     amountIncludesIgv: c?.amountIncludesIgv ?? true,
+    issuerId: c?.issuerId ?? null,
     notes: c?.notes ?? "",
   }
 }
@@ -263,6 +268,60 @@ function FileSlot({
         }}
       />
     </span>
+  )
+}
+
+/** After switching the merchant to another razón social: what left Cuik's books. */
+function reportReleased(r: { released: number; keptClosed: string[] } | null | undefined) {
+  if (!r) return
+  if (r.released > 0) {
+    toast.info(
+      r.released === 1
+        ? "1 venta de Cuik de este comercio se anuló en Ventas (emítele nota de crédito en SUNAT si ya la emitiste con el RUC de Cuik)."
+        : `${r.released} ventas de Cuik de este comercio se anularon en Ventas (emite notas de crédito en SUNAT si ya se emitieron con el RUC de Cuik).`,
+    )
+  }
+  if (r.keptClosed.length > 0) {
+    toast.warning(
+      `Quedan en meses cerrados: ${r.keptClosed.join(", ")}. Corrígelas con nota de crédito.`,
+    )
+  }
+}
+
+/**
+ * Who invoices this merchant. Empty = the month's issuer (CUIK E.I.R.L. from
+ * Nov 2026); a merchant whose contract is with Making Brands stays with it and
+ * its invoices are not Cuik's sales.
+ */
+function IssuerSelect({
+  value,
+  issuers,
+  onChange,
+}: {
+  value: string | null
+  issuers: { id: string; razonSocial: string; ruc: string }[]
+  onChange: (v: string | null) => void
+}) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs">Factura a través de</Label>
+      <select
+        className="h-9 w-full rounded-md border border-ent-line bg-white px-2 text-sm"
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value || null)}
+      >
+        <option value="">Emisor vigente del mes</option>
+        {issuers.map((i) => (
+          <option key={i.id} value={i.id}>
+            {i.razonSocial} · RUC {i.ruc}
+          </option>
+        ))}
+      </select>
+      <p className="text-[11px] text-ent-fg-3">
+        Elige otra razón social solo si el contrato del comercio está con ella: sus facturas no
+        cuentan en los impuestos de Cuik.
+      </p>
+    </div>
   )
 }
 
@@ -432,6 +491,7 @@ export function TenantBillingSection({
       setData(json.data)
       setForm(formFrom(json.data.config))
       toast.success("Facturación guardada")
+      reportReleased(json.data.released)
     } catch {
       toast.error("Error de conexión")
     } finally {
@@ -725,6 +785,11 @@ export function TenantBillingSection({
           <h3 className="text-xs font-semibold text-ent-fg-3 uppercase tracking-wide">
             Servicio y cobro
           </h3>
+          <IssuerSelect
+            value={form.issuerId}
+            issuers={data.issuers}
+            onChange={(v) => set("issuerId", v)}
+          />
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs">Inicio de servicios</Label>

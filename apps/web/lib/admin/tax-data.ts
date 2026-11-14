@@ -102,7 +102,7 @@ async function docsByMonth(issuerId: string, from: string, to: string) {
  *  - invoices already registered in Facturación this month that are not in
  *    Ventas yet (their amount, not the tariff).
  */
-async function toBillIn(month: string, igvRate: number) {
+async function toBillIn(month: string, igvRate: number, issuerId: string) {
   const end = monthEnd(month)
   const [configs, invoices, sales, fx] = await Promise.all([
     db
@@ -112,6 +112,7 @@ async function toBillIn(month: string, igvRate: number) {
         amount: tenantBilling.monthlyAmount,
         currency: tenantBilling.currency,
         includesIgv: tenantBilling.amountIncludesIgv,
+        issuerOverride: tenantBilling.issuerId,
         serviceStartOn: tenantBilling.serviceStartOn,
         billingDay: tenantBilling.billingDay,
         billingMode: tenantBilling.billingMode,
@@ -137,9 +138,11 @@ async function toBillIn(month: string, igvRate: number) {
         currency: tenantInvoices.currency,
         documentId: tenantInvoices.documentId,
         tenantName: tenants.name,
+        issuerOverride: tenantBilling.issuerId,
       })
       .from(tenantInvoices)
       .innerJoin(tenants, eq(tenants.id, tenantInvoices.tenantId))
+      .leftJoin(tenantBilling, eq(tenantBilling.tenantId, tenantInvoices.tenantId))
       .where(ne(tenantInvoices.status, "void")),
     db
       .select({ tenantId: documents.tenantId })
@@ -192,6 +195,8 @@ async function toBillIn(month: string, igvRate: number) {
   }
 
   const due = configs
+    // Merchants invoiced by another razón social (Dfrios through Making Brands) are not Cuik's sales.
+    .filter((c) => !c.issuerOverride || c.issuerOverride === issuerId)
     .filter((c) => !issuedThisMonth.has(c.tenantId) && !soldThisMonth.has(c.tenantId))
     .filter((c) => {
       const o = billingOutlook(
@@ -210,6 +215,7 @@ async function toBillIn(month: string, igvRate: number) {
 
   const registeredWithoutSale = invoices
     .filter((i) => i.issuedOn.slice(0, 7) === month && !i.documentId)
+    .filter((i) => !i.issuerOverride || i.issuerOverride === issuerId)
     .map((i) =>
       row(
         i.tenantId,
@@ -297,7 +303,7 @@ export async function loadTaxSummary(month: string) {
       .where(lte(uitValues.year, Number(year)))
       .orderBy(desc(uitValues.year))
       .limit(1),
-    toBillIn(month, profile.igvRate),
+    toBillIn(month, profile.igvRate, issuer.id),
   ])
   const yearRows = allRows.filter((r) => r.month.startsWith(`${year}-`))
   const current = allRows.find((r) => r.month === month) ?? monthTax(month, EMPTY_MONTH, profile, 0)

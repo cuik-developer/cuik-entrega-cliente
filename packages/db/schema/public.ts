@@ -144,6 +144,12 @@ export const tenantBilling = pgTable("tenant_billing", {
   amountIncludesIgv: boolean("amount_includes_igv").default(true).notNull(),
   /** The merchant is an IGV withholding agent (keeps 3 % of invoices over S/ 700). Migration 0047. */
   isRetentionAgent: boolean("is_retention_agent").default(false).notNull(),
+  /**
+   * Who invoices this merchant when it is not the issuer of the month (e.g.
+   * a contract signed with Making Brands). Null = the month's issuer. FK to
+   * finance.issuers in migration 0050 (not declared here: circular import).
+   */
+  issuerId: uuid("issuer_id"),
   notes: text("notes"),
   updatedBy: text("updated_by").references(() => user.id),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

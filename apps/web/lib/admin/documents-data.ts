@@ -77,6 +77,49 @@ export async function fiscalIssuerFor(conn: Conn, month: string) {
 type InvoiceRow = typeof tenantInvoices.$inferSelect
 
 /**
+ * The invoice no longer is a sale of Cuik (Making Brands month or merchant):
+ * void its document and unlink it, so it can be deleted from Ventas and its
+ * number freed.
+ */
+/**
+ * The merchant now invoices through another razón social: releases its CUIK
+ * sales of open months right away (voided and unlinked). Sales of closed
+ * months stay as declared; their numbers are returned so the user knows a
+ * credit note is due.
+ */
+export async function releaseSalesOfTenant(tx: Tx, tenantId: string, userId: string) {
+  const linked = await tx
+    .select({ invoice: tenantInvoices, doc: documents })
+    .from(tenantInvoices)
+    .innerJoin(documents, eq(documents.id, tenantInvoices.documentId))
+    .where(eq(tenantInvoices.tenantId, tenantId))
+  const keptClosed: string[] = []
+  for (const { invoice, doc } of linked) {
+    if (await isPeriodClosed(tx, doc.issuerId, doc.taxPeriod)) {
+      keptClosed.push(formatSerieNumero(doc.serie, doc.numero))
+      continue
+    }
+    await releaseSale(tx, invoice, doc, userId)
+  }
+  return { released: linked.length - keptClosed.length, keptClosed }
+}
+
+async function releaseSale(
+  tx: Tx,
+  invoice: InvoiceRow,
+  existing: DocRow | undefined,
+  userId: string,
+) {
+  if (!invoice.documentId) return
+  if (existing) await assertPeriodOpen(tx, existing.issuerId, existing.taxPeriod)
+  await tx
+    .update(documents)
+    .set({ status: "void", updatedBy: userId, updatedAt: new Date() })
+    .where(eq(documents.id, invoice.documentId))
+  await tx.update(tenantInvoices).set({ documentId: null }).where(eq(tenantInvoices.id, invoice.id))
+}
+
+/**
  * A closed month only lets the paid date of its sale move: a new sale, a new
  * amount, number, date or void status would change books already declared.
  */
@@ -125,20 +168,26 @@ export async function syncSaleFromInvoice(
     ? await tx.select().from(documents).where(eq(documents.id, invoice.documentId)).limit(1)
     : []
 
-  if (!fiscal) {
-    // Moved back into a Making Brands month: void the document and release it
-    // (it can then be deleted from Ventas, which frees its number).
-    if (invoice.documentId) {
-      if (existing) await assertPeriodOpen(tx, existing.issuerId, existing.taxPeriod)
-      await tx
-        .update(documents)
-        .set({ status: "void", updatedBy: userId, updatedAt: new Date() })
-        .where(eq(documents.id, invoice.documentId))
-      await tx
-        .update(tenantInvoices)
-        .set({ documentId: null })
-        .where(eq(tenantInvoices.id, invoice.id))
-    }
+  // A merchant invoiced by another razón social (Dfrios through Making Brands)
+  // never becomes a sale of the month's issuer.
+  const [override] = await tx
+    .select({ issuerId: tenantBilling.issuerId })
+    .from(tenantBilling)
+    .where(eq(tenantBilling.tenantId, invoice.tenantId))
+    .limit(1)
+  const otherIssuer = !!override?.issuerId && override.issuerId !== fiscal?.issuer.id
+
+  if (
+    otherIssuer &&
+    existing &&
+    (await isPeriodClosed(tx, existing.issuerId, existing.taxPeriod))
+  ) {
+    // A sale already declared in a closed month stays as it was declared (fix
+    // it with a credit note); the invoice itself can still be marked paid.
+    return invoice.documentId
+  }
+  if (!fiscal || otherIssuer) {
+    await releaseSale(tx, invoice, existing, userId)
     return null
   }
 
@@ -619,18 +668,24 @@ export async function invoicesWithoutSale(month: string) {
       currency: tenantInvoices.currency,
       status: tenantInvoices.status,
       documentId: tenantInvoices.documentId,
+      issuerOverride: tenantBilling.issuerId,
     })
     .from(tenantInvoices)
     .innerJoin(tenants, eq(tenants.id, tenantInvoices.tenantId))
-  return rows
-    .filter((r) => !r.documentId && r.status !== "void" && r.issuedOn.slice(0, 7) === month)
-    .map((r) => ({
-      id: r.id,
-      tenantName: r.tenantName,
-      number: r.number,
-      issuedOn: r.issuedOn,
-      amount: Number(r.amount),
-      currency: r.currency,
-      numberOk: !!r.number && !!parseSerieNumero(r.number),
-    }))
+    .leftJoin(tenantBilling, eq(tenantBilling.tenantId, tenantInvoices.tenantId))
+  return (
+    rows
+      .filter((r) => !r.documentId && r.status !== "void" && r.issuedOn.slice(0, 7) === month)
+      // Merchants invoiced by another razón social never become sales of this issuer.
+      .filter((r) => !r.issuerOverride || r.issuerOverride === fiscal.issuer.id)
+      .map((r) => ({
+        id: r.id,
+        tenantName: r.tenantName,
+        number: r.number,
+        issuedOn: r.issuedOn,
+        amount: Number(r.amount),
+        currency: r.currency,
+        numberOk: !!r.number && !!parseSerieNumero(r.number),
+      }))
+  )
 }

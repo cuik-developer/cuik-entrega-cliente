@@ -53,6 +53,8 @@ export const tenantBillingSchema = z.object({
   ...fiscalFields,
   /** Whether the monthly amount already includes IGV. Omitted = unchanged. */
   amountIncludesIgv: z.boolean().optional(),
+  /** Issuer override for this merchant; null = the month's issuer. Omitted = unchanged. */
+  issuerId: z.preprocess(emptyToNull, z.string().uuid().nullable().optional()),
   contactoPagos: z.preprocess(emptyToNull, z.string().trim().max(200).nullable().optional()),
   monthlyAmount: z.number().min(0).max(1_000_000).nullable().optional(),
   currency: z.enum(["PEN", "USD"]).default("PEN"),

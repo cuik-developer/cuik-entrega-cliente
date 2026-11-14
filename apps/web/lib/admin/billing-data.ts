@@ -66,17 +66,23 @@ export async function loadBilling(tenantId: string) {
   const currentProfile = currentIssuer
     ? profileForMonth(profileRows, currentIssuer.id, month)
     : null
-  const issuerOf = (ymd: string) => {
-    const i = issuerForMonth(issuerRows, ymd.slice(0, 7))
-    return i
-      ? { razonSocial: i.razonSocial, ruc: i.ruc, current: i.id === currentIssuer?.id }
-      : null
-  }
   const [config] = await db
     .select()
     .from(tenantBilling)
     .where(eq(tenantBilling.tenantId, tenantId))
     .limit(1)
+  // A merchant whose contract is with another razón social (Dfrios with Making
+  // Brands) is always invoiced by it, whatever the month.
+  const override = config?.issuerId
+    ? (issuerRows.find((i) => i.id === config.issuerId) ?? null)
+    : null
+  const issuerNow = override ?? currentIssuer
+  const issuerOf = (ymd: string) => {
+    // Making Brands months keep their issuer even if the override is Cuik itself.
+    const byMonth = issuerForMonth(issuerRows, ymd.slice(0, 7))
+    const i = override && override.id !== currentIssuer?.id ? override : byMonth
+    return i ? { razonSocial: i.razonSocial, ruc: i.ruc, current: i.id === issuerNow?.id } : null
+  }
   const invoices = await db
     .select()
     .from(tenantInvoices)
@@ -111,17 +117,21 @@ export async function loadBilling(tenantId: string) {
           billingMode: config.billingMode,
           billingIntervalMonths: asInterval(config.billingIntervalMonths),
           amountIncludesIgv: config.amountIncludesIgv,
+          issuerId: config.issuerId,
           isRetentionAgent: config.isRetentionAgent,
           notes: config.notes,
           updatedAt: config.updatedAt.toISOString(),
         }
       : null,
     outlook,
-    issuer: currentIssuer
-      ? { razonSocial: currentIssuer.razonSocial, ruc: currentIssuer.ruc }
-      : null,
-    /** IGV rate of the regime in force today; null until a tax profile exists. */
-    igvRate: currentProfile ? Number(currentProfile.igvRate) : null,
+    issuer: issuerNow ? { razonSocial: issuerNow.razonSocial, ruc: issuerNow.ruc } : null,
+    /** Razones sociales that can invoice, for the "Factura a través de" select. */
+    issuers: issuerRows.map((i) => ({ id: i.id, razonSocial: i.razonSocial, ruc: i.ruc })),
+    /** IGV rate of the regime in force today; null until a tax profile exists or when another issuer invoices it. */
+    igvRate:
+      currentProfile && (!override || override.id === currentIssuer?.id)
+        ? Number(currentProfile.igvRate)
+        : null,
     invoices: invoices.map((i) => ({
       id: i.id,
       period: i.period,

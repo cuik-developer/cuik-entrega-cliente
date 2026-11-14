@@ -1,7 +1,10 @@
-import { db, eq, tenantBilling, tenants } from "@cuik/db"
+import { db, eq, issuers, tenantBilling, tenants } from "@cuik/db"
 import { tenantBillingSchema } from "@cuik/shared/validators"
 
-import { loadBilling } from "@/lib/admin/billing-data"
+import { loadBilling, lockTenantInvoices } from "@/lib/admin/billing-data"
+import { currentMonthLima } from "@/lib/admin/company-data"
+import { releaseSalesOfTenant } from "@/lib/admin/documents-data"
+import { issuerForMonth } from "@/lib/admin/issuers"
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -45,7 +48,16 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     // The fiscal identity is edited in "Datos del negocio" (PUT …/fiscal); only
     // write it here when the body carries it, so this form never blanks it.
     const sent = (key: string) => raw !== null && typeof raw === "object" && key in raw
+    if (b.issuerId) {
+      const [issuer] = await db
+        .select({ id: issuers.id })
+        .from(issuers)
+        .where(eq(issuers.id, b.issuerId))
+        .limit(1)
+      if (!issuer) return errorResponse("Emisor no encontrado", 400)
+    }
     const values = {
+      ...(sent("issuerId") ? { issuerId: b.issuerId ?? null } : {}),
       ...(sent("ruc") ? { ruc: b.ruc ?? null } : {}),
       ...(sent("razonSocial") ? { razonSocial: b.razonSocial ?? null } : {}),
       ...(sent("direccionFiscal") ? { direccionFiscal: b.direccionFiscal ?? null } : {}),
@@ -64,11 +76,26 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       updatedBy: g.session.user.id,
       updatedAt: new Date(),
     }
-    await db
-      .insert(tenantBilling)
-      .values({ tenantId: g.tenant.id, ...values })
-      .onConflictDoUpdate({ target: tenantBilling.tenantId, set: values })
-    return successResponse(await loadBilling(g.tenant.id))
+    const released = await db.transaction(async (tx) => {
+      await lockTenantInvoices(tx, g.tenant.id)
+      const [before] = await tx
+        .select({ issuerId: tenantBilling.issuerId })
+        .from(tenantBilling)
+        .where(eq(tenantBilling.tenantId, g.tenant.id))
+        .limit(1)
+      await tx
+        .insert(tenantBilling)
+        .values({ tenantId: g.tenant.id, ...values })
+        .onConflictDoUpdate({ target: tenantBilling.tenantId, set: values })
+      // Switched to another razón social: its CUIK sales of open months leave
+      // the books now, not at the next edit of each invoice.
+      const next = b.issuerId ?? null
+      if (!sent("issuerId") || !next || next === (before?.issuerId ?? null)) return null
+      const current = issuerForMonth(await tx.select().from(issuers), currentMonthLima())
+      if (next === current?.id) return null
+      return releaseSalesOfTenant(tx, g.tenant.id, g.session.user.id)
+    })
+    return successResponse({ ...(await loadBilling(g.tenant.id)), released })
   } catch (error) {
     console.error("[PUT /api/admin/tenants/[id]/billing]", error)
     return errorResponse("Internal server error", 500)
