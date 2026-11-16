@@ -9,6 +9,7 @@ import {
   fxRates,
   issuers,
   recurringItems,
+  sql,
   suppliers,
   taxProfiles,
   tenantBilling,
@@ -41,7 +42,8 @@ export function isDocumentNumberConflict(err: unknown): boolean {
   return (
     cause?.code === "23505" &&
     (cause.constraint === "finance_documents_sale_number_uidx" ||
-      cause.constraint === "finance_documents_purchase_number_uidx")
+      cause.constraint === "finance_documents_purchase_number_uidx" ||
+      cause.constraint === "finance_documents_occasional_number_uidx")
   )
 }
 
@@ -456,6 +458,13 @@ export async function linkedInvoice(conn: Conn, documentId: string) {
 
 /** Counterparty snapshot: the supplier (purchases), the tenant's billing identity or what was typed (sales). */
 async function resolveCounterparty(conn: Conn, v: DocumentInput) {
+  if (v.direction === "purchase" && !v.supplierId) {
+    // An occasional supplier (a one-off lunch): written on the document, not saved.
+    return {
+      counterpartyDoc: v.counterpartyDoc ?? null,
+      counterpartyName: v.counterpartyName ?? null,
+    }
+  }
   if (v.direction === "purchase") {
     const [s] = await conn
       .select()
@@ -502,11 +511,41 @@ async function assertRecurringLink(
 }
 
 /** Columns from the validated input: counterparty snapshot and issuer by the issue month. */
+/**
+ * A supplier's document exists once. The unique index covers saved suppliers;
+ * an occasional one has no supplier id, so its RUC + number is checked here
+ * (against saved and occasional purchases alike).
+ */
+async function assertPurchaseNotRegistered(
+  conn: Conn,
+  v: DocumentInput,
+  counterpartyDoc: string | null,
+  selfId: string | null,
+): Promise<void> {
+  if (v.direction !== "purchase" || v.supplierId || !counterpartyDoc) return
+  const [dup] = await conn
+    .select({ id: documents.id })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.direction, "purchase"),
+        eq(documents.docType, v.docType),
+        eq(documents.serie, v.serie),
+        eq(documents.numero, String(Number(v.numero))),
+        eq(documents.counterpartyDoc, counterpartyDoc),
+        selfId ? sql`${documents.id} <> ${selfId}` : undefined,
+      ),
+    )
+    .limit(1)
+  if (dup) throw new DocumentError("Ese comprobante de ese proveedor ya está registrado", 409)
+}
+
 async function documentValues(
   conn: Conn,
   v: DocumentInput,
   userId: string,
   currentRecurringId: string | null = null,
+  selfId: string | null = null,
 ) {
   const issueMonth = v.issueDate.slice(0, 7)
   const issuer = issuerForMonth(await conn.select().from(issuers), issueMonth)
@@ -514,6 +553,7 @@ async function documentValues(
   await assertPeriodOpen(conn, issuer.id, v.taxPeriod)
 
   const { counterpartyDoc, counterpartyName } = await resolveCounterparty(conn, v)
+  await assertPurchaseNotRegistered(conn, v, counterpartyDoc, selfId)
   await assertRecurringLink(conn, v, currentRecurringId)
 
   return {
@@ -638,7 +678,7 @@ export async function updateDocument(id: string, input: DocumentInput, userId: s
       ...input,
       recurringItemId: input.docType === "07" ? (input.recurringItemId ?? null) : kept,
     }
-    const values = await documentValues(tx, v, userId, row.recurringItemId)
+    const values = await documentValues(tx, v, userId, row.recurringItemId, id)
     await tx.update(documents).set(values).where(eq(documents.id, id))
     const noCost =
       v.direction !== "purchase" ||

@@ -57,6 +57,8 @@ type Doc = DocumentsPage["docs"][number]
 
 const sel = "h-9 w-full rounded-md border border-ent-line bg-white px-2 text-sm"
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/
+/** Supplier select value for a one-off purchase written on the document. */
+const OCCASIONAL = "__ocasional__"
 
 const COPY: Record<
   Direction,
@@ -807,6 +809,8 @@ type Form = {
   notes: string
   /** Purchases: "new" (create a variable cost), "none", or the id of a fixed cost this is the receipt of. */
   costLink: string
+  /** Purchases: an occasional supplier written on the document (RUC + razón social), not saved. */
+  occasional: boolean
 }
 
 function formFrom(doc: Doc | null, direction: Direction, month: string): Form {
@@ -837,6 +841,7 @@ function formFrom(doc: Doc | null, direction: Direction, month: string): Form {
       paidOn: "",
       notes: "",
       costLink: direction === "purchase" ? "new" : "none",
+      occasional: false,
     }
   }
   return {
@@ -863,6 +868,7 @@ function formFrom(doc: Doc | null, direction: Direction, month: string): Form {
     paidOn: doc.paidOn ?? "",
     notes: doc.notes ?? "",
     costLink: doc.recurringItemId ?? (doc.entryId ? "new" : "none"),
+    occasional: direction === "purchase" && !doc.supplierId,
   }
 }
 
@@ -873,6 +879,7 @@ function withSupplier(p: Form, id: string, s: Supplier | undefined): Form {
   return {
     ...p,
     supplierId: id,
+    occasional: false,
     ...(s?.defaultIgvTreatment ? { igvTreatment: s.defaultIgvTreatment } : {}),
     ...(s && !s.domiciled
       ? { docType: "91" as DocType, igvTreatment: "no_domiciliado" as const }
@@ -901,7 +908,15 @@ function purchaseFromUbl(doc: UblDocument, data: DocumentsPage, p: Form) {
   const s = doc.supplier.doc
     ? data.suppliers.find((x) => x.docNumber === doc.supplier.doc)
     : undefined
-  const form = s ? withSupplier(p, s.id, s) : { ...p, supplierId: "" }
+  const form: Form = s
+    ? withSupplier(p, s.id, s)
+    : {
+        ...p,
+        supplierId: "",
+        occasional: true,
+        counterpartyDoc: doc.supplier.doc ?? "",
+        counterpartyName: doc.supplier.name,
+      }
   const newSupplier =
     !s && doc.supplier.doc ? { ruc: doc.supplier.doc, name: doc.supplier.name } : null
   return {
@@ -961,6 +976,83 @@ function fillFromUbl(
     warnings.push("Está en dólares: escribe el tipo de cambio SUNAT de la fecha de emisión.")
   }
   return { form, warnings, newSupplier: party.newSupplier }
+}
+
+/** Purchases: a saved supplier, or an occasional one with its RUC and razón social written here. */
+function SupplierPicker({
+  f,
+  suppliers,
+  onPick,
+  onOccasional,
+  onField,
+  onRefresh,
+}: {
+  f: Form
+  suppliers: Supplier[]
+  onPick: (id: string) => void
+  onOccasional: () => void
+  onField: (k: "counterpartyDoc" | "counterpartyName", v: string) => void
+  onRefresh: () => void
+}) {
+  return (
+    <>
+      <div className="space-y-1 col-span-2 sm:col-span-4">
+        <Label className="text-xs">Proveedor</Label>
+        <select
+          className={sel}
+          value={f.occasional ? OCCASIONAL : f.supplierId}
+          onChange={(e) =>
+            e.target.value === OCCASIONAL ? onOccasional() : onPick(e.target.value)
+          }
+        >
+          <option value="">Elige un proveedor…</option>
+          <option value={OCCASIONAL}>Proveedor ocasional (escribe su RUC, no se guarda)</option>
+          {suppliers.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+              {s.docNumber ? ` · ${s.docNumber}` : ""}
+              {s.domiciled ? "" : " · exterior"}
+            </option>
+          ))}
+        </select>
+        {suppliers.length === 0 && !f.occasional && (
+          <p className="text-[11.5px] text-ent-fg-3">
+            Agrégalo en la pestaña Proveedores, o elige «Proveedor ocasional» para una compra
+            suelta.
+          </p>
+        )}
+        <button
+          type="button"
+          className="text-[11.5px] text-ent-accent hover:underline"
+          onClick={onRefresh}
+        >
+          Actualizar lista
+        </button>
+      </div>
+      {f.occasional && (
+        <>
+          <div className="space-y-1">
+            <Label className="text-xs">RUC del proveedor</Label>
+            <Input
+              value={f.counterpartyDoc}
+              inputMode="numeric"
+              maxLength={11}
+              onChange={(e) => onField("counterpartyDoc", e.target.value.replace(/\D/g, ""))}
+              placeholder="20123456789"
+            />
+          </div>
+          <div className="space-y-1 col-span-1 sm:col-span-3">
+            <Label className="text-xs">Razón social</Label>
+            <Input
+              value={f.counterpartyName}
+              onChange={(e) => onField("counterpartyName", e.target.value)}
+              placeholder="Como figura en la factura"
+            />
+          </div>
+        </>
+      )}
+    </>
+  )
 }
 
 function DocumentDialog({
@@ -1036,7 +1128,10 @@ function DocumentDialog({
         domiciled: true,
       })
       onSuppliersChanged()
-      if (r.id) set("supplierId", r.id)
+      if (r.id) {
+        const id = r.id
+        setF((p) => ({ ...p, supplierId: id, occasional: false }))
+      }
       setXml((x) => (x ? { ...x, newSupplier: null } : x))
       toast.success("Proveedor agregado")
     } catch (e) {
@@ -1118,7 +1213,9 @@ function DocumentDialog({
     /^\d{4}-\d{2}-\d{2}$/.test(f.issueDate) &&
     MONTH_RE.test(f.taxPeriod) &&
     f.total.trim() !== "" &&
-    (direction === "sale" ? !!f.tenantId || f.counterpartyName.trim() !== "" : !!f.supplierId)
+    (direction === "sale"
+      ? !!f.tenantId || f.counterpartyName.trim() !== ""
+      : !!f.supplierId || (f.occasional && f.counterpartyName.trim() !== ""))
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -1253,35 +1350,14 @@ function DocumentDialog({
               )}
             </>
           ) : (
-            <div className="space-y-1 col-span-2 sm:col-span-4">
-              <Label className="text-xs">Proveedor</Label>
-              <select
-                className={sel}
-                value={f.supplierId}
-                onChange={(e) => pickSupplier(e.target.value)}
-              >
-                <option value="">Elige un proveedor…</option>
-                {data.suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                    {s.docNumber ? ` · ${s.docNumber}` : ""}
-                    {s.domiciled ? "" : " · exterior"}
-                  </option>
-                ))}
-              </select>
-              {data.suppliers.length === 0 && (
-                <p className="text-[11.5px] text-ent-fg-3">
-                  Primero agrega el proveedor en la pestaña Proveedores.
-                </p>
-              )}
-              <button
-                type="button"
-                className="text-[11.5px] text-ent-accent hover:underline"
-                onClick={onSuppliersChanged}
-              >
-                Actualizar lista
-              </button>
-            </div>
+            <SupplierPicker
+              f={f}
+              suppliers={data.suppliers}
+              onPick={pickSupplier}
+              onOccasional={() => setF((p) => ({ ...p, supplierId: "", occasional: true }))}
+              onField={(k, v) => set(k, v)}
+              onRefresh={onSuppliersChanged}
+            />
           )}
 
           <div className="space-y-1">

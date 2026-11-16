@@ -238,6 +238,8 @@ const realDate = (v: string) => {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v
 }
 const SALE_DOC_TYPES: readonly string[] = ["01", "03", "07", "08"]
+/** Documents a Peruvian issuer with RUC gives: an occasional supplier must write its RUC. */
+const RUC_DOC_TYPES: readonly string[] = ["01", "03", "07", "08", "02", "14"]
 const optionalText = (max: number) =>
   z.preprocess(emptyToNull, z.string().trim().max(max).nullable().optional())
 
@@ -334,10 +336,19 @@ export const documentSchema = z
     message: "Falta el tipo de cambio del comprobante",
     path: ["fxRate"],
   })
-  .refine((v) => v.direction === "sale" || !!v.supplierId, {
-    message: "Elige el proveedor",
+  // A purchase names a saved supplier, or an occasional one written on the document.
+  .refine((v) => v.direction === "sale" || !!v.supplierId || !!v.counterpartyName, {
+    message: "Elige el proveedor o escribe su razón social",
     path: ["supplierId"],
   })
+  .refine(
+    (v) =>
+      v.direction === "sale" ||
+      !!v.supplierId ||
+      !RUC_DOC_TYPES.includes(v.docType) ||
+      (!!v.counterpartyDoc && rucSchema.safeParse(v.counterpartyDoc).success),
+    { message: "RUC del proveedor inválido: revisa los dígitos", path: ["counterpartyDoc"] },
+  )
   .refine((v) => v.direction === "sale" || !!v.igvTreatment, {
     message: "Indica cómo se trata el IGV",
     path: ["igvTreatment"],

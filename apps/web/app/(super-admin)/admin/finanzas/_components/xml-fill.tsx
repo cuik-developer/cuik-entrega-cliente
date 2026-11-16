@@ -118,8 +118,8 @@ export function XmlFill({
         <Notice tone="info">
           <span className="flex flex-wrap items-center gap-2">
             <span className="flex-1">
-              Proveedor nuevo: {state.newSupplier.name || "sin nombre"} · RUC{" "}
-              {state.newSupplier.ruc}.
+              Proveedor ocasional: {state.newSupplier.name || "sin nombre"} · RUC{" "}
+              {state.newSupplier.ruc}. Si le volverás a comprar, guárdalo.
             </span>
             <Button
               type="button"
@@ -134,7 +134,7 @@ export function XmlFill({
               ) : (
                 <Plus className="w-3.5 h-3.5" />
               )}
-              Agregar proveedor
+              Guardar como proveedor
             </Button>
           </span>
         </Notice>
