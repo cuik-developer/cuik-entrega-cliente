@@ -48,6 +48,7 @@ import type { DocumentsPage } from "@/lib/admin/documents-data"
 import { apiCall as api, money, soles, todayLima, ymd } from "@/lib/admin/format"
 import { monthShort, splitIgv } from "@/lib/admin/issuers"
 import { decodeXmlBytes, parseUbl, type UblDocument, UblError } from "@/lib/admin/ubl"
+import { LEGAL } from "@/lib/legal"
 import { InvoiceDialog, type InvoicePrefill } from "./invoice-dialog"
 import { SuppliersPanel } from "./suppliers-panel"
 import { uploadDocumentFile, XmlFill, type XmlFillState } from "./xml-fill"
@@ -542,6 +543,9 @@ function IgvCell({ d }: { d: Doc }) {
   )
 }
 
+/** Document types the branded invoice can print (from their SUNAT XML). */
+const BRANDED_TYPES = new Set<string>(["01", "03", "07", "08"])
+
 function FilesCell({
   d,
   direction,
@@ -567,6 +571,21 @@ function FilesCell({
             className="text-[11.5px] text-ent-accent hover:underline"
           >
             PDF de Facturación
+          </a>
+        ) : null}
+        {direction === "sale" &&
+        d.status !== "void" &&
+        d.issuerRuc === LEGAL.ruc &&
+        d.files.xml &&
+        BRANDED_TYPES.has(d.docType) ? (
+          <a
+            href={`/api/admin/finance/documents/${d.id}/factura-cuik?print=1`}
+            target="_blank"
+            rel="noreferrer"
+            title="Factura con el diseño de Cuik, generada desde el XML de SUNAT"
+            className="inline-flex items-center gap-1 text-[11.5px] font-medium text-ent-accent hover:underline"
+          >
+            <FileText className="w-3 h-3" /> Factura Cuik (PDF)
           </a>
         ) : null}
       </div>

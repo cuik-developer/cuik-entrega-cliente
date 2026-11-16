@@ -305,6 +305,7 @@ export async function loadDocumentsPage(direction: "sale" | "purchase", month: s
     .select({
       d: documents,
       issuerName: issuers.razonSocial,
+      issuerRuc: issuers.ruc,
       tenantName: tenants.name,
       supplierName: suppliers.name,
       supplierDomiciled: suppliers.domiciled,
@@ -333,6 +334,7 @@ export async function loadDocumentsPage(direction: "sale" | "purchase", month: s
     issueDate: d.issueDate,
     taxPeriod: d.taxPeriod,
     issuerName: r.issuerName,
+    issuerRuc: r.issuerRuc,
     tenantId: d.tenantId,
     tenantName: r.tenantName,
     supplierId: d.supplierId,

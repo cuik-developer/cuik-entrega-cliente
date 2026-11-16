@@ -175,6 +175,10 @@ export const issuers = financeSchema.table("issuers", {
   fromMonth: text("from_month"),
   toMonth: text("to_month"),
   notes: text("notes"),
+  /** "Datos para pagar" block printed on the branded invoice (free text, one item per line). Migration 0052. */
+  invoicePaymentInfo: text("invoice_payment_info"),
+  /** Closing line of the branded invoice. Migration 0052. */
+  invoiceThanks: text("invoice_thanks"),
   updatedBy: text("updated_by").references(() => user.id),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

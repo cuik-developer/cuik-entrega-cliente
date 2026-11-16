@@ -20,6 +20,8 @@ export async function loadIssuers() {
     fromMonth: i.fromMonth,
     toMonth: i.toMonth,
     notes: i.notes,
+    invoicePaymentInfo: i.invoicePaymentInfo,
+    invoiceThanks: i.invoiceThanks,
     updatedAt: i.updatedAt.toISOString(),
   }))
 }

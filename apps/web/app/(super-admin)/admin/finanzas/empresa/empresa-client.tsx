@@ -156,6 +156,8 @@ type IssuerForm = {
   fromMonth: string
   toMonth: string
   notes: string
+  invoicePaymentInfo: string
+  invoiceThanks: string
 }
 const emptyIssuer: IssuerForm = {
   ruc: "",
@@ -165,6 +167,8 @@ const emptyIssuer: IssuerForm = {
   fromMonth: "",
   toMonth: "",
   notes: "",
+  invoicePaymentInfo: "",
+  invoiceThanks: "",
 }
 
 function IssuersPanel({ data, onData }: { data: CompanyData; onData: (d: CompanyData) => void }) {
@@ -185,6 +189,8 @@ function IssuersPanel({ data, onData }: { data: CompanyData; onData: (d: Company
             fromMonth: issuer.fromMonth ?? "",
             toMonth: issuer.toMonth ?? "",
             notes: issuer.notes ?? "",
+            invoicePaymentInfo: issuer.invoicePaymentInfo ?? "",
+            invoiceThanks: issuer.invoiceThanks ?? "",
           }
         : emptyIssuer,
     )
@@ -277,6 +283,30 @@ function IssuersPanel({ data, onData }: { data: CompanyData; onData: (d: Company
           <div className="space-y-1 col-span-2">
             <Label className="text-xs">Notas</Label>
             <Input value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
+          </div>
+          <div className="space-y-1 col-span-2">
+            <Label className="text-xs">Datos para pagar (factura Cuik)</Label>
+            <Textarea
+              rows={3}
+              maxLength={600}
+              value={f.invoicePaymentInfo}
+              placeholder={
+                "BCP Soles · Cta. 000-0000000-0-00\nCCI 002-000-000000000000-00\nYape / Plin: 999 999 999"
+              }
+              onChange={(e) => setF({ ...f, invoicePaymentInfo: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1 col-span-2">
+            <Label className="text-xs">Mensaje de cierre (factura Cuik)</Label>
+            <Input
+              maxLength={140}
+              value={f.invoiceThanks}
+              placeholder="Gracias por hacer que tus clientes vuelvan."
+              onChange={(e) => setF({ ...f, invoiceThanks: e.target.value })}
+            />
+            <p className="text-[11px] text-ent-fg-3">
+              Salen en la factura con diseño Cuik que se genera desde el XML en Ventas.
+            </p>
           </div>
           <div className="col-span-2 sm:col-span-4 flex justify-end gap-2">
             <Button size="sm" variant="outline" onClick={() => setEditing(null)}>

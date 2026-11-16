@@ -170,6 +170,9 @@ export const issuerSchema = z
     fromMonth: nullableMonth,
     toMonth: nullableMonth,
     notes: z.preprocess(emptyToNull, z.string().trim().max(1000).nullable()),
+    /** Branded invoice (migration 0052). Left out = unchanged. */
+    invoicePaymentInfo: z.preprocess(emptyToNull, z.string().trim().max(600).nullable()).optional(),
+    invoiceThanks: z.preprocess(emptyToNull, z.string().trim().max(140).nullable()).optional(),
   })
   .refine((v) => !v.fromMonth || !v.toMonth || v.fromMonth <= v.toMonth, {
     message: "El mes final es anterior al inicial",
