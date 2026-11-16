@@ -510,11 +510,11 @@ async function assertRecurringLink(
   }
 }
 
-/** Columns from the validated input: counterparty snapshot and issuer by the issue month. */
 /**
- * A supplier's document exists once. The unique index covers saved suppliers;
- * an occasional one has no supplier id, so its RUC + number is checked here
- * (against saved and occasional purchases alike).
+ * A supplier's document exists once, by its RUC + type + serie + number,
+ * whether it was registered with the supplier saved or as occasional (the
+ * unique indexes only see one or the other: a document typed as occasional
+ * and later again with the supplier saved would count twice).
  */
 async function assertPurchaseNotRegistered(
   conn: Conn,
@@ -522,7 +522,7 @@ async function assertPurchaseNotRegistered(
   counterpartyDoc: string | null,
   selfId: string | null,
 ): Promise<void> {
-  if (v.direction !== "purchase" || v.supplierId || !counterpartyDoc) return
+  if (v.direction !== "purchase" || !counterpartyDoc) return
   const [dup] = await conn
     .select({ id: documents.id })
     .from(documents)
@@ -540,6 +540,7 @@ async function assertPurchaseNotRegistered(
   if (dup) throw new DocumentError("Ese comprobante de ese proveedor ya está registrado", 409)
 }
 
+/** Columns from the validated input: counterparty snapshot and issuer by the issue month. */
 async function documentValues(
   conn: Conn,
   v: DocumentInput,
