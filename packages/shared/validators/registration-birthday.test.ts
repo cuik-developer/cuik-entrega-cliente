@@ -2,7 +2,29 @@ import { describe, expect, it } from "vitest"
 import { buildRegistrationSchema } from "./client-schema"
 import { registrationConfigSchema } from "./registration-config-schema"
 
-const base = { name: "Ana", phone: "999", email: "ana@x.com", marketingOptIn: false }
+const base = {
+  name: "Ana",
+  phone: "999",
+  email: "ana@x.com",
+  marketingOptIn: false,
+  privacyAccepted: true,
+}
+
+describe("registration → privacy notice", () => {
+  it("refuses a registration without the privacy notice accepted", () => {
+    const schema = buildRegistrationSchema(null)
+    const { privacyAccepted: _omit, ...withoutPrivacy } = base
+    expect(schema.safeParse(withoutPrivacy).success).toBe(false)
+    expect(schema.safeParse({ ...base, privacyAccepted: false }).success).toBe(false)
+    expect(schema.safeParse(base).success).toBe(true)
+  })
+
+  it("keeps promotions optional and separate", () => {
+    const schema = buildRegistrationSchema(null)
+    const parsed = schema.safeParse({ ...base, marketingOptIn: undefined })
+    expect(parsed.success && parsed.data.marketingOptIn).toBe(false)
+  })
+})
 
 describe("registration config → birthday toggle", () => {
   it("defaults to disabled and is not asked for", () => {

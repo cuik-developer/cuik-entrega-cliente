@@ -9,10 +9,12 @@ import {
   promotions,
   rewardCatalog,
   sql,
+  tenantBilling,
   tenants,
 } from "@cuik/db"
 import { registrationConfigSchema } from "@cuik/shared/validators"
 import { errorResponse, requireAuth, requireRole, successResponse } from "@/lib/api-utils"
+import { isPrivacyIdentityComplete } from "@/lib/privacy/shared"
 
 /**
  * GET /api/admin/tenants/[id]/details
@@ -98,6 +100,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           WHERE o.slug = ${slug} AND m.role IN ('owner', 'admin')) AS admins,
         (SELECT count(*)::int FROM loyalty.clients c WHERE c.tenant_id = ${id}) AS clients`)
     const team = teamRes.rows[0]
+    // The program's privacy notice names the merchant's company only with all three fields.
+    const [billing] = await db
+      .select({
+        razonSocial: tenantBilling.razonSocial,
+        ruc: tenantBilling.ruc,
+        direccion: tenantBilling.direccionFiscal,
+      })
+      .from(tenantBilling)
+      .where(eq(tenantBilling.tenantId, id))
+      .limit(1)
     const appleMode = (tenantRows[0]?.appleConfig as { mode?: string } | null)?.mode ?? null
     const activePromo = promotionsList.find((p) => p.active) ?? null
     const checklist = {
@@ -114,6 +126,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       cashiers: Number(team?.cashiers ?? 0),
       admins: Number(team?.admins ?? 0),
       clients: Number(team?.clients ?? 0),
+      slug,
+      privacyIdentityComplete: isPrivacyIdentityComplete({
+        razonSocial: billing?.razonSocial ?? null,
+        ruc: billing?.ruc ?? null,
+        direccion: billing?.direccion ?? null,
+      }),
     }
 
     // Active catalog rewards, for the Resumen summary of points programs.

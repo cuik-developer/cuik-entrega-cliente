@@ -88,6 +88,7 @@ export {
   buildRegistrationSchema,
   CLIENT_FIELD_MAX,
   type DynamicRegisterClientInput,
+  PRIVACY_REQUIRED_MESSAGE,
   type RegisterClientInput,
   registerClientSchema,
 } from "./client-schema"

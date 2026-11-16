@@ -3,6 +3,7 @@ import {
   clientNotes,
   clients,
   clientTagAssignments,
+  consentEvents,
   db,
   eq,
   gt,
@@ -25,8 +26,8 @@ export type PurgeResult = { anonymized: number; errors: string[] }
  *
  * The row stays (status "deleted") so visits, points and rewards keep adding
  * up in analytics and reports; what goes is everything personal: name,
- * last name, DNI, phone, email, birthday, custom registration fields, notes
- * and tags. The QR is rotated so an old pass can never be scanned again.
+ * last name, DNI, phone, email, birthday, custom registration fields, notes,
+ * tags and the consent history. The QR is rotated so an old pass can never be scanned again.
  *
  * The pass registrations (serial + device token, no personal data) are kept
  * on purpose: they carry the LAST update, which expires the pass so Wallet
@@ -78,6 +79,8 @@ export async function purgeArchivedClients(params?: {
 
         await tx.delete(clientTagAssignments).where(eq(clientTagAssignments.clientId, c.id))
         await tx.delete(clientNotes).where(eq(clientNotes.clientId, c.id))
+        // The consent history holds an IP and a browser: it goes with the person.
+        await tx.delete(consentEvents).where(eq(consentEvents.clientId, c.id))
         // Close the open point lots: nothing of a deleted client may expire, warn or count.
         await tx
           .update(pointsTransactions)

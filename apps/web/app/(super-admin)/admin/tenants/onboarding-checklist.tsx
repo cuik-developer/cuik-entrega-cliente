@@ -14,6 +14,10 @@ export type OnboardingChecklist = {
   cashiers: number
   admins: number
   clients: number
+  /** For the link to the program's public privacy notice. */
+  slug?: string
+  /** Razón social, RUC and fiscal address set in Facturación (the notice names the company). */
+  privacyIdentityComplete?: boolean
 }
 
 type Item = {
@@ -101,6 +105,18 @@ function buildItems(c: OnboardingChecklist, tenantId: string): Item[] {
       detail: c.locations > 0 ? `${c.locations} activa(s).` : "Sin sucursales activas.",
       state: c.locations > 0 ? "ok" : "todo",
       action: { tab: "general", anchor: "sucursales", label: "Sucursales" },
+    },
+    {
+      key: "privacy",
+      label: "Aviso de privacidad",
+      detail: c.privacyIdentityComplete
+        ? "Nombra al comercio con su razón social, RUC y dirección fiscal como titular de los datos."
+        : "Faltan razón social, RUC o dirección fiscal en Facturación: el aviso solo muestra el nombre comercial.",
+      state: c.privacyIdentityComplete ? "ok" : "warn",
+      action:
+        c.privacyIdentityComplete && c.slug
+          ? { href: `/${c.slug}/privacidad`, label: "Ver aviso" }
+          : { tab: "facturacion", label: "Facturación" },
     },
     {
       key: "clients",

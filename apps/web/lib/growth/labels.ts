@@ -32,6 +32,7 @@ export const SUGGESTION_LABEL: Record<SuggestionReason, string> = {
   cooldown: "Contactado hace poco",
   open_send: "En otro envío abierto",
   no_contact: "No contactar",
+  no_consent: "Sin autorización de promociones",
   control: "En control de otro envío",
 }
 

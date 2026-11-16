@@ -353,7 +353,7 @@ export async function blockStates(
   tenantId: string,
   timezone: string,
 ): Promise<Map<string, BlockState>> {
-  const [lastSent, inOpen, noContact, control] = await Promise.all([
+  const [lastSent, inOpen, noContact, control, noConsent] = await Promise.all([
     db
       .select({
         clientId: growthSendRecipients.clientId,
@@ -395,6 +395,25 @@ export async function blockStates(
         ),
       )
       .groupBy(growthSendRecipients.clientId),
+    // Without "Quiero recibir promociones": Growth writes outside the program, never to them.
+    // Only audience members matter here: everyone else is never suggested anyway.
+    db
+      .select({ clientId: clients.id })
+      .from(clients)
+      .where(
+        and(
+          eq(clients.tenantId, tenantId),
+          eq(clients.marketingOptIn, false),
+          inArray(clients.status, LIVE_STATUSES),
+          inArray(
+            clients.id,
+            db
+              .select({ id: growthAudienceMembers.clientId })
+              .from(growthAudienceMembers)
+              .where(eq(growthAudienceMembers.tenantId, tenantId)),
+          ),
+        ),
+      ),
   ])
   const out = new Map<string, BlockState>()
   const get = (id: string): BlockState => {
@@ -403,10 +422,12 @@ export async function blockStates(
       inOpenSend: false,
       noContact: false,
       controlUntil: null,
+      noConsent: false,
     }
     out.set(id, s)
     return s
   }
+  for (const r of noConsent) get(r.clientId).noConsent = true
   for (const r of control) {
     const d = r.until instanceof Date ? r.until : new Date(String(r.until))
     get(r.clientId).controlUntil = localYmd(d, timezone)
@@ -425,6 +446,7 @@ const NO_BLOCK: BlockState = {
   inOpenSend: false,
   noContact: false,
   controlUntil: null,
+  noConsent: false,
 }
 
 // --- Audiences: counts and members ---
@@ -444,7 +466,14 @@ export type AudiencesOverview = {
   computedAt: string | null
   today: string
   rules: GrowthRules
-  blocked: { cooldown: number; openSend: number; noContact: number; control: number }
+  blocked: {
+    cooldown: number
+    openSend: number
+    noContact: number
+    control: number
+    /** Did not authorize promotions: never suggested. */
+    noConsent: number
+  }
   audiences: AudienceSummaryRow[]
 }
 
@@ -474,6 +503,7 @@ export async function audiencesOverview(tenant: GrowthTenant): Promise<Audiences
     openSend: new Set<string>(),
     noContact: new Set<string>(),
     control: new Set<string>(),
+    noConsent: new Set<string>(),
   }
   for (const m of members) {
     const c = counts.get(m.audience) ?? { inAudience: 0, readyToday: 0 }
@@ -483,6 +513,7 @@ export async function audiencesOverview(tenant: GrowthTenant): Promise<Audiences
     else if (s.reason === "cooldown") blockedClients.cooldown.add(m.clientId)
     else if (s.reason === "open_send") blockedClients.openSend.add(m.clientId)
     else if (s.reason === "no_contact") blockedClients.noContact.add(m.clientId)
+    else if (s.reason === "no_consent") blockedClients.noConsent.add(m.clientId)
     else if (s.reason === "control") blockedClients.control.add(m.clientId)
     counts.set(m.audience, c)
   }
@@ -497,6 +528,7 @@ export async function audiencesOverview(tenant: GrowthTenant): Promise<Audiences
       openSend: blockedClients.openSend.size,
       noContact: blockedClients.noContact.size,
       control: blockedClients.control.size,
+      noConsent: blockedClients.noConsent.size,
     },
     audiences: AUDIENCES.map((a) => ({
       slug: a.slug,

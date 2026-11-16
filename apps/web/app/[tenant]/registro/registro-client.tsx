@@ -35,6 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { privacyNoticePath } from "@/lib/privacy/shared"
 
 type RegistroStep = "email" | "form" | "sent"
 
@@ -148,6 +149,7 @@ export default function RegistroClient({
       phone: form.telefono.trim(),
       email: form.email.trim(),
       marketingOptIn: form.aceptaPromos,
+      privacyAccepted: form.aceptaTerminos,
     }
 
     // Add birthday if present
@@ -308,6 +310,7 @@ export default function RegistroClient({
         phone: form.telefono,
         email: form.email,
         marketingOptIn: form.aceptaPromos,
+        privacyAccepted: form.aceptaTerminos,
         turnstileToken: turnstileToken ?? (await turnstileRef.current?.waitForToken()) ?? undefined,
       }
 
@@ -819,9 +822,20 @@ export default function RegistroClient({
                     />
                     <Label
                       htmlFor="terminos"
-                      className="text-sm text-gray-600 font-normal leading-snug cursor-pointer"
+                      className="block text-sm text-gray-600 font-normal leading-snug cursor-pointer"
                     >
-                      Acepto los terminos y condiciones
+                      He leído el{" "}
+                      <a
+                        href={privacyNoticePath(slug)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline underline-offset-2"
+                        style={{ color: primaryColor }}
+                      >
+                        aviso de privacidad
+                      </a>{" "}
+                      y acepto que {tenantName} trate mis datos para darme mi tarjeta, avisarme de
+                      mi programa en el pase y analizar mis visitas y compras.
                     </Label>
                   </div>
 
@@ -840,7 +854,8 @@ export default function RegistroClient({
                           htmlFor="promos"
                           className="text-sm text-gray-600 font-normal leading-snug cursor-pointer"
                         >
-                          Quiero recibir promociones y novedades
+                          Quiero que {tenantName} me escriba por WhatsApp o correo con promociones y
+                          novedades (opcional)
                         </Label>
                         {registrationConfig?.marketingBonus?.enabled && (
                           <Badge

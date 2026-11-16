@@ -140,6 +140,7 @@ export async function sendPreview(
     cooldown: number
     openSend: number
     noContact: number
+    noConsent: number
     control: number
     notYet: number
   }
@@ -154,12 +155,13 @@ export async function sendPreview(
   ].sort()
   const scoped = store ? rows.filter((r) => r.store === store) : rows
   const ready = scoped.filter((r) => r.suggestion.ready)
-  const excluded = { cooldown: 0, openSend: 0, noContact: 0, control: 0, notYet: 0 }
+  const excluded = { cooldown: 0, openSend: 0, noContact: 0, noConsent: 0, control: 0, notYet: 0 }
   for (const r of scoped) {
     if (r.suggestion.ready) continue
     if (r.suggestion.reason === "cooldown") excluded.cooldown++
     else if (r.suggestion.reason === "open_send") excluded.openSend++
     else if (r.suggestion.reason === "no_contact") excluded.noContact++
+    else if (r.suggestion.reason === "no_consent") excluded.noConsent++
     else if (r.suggestion.reason === "control") excluded.control++
     else excluded.notYet++
   }
@@ -454,7 +456,10 @@ export type RecipientRow = {
   spend12m: number
   species: string | null
   messageText: string | null
+  /** Null when the client did not authorize promotions: Growth may not write to them. */
   whatsappUrl: string | null
+  /** The client did not authorize promotions (now): no chat, no "Enviado", not exported. */
+  noConsent: boolean
   openedAt: string | null
   sentAt: string | null
   sentBy: string | null
@@ -496,6 +501,7 @@ export async function getSend(tenant: GrowthTenant, sendId: string): Promise<Sen
         spend12m: growthClientStats.spend12m,
         species: growthClientStats.species,
         messageText: growthSendRecipients.messageText,
+        marketingOptIn: clients.marketingOptIn,
         openedAt: growthSendRecipients.openedAt,
         sentAt: growthSendRecipients.sentAt,
         sentBy: user.name,
@@ -544,7 +550,8 @@ export async function getSend(tenant: GrowthTenant, sendId: string): Promise<Sen
       spend12m: r.spend12m == null ? 0 : Number(r.spend12m),
       species: r.species ?? null,
       messageText: r.messageText,
-      whatsappUrl: r.messageText ? whatsappLink(r.phone, r.messageText) : null,
+      whatsappUrl: r.messageText && r.marketingOptIn ? whatsappLink(r.phone, r.messageText) : null,
+      noConsent: !r.marketingOptIn,
       openedAt: r.openedAt ? r.openedAt.toISOString() : null,
       sentAt: r.sentAt ? r.sentAt.toISOString() : null,
       sentBy: r.sentBy,
@@ -601,9 +608,11 @@ export async function applyRecipientAction(input: {
       messageText: growthSendRecipients.messageText,
       sendStatus: growthSends.status,
       channel: growthSends.channel,
+      marketingOptIn: clients.marketingOptIn,
     })
     .from(growthSendRecipients)
     .innerJoin(growthSends, eq(growthSends.id, growthSendRecipients.sendId))
+    .innerJoin(clients, eq(clients.id, growthSendRecipients.clientId))
     .where(
       and(
         eq(growthSendRecipients.id, input.recipientId),
@@ -616,6 +625,13 @@ export async function applyRecipientAction(input: {
   const current = row.status as RecipientStatus
   if (current === "control") return { ok: false, error: "Este cliente es del grupo de control" }
   const act = input.action
+  // Opening the chat or confirming a message is writing outside the program.
+  if ((act.action === "opened" || act.action === "sent") && !row.marketingOptIn) {
+    return {
+      ok: false,
+      error: "Este cliente no aceptó recibir promociones: no se le puede escribir.",
+    }
+  }
   if (!TRANSITIONS[act.action].includes(current)) {
     return { ok: false, error: `No se puede pasar de "${current}" a "${act.action}"` }
   }
@@ -682,7 +698,7 @@ export async function closeSend(tenant: GrowthTenant, sendId: string): Promise<b
 /** Rows for the bulk tool: pending clients with phone and the resolved message. */
 export function exportRows(detail: SendDetail): { name: string; phone: string; message: string }[] {
   return detail.recipients
-    .filter((r) => CONTACTABLE.includes(r.status) && r.phone && r.messageText)
+    .filter((r) => CONTACTABLE.includes(r.status) && !r.noConsent && r.phone && r.messageText)
     .map((r) => ({ name: r.name, phone: r.phone as string, message: r.messageText as string }))
 }
 

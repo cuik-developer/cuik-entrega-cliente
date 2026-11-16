@@ -38,7 +38,8 @@ export function verifyClientToken(
   const payload = `${clientId}:${expiryStr}`
   const expectedHmac = createHmac("sha256", secret).update(payload).digest("hex")
 
-  if (expectedHmac.length !== providedHmac.length) return { valid: false }
+  // Non-hex characters decode to a shorter buffer and timingSafeEqual throws: refuse first.
+  if (!/^[0-9a-f]{64}$/i.test(providedHmac)) return { valid: false }
 
   const isValid = timingSafeEqual(
     Buffer.from(expectedHmac, "hex"),

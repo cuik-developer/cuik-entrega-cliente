@@ -7,6 +7,7 @@ const RESERVED_KEYS = [
   "phone",
   "dni",
   "marketingOptIn",
+  "privacyAccepted",
   "birthday",
 ] as const
 

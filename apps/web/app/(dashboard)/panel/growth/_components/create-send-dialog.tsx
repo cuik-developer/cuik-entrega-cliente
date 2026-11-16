@@ -44,6 +44,7 @@ type Preview = {
     cooldown: number
     openSend: number
     noContact: number
+    noConsent: number
     control: number
     notYet: number
   }
@@ -163,10 +164,11 @@ export function CreateSendDialog({
                   preview.excluded.cooldown +
                   preview.excluded.openSend +
                   preview.excluded.noContact +
+                  preview.excluded.noConsent +
                   preview.excluded.control +
                   preview.excluded.notYet
                 }
-                hint={`${preview.excluded.cooldown} contactados hace poco · ${preview.excluded.openSend} en otro envío · ${preview.excluded.noContact} no contactar · ${preview.excluded.control} en control de otro envío · ${preview.excluded.notYet} aún no les toca`}
+                hint={`${preview.excluded.cooldown} contactados hace poco · ${preview.excluded.openSend} en otro envío · ${preview.excluded.noContact} no contactar · ${preview.excluded.noConsent} sin autorización de promociones · ${preview.excluded.control} en control de otro envío · ${preview.excluded.notYet} aún no les toca`}
               />
               <Figure
                 label="Entran al envío"

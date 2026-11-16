@@ -8,6 +8,7 @@ import {
   GiftIcon,
   Loader2,
   Megaphone,
+  ShieldCheck,
   Stamp,
   StickyNote,
   TimerOff,
@@ -32,13 +33,14 @@ type TimelineEvent = {
     | "status_change"
     | "campaign"
     | "registered"
+    | "consent"
   at: string
   title: string
   detail?: string
   by?: string
 }
 
-type Filter = "all" | "visits" | "rewards" | "notes" | "campaigns"
+type Filter = "all" | "visits" | "rewards" | "notes" | "campaigns" | "consent"
 
 const FILTERS: Array<{ v: Filter; label: string }> = [
   { v: "all", label: "Todo" },
@@ -46,6 +48,7 @@ const FILTERS: Array<{ v: Filter; label: string }> = [
   { v: "rewards", label: "Premios" },
   { v: "notes", label: "Notas" },
   { v: "campaigns", label: "Campañas" },
+  { v: "consent", label: "Privacidad" },
 ]
 
 const FILTER_TYPES: Record<Filter, TimelineEvent["type"][] | null> = {
@@ -54,6 +57,7 @@ const FILTER_TYPES: Record<Filter, TimelineEvent["type"][] | null> = {
   rewards: ["reward_earned", "reward_redeemed", "reward_expired", "points_expired"],
   notes: ["note", "status_change"],
   campaigns: ["campaign"],
+  consent: ["consent"],
 }
 
 const STYLE: Record<TimelineEvent["type"], { icon: typeof Stamp; tone: string }> = {
@@ -66,6 +70,7 @@ const STYLE: Record<TimelineEvent["type"], { icon: typeof Stamp; tone: string }>
   status_change: { icon: Ban, tone: "bg-red-50 text-red-500" },
   campaign: { icon: Megaphone, tone: "bg-violet-50 text-violet-600" },
   registered: { icon: UserPlus, tone: "bg-sky-50 text-sky-600" },
+  consent: { icon: ShieldCheck, tone: "bg-slate-100 text-slate-600" },
 }
 
 // "vence 2026-09-16T00:00:00.000Z" inside a detail string → formatted date.

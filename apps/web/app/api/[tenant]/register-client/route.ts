@@ -16,6 +16,7 @@ import type { RegistrationConfig } from "@cuik/shared/validators"
 import {
   buildRegistrationSchema,
   cashbackSettingsOf,
+  PRIVACY_REQUIRED_MESSAGE,
   pointsPromotionConfigSchema,
   registerClientSchema,
   registrationConfigSchema,
@@ -35,6 +36,7 @@ import { clientIp } from "@/lib/client-ip"
 import { cashbackTemplateVars } from "@/lib/loyalty/cashback"
 import { insertEarnLot } from "@/lib/loyalty/points-lots"
 import { stampsInCycleOf } from "@/lib/loyalty/stamps"
+import { recordRegistrationConsent } from "@/lib/privacy/consent"
 import { checkRateLimit, HOUR_MS, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit"
 import { TURNSTILE_FAILED_MESSAGE, verifyTurnstile } from "@/lib/turnstile"
 import { tenantBarcodeFormat } from "@/lib/wallet/barcode-format"
@@ -68,12 +70,17 @@ async function checkDniUniqueness(tenantId: string, dni: string | undefined) {
   return null
 }
 
-async function insertClient(tenantId: string, data: Record<string, unknown>, qrCode: string) {
+async function insertClient(
+  exec: Pick<typeof db, "insert">,
+  tenantId: string,
+  data: Record<string, unknown>,
+  qrCode: string,
+) {
   const dni = data.dni as string | undefined
   const birthday = (data.birthday as string) || null
   const customData = (data.customData as Record<string, unknown>) || null
 
-  const [inserted] = await db
+  const [inserted] = await exec
     .insert(clients)
     .values({
       tenantId,
@@ -133,6 +140,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     const parsed = schema.safeParse(body)
 
     if (!parsed.success) {
+      // A form cached before the privacy checkbox existed: say so in Spanish.
+      const fieldErrors = parsed.error.flatten().fieldErrors as Record<string, string[] | undefined>
+      if (fieldErrors.privacyAccepted) {
+        return errorResponse(
+          `${PRIVACY_REQUIRED_MESSAGE} Si no ves la casilla, recarga la página.`,
+          400,
+          { code: "privacy_required" },
+        )
+      }
       return errorResponse("Validation failed", 400, parsed.error.flatten())
     }
 
@@ -175,16 +191,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     const qrCode = `cuik:${slug}:${hex}`
 
     let client: typeof clients.$inferSelect
+    const marketingOptIn = (data.marketingOptIn as boolean) ?? false
 
     try {
-      client = await insertClient(tenant.id, data, qrCode)
+      // Client and proof of consent together: no client without its consent rows.
+      client = await db.transaction(async (tx) => {
+        const inserted = await insertClient(tx, tenant.id, data, qrCode)
+        await recordRegistrationConsent(tx, {
+          tenantId: tenant.id,
+          clientId: inserted.id,
+          marketingOptIn,
+          ip,
+          userAgent: request.headers.get("user-agent"),
+        })
+        return inserted
+      })
     } catch (err: unknown) {
-      if (
-        typeof err === "object" &&
-        err !== null &&
-        "code" in err &&
-        (err as { code: string }).code === "23505"
-      ) {
+      // Drizzle wraps the Postgres error (the code sits on .cause); accept both.
+      const e = err as { code?: string; cause?: { code?: string } } | null
+      if (e?.code === "23505" || e?.cause?.code === "23505") {
         return errorResponse(
           "Este correo ya está registrado. Vuelve al inicio e ingrésalo para recibir tu tarjeta.",
           409,
@@ -194,7 +219,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       throw err
     }
 
-    const marketingOptIn = (data.marketingOptIn as boolean) ?? false
     const updatedClient = await handleMarketingBonus(
       client,
       tenant.id,

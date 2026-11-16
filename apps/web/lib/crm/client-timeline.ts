@@ -2,6 +2,7 @@ import {
   campaigns,
   clientNotes,
   clients,
+  consentEvents,
   db,
   desc,
   eq,
@@ -27,6 +28,7 @@ export type TimelineEventType =
   | "status_change"
   | "campaign"
   | "registered"
+  | "consent"
 
 export type TimelineEvent = {
   id: string
@@ -218,10 +220,45 @@ function campaignEvent(n: Omit<NotifRow, "at"> & { at: Date }): TimelineEvent {
   }
 }
 
+type ConsentRow = {
+  id: string
+  at: Date
+  kind: "privacy" | "marketing"
+  granted: boolean
+  source: "registro" | "preferencias"
+  version: string
+}
+
+const CONSENT_SOURCE: Record<ConsentRow["source"], string> = {
+  registro: "en el registro",
+  preferencias: "desde su enlace de preferencias",
+}
+
+export function consentEvent(c: ConsentRow): TimelineEvent {
+  let title: string
+  if (c.kind === "privacy") {
+    title = c.granted ? "Aceptó el aviso de privacidad" : "Rechazó el aviso de privacidad"
+  } else if (c.granted) {
+    title = "Autorizó recibir promociones por WhatsApp y correo"
+  } else {
+    title =
+      c.source === "registro"
+        ? "No autorizó recibir promociones"
+        : "Retiró la autorización de promociones"
+  }
+  return {
+    id: `consent-${c.id}`,
+    type: "consent",
+    at: c.at.toISOString(),
+    title,
+    detail: `${CONSENT_SOURCE[c.source] ?? c.source} · aviso versión ${c.version}`,
+  }
+}
+
 /**
- * Everything that happened to one client, newest first, from five tables:
- * visits, rewards (earned / redeemed / expired), notes, campaign
- * notifications and the registration itself. Read-only; the ficha renders it
+ * Everything that happened to one client, newest first: visits, rewards
+ * (earned / redeemed / expired), notes, campaign notifications, consents and
+ * the registration itself. Read-only; the ficha renders it
  * as one chronological feed so a claim ("I came last week", "I never got my
  * reward") can be settled from a single screen.
  */
@@ -233,100 +270,125 @@ export async function getClientTimeline(params: {
   const { tenantId, clientId } = params
   const limit = Math.min(Math.max(params.limit ?? 100, 1), 500)
 
-  const [clientRows, promoRows, visitRows, rewardRows, noteRows, notifRows, pointsRedeemRows] =
-    await Promise.all([
-      db
-        .select({ createdAt: clients.createdAt })
-        .from(clients)
-        .where(eq(clients.id, clientId))
-        .limit(1),
+  const [
+    clientRows,
+    promoRows,
+    visitRows,
+    rewardRows,
+    noteRows,
+    notifRows,
+    pointsRedeemRows,
+    consentRows,
+  ] = await Promise.all([
+    db
+      .select({ createdAt: clients.createdAt })
+      .from(clients)
+      .where(eq(clients.id, clientId))
+      .limit(1),
 
-      db
-        .select({ type: promotions.type })
-        .from(promotions)
-        .where(sql`${promotions.tenantId} = ${tenantId} AND ${promotions.active} = true`)
-        .limit(1),
+    db
+      .select({ type: promotions.type })
+      .from(promotions)
+      .where(sql`${promotions.tenantId} = ${tenantId} AND ${promotions.active} = true`)
+      .limit(1),
 
-      db
-        .select({
-          id: visits.id,
-          at: visits.createdAt,
-          visitNum: visits.visitNum,
-          cycleNumber: visits.cycleNumber,
-          source: visits.source,
-          amount: visits.amount,
-          points: visits.points,
-          locationName: locations.name,
-          cashierName: user.name,
-        })
-        .from(visits)
-        .leftJoin(locations, eq(locations.id, visits.locationId))
-        .leftJoin(user, eq(user.id, visits.registeredBy))
-        .where(sql`${visits.clientId} = ${clientId} AND ${visits.tenantId} = ${tenantId}`)
-        .orderBy(desc(visits.createdAt))
-        .limit(PER_SOURCE_LIMIT),
+    db
+      .select({
+        id: visits.id,
+        at: visits.createdAt,
+        visitNum: visits.visitNum,
+        cycleNumber: visits.cycleNumber,
+        source: visits.source,
+        amount: visits.amount,
+        points: visits.points,
+        locationName: locations.name,
+        cashierName: user.name,
+      })
+      .from(visits)
+      .leftJoin(locations, eq(locations.id, visits.locationId))
+      .leftJoin(user, eq(user.id, visits.registeredBy))
+      .where(sql`${visits.clientId} = ${clientId} AND ${visits.tenantId} = ${tenantId}`)
+      .orderBy(desc(visits.createdAt))
+      .limit(PER_SOURCE_LIMIT),
 
-      db
-        .select({
-          id: rewards.id,
-          createdAt: rewards.createdAt,
-          redeemedAt: rewards.redeemedAt,
-          expiresAt: rewards.expiresAt,
-          status: rewards.status,
-          rewardType: rewards.rewardType,
-          cycleNumber: rewards.cycleNumber,
-          kind: rewards.kind,
-        })
-        .from(rewards)
-        .where(sql`${rewards.clientId} = ${clientId} AND ${rewards.tenantId} = ${tenantId}`)
-        .orderBy(desc(rewards.createdAt))
-        .limit(PER_SOURCE_LIMIT),
+    db
+      .select({
+        id: rewards.id,
+        createdAt: rewards.createdAt,
+        redeemedAt: rewards.redeemedAt,
+        expiresAt: rewards.expiresAt,
+        status: rewards.status,
+        rewardType: rewards.rewardType,
+        cycleNumber: rewards.cycleNumber,
+        kind: rewards.kind,
+      })
+      .from(rewards)
+      .where(sql`${rewards.clientId} = ${clientId} AND ${rewards.tenantId} = ${tenantId}`)
+      .orderBy(desc(rewards.createdAt))
+      .limit(PER_SOURCE_LIMIT),
 
-      db
-        .select({
-          id: clientNotes.id,
-          at: clientNotes.createdAt,
-          content: clientNotes.content,
-          author: user.name,
-        })
-        .from(clientNotes)
-        .leftJoin(user, eq(user.id, clientNotes.createdBy))
-        .where(sql`${clientNotes.clientId} = ${clientId} AND ${clientNotes.tenantId} = ${tenantId}`)
-        .orderBy(desc(clientNotes.createdAt))
-        .limit(PER_SOURCE_LIMIT),
+    db
+      .select({
+        id: clientNotes.id,
+        at: clientNotes.createdAt,
+        content: clientNotes.content,
+        author: user.name,
+      })
+      .from(clientNotes)
+      .leftJoin(user, eq(user.id, clientNotes.createdBy))
+      .where(sql`${clientNotes.clientId} = ${clientId} AND ${clientNotes.tenantId} = ${tenantId}`)
+      .orderBy(desc(clientNotes.createdAt))
+      .limit(PER_SOURCE_LIMIT),
 
-      db
-        .select({
-          id: notifications.id,
-          at: notifications.sentAt,
-          status: notifications.status,
-          campaignName: campaigns.name,
-          message: campaigns.message,
-        })
-        .from(notifications)
-        .innerJoin(campaigns, eq(campaigns.id, notifications.campaignId))
-        .where(sql`${notifications.clientId} = ${clientId} AND ${campaigns.tenantId} = ${tenantId}`)
-        .orderBy(desc(notifications.sentAt))
-        .limit(PER_SOURCE_LIMIT),
+    db
+      .select({
+        id: notifications.id,
+        at: notifications.sentAt,
+        status: notifications.status,
+        campaignName: campaigns.name,
+        message: campaigns.message,
+      })
+      .from(notifications)
+      .innerJoin(campaigns, eq(campaigns.id, notifications.campaignId))
+      .where(sql`${notifications.clientId} = ${clientId} AND ${campaigns.tenantId} = ${tenantId}`)
+      .orderBy(desc(notifications.sentAt))
+      .limit(PER_SOURCE_LIMIT),
 
-      db
-        .select({
-          id: pointsTransactions.id,
-          at: pointsTransactions.createdAt,
-          amount: pointsTransactions.amount,
-          type: pointsTransactions.type,
-          rewardName: rewardCatalog.name,
-          description: pointsTransactions.description,
-          cashierId: sql<string | null>`${pointsTransactions.metadata}->>'cashierId'`,
-        })
-        .from(pointsTransactions)
-        .leftJoin(rewardCatalog, eq(rewardCatalog.id, pointsTransactions.catalogItemId))
-        .where(
-          sql`${pointsTransactions.clientId} = ${clientId} AND ${pointsTransactions.tenantId} = ${tenantId} AND ${pointsTransactions.type} IN ('redeem', 'expire')`,
-        )
-        .orderBy(desc(pointsTransactions.createdAt))
-        .limit(PER_SOURCE_LIMIT),
-    ])
+    db
+      .select({
+        id: pointsTransactions.id,
+        at: pointsTransactions.createdAt,
+        amount: pointsTransactions.amount,
+        type: pointsTransactions.type,
+        rewardName: rewardCatalog.name,
+        description: pointsTransactions.description,
+        cashierId: sql<string | null>`${pointsTransactions.metadata}->>'cashierId'`,
+      })
+      .from(pointsTransactions)
+      .leftJoin(rewardCatalog, eq(rewardCatalog.id, pointsTransactions.catalogItemId))
+      .where(
+        sql`${pointsTransactions.clientId} = ${clientId} AND ${pointsTransactions.tenantId} = ${tenantId} AND ${pointsTransactions.type} IN ('redeem', 'expire')`,
+      )
+      .orderBy(desc(pointsTransactions.createdAt))
+      .limit(PER_SOURCE_LIMIT),
+
+    // Consent history; the IP and browser stay in the table as proof, not in the panel.
+    db
+      .select({
+        id: consentEvents.id,
+        at: consentEvents.createdAt,
+        kind: consentEvents.kind,
+        granted: consentEvents.granted,
+        source: consentEvents.source,
+        version: consentEvents.version,
+      })
+      .from(consentEvents)
+      .where(
+        sql`${consentEvents.clientId} = ${clientId} AND ${consentEvents.tenantId} = ${tenantId}`,
+      )
+      .orderBy(desc(consentEvents.createdAt))
+      .limit(PER_SOURCE_LIMIT),
+  ])
 
   // Cashier names for points redemptions (id kept in metadata).
   const redeemCashierIds = [
@@ -366,6 +428,7 @@ export async function getClientTimeline(params: {
         cashierName: r.cashierId ? (redeemCashierNames.get(r.cashierId) ?? null) : null,
       }),
     ),
+    ...consentRows.map(consentEvent),
   ]
 
   events.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))

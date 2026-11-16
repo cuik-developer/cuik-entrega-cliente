@@ -51,8 +51,9 @@ const SECTIONS: LegalSection[] = [
         </p>
         <p>
           <strong>Si eres Cliente de un Comercio:</strong> nombre, correo, teléfono y, si el
-          Comercio lo pregunta, fecha de cumpleaños u otros campos que él defina; además, tus
-          visitas, sellos, puntos y canjes, y el estado de tu pase en Apple Wallet o Google Wallet.
+          Comercio lo pregunta, DNI, fecha de cumpleaños u otros campos que él defina; además, tus
+          visitas, sellos, puntos y canjes, el estado de tu pase en Apple Wallet o Google Wallet y,
+          si el Comercio conecta su sistema de ventas, tus compras en sus tiendas.
         </p>
         <p>
           <strong>Si nos escribes por Contáctanos o el Libro de Reclamaciones:</strong> los datos
@@ -93,7 +94,16 @@ const SECTIONS: LegalSection[] = [
           Respecto de los datos de los Clientes de un Comercio, el <strong>Comercio</strong> es el
           titular del banco de datos y decide las finalidades de su programa; Cuik actúa como{" "}
           <strong>encargado del tratamiento</strong> por cuenta del Comercio, conforme a lo previsto
-          en la Ley N.° 29733, y solo trata esos datos según sus instrucciones y esta política.
+          en la Ley N.° 29733, y solo trata esos datos según sus instrucciones y esta política. Esto
+          incluye los análisis de frecuencia, compras e impacto del programa que Cuik prepara para
+          el Comercio: se hacen para él y no se usan para fines propios de Cuik ni para otros
+          comercios.
+        </p>
+        <p>
+          Cada programa publica su propio aviso de privacidad en{" "}
+          {LEGAL.site.replace(/^https?:\/\//, "")}/<em>nombre-del-comercio</em>/privacidad, con el
+          Comercio como titular. Ahí también se indica cómo dar o retirar la autorización para
+          recibir promociones por WhatsApp o correo.
         </p>
         <p>
           Bancos de datos de Cuik inscritos en el Registro Nacional de Protección de Datos

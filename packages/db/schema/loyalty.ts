@@ -103,6 +103,43 @@ export const clients = loyaltySchema.table(
   ],
 )
 
+/**
+ * Proof of consent (Ley 29733, migration 0054): one row each time a client
+ * accepts the program's privacy notice or gives or withdraws the promotions
+ * authorization. Rows are only appended, never updated; the purge of archived
+ * clients deletes them with the person (they hold an IP and a browser).
+ */
+export const consentEvents = loyaltySchema.table(
+  "consent_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    /** "privacy": the program's notice; "marketing": promotions outside the program. */
+    kind: text("kind").$type<"privacy" | "marketing">().notNull(),
+    granted: boolean("granted").notNull(),
+    /** PRIVACY_NOTICE_VERSION the client saw. */
+    version: text("version").notNull(),
+    /** "registro": the registration form; "preferencias": the emailed preferences link. */
+    source: text("source").$type<"registro" | "preferencias">().notNull(),
+    ip: text("ip"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("consent_events_client_idx").on(
+      table.tenantId,
+      table.clientId,
+      table.kind,
+      table.createdAt,
+    ),
+  ],
+)
+
 export const visits = loyaltySchema.table(
   "visits",
   {

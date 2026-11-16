@@ -187,7 +187,7 @@ function Resumen() {
               },
               {
                 label: "Fuera siempre",
-                value: `Quien está en otro envío abierto (${data.blocked.openSend}), marcado "No contactar" (${data.noContact}) o archivado.`,
+                value: `Quien está en otro envío abierto (${data.blocked.openSend}), marcado "No contactar" (${data.noContact}), sin autorización de promociones (${data.blocked.noConsent}) o archivado.`,
               },
             ]}
           />

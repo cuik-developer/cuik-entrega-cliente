@@ -350,7 +350,8 @@ function CurrentClient({
   onDone: () => void
 }) {
   const [noContactOpen, setNoContactOpen] = useState(false)
-  const waUrl = whatsappLink(current.phone, draft)
+  // Without "Quiero recibir promociones" Growth may not write: no chat, no check.
+  const waUrl = current.noConsent ? null : whatsappLink(current.phone, draft)
   const opened = current.status === "opened"
 
   async function copyMessage() {
@@ -389,7 +390,7 @@ function CurrentClient({
             </Link>
             <div className="text-[12.5px] text-ent-fg-2">
               {[
-                current.phone ? phoneLabel(current.phone) : null,
+                current.phone && !current.noConsent ? phoneLabel(current.phone) : null,
                 current.store,
                 rhythmPhrase({ intervalDays: current.intervalDays, daysSince: current.daysSince }),
                 current.spend12m ? `gasto 12 m ${soles(current.spend12m)}` : null,
@@ -411,18 +412,23 @@ function CurrentClient({
               { label: "Esperada", value: fmtDay(current.expectedOn) },
             ]}
           />
-          {!current.phone && (
+          {current.noConsent ? (
+            <Notice tone="warn">
+              No aceptó recibir promociones: no se le puede escribir. Omítelo; si quiere recibir
+              mensajes, puede autorizarlo él mismo en la página de preferencias del programa.
+            </Notice>
+          ) : !current.phone ? (
             <Notice tone="warn">
               Sin celular registrado: no se puede abrir el chat. Omítelo o corrige el número en su
               ficha.
             </Notice>
-          )}
+          ) : null}
           <div className="flex flex-wrap gap-2">
             {opened ? (
               <Button
                 size="sm"
                 className="h-9 text-[13px] gap-1.5"
-                disabled={busy}
+                disabled={busy || current.noConsent}
                 onClick={() => void onMarkSent()}
               >
                 <Check className="w-4 h-4" /> Sí, enviado · siguiente cliente
@@ -448,7 +454,7 @@ function CurrentClient({
               size="sm"
               className="h-9 text-[12.5px] gap-1.5"
               onClick={() => void copyMessage()}
-              disabled={!draft}
+              disabled={!draft || current.noConsent}
             >
               <Copy className="w-3.5 h-3.5" /> Copiar mensaje
             </Button>
@@ -559,8 +565,11 @@ function RecipientLine({
         <Link href={`/panel/clientes/${r.clientId}`} className="text-ent-accent hover:underline">
           {r.name}
         </Link>
-        {!r.phone && r.status !== "control" && (
-          <span className="text-ent-fg-3"> · sin celular</span>
+        {r.noConsent && r.status !== "control" ? (
+          <span className="text-ent-fg-3"> · sin autorización de promociones</span>
+        ) : (
+          !r.phone &&
+          r.status !== "control" && <span className="text-ent-fg-3"> · sin celular</span>
         )}
       </Td>
       <Td className="text-ent-fg-2">{r.store ?? "—"}</Td>

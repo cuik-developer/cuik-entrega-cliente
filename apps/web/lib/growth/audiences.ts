@@ -228,6 +228,12 @@ export type BlockState = {
   noContact: boolean
   /** Local day the client's control window ends (drawn as control in a send still measuring); null = none. */
   controlUntil?: string | null
+  /**
+   * The client did not authorize promotions (clients.marketing_opt_in = false).
+   * Growth contacts outside the loyalty program (WhatsApp, an exported list),
+   * so these clients are never suggested; the pass notifications are not Growth.
+   */
+  noConsent?: boolean
 }
 
 export type SuggestionReason =
@@ -236,6 +242,7 @@ export type SuggestionReason =
   | "cooldown"
   | "open_send"
   | "no_contact"
+  | "no_consent"
   | "control"
 
 export type Suggestion = {
@@ -253,6 +260,7 @@ export function suggestion(
   rules: Pick<GrowthRules, "cooldownDays">,
 ): Suggestion {
   if (block.noContact) return { ready: false, reason: "no_contact", availableOn: null }
+  if (block.noConsent) return { ready: false, reason: "no_consent", availableOn: null }
   if (block.inOpenSend) return { ready: false, reason: "open_send", availableOn: null }
   // A control client stays untouched while the send is measured: contacting
   // them from another list would spoil the comparison.

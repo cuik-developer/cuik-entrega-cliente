@@ -15,12 +15,15 @@ export function LegalPage({
   title,
   intro,
   sections,
+  updated = LEGAL.lastUpdated,
   children,
 }: {
   eyebrow: string
   title: string
   intro: string
   sections: LegalSection[]
+  /** "Última actualización" date; Cuik's own legal pages use LEGAL.lastUpdated. */
+  updated?: string
   /** Optional block rendered after the sections (a form, for instance). */
   children?: ReactNode
 }) {
@@ -38,9 +41,7 @@ export function LegalPage({
             {title}
           </h1>
           <p className="mt-4 text-lg text-gray-500 max-w-2xl leading-relaxed">{intro}</p>
-          <p className="mt-4 text-xs font-medium text-gray-400">
-            Última actualización: {LEGAL.lastUpdated}
-          </p>
+          <p className="mt-4 text-xs font-medium text-gray-400">Última actualización: {updated}</p>
         </div>
       </header>
 

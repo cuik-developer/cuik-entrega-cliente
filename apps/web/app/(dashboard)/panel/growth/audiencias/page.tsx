@@ -68,9 +68,9 @@ function Audiencias() {
       <Notice tone="info">
         Antes de sugerir a alguien, Cuik lo descarta si recibió un mensaje en los últimos{" "}
         {r.cooldownDays} días (hoy {data.blocked.cooldown} clientes), tiene un envío abierto en otra
-        lista ({data.blocked.openSend}), está marcado “No contactar” ({data.blocked.noContact}) o
-        archivado. “Listos hoy” ya aplica esos filtros y, en Recompra próxima, el día que le toca a
-        cada uno.
+        lista ({data.blocked.openSend}), está marcado “No contactar” ({data.blocked.noContact}), no
+        aceptó recibir promociones ({data.blocked.noConsent}) o está archivado. “Listos hoy” ya
+        aplica esos filtros y, en Recompra próxima, el día que le toca a cada uno.
       </Notice>
 
       <Panel>

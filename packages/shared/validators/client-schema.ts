@@ -11,6 +11,19 @@ export const CLIENT_FIELD_MAX = {
   customText: 200,
 } as const
 
+/** Shown when the registration arrives without the privacy notice accepted. */
+export const PRIVACY_REQUIRED_MESSAGE =
+  "Para inscribirte debes aceptar el aviso de privacidad del programa."
+
+/**
+ * The client accepts the program's privacy notice (Ley 29733): required to
+ * register, checked again on the server. Promotions stay a separate, optional
+ * consent (marketingOptIn).
+ */
+const privacyAccepted = z.literal(true, {
+  errorMap: () => ({ message: PRIVACY_REQUIRED_MESSAGE }),
+})
+
 export const registerClientSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(CLIENT_FIELD_MAX.name),
   lastName: z.string().trim().max(CLIENT_FIELD_MAX.lastName).optional(),
@@ -23,6 +36,7 @@ export const registerClientSchema = z.object({
     .email("Email inválido")
     .max(CLIENT_FIELD_MAX.email),
   marketingOptIn: z.boolean().default(false),
+  privacyAccepted,
 })
 
 export type RegisterClientInput = z.infer<typeof registerClientSchema>
@@ -49,6 +63,7 @@ export function buildRegistrationSchema(config: RegistrationConfig | null) {
       .email("Email inválido")
       .max(CLIENT_FIELD_MAX.email),
     marketingOptIn: z.boolean().default(false),
+    privacyAccepted,
   }
 
   // Birthday toggle (registration config → "Cumpleaños"): top-level, validated as YYYY-MM-DD.
