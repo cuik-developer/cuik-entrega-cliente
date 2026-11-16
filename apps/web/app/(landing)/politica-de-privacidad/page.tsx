@@ -95,7 +95,17 @@ const SECTIONS: LegalSection[] = [
           <strong>encargado del tratamiento</strong> por cuenta del Comercio, conforme a lo previsto
           en la Ley N.° 29733, y solo trata esos datos según sus instrucciones y esta política.
         </p>
-        <p>Banco de datos de Cuik inscrito ante la ANPD: {LEGAL.bancoDatosCodigo}.</p>
+        <p>
+          Bancos de datos de Cuik inscritos en el Registro Nacional de Protección de Datos
+          Personales:
+        </p>
+        <ul>
+          {LEGAL.bancosDatos.map((b) => (
+            <li key={b.codigo}>
+              {b.nombre}: código {b.codigo}
+            </li>
+          ))}
+        </ul>
       </>
     ),
   },
