@@ -15,6 +15,8 @@ type VisitRecord = {
   bonusKind?: string | null
   points?: number | null
   amount?: string | null
+  /** Cashback this purchase earned (stamps with a cashback reward). */
+  cashbackAmount?: string | null
   createdAt: string
   /** Who registered it; shown when more than one person works the till. */
   registeredByName?: string | null
@@ -126,7 +128,7 @@ export default function HistorialPage() {
                     ·{" "}
                     {isPoints
                       ? `${v.points != null ? `+${v.points} puntos` : "Puntos"}${v.amount ? ` · S/ ${Number(v.amount).toFixed(2)}` : ""}`
-                      : `Sello ${v.visitNum} (ciclo ${v.cycleNumber})`}
+                      : `Sello ${v.visitNum} (ciclo ${v.cycleNumber})${v.amount ? ` · S/ ${Number(v.amount).toFixed(2)}` : ""}${Number(v.cashbackAmount) > 0 ? ` · +S/ ${Number(v.cashbackAmount).toFixed(2)} cashback` : ""}`}
                   </span>
                   {showRegisteredBy && v.registeredByName && (
                     <div className="text-xs text-gray-400 truncate">

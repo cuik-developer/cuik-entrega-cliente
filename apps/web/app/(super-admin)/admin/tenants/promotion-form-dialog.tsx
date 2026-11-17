@@ -521,6 +521,7 @@ export function PromotionFormDialog({
     control,
     watch,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -783,7 +784,13 @@ export function PromotionFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form
+          onSubmit={handleSubmit(onSubmit, () =>
+            // The failing field may sit far below the save button: say it, don't fail silently.
+            toast.error("No se guardó: revisa los campos marcados en rojo"),
+          )}
+          className="space-y-4"
+        >
           {/* Tipo selector */}
           {isEdit ? (
             <div className="space-y-2">
@@ -986,6 +993,28 @@ export function PromotionFormDialog({
                       guardar el cambio a cashback, los clientes con tarjeta en curso reciben el
                       saldo de los sellos que ya tienen monto, y se crea una etapa del programa.
                     </p>
+                  </div>
+                )}
+                {/* Said here, where cashback is chosen: the conflicting hito sits further down. */}
+                {rewardMode === "cashback" && hasRedeemableMilestone && (
+                  <div className="flex flex-wrap items-center gap-2 rounded-[4px] border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    <span className="min-w-0 flex-1">
+                      La escalera tiene un premio canjeable con reinicio. Con cashback no se puede:
+                      la tarjeta tendría dos formas de cobrarse. Desmárcalo para poder guardar.
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        for (let i = 0; i < milestoneRows.fields.length; i++) {
+                          setValue(`milestones.${i}.redeemable`, false, { shouldValidate: true })
+                        }
+                      }}
+                    >
+                      Desmarcar
+                    </Button>
                   </div>
                 )}
               </div>

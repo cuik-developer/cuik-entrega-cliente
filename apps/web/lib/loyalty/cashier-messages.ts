@@ -12,7 +12,9 @@ const VISIT_MESSAGES: Record<string, string> = {
   NO_ACTIVE_PROMOTION: "No hay una promoción activa en este comercio",
   CLIENT_BLOCKED: "Cliente bloqueado: no puede registrar visitas ni canjear",
   CLIENT_ARCHIVED: "Cliente archivado: su pase ya no es válido",
-  AMOUNT_REQUIRED: "El monto de compra es obligatorio",
+  // The screen may predate a switch to cashback (it reads the program once): say how to fix it.
+  AMOUNT_REQUIRED:
+    "El monto de compra es obligatorio. Si no ves la casilla del monto, recarga la página",
   BELOW_MINIMUM_PURCHASE: "El monto de compra es menor al mínimo requerido",
   NO_POINTS_EARNED: "Esta compra no alcanza para sumar puntos: no se registró la visita",
 }

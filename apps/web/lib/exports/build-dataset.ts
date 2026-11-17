@@ -232,6 +232,7 @@ async function queryClients(r: DatasetRequest): Promise<Row[]> {
 async function queryVisits(r: DatasetRequest): Promise<Row[]> {
   const res = await db.execute<Row>(sql`
     SELECT v.created_at, v.visit_num, v.cycle_number, v.points, v.source, v.bonus_kind, v.amount,
+           v.cashback_amount,
            c.name, c.last_name, c.email, c.phone, c.dni, c.created_at AS client_created_at,
            l.name AS location_name, u.name AS cashier_name,
            (w.client_id IS NOT NULL) AS has_pass, coalesce(w.apple_installed, false) AS apple_installed,
@@ -349,6 +350,8 @@ function visitCells(row: Row, r: DatasetRequest): Record<string, Cell> {
     points: num(row.points),
     // The registration bonus is not a till visit: no amount, local or cashier.
     amount: registrationBonus ? "—" : num(row.amount),
+    // What this purchase earned when the reward is cashback; empty for a gift.
+    cashbackAmount: num(row.cashback_amount),
     source: visitOriginLabel(str(row.source), row.bonus_kind == null ? null : str(row.bonus_kind)),
     locationName: registrationBonus ? "—" : str(row.location_name),
     cashierName: registrationBonus ? "Automático (registro del cliente)" : str(row.cashier_name),

@@ -117,6 +117,13 @@ export const DATASETS: DatasetDef[] = [
         program: "points",
       },
       { key: "amount", label: "Monto", width: 12, group: "Visita" },
+      {
+        key: "cashbackAmount",
+        label: "Cashback ganado (S/)",
+        width: 18,
+        group: "Visita",
+        program: "stamps",
+      },
       { key: "source", label: "Origen", width: 20, group: "Visita" },
       { key: "locationName", label: "Local", width: 18, group: "Visita" },
       { key: "cashierName", label: "Registrada por", width: 20, group: "Visita" },

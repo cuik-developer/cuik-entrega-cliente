@@ -226,6 +226,26 @@ export async function registerVisit(params: {
     const cashbackSettings = cashbackSettingsOf(config.stamps)
     const cashbackBalanceBefore = cashbackSettings ? toCents(client.cashbackBalance) : 0
 
+    // Cashback is earned on the purchase amount: without it the stamp would earn
+    // S/ 0 unnoticed (a till screen opened before the switch does not ask for it).
+    // Rejected like a points visit without amount.
+    if (cashbackSettings && !(Number(amount) > 0)) {
+      return {
+        code: "AMOUNT_REQUIRED" as const,
+        client: {
+          id: client.id,
+          name: client.name,
+          lastName: client.lastName,
+          totalVisits: client.totalVisits,
+          currentCycle: client.currentCycle,
+          tier: client.tier ?? null,
+        },
+        stamps: { current: effectiveVisits(client) % promotion.maxVisits, max: promotion.maxVisits },
+        cycleComplete: false,
+        pendingRewards: 0,
+      }
+    }
+
     // 3. Count today's visits (uses tenant timezone, not UTC)
     const todayVisits = await tx
       .select({ cnt: count() })

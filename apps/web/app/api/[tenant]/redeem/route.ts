@@ -9,6 +9,7 @@ import {
   successResponse,
 } from "@/lib/api-utils"
 import { redeemReward } from "@/lib/loyalty"
+import { nextPendingReward } from "@/lib/loyalty/next-reward"
 import { redeemPoints } from "@/lib/loyalty/redeem-points"
 import { refreshStampsPass } from "@/lib/wallet/refresh-stamps-pass"
 import { triggerWalletUpdate } from "@/lib/wallet/trigger-wallet-update"
@@ -70,6 +71,32 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     return successResponse(result)
   } catch (error) {
     console.error("[POST /api/[tenant]/redeem]", error)
+    return errorResponse("Internal server error", 500)
+  }
+}
+
+/**
+ * GET ?qrCode=… — the stamps reward the next "Canjear" would hand over, so the
+ * cashier confirms knowing what it is (a gift, or how much to discount).
+ */
+export async function GET(request: Request, { params }: { params: Promise<{ tenant: string }> }) {
+  try {
+    const { session, error: authError } = await requireAuth(request)
+    if (authError) return authError
+
+    const { tenant: slug } = await params
+    const tenant = await resolveTenant(slug)
+    if (!tenant) return errorResponse("Tenant not found", 404)
+
+    const membershipError = await requireTenantMembership(session, tenant.id)
+    if (membershipError) return membershipError
+
+    const qrCode = new URL(request.url).searchParams.get("qrCode")?.trim() ?? ""
+    if (!qrCode || qrCode.length > 200) return errorResponse("qrCode is required", 400)
+
+    return successResponse({ nextReward: await nextPendingReward(qrCode, tenant.id) })
+  } catch (error) {
+    console.error("[GET /api/[tenant]/redeem]", error)
     return errorResponse("Internal server error", 500)
   }
 }

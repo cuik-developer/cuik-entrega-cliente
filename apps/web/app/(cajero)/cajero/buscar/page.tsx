@@ -13,6 +13,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { CashbackSummary, type CashbackView } from "@/components/cajero/cashback-summary"
+import { PendingRewards } from "@/components/cajero/pending-rewards"
 import { PointsCatalog } from "@/components/cajero/points-catalog"
 import {
   CashOutOffer,
@@ -600,7 +601,7 @@ function ClientDetailView({
   submitting: boolean
   locationRequired: boolean
   handleVisit: () => void
-  handleRedeem: () => void
+  handleRedeem: () => Promise<void>
   redeemingReward: boolean
   onPointsRedeemed: () => Promise<void>
   /** After an early cash-out or an undo: show `message` and reload the client. */
@@ -696,21 +697,14 @@ function ClientDetailView({
       )}
 
       {/* Stamps: pending rewards */}
-      {!isPoints && selected.pendingRewards > 0 && (
-        <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-          <Gift className="w-5 h-5 text-amber-600 flex-shrink-0" />
-          <div className="font-semibold text-amber-800 text-sm">
-            {selected.pendingRewards} premio(s) pendiente(s)
-          </div>
-          <Button
-            size="sm"
-            className="ml-auto bg-amber-500 text-white text-xs h-8"
-            onClick={handleRedeem}
-            disabled={redeemingReward}
-          >
-            {redeemingReward ? "Canjeando…" : "Canjear"}
-          </Button>
-        </div>
+      {!isPoints && (
+        <PendingRewards
+          tenantSlug={tenantSlug}
+          qrCode={selected.client.qrCode}
+          count={selected.pendingRewards}
+          onRedeem={handleRedeem}
+          busy={redeemingReward}
+        />
       )}
 
       {/* Stamps: early cash-out ("escalera canjeable"), same panel as Escanear */}

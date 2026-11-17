@@ -19,6 +19,7 @@ import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { CashbackSummary, type CashbackView } from "@/components/cajero/cashback-summary"
+import { PendingRewards } from "@/components/cajero/pending-rewards"
 import { PointsCatalog } from "@/components/cajero/points-catalog"
 import {
   CashOutOffer,
@@ -645,6 +646,20 @@ export default function EscanearPage() {
   }
 
   // Stamps client on a result screen: cash-out offer and undo (same panels as Buscar).
+  // Pending stamps rewards: the same panel and confirmation as Buscar.
+  const pendingRewardsFor = (r: VisitApiResult) => {
+    const qrCode = lastQrRef.current || pendingQrCode
+    if (isPointsResult(r) || !tenantSlug) return null
+    return (
+      <PendingRewards
+        tenantSlug={tenantSlug}
+        qrCode={qrCode || null}
+        count={r.pendingRewards}
+        onRedeem={handleRedeem}
+      />
+    )
+  }
+
   const stampsExtrasFor = (r: VisitApiResult) => {
     const qrCode = lastQrRef.current || pendingQrCode
     if (isPointsResult(r) || !tenantSlug || !qrCode) return null
@@ -767,7 +782,7 @@ export default function EscanearPage() {
       {step === "success" && result && (
         <SuccessStepView
           result={result}
-          handleRedeem={handleRedeem}
+          pendingRewards={pendingRewardsFor(result)}
           reset={reset}
           pointsCatalog={pointsCatalogFor(result)}
           stampsExtras={stampsExtrasFor(result)}
@@ -777,7 +792,7 @@ export default function EscanearPage() {
       {step === "already" && result && (
         <AlreadyScannedStepView
           result={result}
-          handleRedeem={handleRedeem}
+          pendingRewards={pendingRewardsFor(result)}
           reset={reset}
           pointsCatalog={pointsCatalogFor(result)}
           stampsExtras={stampsExtrasFor(result)}
@@ -1078,13 +1093,14 @@ function AmountStepView({
 
 function SuccessStepView({
   result,
-  handleRedeem,
+  pendingRewards,
   reset,
   pointsCatalog,
   stampsExtras,
 }: {
   result: VisitApiResult
-  handleRedeem: () => Promise<boolean>
+  /** Stamps: pending rewards with their confirmation (shared with Buscar). */
+  pendingRewards: React.ReactNode
   reset: () => void
   /** Points: catalog to redeem right after the visit. */
   pointsCatalog?: React.ReactNode
@@ -1188,23 +1204,7 @@ function SuccessStepView({
             </div>
           )}
 
-          {result.pendingRewards > 0 && (
-            <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-              <Gift className="w-5 h-5 text-amber-600 flex-shrink-0" />
-              <div>
-                <div className="font-semibold text-amber-800 text-sm">
-                  {result.pendingRewards} premio(s) pendiente(s)
-                </div>
-              </div>
-              <Button
-                size="sm"
-                className="ml-auto bg-amber-500 text-white text-xs h-8"
-                onClick={handleRedeem}
-              >
-                Canjear
-              </Button>
-            </div>
-          )}
+          {pendingRewards}
         </>
       )}
 
@@ -1226,13 +1226,14 @@ function SuccessStepView({
 
 function AlreadyScannedStepView({
   result,
-  handleRedeem,
+  pendingRewards,
   reset,
   pointsCatalog,
   stampsExtras,
 }: {
   result: VisitApiResult
-  handleRedeem: () => Promise<boolean>
+  /** Stamps: pending rewards with their confirmation (shared with Buscar). */
+  pendingRewards: React.ReactNode
   reset: () => void
   /** Points: catalog to redeem right after the visit. */
   pointsCatalog?: React.ReactNode
@@ -1287,21 +1288,7 @@ function AlreadyScannedStepView({
 
           {result.cashback && <CashbackSummary cashback={{ ...result.cashback, earned: 0 }} />}
 
-          {result.pendingRewards > 0 && (
-            <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-              <Gift className="w-5 h-5 text-amber-600 flex-shrink-0" />
-              <div className="font-semibold text-amber-800 text-sm">
-                {result.pendingRewards} premio(s) pendiente(s)
-              </div>
-              <Button
-                size="sm"
-                className="ml-auto bg-amber-500 text-white text-xs h-8"
-                onClick={handleRedeem}
-              >
-                Canjear
-              </Button>
-            </div>
-          )}
+          {pendingRewards}
         </>
       )}
 
