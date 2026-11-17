@@ -61,6 +61,13 @@ describe("cashback needs the purchase amount", () => {
     )
   })
 
+  it("a visit that completes the card is labelled as its last stamp", () => {
+    // A bonus that overflows into the next card used to read "sello 1 (ciclo 4)".
+    expect(src("lib/loyalty/register-visit.ts")).toMatch(
+      /const visitNum =\s+cycleComplete \|\| stampsInCycleAfter === 0 \? promotion\.maxVisits : stampsInCycleAfter/,
+    )
+  })
+
   it("the visits export has the cashback earned per visit (stamps only)", () => {
     const visits = DATASETS.find((d) => d.key === "visits")
     expect(visits).toBeDefined()

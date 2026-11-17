@@ -348,8 +348,11 @@ export async function registerVisit(params: {
       wrapped: cycleComplete,
     })
 
-    // visitNum = position within current cycle (1-based)
-    const visitNum = stampsInCycleAfter === 0 ? promotion.maxVisits : stampsInCycleAfter
+    // visitNum = position within current cycle (1-based).
+    // A visit that completes the card belongs to that card (cycleNumber below),
+    // even when a bonus carries extra stamps into the next one: "sello 10 (ciclo 4)".
+    const visitNum =
+      cycleComplete || stampsInCycleAfter === 0 ? promotion.maxVisits : stampsInCycleAfter
     // cycleNumber = which cycle this visit belongs to
     const cycleNumber = cycleComplete
       ? cyclesAfter // last completed cycle
