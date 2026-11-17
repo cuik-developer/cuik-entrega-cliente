@@ -12,15 +12,19 @@ import {
   user,
   verification,
 } from "@cuik/db"
+import { randomBytes, randomUUID } from "node:crypto"
+import { InvitacionEquipo, sendEmail } from "@cuik/email"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { requireSuperAdminOrAction } from "@/lib/admin-access"
 import { auth } from "@/lib/auth"
 import {
   normalizeStaffPermissions,
+  STAFF_PERMISSION_LABELS,
   STAFF_PERMISSIONS,
   type StaffPermission,
 } from "@/lib/staff-permissions"
+import { STAFF_INVITE_DAYS, staffInviteIdentifier, staffInviteLink } from "@/lib/staff-invite"
 
 /**
  * Equipo Cuik management (owner only): invite, change permissions, revoke.
@@ -59,21 +63,67 @@ const userIdSchema = z.string().min(1).max(100)
 
 const requireOwner = () => requireSuperAdminOrAction()
 
-async function sendSetPasswordEmail(email: string): Promise<boolean> {
+/**
+ * The invitation link is a Better Auth password-reset token written here
+ * (lib/staff-invite.ts) so it lasts days instead of an hour and arrives as an
+ * invitation, not as "Restablecer contraseña".
+ */
+async function sendStaffInviteEmail(member: {
+  id: string
+  email: string
+  name: string
+  permissions: StaffPermission[]
+}): Promise<boolean> {
   try {
-    // Better Auth's reset flow (lib/auth.ts sendResetPassword): the link lets
-    // the new member choose their password at /reset-password.
-    await auth.api.requestPasswordReset({ body: { email, redirectTo: "/reset-password" } })
+    const token = randomBytes(18).toString("base64url")
+    const expiresAt = new Date(Date.now() + STAFF_INVITE_DAYS * 24 * 60 * 60 * 1000)
+    // A new invitation replaces any earlier link of this person.
+    await db
+      .delete(verification)
+      .where(
+        and(eq(verification.value, member.id), like(verification.identifier, "reset-password:%")),
+      )
+    await db.insert(verification).values({
+      id: randomUUID(),
+      identifier: staffInviteIdentifier(token),
+      value: member.id,
+      expiresAt,
+    })
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+    const result = await sendEmail({
+      to: member.email,
+      subject: "Te invitaron al Equipo Cuik",
+      template: InvitacionEquipo({
+        memberName: member.name,
+        inviteLink: staffInviteLink(baseUrl, token),
+        areas: member.permissions.map((p) => STAFF_PERMISSION_LABELS[p]),
+        expiresAt: expiresAt.toLocaleDateString("es-PE", {
+          day: "numeric",
+          month: "long",
+          timeZone: "America/Lima",
+        }),
+      }),
+    })
+    if ("error" in result) {
+      console.error("[equipo] invitation email failed:", result.error)
+      return false
+    }
     return true
   } catch (err) {
-    console.error("[equipo] set-password email failed:", err)
+    console.error("[equipo] invitation email failed:", err)
     return false
   }
 }
 
 async function findStaffUser(userId: string) {
   const [row] = await db
-    .select({ id: user.id, email: user.email, role: user.role })
+    .select({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      permissions: user.staffPermissions,
+    })
     .from(user)
     .where(eq(user.id, userId))
     .limit(1)
@@ -176,7 +226,7 @@ export async function inviteStaff(
     await db.delete(sessionTable).where(eq(sessionTable.userId, userId))
   }
 
-  const emailSent = await sendSetPasswordEmail(email)
+  const emailSent = await sendStaffInviteEmail({ id: userId, email, name, permissions })
   revalidatePath("/admin/equipo")
   return { success: true, data: { id: userId, emailSent, reactivated } }
 }
@@ -229,6 +279,12 @@ export async function revokeStaff(input: { userId: string }): Promise<ActionResu
     })
     .where(and(eq(user.id, target.id), eq(user.role, "staff")))
   await db.delete(sessionTable).where(eq(sessionTable.userId, target.id))
+  // An invitation still waiting (7 days) stops working too.
+  await db
+    .delete(verification)
+    .where(
+      and(eq(verification.value, target.id), like(verification.identifier, "reset-password:%")),
+    )
   revalidatePath("/admin/equipo")
   return { success: true, data: null }
 }
@@ -285,7 +341,12 @@ export async function resendStaffInvite(input: {
   const target = await findStaffUser(id.data)
   if (!target) return { success: false, error: "Persona no encontrada en Equipo Cuik" }
 
-  const emailSent = await sendSetPasswordEmail(target.email)
+  const emailSent = await sendStaffInviteEmail({
+    id: target.id,
+    email: target.email,
+    name: target.name,
+    permissions: normalizeStaffPermissions(target.permissions),
+  })
   return emailSent
     ? { success: true, data: { emailSent } }
     : { success: false, error: "No se pudo enviar el correo" }

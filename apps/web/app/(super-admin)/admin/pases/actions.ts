@@ -688,21 +688,36 @@ export async function duplicateDesign(designId: string): Promise<ActionResult<{ 
   const [source] = await db.select().from(passDesigns).where(eq(passDesigns.id, designId)).limit(1)
   if (!source) return { success: false, error: "Diseño no encontrado" }
 
-  const [inserted] = await db
-    .insert(passDesigns)
-    .values({
-      tenantId: source.tenantId,
-      promotionId: source.promotionId,
-      name: `${source.name} (borrador)`.slice(0, 100),
-      type: source.type,
-      canvasData: source.canvasData,
-      colors: source.colors,
-      fields: source.fields,
-      stampsConfig: source.stampsConfig,
-      isActive: false,
-      version: source.version,
-    })
-    .returning({ id: passDesigns.id })
+  const inserted = await db.transaction(async (tx) => {
+    const [copy] = await tx
+      .insert(passDesigns)
+      .values({
+        tenantId: source.tenantId,
+        promotionId: source.promotionId,
+        name: `${source.name} (borrador)`.slice(0, 100),
+        type: source.type,
+        canvasData: source.canvasData,
+        colors: source.colors,
+        fields: source.fields,
+        stampsConfig: source.stampsConfig,
+        isActive: false,
+        version: source.version,
+      })
+      .returning({ id: passDesigns.id })
+
+    // The images too: older designs keep them only in pass_assets (the editor
+    // fills the canvas from there), so a copy without them opened blank. The
+    // copy points at the same stored files; nothing in storage is duplicated
+    // or ever deleted.
+    const assets = await tx
+      .select({ type: passAssets.type, url: passAssets.url, metadata: passAssets.metadata })
+      .from(passAssets)
+      .where(eq(passAssets.designId, source.id))
+    if (assets.length > 0) {
+      await tx.insert(passAssets).values(assets.map((a) => ({ ...a, designId: copy.id })))
+    }
+    return copy
+  })
 
   await recordProductChange({
     actor: guard.session,

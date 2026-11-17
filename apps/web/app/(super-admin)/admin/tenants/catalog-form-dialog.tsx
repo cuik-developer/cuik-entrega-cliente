@@ -91,10 +91,11 @@ export function CatalogFormDialog({ open, onOpenChange, tenantId, item }: Catalo
 
   function onSubmit(values: FormValues) {
     startTransition(async () => {
+      // No photo field here: the merchant uploads it in Panel › Premios. Editing
+      // must leave it alone (sending imageUrl: null erased the photo).
       const payload = {
         name: values.name,
         description: values.description || null,
-        imageUrl: null as string | null,
         pointsCost: values.pointsCost,
         category: values.category || null,
         active: values.active,
@@ -111,7 +112,7 @@ export function CatalogFormDialog({ open, onOpenChange, tenantId, item }: Catalo
           toast.error(result.error)
         }
       } else {
-        const result = await createCatalogItem(tenantId, payload)
+        const result = await createCatalogItem(tenantId, { ...payload, imageUrl: null })
 
         if (result.success) {
           toast.success("Recompensa creada")

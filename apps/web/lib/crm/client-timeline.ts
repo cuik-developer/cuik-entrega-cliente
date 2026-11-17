@@ -17,6 +17,7 @@ import {
   user,
   visits,
 } from "@cuik/db"
+import { visitOriginLabel } from "@/lib/loyalty/visit-origin"
 
 export type TimelineEventType =
   | "visit"
@@ -49,7 +50,9 @@ type VisitRow = {
   visitNum: number
   cycleNumber: number
   source: string
+  bonusKind: string | null
   amount: string | null
+  cashbackAmount: string | null
   points: number | null
   locationName: string | null
   cashierName: string | null
@@ -77,14 +80,16 @@ type NotifRow = {
   message: string | null
 }
 
-function visitEvent(v: VisitRow, isPointsProgram: boolean): TimelineEvent {
+export function visitEvent(v: VisitRow, isPointsProgram: boolean): TimelineEvent {
   const bits: string[] = []
   if (v.locationName) bits.push(v.locationName)
   if (v.amount && Number(v.amount) > 0) bits.push(`S/ ${Number(v.amount).toFixed(2)}`)
-  // visits.points is also written by stamp programs (1 per visit); only meaningful for points.
-  if (v.source === "manual") bits.push("registro manual")
-  // Points programs put the points and the bonus in the title (see below).
-  if (v.source === "bonus" && !isPointsProgram) bits.push("bonus")
+  // Cashback this purchase earned (stamps with a cashback reward).
+  if (Number(v.cashbackAmount) > 0) bits.push(`+S/ ${Number(v.cashbackAmount).toFixed(2)} cashback`)
+  // Origin worded like the cashier Historial and the visits Excel. The
+  // registration bonus already says so in the points title.
+  const origin = visitOriginLabel(v.source, v.bonusKind)
+  if (origin && !(isPointsProgram && v.source === "bonus")) bits.push(origin)
   // Points programs have no stamps/cycles: title by points instead.
   const title = isPointsProgram
     ? v.source === "bonus"
@@ -299,7 +304,9 @@ export async function getClientTimeline(params: {
         visitNum: visits.visitNum,
         cycleNumber: visits.cycleNumber,
         source: visits.source,
+        bonusKind: visits.bonusKind,
         amount: visits.amount,
+        cashbackAmount: visits.cashbackAmount,
         points: visits.points,
         locationName: locations.name,
         cashierName: user.name,

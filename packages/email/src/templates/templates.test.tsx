@@ -4,11 +4,31 @@ import { describe, expect, it } from "vitest"
 
 import { BienvenidaComercio } from "./bienvenida-comercio"
 import { Credenciales } from "./credenciales"
+import { InvitacionEquipo } from "./invitacion-equipo"
 import { ReportePeriodico } from "./reporte-periodico"
 import { RewardCanjeado } from "./reward-canjeado"
 import { SolicitudRecibida } from "./solicitud-recibida"
 
 describe("email templates", () => {
+  describe("InvitacionEquipo", () => {
+    it("is an invitation with the link, the areas and the expiry, not a password reset", async () => {
+      const html = await render(
+        React.createElement(InvitacionEquipo, {
+          memberName: "Diego",
+          inviteLink: "https://cuik.org/api/auth/reset-password/tok?callbackURL=%2Freset-password",
+          areas: ["Pases", "Comercios"],
+          expiresAt: "24 de noviembre",
+        }),
+      )
+      expect(html).toContain("Equipo Cuik")
+      expect(html).toContain("Crear mi contraseña")
+      expect(html).toContain("Pases, Comercios")
+      expect(html).toContain("24 de noviembre")
+      expect(html).toContain("https://cuik.org/api/auth/reset-password/tok")
+      expect(html).not.toContain("Restablecer")
+    })
+  })
+
   describe("SolicitudRecibida", () => {
     const props = {
       businessName: "Café del Centro",
