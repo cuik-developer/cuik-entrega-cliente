@@ -54,6 +54,39 @@ describe("Escanear and Buscar parity", () => {
   })
 })
 
+describe("the reward a redeem takes is the one the till shows", () => {
+  it("redeem and next-reward pick the same oldest reward, id breaking ties", () => {
+    for (const path of ["lib/loyalty/redeem-reward.ts", "lib/loyalty/next-reward.ts"]) {
+      expect(src(path)).toContain(".orderBy(asc(rewards.createdAt), asc(rewards.id))")
+    }
+  })
+
+  it("Escanear's 'Premio ganado' reads the reward the redeem will take", () => {
+    const s = src(ESCANEAR)
+    expect(s).toContain("useNextReward(tenantSlug, qrCode, result.pendingRewards)")
+    expect(s).toContain("Primero se canjea su premio más antiguo")
+  })
+})
+
+describe("passes and the camera", () => {
+  it("Apple pass downloads never serve a draft design", () => {
+    for (const path of [
+      "app/api/[tenant]/wallet/apple/[clientId]/route.ts",
+      "app/api/[tenant]/wallet/apple/[clientId]/[token]/route.ts",
+    ]) {
+      const s = src(path)
+      expect(s).toContain("candidates.find((d) => d.isActive) ??\n      null")
+      expect(s).not.toContain("candidates.find(linkedToPromo) ??")
+    }
+  })
+
+  it("the barcode camera is only for Code 128 tenants; QR tenants keep the plain reader", () => {
+    const s = src(ESCANEAR)
+    expect(s).toContain('if (barcodeFormat === "code128") {')
+    expect(s).toContain("reader.decodeFromVideoDevice(undefined, videoRef.current, onDecode)")
+  })
+})
+
 describe("cashback needs the purchase amount", () => {
   it("the server rejects a cashback stamp without amount", () => {
     expect(src("lib/loyalty/register-visit.ts")).toMatch(

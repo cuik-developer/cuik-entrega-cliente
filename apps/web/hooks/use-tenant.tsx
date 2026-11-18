@@ -22,11 +22,18 @@ type TenantContextValue = {
   adminCashier: boolean
   /** Super-admin switch: the Growth module is on for this tenant. */
   growth: boolean
+  /** Code on the passes; "code128" turns on the barcode camera in Escanear. */
+  barcodeFormat: "qr" | "code128"
   isLoading: boolean
   error: string | null
 }
 
 const TenantContext = createContext<TenantContextValue | null>(null)
+
+/** Anything but "code128" is a QR tenant. */
+function barcodeFormatOf(raw: unknown): "qr" | "code128" {
+  return raw === "code128" ? "code128" : "qr"
+}
 
 export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<TenantContextValue>({
@@ -43,6 +50,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     memberRole: null,
     adminCashier: false,
     growth: false,
+    barcodeFormat: "qr",
     isLoading: true,
     error: null,
   })
@@ -84,6 +92,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           memberRole: json.data.memberRole ?? null,
           adminCashier: json.data.adminCashier === true,
           growth: json.data.growth === true,
+          barcodeFormat: barcodeFormatOf(json.data.barcodeFormat),
           isLoading: false,
           error: null,
         })

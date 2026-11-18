@@ -1,6 +1,7 @@
 "use client"
 
-import { BrowserMultiFormatReader } from "@zxing/browser"
+import { BarcodeFormat, BrowserMultiFormatReader } from "@zxing/browser"
+import { DecodeHintType } from "@zxing/library"
 import {
   Camera,
   CheckCircle2,
@@ -19,7 +20,7 @@ import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { CashbackSummary, type CashbackView } from "@/components/cajero/cashback-summary"
-import { PendingRewards } from "@/components/cajero/pending-rewards"
+import { PendingRewards, useNextReward } from "@/components/cajero/pending-rewards"
 import { PointsCatalog } from "@/components/cajero/points-catalog"
 import {
   CashOutOffer,
@@ -300,7 +301,7 @@ function handleVisitResult(
 }
 
 export default function EscanearPage() {
-  const { tenantSlug, promotionType, promotionConfig } = useTenant()
+  const { tenantSlug, promotionType, promotionConfig, barcodeFormat } = useTenant()
   const router = useRouter()
   const [step, setStep] = useState<ScanStep>("scan")
   const [result, setResult] = useState<VisitApiResult | null>(null)
@@ -519,15 +520,35 @@ export default function EscanearPage() {
     }
 
     try {
-      const reader = new BrowserMultiFormatReader()
-      readerRef.current = reader
-
-      controlsRef.current = reader.decodeFromVideoDevice(undefined, videoRef.current, (res) => {
+      const onDecode = (res: { getText(): string } | undefined) => {
         if (res) {
           const text = res.getText()
           processQrRef.current(text)
         }
-      })
+      }
+
+      if (barcodeFormat === "code128") {
+        // Barcode tenants only (QR tenants keep the reader below untouched): a
+        // Code 128 on a phone screen needs the rear camera at HD and TRY_HARDER,
+        // and looking only for the two formats a Cuik pass can carry.
+        const hints = new Map<DecodeHintType, unknown>([
+          [DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128, BarcodeFormat.QR_CODE]],
+          [DecodeHintType.TRY_HARDER, true],
+        ])
+        const reader = new BrowserMultiFormatReader(hints)
+        readerRef.current = reader
+        controlsRef.current = reader.decodeFromConstraints(
+          {
+            video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+          },
+          videoRef.current,
+          onDecode,
+        )
+      } else {
+        const reader = new BrowserMultiFormatReader()
+        readerRef.current = reader
+        controlsRef.current = reader.decodeFromVideoDevice(undefined, videoRef.current, onDecode)
+      }
 
       await controlsRef.current
     } catch (err) {
@@ -535,7 +556,7 @@ export default function EscanearPage() {
       setCameraError(true)
       setManualMode(true)
     }
-  }, [])
+  }, [barcodeFormat])
 
   useEffect(() => {
     if (step === "scan" && !manualMode && locationsLoaded) {
@@ -802,6 +823,8 @@ export default function EscanearPage() {
       {step === "reward" && result && !isPointsResult(result) && (
         <RewardStepView
           result={result}
+          tenantSlug={tenantSlug ?? ""}
+          qrCode={lastQrRef.current || pendingQrCode || null}
           handleRedeem={handleRedeem}
           reset={reset}
           onRedeemed={() => setStep("success")}
@@ -1310,16 +1333,35 @@ function AlreadyScannedStepView({
 
 function RewardStepView({
   result,
+  tenantSlug,
+  qrCode,
   handleRedeem,
   reset,
   onRedeemed,
 }: {
   result: StampsVisitApiResult
+  tenantSlug: string
+  qrCode: string | null
   handleRedeem: () => Promise<boolean>
   reset: () => void
   /** After the reward is redeemed: back to the result screen (where it can be undone). */
   onRedeemed: () => void
 }) {
+  // The redeem takes the OLDEST pending reward. With an older one still waiting
+  // (e.g. a gift from before the switch to cashback) the screen says so instead
+  // of promising this card's reward.
+  const { next, state } = useNextReward(tenantSlug, qrCode, result.pendingRewards)
+  // Compare the reward itself, not the count: the count also includes an
+  // expired reward the nightly job has not closed yet (the redeem skips it).
+  const isThisCard =
+    next !== null &&
+    (result.cashback?.rewardAmount
+      ? next.cashbackAmount === result.cashback.rewardAmount
+      : next.label === result.rewardValue)
+  const olderFirst = state === "ready" && next !== null && !isThisCard
+  const thisCard = result.cashback?.rewardAmount
+    ? `El cashback de ${formatSoles(result.cashback.rewardAmount)} de esta tarjeta`
+    : "El premio de esta tarjeta"
   return (
     <div className="flex flex-col items-center text-center gap-5 py-8">
       <div className="w-24 h-24 bg-amber-100 rounded-full flex items-center justify-center">
@@ -1333,7 +1375,17 @@ function RewardStepView({
         <p className="text-gray-500 mt-1 text-sm">
           {result.client.name} {result.client.lastName || ""} completo su tarjeta
         </p>
-        {result.cashback?.rewardAmount ? (
+        {olderFirst ? (
+          <p className="text-amber-800 bg-amber-50 border border-amber-200 rounded-lg mt-3 px-3 py-2 text-sm">
+            Primero se canjea su premio más antiguo:{" "}
+            <span className="font-semibold">
+              {next?.cashbackAmount
+                ? `descuenta ${formatSoles(next.cashbackAmount)}`
+                : (next?.label ?? "premio pendiente")}
+            </span>
+            . {thisCard} queda pendiente.
+          </p>
+        ) : result.cashback?.rewardAmount ? (
           <>
             <Badge className="mt-2 bg-amber-100 text-amber-700 text-sm">
               {result.cashback.rewardLabel ?? formatSoles(result.cashback.rewardAmount)}
@@ -1353,6 +1405,8 @@ function RewardStepView({
       <div className="flex flex-col gap-2 w-full max-w-xs">
         <Button
           className="w-full h-11 bg-amber-500 hover:bg-amber-600 text-white font-semibold gap-2"
+          // Wait until we know which reward the redeem takes.
+          disabled={state === "loading" || (state === "idle" && qrCode !== null)}
           onClick={async () => {
             // A second tap while the first redeem is in flight does nothing.
             if (await handleRedeem()) onRedeemed()

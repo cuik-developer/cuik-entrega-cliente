@@ -31,7 +31,7 @@ export async function nextPendingReward(
         or(sql`${rewards.expiresAt} IS NULL`, sql`${rewards.expiresAt} > NOW()`),
       ),
     )
-    .orderBy(asc(rewards.createdAt))
+    .orderBy(asc(rewards.createdAt), asc(rewards.id))
     .limit(1)
   if (!row) return null
   const amount = row.cashbackAmount === null ? null : Number(row.cashbackAmount)

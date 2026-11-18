@@ -117,7 +117,9 @@ export async function redeemReward(params: {
           or(sql`${rewards.expiresAt} IS NULL`, sql`${rewards.expiresAt} > NOW()`),
         ),
       )
-      .orderBy(asc(rewards.createdAt))
+      // Same order as nextPendingReward (lib/loyalty/next-reward.ts): the id
+      // breaks a tie when a bonus completed two cards in one visit.
+      .orderBy(asc(rewards.createdAt), asc(rewards.id))
       .for("update")
       .limit(1)
 

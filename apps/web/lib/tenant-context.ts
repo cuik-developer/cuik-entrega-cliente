@@ -26,6 +26,8 @@ export type TenantContextData = {
   adminCashier: boolean
   /** Super-admin switch: the Growth module (audiences, envíos, resultados) is on. */
   growth: boolean
+  /** Code on the passes: "code128" turns on the barcode camera in Escanear. */
+  barcodeFormat: "qr" | "code128"
 }
 
 /**
@@ -136,5 +138,6 @@ export async function getTenantForUser(userId: string): Promise<TenantContextDat
     memberRole,
     adminCashier: parseTenantFeatures(tenant.features).adminCashier,
     growth: parseTenantFeatures(tenant.features).growth,
+    barcodeFormat: parseTenantFeatures(tenant.features).barcodeFormat,
   }
 }

@@ -113,8 +113,8 @@ export async function GET(
 
     // What the client sees is the PUBLISHED design, as in registration, Google
     // and pass updates. Among published designs the one linked to the active
-    // promotion wins; a linked draft is used only when the tenant has not
-    // published any Apple design yet.
+    // promotion wins. A draft is never served: saving one must not change what
+    // clients get (without a published design there is no pass, as at registration).
     const candidates = await db
       .select()
       .from(passDesigns)
@@ -125,7 +125,6 @@ export async function GET(
     design =
       candidates.find((d) => d.isActive && linkedToPromo(d)) ??
       candidates.find((d) => d.isActive) ??
-      candidates.find(linkedToPromo) ??
       null
 
     if (!design) return errorResponse("No active pass design found", 404)
