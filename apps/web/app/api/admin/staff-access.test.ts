@@ -41,8 +41,15 @@ vi.mock("@cuik/db", () => {
 vi.mock("@/lib/admin/campaign-admin", () => ({ listAdminCampaigns: mockListCampaigns }))
 vi.mock("@/lib/admin/finance-data", () => ({ loadFinance: mockLoadFinance }))
 vi.mock("@/lib/admin/platform-metrics", () => ({ computePlatformMetrics: mockMetrics }))
+const { mockDashboard, mockFinanceExcel } = vi.hoisted(() => ({
+  mockDashboard: vi.fn(),
+  mockFinanceExcel: vi.fn(),
+}))
+vi.mock("@/lib/admin/finance-dashboard", () => ({ buildFinanceDashboard: mockDashboard }))
+vi.mock("@/lib/admin/finance-excel", () => ({ buildFinanceExcel: mockFinanceExcel }))
 
 import { GET as getCampaigns } from "./campaigns/route"
+import { GET as getLedger } from "./finance/ledger/route"
 import { GET as getFinance } from "./finance/route"
 import { GET as getMetrics } from "./metrics/route"
 
@@ -105,7 +112,16 @@ describe("super-admin APIs with Equipo Cuik staff", () => {
   })
 
   it("keeps finance owner-only even for staff with every permission", async () => {
-    as("staff", ["designs", "branding", "campaigns", "tenants_view", "metrics"])
+    // "Finanzas › Tablero (ver)" opens the Tablero only, never Costos e ingresos.
+    as("staff", [
+      "designs",
+      "branding",
+      "campaigns",
+      "tenants_view",
+      "metrics",
+      "simulator",
+      "finance_dashboard",
+    ])
     const res = await getFinance(req("/api/admin/finance"))
     expect(res.status).toBe(403)
     expect(mockLoadFinance).not.toHaveBeenCalled()
@@ -122,6 +138,28 @@ describe("super-admin APIs with Equipo Cuik staff", () => {
     expect((await getCampaigns(req("/api/admin/campaigns"))).status).toBe(403)
     as("user", ["campaigns"])
     expect((await getCampaigns(req("/api/admin/campaigns"))).status).toBe(403)
+  })
+
+  it("Finanzas › Tablero: staff with the permission see it on screen, never the Excel", async () => {
+    mockDashboard.mockResolvedValue({ range: { from: "2026-01", to: "2026-11" } })
+    mockFinanceExcel.mockResolvedValue(new Uint8Array([1]))
+
+    as("staff", ["designs", "metrics"])
+    expect((await getLedger(req("/api/admin/finance/ledger"))).status).toBe(403)
+    expect(mockDashboard).not.toHaveBeenCalled()
+
+    as("staff", ["finance_dashboard"])
+    expect((await getLedger(req("/api/admin/finance/ledger"))).status).toBe(200)
+    expect((await getLedger(req("/api/admin/finance/ledger?format=xlsx"))).status).toBe(403)
+    expect(mockFinanceExcel).not.toHaveBeenCalled()
+
+    as("staff", ["finance_dashboard"], "staff", false)
+    expect((await getLedger(req("/api/admin/finance/ledger"))).status).toBe(403)
+
+    as("super_admin", null)
+    expect((await getLedger(req("/api/admin/finance/ledger?format=xlsx"))).status).toBe(200)
+    as("super_admin", null, "super_admin", false)
+    expect((await getLedger(req("/api/admin/finance/ledger"))).status).toBe(403)
   })
 
   it("gives staff metrics without revenue and without the Excel export", async () => {

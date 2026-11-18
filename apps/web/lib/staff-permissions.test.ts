@@ -6,6 +6,11 @@ import {
   canOpenAdminPath,
   normalizeStaffPermissions,
   permissionForAdminPath,
+  STAFF_PERMISSIONS,
+  STAFF_VIEWS,
+  staffAccessSummary,
+  staffViewLevel,
+  withStaffViewLevel,
 } from "./staff-permissions"
 
 describe("normalizeStaffPermissions", () => {
@@ -55,7 +60,19 @@ describe("admin paths", () => {
     expect(permissionForAdminPath("/admin/pases/123/editor")).toBe("designs")
     expect(permissionForAdminPath("/admin/tenants/abc")).toBe("tenants_view")
     expect(permissionForAdminPath("/admin/finanzas")).toBeNull()
-    expect(permissionForAdminPath("/admin/finanzas/tablero")).toBeNull()
+    // Only the Tablero opens; every other Finanzas page stays owner-only.
+    expect(permissionForAdminPath("/admin/finanzas/tablero")).toBe("finance_dashboard")
+    for (const p of [
+      "inicio",
+      "cobranza",
+      "ventas",
+      "compras",
+      "cierres",
+      "empresa",
+      "prospectos",
+    ]) {
+      expect(permissionForAdminPath(`/admin/finanzas/${p}`)).toBeNull()
+    }
     expect(permissionForAdminPath("/admin/equipo")).toBeNull()
     // Prefix must match a whole segment.
     expect(permissionForAdminPath("/admin/pasesx")).toBeNull()
@@ -87,5 +104,46 @@ describe("Producto › Historial", () => {
       false,
     )
     expect(canOpenAdminPath(accessFor("super_admin", null), "/admin/historial")).toBe(true)
+  })
+})
+
+describe("Equipo Cuik › permissions table", () => {
+  it("every permission belongs to exactly one view row", () => {
+    for (const p of STAFF_PERMISSIONS) {
+      const rows = STAFF_VIEWS.filter((v) => v.levels.some((l) => l.permissions.includes(p)))
+      expect(
+        rows.map((r) => r.key),
+        p,
+      ).toHaveLength(1)
+    }
+  })
+
+  it("reads and sets a view's level without touching the others", () => {
+    const designs = STAFF_VIEWS.find((v) => v.key === "designs")
+    const tablero = STAFF_VIEWS.find((v) => v.key === "finance_dashboard")
+    if (!designs || !tablero) throw new Error("missing views")
+    expect(staffViewLevel(designs, ["designs"])).toBe(0)
+    expect(staffViewLevel(designs, ["designs", "designs_publish"])).toBe(1)
+    expect(staffViewLevel(tablero, ["designs"])).toBe(-1)
+
+    let perms = withStaffViewLevel(["designs", "designs_publish"], tablero, 0)
+    expect(perms).toEqual(["designs", "designs_publish", "finance_dashboard"])
+    perms = withStaffViewLevel(perms, designs, 0)
+    expect(perms).toEqual(["designs", "finance_dashboard"])
+    perms = withStaffViewLevel(perms, designs, -1)
+    expect(perms).toEqual(["finance_dashboard"])
+  })
+
+  it("summarizes a member's access by view and level", () => {
+    expect(staffAccessSummary(["designs", "designs_publish", "finance_dashboard"])).toEqual([
+      "Loyalty › Diseños de pases: Editar y publicar",
+      "Finanzas › Tablero: Ver",
+    ])
+  })
+
+  it("today's permissions read the same in the table (no migration)", () => {
+    expect(staffAccessSummary(normalizeStaffPermissions(["designs_publish"]))).toEqual([
+      "Loyalty › Diseños de pases: Editar y publicar",
+    ])
   })
 })

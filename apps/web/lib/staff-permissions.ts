@@ -14,6 +14,7 @@ export const STAFF_PERMISSIONS = [
   "tenants_view",
   "metrics",
   "simulator",
+  "finance_dashboard",
 ] as const
 
 export type StaffPermission = (typeof STAFF_PERMISSIONS)[number]
@@ -26,6 +27,7 @@ export const STAFF_PERMISSION_LABELS: Record<StaffPermission, string> = {
   tenants_view: "Tenants (solo lectura)",
   metrics: "Métricas",
   simulator: "Simulador (demos)",
+  finance_dashboard: "Finanzas › Tablero (ver)",
 }
 
 export const STAFF_PERMISSION_DESCRIPTIONS: Record<StaffPermission, string> = {
@@ -39,6 +41,108 @@ export const STAFF_PERMISSION_DESCRIPTIONS: Record<StaffPermission, string> = {
   metrics: "Ver las métricas agregadas de la plataforma, sin ingresos ni exportaciones.",
   simulator:
     "Registrar visitas y enviar campañas de prueba solo en las demos internas (Sistema › Configuración). Las notificaciones llegan de verdad a los teléfonos con pases de esas demos.",
+  finance_dashboard:
+    "Ver en pantalla el Tablero de Finanzas: ingresos, costos, punto de equilibrio, préstamos, lo que paga cada comercio y lo que puso y recupera el socio (y los prospectos, si activa la proyección). Sin descargar el Excel ni entrar a las demás vistas de Finanzas.",
+}
+
+/**
+ * Equipo Cuik › permissions as a table: one row per super-admin view, each
+ * with the levels it offers (besides "Sin acceso"). A level is the set of
+ * permissions it grants; a higher level includes the lower one. Only views
+ * whose server side is ready appear here: adding a row means opening its
+ * pages and APIs to that permission first (default deny everywhere else).
+ */
+export type StaffViewLevel = { label: string; permissions: readonly StaffPermission[] }
+export type StaffView = {
+  key: string
+  module: string
+  label: string
+  description: string
+  levels: readonly StaffViewLevel[]
+}
+
+export const STAFF_VIEWS: readonly StaffView[] = [
+  {
+    key: "tenants",
+    module: "Comercios",
+    label: "Tenants",
+    description: STAFF_PERMISSION_DESCRIPTIONS.tenants_view,
+    levels: [{ label: "Ver", permissions: ["tenants_view"] }],
+  },
+  {
+    key: "campaigns",
+    module: "Comercios",
+    label: "Validación de campañas",
+    description: STAFF_PERMISSION_DESCRIPTIONS.campaigns,
+    levels: [{ label: "Ver", permissions: ["campaigns"] }],
+  },
+  {
+    key: "metrics",
+    module: "Loyalty",
+    label: "Métricas",
+    description: STAFF_PERMISSION_DESCRIPTIONS.metrics,
+    levels: [{ label: "Ver", permissions: ["metrics"] }],
+  },
+  {
+    key: "designs",
+    module: "Loyalty",
+    label: "Diseños de pases",
+    description:
+      "Editar: ver y editar diseños y guardar borradores; tú revisas y publicas. Editar y publicar: además publica (actualiza los pases de todos los clientes del comercio), edita diseños publicados y elimina borradores.",
+    levels: [
+      { label: "Editar", permissions: ["designs"] },
+      { label: "Editar y publicar", permissions: ["designs", "designs_publish"] },
+    ],
+  },
+  {
+    key: "branding",
+    module: "Loyalty",
+    label: "Branding",
+    description: STAFF_PERMISSION_DESCRIPTIONS.branding,
+    levels: [{ label: "Editar", permissions: ["branding"] }],
+  },
+  {
+    key: "simulator",
+    module: "Loyalty",
+    label: "Simulador",
+    description: STAFF_PERMISSION_DESCRIPTIONS.simulator,
+    levels: [{ label: "Usar", permissions: ["simulator"] }],
+  },
+  {
+    key: "finance_dashboard",
+    module: "Finanzas",
+    label: "Tablero",
+    description: STAFF_PERMISSION_DESCRIPTIONS.finance_dashboard,
+    levels: [{ label: "Ver", permissions: ["finance_dashboard"] }],
+  },
+]
+
+/** Highest level of `view` that `permissions` fully grant: -1 = Sin acceso. */
+export function staffViewLevel(view: StaffView, permissions: readonly StaffPermission[]): number {
+  for (let i = view.levels.length - 1; i >= 0; i--) {
+    if (view.levels[i].permissions.every((p) => permissions.includes(p))) return i
+  }
+  return -1
+}
+
+/** `permissions` with `view` set to `level` (-1 = Sin acceso); other views untouched. */
+export function withStaffViewLevel(
+  permissions: readonly StaffPermission[],
+  view: StaffView,
+  level: number,
+): StaffPermission[] {
+  const own = new Set(view.levels.flatMap((l) => l.permissions))
+  const next = new Set(permissions.filter((p) => !own.has(p)))
+  for (const p of view.levels[level]?.permissions ?? []) next.add(p)
+  return STAFF_PERMISSIONS.filter((p) => next.has(p))
+}
+
+/** "Tenants: Ver · Diseños de pases: Editar y publicar", for the member list. */
+export function staffAccessSummary(permissions: readonly StaffPermission[]): string[] {
+  return STAFF_VIEWS.flatMap((v) => {
+    const level = staffViewLevel(v, permissions)
+    return level < 0 ? [] : [`${v.module} › ${v.label}: ${v.levels[level].label}`]
+  })
 }
 
 const PERMISSION_SET: ReadonlySet<string> = new Set(STAFF_PERMISSIONS)
@@ -102,6 +206,8 @@ export const STAFF_SECTIONS: ReadonlyArray<{ prefix: string; permission: Section
   // Producto › Historial: each member sees only the areas they hold.
   { prefix: "/admin/historial", permission: ["designs", "branding", "simulator"] },
   { prefix: "/admin/simulador", permission: "simulator" },
+  // Only the Tablero: every other Finanzas page stays owner-only.
+  { prefix: "/admin/finanzas/tablero", permission: "finance_dashboard" },
 ]
 
 function matchesPrefix(pathname: string, prefix: string): boolean {
@@ -128,6 +234,7 @@ const LANDING_ORDER: ReadonlyArray<{ href: string; permission: StaffPermission }
   { href: "/admin/pases", permission: "designs" },
   { href: "/admin/campanas", permission: "campaigns" },
   { href: "/admin/branding", permission: "branding" },
+  { href: "/admin/finanzas/tablero", permission: "finance_dashboard" },
 ]
 
 export function adminLandingHref(access: AdminAccess): string | null {

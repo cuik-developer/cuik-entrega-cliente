@@ -13,6 +13,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
+import { useAdminAccess } from "@/components/admin/admin-access"
 import {
   DataTable,
   Notice,
@@ -96,6 +97,9 @@ function ChartTooltip({
  * merchant's billing terms, the fixed costs and the loan schedule.
  */
 export function TableroClient() {
+  // Equipo Cuik with "Finanzas › Tablero (ver)": screen only, no Excel and no
+  // way into the rest of Finanzas (both stay owner-only on the server too).
+  const isOwner = useAdminAccess().kind === "super_admin"
   const [data, setData] = useState<FinanceDashboard | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -288,18 +292,20 @@ export function TableroClient() {
       <PageHeader
         crumbs={[
           { label: "Inicio", href: "/admin" },
-          { label: "Finanzas", href: "/admin/finanzas" },
+          isOwner ? { label: "Finanzas", href: "/admin/finanzas" } : { label: "Finanzas" },
           { label: "Tablero" },
         ]}
         title="Tablero"
         subtitle="Cuánto entra, cuánto sale y cuánto falta para que Cuik se pague solo. Soles; los dólares van al tipo de cambio de cada mes. Los meses futuros se proyectan con las condiciones de facturación de cada comercio, los costos fijos y las cuotas."
         actions={
-          <Button asChild variant="outline" size="sm" className="h-8 text-[12.5px]">
-            <a href={`/api/admin/finance/ledger?${query}${query ? "&" : ""}format=xlsx`}>
-              <Download className="w-3.5 h-3.5" />
-              Exportar Excel
-            </a>
-          </Button>
+          isOwner ? (
+            <Button asChild variant="outline" size="sm" className="h-8 text-[12.5px]">
+              <a href={`/api/admin/finance/ledger?${query}${query ? "&" : ""}format=xlsx`}>
+                <Download className="w-3.5 h-3.5" />
+                Exportar Excel
+              </a>
+            </Button>
+          ) : undefined
         }
       />
 

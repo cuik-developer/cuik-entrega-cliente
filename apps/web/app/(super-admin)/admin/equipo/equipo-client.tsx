@@ -16,7 +16,6 @@ import {
   Tr,
 } from "@/components/admin/enterprise"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -28,10 +27,11 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
-  STAFF_PERMISSION_DESCRIPTIONS,
-  STAFF_PERMISSION_LABELS,
-  STAFF_PERMISSIONS,
+  STAFF_VIEWS,
   type StaffPermission,
+  staffAccessSummary,
+  staffViewLevel,
+  withStaffViewLevel,
 } from "@/lib/staff-permissions"
 import {
   inviteStaff,
@@ -51,7 +51,12 @@ function fmtDate(value: Date | string) {
   })
 }
 
-function PermissionChecks({
+/**
+ * One row per super-admin view, grouped by module, with "Sin acceso" and the
+ * levels the view offers. Only views already opened on the server are listed
+ * (STAFF_VIEWS); a higher level includes the lower one.
+ */
+function PermissionMatrix({
   value,
   onChange,
   idPrefix,
@@ -60,44 +65,54 @@ function PermissionChecks({
   onChange: (next: StaffPermission[]) => void
   idPrefix: string
 }) {
+  const modules = [...new Set(STAFF_VIEWS.map((v) => v.module))]
   return (
-    <div className="space-y-2.5">
-      {STAFF_PERMISSIONS.map((p) => {
-        const id = `${idPrefix}-${p}`
-        const checked = value.includes(p)
-        return (
-          <div key={p} className="flex items-start gap-2.5">
-            <Checkbox
-              id={id}
-              checked={checked}
-              onCheckedChange={(c) => {
-                // Publishing includes working on designs: the two move together.
-                const next = new Set(value)
-                if (c === true) {
-                  next.add(p)
-                  if (p === "designs_publish") next.add("designs")
-                } else {
-                  next.delete(p)
-                  if (p === "designs") next.delete("designs_publish")
-                }
-                onChange(STAFF_PERMISSIONS.filter((x) => next.has(x)))
-              }}
-              className="mt-0.5"
-            />
-            <Label
-              htmlFor={id}
-              className="flex flex-col items-start gap-0.5 font-normal cursor-pointer"
-            >
-              <span className="text-[12.5px] font-medium text-ent-fg">
-                {STAFF_PERMISSION_LABELS[p]}
-              </span>
-              <span className="text-[11.5px] text-ent-fg-3">
-                {STAFF_PERMISSION_DESCRIPTIONS[p]}
-              </span>
-            </Label>
+    <div className="space-y-3">
+      {modules.map((module) => (
+        <div key={module} className="space-y-1.5">
+          <div className="text-[10.5px] font-semibold uppercase tracking-wide text-ent-fg-3">
+            {module}
           </div>
-        )
-      })}
+          {STAFF_VIEWS.filter((v) => v.module === module).map((view) => {
+            const current = staffViewLevel(view, value)
+            const options = [{ label: "Sin acceso", level: -1 }].concat(
+              view.levels.map((l, i) => ({ label: l.label, level: i })),
+            )
+            return (
+              <div
+                key={view.key}
+                className="flex flex-col gap-1.5 rounded-[4px] border border-ent-line px-2.5 py-2 sm:flex-row sm:items-start sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <div className="text-[12.5px] font-medium text-ent-fg">{view.label}</div>
+                  <div className="text-[11.5px] text-ent-fg-3">{view.description}</div>
+                </div>
+                <fieldset
+                  aria-label={`${module} › ${view.label}`}
+                  className="m-0 flex min-w-0 shrink-0 overflow-hidden rounded-[4px] border border-ent-line p-0"
+                >
+                  {options.map((o) => (
+                    <button
+                      key={o.level}
+                      id={`${idPrefix}-${view.key}-${o.level}`}
+                      type="button"
+                      aria-pressed={current === o.level}
+                      onClick={() => onChange(withStaffViewLevel(value, view, o.level))}
+                      className={`whitespace-nowrap px-2.5 py-1 text-[11.5px] transition-colors ${
+                        current === o.level
+                          ? "bg-ent-accent text-white"
+                          : "bg-transparent text-ent-fg-2 hover:bg-ent-accent-soft"
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </fieldset>
+              </div>
+            )
+          })}
+        </div>
+      ))}
     </div>
   )
 }
@@ -246,9 +261,11 @@ export function EquipoClient() {
       />
 
       <Notice tone="info">
-        Por defecto no ven nada: solo las secciones marcadas. Nunca acceden a Finanzas, Solicitudes,
-        Exportar, Reclamaciones, Planes, Configuración ni a los datos personales de los clientes.
-        Los diseños que guardan quedan “listos para publicar” y los publicas tú.
+        Por defecto no ven nada: solo las vistas y el nivel que les des. La tabla muestra las
+        vistas que ya se pueden compartir; el resto de Finanzas, Solicitudes, Exportar,
+        Reclamaciones, Planes, Configuración y los datos personales de los clientes siguen siendo
+        solo tuyos. Los diseños que guardan quedan “listos para publicar” salvo que les des
+        “Editar y publicar”.
       </Notice>
 
       <Panel>
@@ -285,7 +302,7 @@ export function EquipoClient() {
                   <Td className="text-ent-fg-2">{m.email}</Td>
                   <Td className="whitespace-normal text-ent-fg-2">
                     {m.permissions.length > 0
-                      ? m.permissions.map((p) => STAFF_PERMISSION_LABELS[p]).join(" · ")
+                      ? staffAccessSummary(m.permissions).join(" · ")
                       : "Sin permisos"}
                   </Td>
                   <Td>
@@ -373,7 +390,7 @@ export function EquipoClient() {
       )}
 
       <Dialog open={inviteOpen} onOpenChange={(o) => !inviting && setInviteOpen(o)}>
-        <DialogContent className="ent sm:max-w-md">
+        <DialogContent className="ent sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-[15px]">Invitar a Equipo Cuik</DialogTitle>
             <DialogDescription className="text-[12px]">
@@ -409,7 +426,7 @@ export function EquipoClient() {
             </div>
             <div className="space-y-1.5">
               <span className="text-[12px] font-medium">Permisos</span>
-              <PermissionChecks value={perms} onChange={setPerms} idPrefix="invite" />
+              <PermissionMatrix value={perms} onChange={setPerms} idPrefix="invite" />
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -425,14 +442,14 @@ export function EquipoClient() {
       </Dialog>
 
       <Dialog open={editing !== null} onOpenChange={(o) => !o && !saving && setEditing(null)}>
-        <DialogContent className="ent sm:max-w-md">
+        <DialogContent className="ent sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-[15px]">Permisos de {editing?.name}</DialogTitle>
             <DialogDescription className="text-[12px]">
               El cambio rige desde su próxima acción, sin cerrar su sesión.
             </DialogDescription>
           </DialogHeader>
-          <PermissionChecks value={editPerms} onChange={setEditPerms} idPrefix="edit" />
+          <PermissionMatrix value={editPerms} onChange={setEditPerms} idPrefix="edit" />
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setEditing(null)} disabled={saving}>
               Cancelar
