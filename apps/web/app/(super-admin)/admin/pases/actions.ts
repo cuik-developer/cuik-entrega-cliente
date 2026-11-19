@@ -843,23 +843,7 @@ async function propagateGooglePasses(
     return
   }
 
-  // 2. Query ALL pass_instances for this tenant (both with and without googleObjectId)
-  const googleInstances = await db
-    .select({
-      serialNumber: passInstances.serialNumber,
-      googleObjectId: passInstances.googleObjectId,
-      clientId: passInstances.clientId,
-    })
-    .from(passInstances)
-    .innerJoin(passDesigns, eq(passInstances.designId, passDesigns.id))
-    .where(eq(passDesigns.tenantId, tenantId))
-
-  if (googleInstances.length === 0) {
-    console.info("[publishDesign:Google] No Google pass instances to propagate")
-    return
-  }
-
-  // 3. Get asset URLs for loyalty class styling (logo, icon, strip_bg)
+  // 2. Get asset URLs for loyalty class styling (logo, icon, strip_bg)
   const assetRows = await db
     .select({ url: passAssets.url, type: passAssets.type })
     .from(passAssets)
@@ -938,7 +922,25 @@ async function propagateGooglePasses(
     )
   }
 
-  // 4. Load promotion maxVisits for the design
+  // 4. Query ALL pass_instances for this tenant (both with and without googleObjectId).
+  // After the class update on purpose: the class carries the banner (objects no longer
+  // repeat it), so a publish with no clients yet must still refresh it.
+  const googleInstances = await db
+    .select({
+      serialNumber: passInstances.serialNumber,
+      googleObjectId: passInstances.googleObjectId,
+      clientId: passInstances.clientId,
+    })
+    .from(passInstances)
+    .innerJoin(passDesigns, eq(passInstances.designId, passDesigns.id))
+    .where(eq(passDesigns.tenantId, tenantId))
+
+  if (googleInstances.length === 0) {
+    console.info("[publishDesign:Google] Class updated; no Google pass instances to propagate")
+    return
+  }
+
+  // 5. Load promotion maxVisits for the design
   const [designRow] = await db
     .select({ promotionId: passDesigns.promotionId })
     .from(passDesigns)
@@ -957,7 +959,7 @@ async function propagateGooglePasses(
     if (promo?.type) promotionType = promo.type as typeof promotionType
   }
 
-  // 5. Load all clients at once for template resolution
+  // 6. Load all clients at once for template resolution
   const clientIds = [...new Set(googleInstances.map((i) => i.clientId))]
   const clientRows = await db
     .select({
@@ -1021,7 +1023,7 @@ async function propagateGooglePasses(
     promotionType === "stamps" ? await activeCashbackSettings(tenantId) : null
   const barcodeFormat = await tenantBarcodeFormat(tenantId)
 
-  // 6. Batch upsert: 5 at a time with Promise.allSettled
+  // 7. Batch upsert: 5 at a time with Promise.allSettled
   let successCount = 0
   let failCount = 0
   const fields = designFieldsRaw as DesignFieldsRaw
