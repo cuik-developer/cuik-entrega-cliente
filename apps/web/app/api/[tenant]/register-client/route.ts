@@ -42,6 +42,7 @@ import { TURNSTILE_FAILED_MESSAGE, verifyTurnstile } from "@/lib/turnstile"
 import { tenantBarcodeFormat } from "@/lib/wallet/barcode-format"
 import { pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
 import { googleSaveOrigins } from "@/lib/wallet/google-save-origins"
+import { type StampsConfigLike, stripMaxVisits } from "@/lib/wallet/strip-layout"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 
 // ── Registration helpers ─────────────────────────────────────────────
@@ -612,8 +613,15 @@ async function generateWalletUrls(ctx: {
   // Primary design for pass_instance (prefer Apple since regeneratePass uses designId)
   const design = appleDesign
 
-  const stampsConfig = design.stampsConfig as { maxVisits?: number } | null
-  const maxVisits = stampsConfig?.maxVisits ?? 10
+  // Same rule as the wallet routes: the promotion counts the visits, the design
+  // only draws them. Reading the design here showed "0 de 8" on a new Google pass
+  // of a 6-stamp program until the first visit re-sent it with the promotion's value.
+  const [activePromo] = await db
+    .select({ maxVisits: promotions.maxVisits })
+    .from(promotions)
+    .where(and(eq(promotions.tenantId, tenant.id), eq(promotions.active, true)))
+    .limit(1)
+  const maxVisits = stripMaxVisits(activePromo, design.stampsConfig as StampsConfigLike | null)
 
   const serialNumber = client.qrCode
   let appleUrl: string | null = null

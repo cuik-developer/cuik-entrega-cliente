@@ -124,6 +124,20 @@ describe("loyalty object payload", () => {
     )
   })
 
+  it("never sends the banner as an image module (the class heroImage already shows it)", async () => {
+    const imageUrl = "https://cdn.example.com/hero.png"
+    const designFields = { headerFields: [], secondaryFields: [], backFields: [] }
+
+    for (const overrides of [{ imageUrl }, { imageUrl, designFields }]) {
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200 })
+      await upsertLoyaltyObject(baseParams(overrides))
+
+      const body = JSON.parse(mockFetch.mock.calls.at(-1)?.[1].body)
+      expect(body.imageModulesData).toBeUndefined()
+      expect(JSON.stringify(body)).not.toContain(imageUrl)
+    }
+  })
+
   it("builds correct objectId from issuerId and serialNumber", async () => {
     mockFetch.mockResolvedValueOnce({ ok: true, status: 200 })
     await upsertLoyaltyObject(baseParams())

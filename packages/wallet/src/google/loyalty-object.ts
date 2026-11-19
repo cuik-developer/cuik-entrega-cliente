@@ -66,6 +66,10 @@ function buildLoyaltyPointsLabel(
 
 /**
  * Build the Google Wallet loyalty object payload.
+ *
+ * No `imageModulesData`: the banner is the class `heroImage`. Sending the same
+ * image again as an object image module (what `params.imageUrl` used to do) made
+ * Google's full-screen pass view (2026) show it twice, so `imageUrl` is ignored.
  */
 function buildLoyaltyObjectPayload(params: UpsertLoyaltyObjectParams) {
   const {
@@ -132,17 +136,6 @@ function buildLoyaltyObjectPayload(params: UpsertLoyaltyObjectParams) {
       textModulesData,
     }
 
-    if (params.imageUrl) {
-      dynamicPayload.imageModulesData = [
-        {
-          mainImage: {
-            sourceUri: { uri: params.imageUrl },
-          },
-          id: "DESIGN_IMAGE",
-        },
-      ]
-    }
-
     return { objectId, payload: dynamicPayload }
   }
 
@@ -172,17 +165,6 @@ function buildLoyaltyObjectPayload(params: UpsertLoyaltyObjectParams) {
         body: statusText,
       },
     ],
-  }
-
-  if (params.imageUrl) {
-    fallbackPayload.imageModulesData = [
-      {
-        mainImage: {
-          sourceUri: { uri: params.imageUrl },
-        },
-        id: "DESIGN_IMAGE",
-      },
-    ]
   }
 
   return { objectId, payload: fallbackPayload }

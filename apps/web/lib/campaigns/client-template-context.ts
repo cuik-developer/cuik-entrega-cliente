@@ -16,6 +16,7 @@ import { formatBirthday } from "@/lib/birthday"
 import { cashbackTemplateVars } from "@/lib/loyalty/cashback"
 import { pointsExpiryTemplateVars } from "@/lib/loyalty/points-lots"
 import { stampsInCycleOf } from "@/lib/loyalty/stamps"
+import { type StampsConfigLike, stripMaxVisits } from "@/lib/wallet/strip-layout"
 
 /**
  * Builds one TemplateContext per client so campaign messages can be resolved
@@ -37,7 +38,11 @@ export async function buildClientTemplateContexts(
     .where(eq(tenants.id, tenantId))
     .limit(1)
   const [activePromotion] = await db
-    .select({ type: promotions.type, config: promotions.config })
+    .select({
+      type: promotions.type,
+      maxVisits: promotions.maxVisits,
+      config: promotions.config,
+    })
     .from(promotions)
     .where(and(eq(promotions.tenantId, tenantId), eq(promotions.active, true)))
     .limit(1)
@@ -52,7 +57,11 @@ export async function buildClientTemplateContexts(
     .from(passDesigns)
     .where(and(eq(passDesigns.tenantId, tenantId), eq(passDesigns.isActive, true)))
     .limit(1)
-  const maxVisits = (activeDesign?.stampsConfig as { maxVisits?: number } | null)?.maxVisits ?? 8
+  // The promotion counts the visits, the design only draws them (same rule as the wallet routes).
+  const maxVisits = stripMaxVisits(
+    activePromotion,
+    activeDesign?.stampsConfig as StampsConfigLike | null,
+  )
   const isPoints = activePromotion?.type === "points"
   const timezone = tenantRow?.timezone ?? "America/Lima"
 
