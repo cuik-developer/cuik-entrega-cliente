@@ -24,6 +24,21 @@ describe("publishing a design refreshes the Google class", () => {
     expect(noPassesExit).toBeGreaterThan(classUpdate)
   })
 
+  // 19 Nov 2026: a publish read the visits per card from the promotion linked to
+  // the design (10 when missing) while visits and sign-up used the active one,
+  // so a publish could send "N de 10" until each client's next visit.
+  it("counts visits against the active promotion, like visits and sign-up", () => {
+    const s = src("app/(super-admin)/admin/pases/actions.ts")
+    const body = s.slice(s.indexOf("async function propagateGooglePasses("))
+
+    expect(body).toContain("eq(promotions.active, true)")
+    expect(body).toMatch(/const maxVisits = stripMaxVisits\(promo,/)
+    expect(body).not.toMatch(/let maxVisits = 10/)
+    // A completed card with its reward pending reads "6 de 6" in the design fields too.
+    expect(body).toContain("stamps: stampsTemplateVars(")
+    expect(s).toMatch(/current: cardFull \? maxVisits : stampsInCycle/)
+  })
+
   it("loyalty objects do not carry the banner again", () => {
     const s = readFileSync(
       join(WEB, "..", "..", "packages", "wallet", "src", "google", "loyalty-object.ts"),

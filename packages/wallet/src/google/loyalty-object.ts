@@ -68,8 +68,12 @@ function buildLoyaltyPointsLabel(
  * Build the Google Wallet loyalty object payload.
  *
  * No `imageModulesData`: the banner is the class `heroImage`. Sending the same
- * image again as an object image module (what `params.imageUrl` used to do) made
- * Google's full-screen pass view (2026) show it twice, so `imageUrl` is ignored.
+ * image again as an object image module made Google's full-screen pass view
+ * (2026) show it twice.
+ *
+ * `stampsImageUrl` (tenants with the "sellos en Google" switch on) is the stamp
+ * card drawn for this client's progress. It goes as the OBJECT `heroImage`,
+ * which replaces the class banner on this pass only, so there is still one image.
  */
 function buildLoyaltyObjectPayload(params: UpsertLoyaltyObjectParams) {
   const {
@@ -101,6 +105,9 @@ function buildLoyaltyObjectPayload(params: UpsertLoyaltyObjectParams) {
     ? "Sumá puntos en cada compra y canjealos por premios."
     : buildStatusText(stampsInCycle, maxVisits, hasReward, rewardRedeemed)
   const loyaltyLabel = buildLoyaltyPointsLabel(promotionType)
+  const heroImage = params.stampsImageUrl
+    ? { heroImage: { sourceUri: { uri: params.stampsImageUrl } } }
+    : {}
 
   // ─── Dynamic vs hard-coded fields ────────────────────────────────
   if (params.designFields) {
@@ -134,6 +141,7 @@ function buildLoyaltyObjectPayload(params: UpsertLoyaltyObjectParams) {
         },
       },
       textModulesData,
+      ...heroImage,
     }
 
     return { objectId, payload: dynamicPayload }
@@ -165,6 +173,7 @@ function buildLoyaltyObjectPayload(params: UpsertLoyaltyObjectParams) {
         body: statusText,
       },
     ],
+    ...heroImage,
   }
 
   return { objectId, payload: fallbackPayload }
@@ -173,12 +182,27 @@ function buildLoyaltyObjectPayload(params: UpsertLoyaltyObjectParams) {
 /**
  * Upsert a Google Wallet loyalty object.
  *
- * Strategy: PUT first (update). If 404, fall back to POST (create).
- * Uses native `fetch` with Bearer token auth.
+ * A pass that carries the stamp card and is rejected as invalid (Google may
+ * check that the image loads) is sent once more without it: the visit must
+ * still reach the phone, with the class banner until the next update.
  */
 export async function upsertLoyaltyObject(
   params: UpsertLoyaltyObjectParams,
 ): Promise<UpsertResult> {
+  const result = await sendLoyaltyObject(params)
+  if (result.ok || result.status !== 400 || !params.stampsImageUrl) return result
+
+  console.warn(
+    `[Wallet:Google] Object rejected with the stamp card image, retrying without it: ${result.error}`,
+  )
+  return sendLoyaltyObject({ ...params, stampsImageUrl: undefined })
+}
+
+/**
+ * Strategy: PUT first (update). If 404, fall back to POST (create).
+ * Uses native `fetch` with Bearer token auth.
+ */
+async function sendLoyaltyObject(params: UpsertLoyaltyObjectParams): Promise<UpsertResult> {
   const { accessToken } = params
   const { objectId, payload } = buildLoyaltyObjectPayload(params)
 

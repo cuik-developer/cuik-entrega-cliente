@@ -84,7 +84,7 @@ async function updateGoogle(
       serialNumber: params.serialNumber,
       clientName: params.clientName,
       clientDni: params.google.clientDni,
-      imageUrl: params.google.imageUrl,
+      stampsImageUrl: params.google.stampsImageUrl,
       stampsInCycle: params.stampsInCycle,
       maxVisits: params.maxVisits,
       totalVisits: params.totalVisits,

@@ -32,6 +32,7 @@ import { pointsExpiryTemplateVars } from "@/lib/loyalty/points-lots"
 import { stampsInCycleOf } from "@/lib/loyalty/stamps"
 import { tenantBarcodeFormat } from "@/lib/wallet/barcode-format"
 import { pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
+import { googleStampsImageUrl } from "@/lib/wallet/google-stamps-image-db"
 import { googleSaveOrigins } from "@/lib/wallet/google-save-origins"
 import { type StampsConfigLike, stripMaxVisits } from "@/lib/wallet/strip-layout"
 
@@ -238,7 +239,13 @@ export async function POST(
       barcodeFormat: await tenantBarcodeFormat(tenant.id),
       accessToken,
       designFields: resolvedDesignFields,
-      imageUrl: heroImageUrl,
+      // Stamp card drawn with the client's progress, only with the tenant switch on.
+      stampsImageUrl: await googleStampsImageUrl(tenant.id, {
+        stampsInCycle,
+        maxVisits,
+        pendingRewards,
+        totalVisits: client.totalVisits,
+      }),
       promotionType: activePromotion?.type,
       pointsBalance: client.pointsBalance,
     })

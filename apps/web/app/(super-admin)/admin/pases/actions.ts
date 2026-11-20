@@ -51,6 +51,8 @@ import { canAccess } from "@/lib/staff-permissions"
 import { apnsClientCertFor } from "@/lib/wallet/apns-client-cert"
 import { tenantBarcodeFormat } from "@/lib/wallet/barcode-format"
 import { GOOGLE_HERO_ASSET_TYPE, pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
+import { tenantStampsImage } from "@/lib/wallet/google-stamps-image-db"
+import { type StampsConfigLike, stripCompleted, stripMaxVisits } from "@/lib/wallet/strip-layout"
 import { googleMerchantLocations } from "@/lib/wallet/google-nearby"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 import { getDesignById, listDesignsByTenant } from "./queries"
@@ -624,6 +626,43 @@ export async function refreshTenantPasses(
   return { success: true, data: { designs: live.length } }
 }
 
+/**
+ * Re-send only the Google passes of a tenant, after a setting that touches
+ * nothing on iPhone changed (the "sellos en Google" switch). Same design choice
+ * as registration: the Google design when there is one, else the live design.
+ * Runs in the background, like a publish. Super-admin only.
+ */
+export async function refreshTenantGooglePasses(
+  tenantId: string,
+): Promise<ActionResult<{ started: boolean }>> {
+  const guard = await requirePublish()
+  if (guard.error !== null) return { success: false, error: guard.error }
+  if (guard.access.kind === "staff") return { success: false, error: "Solo el super admin" }
+  if (!z.string().uuid().safeParse(tenantId).success)
+    return { success: false, error: "Comercio inválido" }
+
+  const googleConfig = validateGoogleEnv()
+  if (!googleConfig) return { success: false, error: "Google Wallet no está configurado" }
+
+  const live = await db
+    .select({ id: passDesigns.id, type: passDesigns.type, fields: passDesigns.fields })
+    .from(passDesigns)
+    .where(
+      and(
+        eq(passDesigns.tenantId, tenantId),
+        eq(passDesigns.isActive, true),
+        eq(passDesigns.isTemplate, false),
+      ),
+    )
+  const design = live.find((d) => d.type === "google_loyalty") ?? live[0]
+  if (!design) return { success: true, data: { started: false } }
+
+  void propagateGooglePasses(design.id, tenantId, design.fields, googleConfig).catch((err) => {
+    console.error("[refreshTenantGooglePasses] Google propagation error:", err)
+  })
+  return { success: true, data: { started: true } }
+}
+
 export async function deleteDesign(designId: string): Promise<ActionResult<{ id: string }>> {
   const guard = await requirePublish()
   if (guard.error !== null) return { success: false, error: guard.error }
@@ -822,6 +861,22 @@ type DesignFieldsRaw = {
   backFields?: Array<{ key: string; label: string; value: string }>
 } | null
 
+/** {{stamps.*}} of one client. A completed card with its reward pending reads "6 de 6", as visits send it. */
+function stampsTemplateVars(
+  stampsInCycle: number,
+  maxVisits: number,
+  pendingRewards: number,
+  totalVisits: number,
+) {
+  const cardFull = stripCompleted(stampsInCycle, pendingRewards, totalVisits)
+  return {
+    current: cardFull ? maxVisits : stampsInCycle,
+    max: maxVisits,
+    remaining: cardFull ? 0 : maxVisits - stampsInCycle,
+    total: totalVisits,
+  }
+}
+
 async function propagateGooglePasses(
   designId: string,
   tenantId: string,
@@ -940,24 +995,37 @@ async function propagateGooglePasses(
     return
   }
 
-  // 5. Load promotion maxVisits for the design
+  // 5. Visits per card and program type. Same rule as visits, sign-up and the
+  // Apple pass: the tenant's ACTIVE promotion counts the visits and the design
+  // only draws them. The promotion linked to the design is the fallback. Reading
+  // only the linked one (10 when missing) sent "N de 10", or the count of a
+  // promotion no longer active, until each client's next visit corrected it.
   const [designRow] = await db
-    .select({ promotionId: passDesigns.promotionId })
+    .select({ promotionId: passDesigns.promotionId, stampsConfig: passDesigns.stampsConfig })
     .from(passDesigns)
     .where(eq(passDesigns.id, designId))
     .limit(1)
 
-  let maxVisits = 10 // default
-  let promotionType: "stamps" | "points" | "discount" | "coupon" | "subscription" | undefined
-  if (designRow?.promotionId) {
-    const [promo] = await db
+  let [promo] = await db
+    .select({ maxVisits: promotions.maxVisits, type: promotions.type })
+    .from(promotions)
+    .where(and(eq(promotions.tenantId, tenantId), eq(promotions.active, true)))
+    .limit(1)
+  if (!promo && designRow?.promotionId) {
+    ;[promo] = await db
       .select({ maxVisits: promotions.maxVisits, type: promotions.type })
       .from(promotions)
       .where(eq(promotions.id, designRow.promotionId))
       .limit(1)
-    if (promo?.maxVisits) maxVisits = promo.maxVisits
-    if (promo?.type) promotionType = promo.type as typeof promotionType
   }
+  const maxVisits = stripMaxVisits(promo, designRow?.stampsConfig as StampsConfigLike | null)
+  const promotionType = promo?.type as
+    | "stamps"
+    | "points"
+    | "discount"
+    | "coupon"
+    | "subscription"
+    | undefined
 
   // 6. Load all clients at once for template resolution
   const clientIds = [...new Set(googleInstances.map((i) => i.clientId))]
@@ -1027,6 +1095,8 @@ async function propagateGooglePasses(
   let successCount = 0
   let failCount = 0
   const fields = designFieldsRaw as DesignFieldsRaw
+  // Stamp card drawn per client, only for tenants with the switch on (else null).
+  const stampsImage = await tenantStampsImage(tenantId)
 
   for (let i = 0; i < targets.length; i += GOOGLE_PROPAGATE_BATCH) {
     const batch = targets.slice(i, i + GOOGLE_PROPAGATE_BATCH)
@@ -1037,7 +1107,8 @@ async function propagateGooglePasses(
         if (!client) return { ok: false, error: "Client not found" }
 
         const stampsInCycle = stampsInCycleOf(client, maxVisits)
-        const hasReward = (pendingRewardsMap.get(instance.clientId) ?? 0) > 0
+        const pendingRewards = pendingRewardsMap.get(instance.clientId) ?? 0
+        const hasReward = pendingRewards > 0
 
         // Resolve template fields per client
         let resolvedDesignFields: {
@@ -1064,17 +1135,17 @@ async function propagateGooglePasses(
               birthday: client.birthday,
               customData: client.customData as Record<string, unknown> | null,
             },
-            stamps: {
-              current: stampsInCycle,
-              max: maxVisits,
-              remaining: maxVisits - stampsInCycle,
-              total: client.totalVisits,
-            },
+            stamps: stampsTemplateVars(
+              stampsInCycle,
+              maxVisits,
+              pendingRewards,
+              client.totalVisits,
+            ),
             points: {
               balance: client.pointsBalance,
             },
             rewards: {
-              pending: pendingRewardsMap.get(instance.clientId) ?? 0,
+              pending: pendingRewards,
             },
             cashback: cashbackSettings
               ? cashbackTemplateVars(
@@ -1105,7 +1176,12 @@ async function propagateGooglePasses(
           barcodeFormat,
           accessToken,
           designFields: resolvedDesignFields,
-          imageUrl: heroImageUrl,
+          stampsImageUrl: stampsImage?.({
+            stampsInCycle,
+            maxVisits,
+            pendingRewards,
+            totalVisits: client.totalVisits,
+          }),
           promotionType,
           pointsBalance: client.pointsBalance,
           expired: client.status === "deleted",

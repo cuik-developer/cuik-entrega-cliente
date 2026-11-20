@@ -41,6 +41,7 @@ import { checkRateLimit, HOUR_MS, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit"
 import { TURNSTILE_FAILED_MESSAGE, verifyTurnstile } from "@/lib/turnstile"
 import { tenantBarcodeFormat } from "@/lib/wallet/barcode-format"
 import { pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
+import { googleStampsImageUrl } from "@/lib/wallet/google-stamps-image-db"
 import { googleSaveOrigins } from "@/lib/wallet/google-save-origins"
 import { type StampsConfigLike, stripMaxVisits } from "@/lib/wallet/strip-layout"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
@@ -472,7 +473,13 @@ async function generateGoogleWalletUrl(ctx: {
       barcodeFormat: await tenantBarcodeFormat(tenant.id),
       accessToken,
       designFields: resolvedDesignFields,
-      imageUrl: heroImageUrl,
+      // Stamp card drawn with the client's progress, only with the tenant switch on.
+      stampsImageUrl: await googleStampsImageUrl(tenant.id, {
+        stampsInCycle,
+        maxVisits,
+        pendingRewards: 0,
+        totalVisits: client.totalVisits,
+      }),
       promotionType: activePromotion?.type,
       pointsBalance: client.pointsBalance,
     })

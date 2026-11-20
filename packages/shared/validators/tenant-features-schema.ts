@@ -12,6 +12,11 @@ export const tenantFeaturesSchema = z.object({
   barcodeFormat: z.enum(["qr", "code128"]).optional(),
   /** Growth: audiences, envíos and attributed sales over the POS data (needs the connector). */
   growth: z.boolean().optional(),
+  /**
+   * Google Wallet shows the stamp card drawn with the client's progress (the
+   * same strip as Apple) instead of the fixed banner. Off = fixed banner, as always.
+   */
+  googleStampsImage: z.boolean().optional(),
 })
 export type TenantFeatures = z.infer<typeof tenantFeaturesSchema>
 
@@ -23,5 +28,6 @@ export function parseTenantFeatures(raw: unknown): Required<TenantFeatures> {
     adminCashier: data.adminCashier === true,
     barcodeFormat: data.barcodeFormat === "code128" ? "code128" : "qr",
     growth: data.growth === true,
+    googleStampsImage: data.googleStampsImage === true,
   }
 }

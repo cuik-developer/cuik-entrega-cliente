@@ -4,7 +4,6 @@ import {
   clients,
   db,
   eq,
-  passAssets,
   passDesigns,
   passInstances,
   promotions,
@@ -32,7 +31,7 @@ import { allMilestoneMessages } from "@/lib/loyalty/milestones"
 import { nextExpiration } from "@/lib/loyalty/points-lots"
 import { apnsClientCertFor } from "@/lib/wallet/apns-client-cert"
 import { tenantBarcodeFormat } from "@/lib/wallet/barcode-format"
-import { pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
+import { googleStampsImageUrl } from "@/lib/wallet/google-stamps-image-db"
 import { stripCompleted } from "@/lib/wallet/strip-layout"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 
@@ -266,7 +265,7 @@ export async function triggerWalletUpdate(ctx: {
     qrValue: string
     barcodeFormat?: "qr" | "code128"
     clientDni?: string
-    imageUrl?: string
+    stampsImageUrl?: string
   } | null = null
 
   const googleConfig = validateGoogleEnv()
@@ -276,7 +275,7 @@ export async function triggerWalletUpdate(ctx: {
       const classId = buildGoogleClassId(googleConfig.issuerId, ctx.tenantName)
 
       // The object update is a full PUT: resend the DNI ("ID de miembro") and
-      // the details image, or the first visit wipes what registration set.
+      // the stamp card image, or the first visit wipes what registration set.
       const details = instance.googleObjectId ? await googleObjectDetails(ctx) : {}
       googleParams = {
         issuerId: googleConfig.issuerId,
@@ -393,35 +392,27 @@ async function notifyGoogleMilestone(p: {
   )
 }
 
-/** DNI and hero image of the Google object, as registration and publish send them. */
+/**
+ * DNI and stamp card image of the Google object, as registration and publish
+ * send them. The image is only there for tenants with the "sellos en Google"
+ * switch on; everyone else keeps the class banner.
+ */
 async function googleObjectDetails(ctx: {
   clientId: string
   tenantId: string
-}): Promise<{ clientDni?: string; imageUrl?: string }> {
-  const [[client], designs] = await Promise.all([
+  stampsInCycle: number
+  maxVisits: number
+  pendingRewards: number
+  totalVisits: number
+}): Promise<{ clientDni?: string; stampsImageUrl?: string }> {
+  const [[client], stampsImageUrl] = await Promise.all([
     db.select({ dni: clients.dni }).from(clients).where(eq(clients.id, ctx.clientId)).limit(1),
-    db
-      .select({ id: passDesigns.id, type: passDesigns.type })
-      .from(passDesigns)
-      .where(and(eq(passDesigns.tenantId, ctx.tenantId), eq(passDesigns.isActive, true))),
+    googleStampsImageUrl(ctx.tenantId, {
+      stampsInCycle: ctx.stampsInCycle,
+      maxVisits: ctx.maxVisits,
+      pendingRewards: ctx.pendingRewards,
+      totalVisits: ctx.totalVisits,
+    }),
   ])
-  // Same design choice as register-client and publish: the Google design when
-  // there is one, else the only active design. Never mix two designs' assets.
-  const design = designs.find((d) => d.type === "google_loyalty") ?? designs[0]
-  const assetRows = design
-    ? await db
-        .select({ url: passAssets.url, type: passAssets.type })
-        .from(passAssets)
-        .where(eq(passAssets.designId, design.id))
-    : []
-  const hero = pickGoogleHeroAsset(assetRows)
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? ""
-  return {
-    clientDni: client?.dni ?? undefined,
-    imageUrl: hero?.url
-      ? hero.url.startsWith("http")
-        ? hero.url
-        : `${baseUrl}${hero.url}`
-      : undefined,
-  }
+  return { clientDni: client?.dni ?? undefined, stampsImageUrl }
 }

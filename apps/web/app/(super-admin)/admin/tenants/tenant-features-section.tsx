@@ -13,13 +13,20 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { refreshTenantPasses } from "../pases/actions"
+import { refreshTenantGooglePasses, refreshTenantPasses } from "../pases/actions"
 
 type Features = Required<TenantFeatures>
 
 type BoolKey = { [K in keyof Features]: Features[K] extends boolean ? K : never }[keyof Features]
 
-const ITEMS: { key: BoolKey; title: string; detail: string }[] = [
+const ITEMS: {
+  key: BoolKey
+  title: string
+  detail: string
+  /** Changing it re-sends the tenant's Google passes: asked first, then refreshed. */
+  confirmOn?: string
+  confirmOff?: string
+}[] = [
   {
     key: "adminCashier",
     title: "Modo cajero para administradores",
@@ -31,6 +38,16 @@ const ITEMS: { key: BoolKey; title: string; detail: string }[] = [
     title: "Growth",
     detail:
       "Audiencias, envíos por WhatsApp y ventas atribuidas sobre las ventas del punto de venta. Necesita el conector POS; las reglas y los términos se fijan en Growth › Reglas por comercio.",
+  },
+  {
+    key: "googleStampsImage",
+    title: "Sellos dibujados en Google Wallet",
+    detail:
+      "La tarjeta en Android muestra los sellos del cliente, con el mismo dibujo que en iPhone, en vez de la imagen fija. Solo programas de sellos con un diseño de Apple publicado. Al cambiarlo se actualizan los pases de Android del comercio.",
+    confirmOn:
+      "¿Mostrar los sellos dibujados en Google Wallet? Se actualizan los pases de Android de este comercio.",
+    confirmOff:
+      "¿Volver a la imagen fija en Google Wallet? Se actualizan los pases de Android de este comercio.",
   },
 ]
 
@@ -79,7 +96,18 @@ export function TenantFeaturesSection({ tenantId }: { tenantId: string }) {
   }
 
   async function toggle(key: BoolKey, value: boolean) {
-    if (await save(key, value)) toast.success(value ? "Activado" : "Desactivado")
+    const item = ITEMS.find((i) => i.key === key)
+    const question = value ? item?.confirmOn : item?.confirmOff
+    if (!question) {
+      if (await save(key, value)) toast.success(value ? "Activado" : "Desactivado")
+      return
+    }
+    if (!window.confirm(question) || !(await save(key, value))) return
+    setSaving(key)
+    const r = await refreshTenantGooglePasses(tenantId)
+    setSaving(null)
+    if (r.success) toast.success("Guardado. Los pases de Android se están actualizando.")
+    else toast.error(`Guardado, pero no se pudieron actualizar los pases: ${r.error}`)
   }
 
   async function changeBarcode(value: Features["barcodeFormat"]) {

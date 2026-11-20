@@ -124,17 +124,75 @@ describe("loyalty object payload", () => {
     )
   })
 
-  it("never sends the banner as an image module (the class heroImage already shows it)", async () => {
-    const imageUrl = "https://cdn.example.com/hero.png"
+  it("sends no image of its own by default: the class banner is the only one", async () => {
     const designFields = { headerFields: [], secondaryFields: [], backFields: [] }
 
-    for (const overrides of [{ imageUrl }, { imageUrl, designFields }]) {
+    for (const overrides of [{}, { designFields }]) {
       mockFetch.mockResolvedValueOnce({ ok: true, status: 200 })
       await upsertLoyaltyObject(baseParams(overrides))
 
       const body = JSON.parse(mockFetch.mock.calls.at(-1)?.[1].body)
       expect(body.imageModulesData).toBeUndefined()
-      expect(JSON.stringify(body)).not.toContain(imageUrl)
+      expect(body.heroImage).toBeUndefined()
+    }
+  })
+
+  it("sends the stamp card as the object banner, never as an image module", async () => {
+    const stampsImageUrl = "https://app.example.com/api/public/google-stamps/d/abcdefabcdef-3.png"
+    const designFields = { headerFields: [], secondaryFields: [], backFields: [] }
+
+    for (const overrides of [{ stampsImageUrl }, { stampsImageUrl, designFields }]) {
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200 })
+      await upsertLoyaltyObject(baseParams(overrides))
+
+      const body = JSON.parse(mockFetch.mock.calls.at(-1)?.[1].body)
+      expect(body.heroImage).toEqual({ sourceUri: { uri: stampsImageUrl } })
+      expect(body.imageModulesData).toBeUndefined()
+    }
+  })
+
+  it("rejected with the stamp card: sends the pass again without the image", async () => {
+    const stampsImageUrl = "https://app.example.com/api/public/google-stamps/d/abcdefabcdef-3.png"
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        text: vi.fn().mockResolvedValue("Image cannot be loaded"),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 200 })
+
+    const result = await upsertLoyaltyObject(baseParams({ stampsImageUrl, stampsInCycle: 3 }))
+
+    expect(result.ok).toBe(true)
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+    const first = JSON.parse(mockFetch.mock.calls[0][1].body)
+    const second = JSON.parse(mockFetch.mock.calls[1][1].body)
+    expect(first.heroImage).toEqual({ sourceUri: { uri: stampsImageUrl } })
+    expect(second.heroImage).toBeUndefined()
+    // Everything else of the visit still travels.
+    expect(second.loyaltyPoints).toEqual(first.loyaltyPoints)
+    expect(second.id).toBe(first.id)
+  })
+
+  it("does not retry what the image cannot explain", async () => {
+    const stampsImageUrl = "https://app.example.com/api/public/google-stamps/d/abcdefabcdef-3.png"
+    const fail = (status: number) => ({
+      ok: false,
+      status,
+      text: vi.fn().mockResolvedValue("nope"),
+    })
+
+    // Invalid pass without an image: nothing to drop.
+    mockFetch.mockResolvedValueOnce(fail(400))
+    expect((await upsertLoyaltyObject(baseParams())).ok).toBe(false)
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+
+    // Google down or refusing us: the image is not the cause.
+    for (const status of [401, 403, 429, 500]) {
+      mockFetch.mockClear()
+      mockFetch.mockResolvedValueOnce(fail(status))
+      expect((await upsertLoyaltyObject(baseParams({ stampsImageUrl }))).ok).toBe(false)
+      expect(mockFetch).toHaveBeenCalledTimes(1)
     }
   })
 

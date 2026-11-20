@@ -255,8 +255,9 @@ export type UpsertLoyaltyObjectParams = {
     backFields: Array<{ key: string; label: string; value: string }>
   } | null
 
-  // Optional image below QR code (imageModulesData)
-  imageUrl?: string
+  // Stamp card drawn for this client's progress, shown as the pass banner
+  // (object heroImage). Absent = the class banner, as for every tenant by default.
+  stampsImageUrl?: string
 
   // Points programs: the balance shown instead of "N de M visitas".
   pointsBalance?: number
@@ -301,8 +302,8 @@ export type WalletUpdateParams = {
     barcodeFormat?: BarcodeFormat
     /** "ID de miembro" on the back. The object update is a full PUT: omitting it wipes it. */
     clientDni?: string
-    /** Image module of the pass details. Same full-PUT caveat. */
-    imageUrl?: string
+    /** Stamp card image (object heroImage). Omitting it brings back the class banner. */
+    stampsImageUrl?: string
   } | null
   // Promotion type — affects loyaltyPoints label in Google Wallet. Defaults to "stamps".
   promotionType?: "stamps" | "points" | "discount" | "coupon" | "subscription"
