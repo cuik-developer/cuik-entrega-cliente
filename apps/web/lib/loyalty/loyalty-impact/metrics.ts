@@ -13,25 +13,27 @@ import {
  * Three levels, and the screen never mixes them:
  *   1. what happened        base, purchases, sales that went through the card
  *   2. what it is worth     how many come back and what a returning client leaves
- *   3. what we caused       campaigns against what those clients would have done anyway
+ *   3. what followed        who came back after each send, and what they bought
  *
  * Campaigns are read AS OF THE SEND DAY. A client's segment today says nothing
  * about the campaign: someone who was "inactivo" when the message went out and
  * came back is, a month later, a client with visits. Every client's segment is
  * rebuilt from their visits up to the send day with the panel's own rules
- * (`computeClientSegment`), recipients are compared with clients that were in
- * that segment that day, can be reached by campaigns and got no message during
- * the window, and the segment each one moved to is kept.
+ * (`computeClientSegment`), and the segment each one moved to is kept.
+ *
+ * Campaigns are described, not judged (decision of 21 Nov 2026): the screen
+ * says who got each send and who came back inside the window, with no
+ * comparison against clients left without a message. These merchants write to
+ * everybody, often, so there is nobody to compare with, and holding clients
+ * back as a control group costs sales. The credit goes to the program as a
+ * whole, in the conclusion; what followed a send is part of the card sales
+ * the conclusion starts from, never an amount added on top.
  *
  * One purchase, one campaign: a purchase belongs to the last message the client
  * got before it. A recipient who got a later message before coming back stays
- * in this campaign's count as "did not come back" (never dropped, which would
- * leave only the ones who returned), and a campaign with too many of them is
- * not judged at all.
- *
- * The money a campaign added is never read from one campaign alone: the
- * conclusion pools every campaign of a kind, wins and losses, and only counts
- * the kinds that beat chance.
+ * in this campaign's count as "did not come back", and the purchase is the
+ * later send's. That is what lets sends be added up without counting a
+ * purchase twice.
  *
  * Everything here is a FLOOR: a purchase the cashier did not stamp does not
  * exist for Cuik. Comparisons between card holders still hold, because every
@@ -94,45 +96,22 @@ export const SEGMENTS: readonly ClientSegment[] = [
 
 export const WINDOW_MIN = 5
 export const WINDOW_MAX = 120
-/** Fewer comparable clients than this on the send day: use the tenant's history instead. */
-export const MIN_COMPARABLES = 20
-/** Fewer recipients than this: the result is shown as "orientativo". */
-export const MIN_RECIPIENTS = 30
 /** An amount this many times the typical ticket is a typing mistake, not a sale. */
 export const OUTLIER_TIMES_MEDIAN = 100
-/** More than this share of recipients got a later message before coming back: not judged. */
-export const MAX_OVERLAP = 0.2
-
-/** At least this share of recipients must have comparable clients that day to judge a campaign. */
-export const MIN_COVERAGE = 0.8
-
-/**
- * "overlap": other messages reached the recipients inside the window, so it
- * cannot be read alone. "no_reference": the campaign left nobody comparable
- * without a message (a send to everybody); against the tenant's history alone,
- * a busy week would pass for an effect, so it is not judged.
- */
-export type CampaignVerdict =
-  | "above"
-  | "within"
-  | "below"
-  | "running"
-  | "empty"
-  | "overlap"
-  | "no_reference"
-export type ExpectedFrom = "same_day" | "history"
 
 /** One segment of a campaign's recipients, as they were on the send day. */
 export type CampaignSegmentRow = {
   segment: ClientSegment
   recipients: number
   returned: number
-  /** Expected back anyway, for clients in this segment that day. */
-  expected: number
-  expectedFrom: ExpectedFrom
-  extraClients: number
+  returnedPct: number | null
 }
 
+/**
+ * What happened after one send: who got it and who came back inside the
+ * window. It is not compared with anything: the program as a whole takes the
+ * credit in the conclusion, and campaigns are part of the program.
+ */
 export type CampaignImpact = {
   id: string
   name: string
@@ -140,28 +119,15 @@ export type CampaignImpact = {
   sentOn: string
   /** Clients the campaign reached. */
   recipients: number
-  /** Of those, the ones who got a later message before coming back (counted as not back). */
+  /** Of those, the ones who got a later message before coming back: their purchase is the later send's. */
   handedOver: number
   /** The window has fully passed; before that the numbers are still moving. */
   windowComplete: boolean
   returned: number
   returnedPct: number | null
-  /** Recipients expected back anyway, by their segment on the send day. */
-  expected: number
-  expectedPct: number | null
-  /** ± clients of pure chance around the expected number (95 %). */
-  margin: number
-  extraClients: number
-  /** Share of recipients compared with clients of their segment that day (the rest: history). */
-  comparablePct: number | null
   /** Purchases and sales this campaign answers for (up to the next message each client got). */
   purchasesInWindow: number
   salesInWindow: number
-  /** The part above the expected return, shown only when this campaign alone beat chance. */
-  extraSales: number | null
-  verdict: CampaignVerdict
-  /** Complete window, enough recipients and no overlap: can be read on its own. */
-  reliable: boolean
   /** Recipients by the segment they were in when the campaign went out. */
   bySegment: CampaignSegmentRow[]
   /** Recipients who came back: segment on the send day → segment when the window closed. */
@@ -184,23 +150,22 @@ export type CampaignClientRow = {
   segmentAtClose: ClientSegment | null
 }
 
-/** Every measurable campaign of a kind pooled together, wins and losses. */
+/** Every send of a kind together. */
 export type CampaignKindSummary = {
   kind: CampaignKind
-  /** Campaigns sent. */
+  /** Sends that reached somebody. */
   campaigns: number
-  /** Of those, the ones pooled: complete window, recipients, no overlap. */
-  measured: number
-  recipients: number
+  /** Of those, the ones whose window is still open: their numbers can still grow. */
+  open: number
+  /** Messages delivered: a client counts once per send. */
+  deliveries: number
+  /** Different clients who got at least one. */
+  clients: number
+  /** Different clients who came back after at least one, before their next message. */
   returned: number
-  expected: number
-  extraClients: number
-  margin: number
-  /** Net of the pooled campaigns; 0 unless the kind beat chance. */
-  extraPurchases: number
-  extraSales: number
-  verdict: CampaignVerdict
-  reliable: boolean
+  returnedPct: number | null
+  purchases: number
+  sales: number
 }
 
 export type LoyaltyImpact = {
@@ -267,12 +232,17 @@ export type LoyaltyImpact = {
   }>
   campaigns: CampaignImpact[]
   byKind: CampaignKindSummary[]
-  /** Kinds that beat chance with enough clients: what the conclusion adds as measured. */
+  /**
+   * All kinds together. Each purchase belongs to one send only (the last
+   * message before it), so these add up without counting anything twice.
+   */
   campaignTotals: {
-    kindsMeasured: number
-    kindsAbove: number
-    extraPurchases: number
-    extraSales: number
+    campaigns: number
+    deliveries: number
+    clients: number
+    returned: number
+    purchases: number
+    sales: number
   }
   /** How many messages each client got in the current month. */
   pressure: { month: string; one: number; twoOrThree: number; fourPlus: number }
@@ -356,12 +326,6 @@ const NO_VISITS: ClientVisits = { stampDays: [], buys: [], days: [] }
 type Tally = Record<ClientSegment, { n: number; back: number }>
 const emptyTally = (): Tally =>
   Object.fromEntries(SEGMENTS.map((s) => [s, { n: 0, back: 0 }])) as Tally
-
-/** Any purchase day after `after` and up to `until`. */
-function boughtBetweenDays(days: string[], after: string, until: string): boolean {
-  const next = days[firstAfter(days, after, (d) => d)]
-  return next !== undefined && next <= until
-}
 
 /** First purchase after an instant, up to the end of `until`. */
 function firstBuyAfter(buys: Buy[], at: number, until: string): Buy | null {
@@ -551,34 +515,6 @@ type Context = {
   byClient: Map<string, ClientVisits>
   /** Every message each client got, oldest first. */
   reaches: Map<string, Reach[]>
-  history: Tally
-}
-
-/**
- * The tenant's own history by segment, sampled every 7 days: of the clients in
- * a segment on a given day, how many bought within the window. It is what a
- * campaign is compared with when it leaves too few comparable clients untouched
- * (a campaign to "all the inactive ones" leaves none). It includes days with
- * campaigns, this one among them, so it is "what is normal here", not "with no
- * campaign at all".
- */
-function historyBySegment(
-  ctx: Omit<Context, "history" | "reaches">,
-  firstDay: string | null,
-): Tally {
-  const tally = emptyTally()
-  if (firstDay === null) return tally
-  for (let ref = firstDay; addDays(ref, ctx.windowDays) < ctx.today; ref = addDays(ref, 7)) {
-    const until = addDays(ref, ctx.windowDays)
-    for (const c of ctx.clients) {
-      if (c.registeredOn > ref) continue
-      const entry = ctx.byClient.get(c.id) ?? NO_VISITS
-      const slot = tally[segmentOn(c.registeredOn, entry.stampDays, ref, ctx.thresholds)]
-      slot.n++
-      if (boughtBetweenDays(entry.days, ref, until)) slot.back++
-    }
-  }
-  return tally
 }
 
 function reachesByClient(campaigns: ImpactCampaign[]): Map<string, Reach[]> {
@@ -594,14 +530,20 @@ function reachesByClient(campaigns: ImpactCampaign[]): Map<string, Reach[]> {
   return map
 }
 
-/** The next message of another campaign the client got inside the window, if any. */
+/**
+ * The next message of another campaign the client got inside the window, if
+ * any. Two sends at the very same instant are ordered by id, so one of them is
+ * "the last" and a purchase is never counted for both.
+ */
 function laterMessage(c: ImpactCampaign, clientId: string, until: string, ctx: Context) {
   const list = ctx.reaches.get(clientId)
   if (!list) return null
-  for (let i = firstAfter(list, c.sentAt, (r) => r.at); i < list.length; i++) {
+  for (let i = firstAfter(list, c.sentAt - 1, (r) => r.at); i < list.length; i++) {
     const r = list[i] as Reach
     if (r.day > until) return null
-    if (r.campaignId !== c.id) return r
+    if (r.campaignId === c.id) continue
+    if (r.at === c.sentAt && r.campaignId < c.id) continue
+    return r
   }
   return null
 }
@@ -641,49 +583,16 @@ function followRecipient(c: ImpactCampaign, clientId: string, until: string, ctx
   } satisfies CampaignClientRow
 }
 
-/**
- * Clients campaigns can reach (they got one at some point) that nobody wrote to
- * during this window, by their segment on the send day. Clients without a live
- * pass, blocked or archived never get a message: comparing with them would
- * flatter every campaign.
- */
-function comparables(c: ImpactCampaign, reached: Set<string>, until: string, ctx: Context): Tally {
-  const tally = emptyTally()
-  for (const [clientId, list] of ctx.reaches) {
-    if (reached.has(clientId)) continue
-    const registeredOn = ctx.registeredOn.get(clientId)
-    if (registeredOn === undefined || registeredOn > c.sentOn) continue
-    const around = list[firstAfter(list, c.sentOn, (r) => r.day) - 1]
-    const next = list[firstAfter(list, c.sentOn, (r) => r.day)]
-    if (around?.day === c.sentOn || (next !== undefined && next.day <= until)) continue
-    const entry = ctx.byClient.get(clientId) ?? NO_VISITS
-    const slot = tally[segmentOn(registeredOn, entry.stampDays, c.sentOn, ctx.thresholds)]
-    slot.n++
-    if (firstBuyAfter(entry.buys, c.sentAt, until) !== null) slot.back++
-  }
-  return tally
-}
-
 const reachedOf = (c: ImpactCampaign, ctx: Context) =>
   new Set(c.recipients.filter((id) => (ctx.registeredOn.get(id) ?? "9") <= c.sentOn))
 
-/** Kept apart from the public shape: what the pooling by kind needs from each campaign. */
-type Measured = CampaignImpact & {
-  /** Complete window, no overlap and comparable clients: can enter the pool of its kind. */
-  measurable: boolean
-  variance: number
-  extraPurchasesNet: number
-  extraSalesNet: number
-}
+/** Kept apart from the public shape: what the summary by kind needs from each campaign. */
+type Measured = CampaignImpact & { reachedIds: string[]; returnedIds: string[] }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one campaign read top to bottom (who it reached, what was expected, the verdict); splitting it would scatter the rules
 function measureCampaign(c: ImpactCampaign, ctx: Context): Measured {
   const until = addDays(c.sentOn, ctx.windowDays)
-  const windowComplete = until < ctx.today
-  const reached = reachedOf(c, ctx)
-  const rows = [...reached].map((id) => followRecipient(c, id, until, ctx))
-  const handedOver = rows.filter((r) => r.handedOver).length
-  const others = rows.length > 0 ? comparables(c, reached, until, ctx) : emptyTally()
+  const rows = [...reachedOf(c, ctx)].map((id) => followRecipient(c, id, until, ctx))
+  const back = rows.filter((r) => r.returnedOn !== null)
 
   const mine = emptyTally()
   const moves = new Map<string, number>()
@@ -697,124 +606,63 @@ function measureCampaign(c: ImpactCampaign, ctx: Context): Measured {
     }
   }
 
-  let expected = 0
-  let variance = 0
-  let returned = 0
-  let covered = 0
-  const bySegment: CampaignSegmentRow[] = []
-  for (const segment of SEGMENTS) {
-    const n = mine[segment].n
-    if (n === 0) continue
-    const sameDay = others[segment].n >= MIN_COMPARABLES
-    if (sameDay) covered += n
-    const reference = sameDay ? others[segment] : ctx.history[segment]
-    const rate = reference.n > 0 ? reference.back / reference.n : 0
-    // Chance has two sources: the recipients themselves and how well the
-    // reference pins the rate down. A rate of exactly 0 or 1 is never certain.
-    const smooth = (reference.back + 0.5) / (reference.n + 1)
-    const spread = smooth * (1 - smooth)
-    returned += mine[segment].back
-    expected += n * rate
-    variance += n * spread + (n * n * spread) / Math.max(1, reference.n)
-    bySegment.push({
-      segment,
-      recipients: n,
-      returned: mine[segment].back,
-      expected: round1(n * rate),
-      expectedFrom: sameDay ? "same_day" : "history",
-      extraClients: round1(mine[segment].back - n * rate),
-    })
-  }
-
-  const margin = 1.96 * Math.sqrt(variance)
-  const extraClients = returned - expected
-  const overlap = rows.length > 0 && handedOver / rows.length > MAX_OVERLAP
-  const hasReference = rows.length > 0 && covered / rows.length >= MIN_COVERAGE
-  let verdict: CampaignVerdict = "within"
-  if (rows.length === 0) verdict = "empty"
-  else if (!windowComplete) verdict = "running"
-  else if (overlap) verdict = "overlap"
-  else if (!hasReference) verdict = "no_reference"
-  else if (extraClients > margin) verdict = "above"
-  else if (extraClients < -margin) verdict = "below"
-
-  const purchasesInWindow = sum(rows.map((r) => r.purchases))
-  const salesInWindow = sum(rows.map((r) => r.sales))
-  const share = returned > 0 ? extraClients / returned : 0
-  const measurable = windowComplete && !overlap && hasReference
-  const reliable = measurable && rows.length >= MIN_RECIPIENTS
-
   return {
     id: c.id,
     name: c.name,
     kind: c.kind,
     sentOn: c.sentOn,
     recipients: rows.length,
-    handedOver,
-    windowComplete,
-    returned,
-    returnedPct: pct(returned, rows.length),
-    expected: round1(expected),
-    expectedPct: pct(expected, rows.length),
-    margin: round1(margin),
-    extraClients: round1(extraClients),
-    comparablePct: pct(covered, rows.length),
-    purchasesInWindow,
-    salesInWindow: Math.round(salesInWindow),
-    extraSales: verdict === "above" && reliable ? Math.round(salesInWindow * share) : null,
-    verdict,
-    reliable,
-    bySegment: bySegment.sort((a, b) => b.recipients - a.recipients),
+    handedOver: rows.filter((r) => r.handedOver).length,
+    windowComplete: until < ctx.today,
+    returned: back.length,
+    returnedPct: pct(back.length, rows.length),
+    purchasesInWindow: sum(rows.map((r) => r.purchases)),
+    salesInWindow: Math.round(sum(rows.map((r) => r.sales))),
+    bySegment: SEGMENTS.filter((segment) => mine[segment].n > 0)
+      .map((segment) => ({
+        segment,
+        recipients: mine[segment].n,
+        returned: mine[segment].back,
+        returnedPct: pct(mine[segment].back, mine[segment].n),
+      }))
+      .sort((a, b) => b.recipients - a.recipients),
     moves: [...moves.entries()]
       .map(([key, clients]) => {
         const [from, to] = key.split(">") as [ClientSegment, ClientSegment]
         return { from, to, clients }
       })
       .sort((a, b) => b.clients - a.clients),
-    measurable,
-    variance,
-    extraPurchasesNet: purchasesInWindow * share,
-    extraSalesNet: salesInWindow * share,
+    reachedIds: rows.map((r) => r.clientId),
+    returnedIds: back.map((r) => r.clientId),
   }
 }
 
-/**
- * Every measurable campaign of a kind pooled, wins and losses together: twenty
- * campaigns with no effect always leave one or two "above" by chance, and
- * adding only those would invent sales. A kind counts when the pool beats
- * chance, and then it adds its net.
- */
+/** Sends, messages, different clients and what followed, for a group of campaigns. */
+function totalsOf(campaigns: Measured[]) {
+  const clients = new Set(campaigns.flatMap((c) => c.reachedIds))
+  const returned = new Set(campaigns.flatMap((c) => c.returnedIds))
+  return {
+    campaigns: campaigns.length,
+    deliveries: sum(campaigns.map((c) => c.recipients)),
+    clients: clients.size,
+    returned: returned.size,
+    purchases: sum(campaigns.map((c) => c.purchasesInWindow)),
+    sales: sum(campaigns.map((c) => c.salesInWindow)),
+  }
+}
+
+/** Every send of a kind together: a client who got five weekly pushes is one client. */
 function summarizeKinds(campaigns: Measured[]): CampaignKindSummary[] {
   return CAMPAIGN_KINDS.flatMap((kind) => {
     const all = campaigns.filter((c) => c.kind === kind && c.recipients > 0)
     if (all.length === 0) return []
-    const pool = all.filter((c) => c.measurable)
-    const recipients = sum(pool.map((c) => c.recipients))
-    const extraClients = sum(pool.map((c) => c.returned - c.expected))
-    const margin = 1.96 * Math.sqrt(sum(pool.map((c) => c.variance)))
-    const reliable = recipients >= MIN_RECIPIENTS
-    let verdict: CampaignVerdict = "within"
-    if (pool.length === 0) {
-      // Nothing to pool: say why, in the order that can still change.
-      if (all.some((c) => !c.windowComplete)) verdict = "running"
-      else verdict = all.some((c) => c.verdict === "overlap") ? "overlap" : "no_reference"
-    } else if (extraClients > margin) verdict = "above"
-    else if (extraClients < -margin) verdict = "below"
-    const counts = verdict === "above" && reliable
+    const totals = totalsOf(all)
     return [
       {
         kind,
-        campaigns: all.length,
-        measured: pool.length,
-        recipients,
-        returned: sum(pool.map((c) => c.returned)),
-        expected: round1(sum(pool.map((c) => c.expected))),
-        extraClients: round1(extraClients),
-        margin: round1(margin),
-        extraPurchases: counts ? round1(Math.max(0, sum(pool.map((c) => c.extraPurchasesNet)))) : 0,
-        extraSales: counts ? Math.round(Math.max(0, sum(pool.map((c) => c.extraSalesNet)))) : 0,
-        verdict,
-        reliable,
+        ...totals,
+        open: all.filter((c) => !c.windowComplete).length,
+        returnedPct: pct(totals.returned, totals.clients),
       },
     ]
   })
@@ -838,7 +686,7 @@ function messagePressure(campaigns: ImpactCampaign[], today: string) {
 
 // ── the report ───────────────────────────────────────────────────────
 
-function buildContext(input: LoyaltyImpactInput, withHistory: boolean) {
+function buildContext(input: LoyaltyImpactInput) {
   const { today } = input
   const windowDays = clampWindow(input.windowDays)
   const thresholds = input.thresholds ?? DEFAULT_THRESHOLDS
@@ -865,18 +713,14 @@ function buildContext(input: LoyaltyImpactInput, withHistory: boolean) {
     const first = e.days[0]
     if (first !== undefined && (firstDay === null || first < firstDay)) firstDay = first
   }
-  const partial = {
+  const ctx: Context = {
     today,
     windowDays,
     thresholds,
     clients,
     registeredOn,
     byClient: grouped.byClient,
-  }
-  const ctx: Context = {
-    ...partial,
     reaches: reachesByClient(campaigns),
-    history: withHistory ? historyBySegment(partial, firstDay) : emptyTally(),
   }
   return { ctx, grouped, campaigns, firstDay }
 }
@@ -886,7 +730,7 @@ export function campaignClients(
   input: LoyaltyImpactInput,
   campaignId: string,
 ): CampaignClientRow[] | null {
-  const { ctx, campaigns } = buildContext(input, false)
+  const { ctx, campaigns } = buildContext(input)
   const c = campaigns.find((x) => x.id === campaignId)
   if (!c) return null
   const until = addDays(c.sentOn, ctx.windowDays)
@@ -894,7 +738,7 @@ export function campaignClients(
 }
 
 export function computeLoyaltyImpact(input: LoyaltyImpactInput): LoyaltyImpact {
-  const { ctx, grouped, campaigns: sent, firstDay } = buildContext(input, true)
+  const { ctx, grouped, campaigns: sent, firstDay } = buildContext(input)
   const { today, windowDays, clients, byClient } = ctx
   const buyers = [...byClient.entries()].filter(([, e]) => e.buys.length > 0)
   const entries = buyers.map(([, e]) => e)
@@ -917,7 +761,6 @@ export function computeLoyaltyImpact(input: LoyaltyImpactInput): LoyaltyImpact {
 
   const measured = [...sent].sort((a, b) => b.sentAt - a.sentAt).map((c) => measureCampaign(c, ctx))
   const byKind = summarizeKinds(measured)
-  const counted = byKind.filter((k) => k.reliable && k.measured > 0)
 
   return {
     period: { from: firstDay, to: today, months: monthsBetween(firstActivity, today) },
@@ -960,16 +803,9 @@ export function computeLoyaltyImpact(input: LoyaltyImpactInput): LoyaltyImpact {
     },
     months,
     naturalReturn: naturalReturnAfterSilence(entries, today, windowDays),
-    campaigns: measured.map(
-      ({ measurable, variance, extraPurchasesNet, extraSalesNet, ...c }) => c,
-    ),
+    campaigns: measured.map(({ reachedIds, returnedIds, ...c }) => c),
     byKind,
-    campaignTotals: {
-      kindsMeasured: counted.length,
-      kindsAbove: counted.filter((k) => k.verdict === "above").length,
-      extraPurchases: round1(sum(byKind.map((k) => k.extraPurchases))),
-      extraSales: sum(byKind.map((k) => k.extraSales)),
-    },
+    campaignTotals: totalsOf(measured.filter((c) => c.recipients > 0)),
     pressure: messagePressure(sent, today),
   }
 }
@@ -986,36 +822,24 @@ export type ImpactAssumptions = {
 }
 
 /**
- * "The program generated about S/ X": the return-visit sales times the factor,
- * plus what campaigns added above normal (measured, not assumed). The range
- * goes from half to one and a half times the factor. Never more than what
- * actually went through the card.
+ * "The program generated about S/ X": the return-visit sales times the factor.
+ * Campaigns add nothing on top: the program takes the credit as a whole. What
+ * followed a send is part of the card sales (and of the return-visit sales,
+ * except when it was the client's first purchase). The range goes from half to
+ * one and a half times the factor.
  */
 export function concludeImpact(impact: LoyaltyImpact, a: ImpactAssumptions) {
   const factor = Math.min(1, Math.max(0, a.factorPct / 100))
   const margin = Math.min(1, Math.max(0, a.marginPct / 100))
-  const { sales, returnSales, returnPurchases, purchases: allPurchases } = impact.headline
-  const campaignSales = Math.min(sales, Math.max(0, impact.campaignTotals.extraSales))
-  const campaignPurchases = Math.min(
-    allPurchases,
-    Math.max(0, impact.campaignTotals.extraPurchases),
-  )
-  // What campaigns added is taken out of the return-visit sales before the
-  // factor applies, so nothing is counted twice.
-  const programBase = Math.max(0, returnSales - campaignSales)
-  const cap = (n: number) => Math.min(sales, n)
-  const generated = cap(programBase * factor + campaignSales)
+  const { returnSales, returnPurchases } = impact.headline
+  const generated = returnSales * factor
   const paid = Math.max(0, a.monthlyFee) * impact.period.months
   const profit = generated * margin
   return {
     generated: Math.round(generated),
-    low: Math.round(cap(programBase * factor * 0.5 + campaignSales)),
-    high: Math.round(cap(programBase * Math.min(1, factor * 1.5) + campaignSales)),
-    fromProgram: Math.round(programBase * factor),
-    fromCampaigns: Math.round(campaignSales),
-    purchases: Math.round(
-      Math.max(0, returnPurchases - campaignPurchases) * factor + campaignPurchases,
-    ),
+    low: Math.round(returnSales * factor * 0.5),
+    high: Math.round(returnSales * Math.min(1, factor * 1.5)),
+    purchases: Math.round(returnPurchases * factor),
     profit: Math.round(profit),
     paid: Math.round(paid),
     salesPerSol: paid > 0 ? round1(generated / paid) : null,

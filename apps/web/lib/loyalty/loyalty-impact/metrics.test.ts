@@ -53,9 +53,6 @@ const campaign = (
   ...extra,
 })
 
-/** An old send to everybody: makes every client one that campaigns can reach. */
-const reachable = (ids: string[]) => campaign(ids, "2025-11-01", { id: "old", name: "Bienvenida" })
-
 describe("what happened and what it is worth", () => {
   const clients: ImpactClient[] = ["a", "b", "c", "d"].map((id) => ({
     id,
@@ -203,131 +200,69 @@ describe("natural return", () => {
   })
 })
 
-describe("campaigns against what would have happened anyway", () => {
-  it("measures a campaign against reachable clients nobody wrote to", () => {
+describe("what followed each send", () => {
+  it("says who got the send and who came back inside the window", () => {
     const { clients, visits, ids } = hundred()
     const back = [
-      // 25 of the 50 recipients come back, 10 of the 50 others.
+      // 25 of the 50 recipients come back; so do 10 clients nobody wrote to.
       ...ids.slice(0, 25).map((id) => visit(id, "2026-03-10")),
       ...ids.slice(50, 60).map((id) => visit(id, "2026-03-12")),
     ]
     const r = run({
       clients,
       visits: [...visits, ...back],
-      campaigns: [reachable(ids), campaign(ids.slice(0, 50))],
+      campaigns: [campaign(ids.slice(0, 50))],
     })
-    const [c] = r.campaigns
-    expect(c).toMatchObject({
-      recipients: 50,
-      handedOver: 0,
-      returned: 25,
-      returnedPct: 50,
-      expected: 10,
-      expectedPct: 20,
-      extraClients: 15,
-      purchasesInWindow: 25,
-      salesInWindow: 2500,
-      extraSales: 1500,
-      verdict: "above",
-      reliable: true,
-    })
-    expect(c?.bySegment).toEqual([
+    expect(r.campaigns).toEqual([
       {
-        segment: "regular",
+        id: "k1",
+        name: "Te extrañamos",
+        kind: "manual",
+        sentOn: "2026-03-01",
         recipients: 50,
+        handedOver: 0,
+        windowComplete: true,
         returned: 25,
-        expected: 10,
-        expectedFrom: "same_day",
-        extraClients: 15,
+        returnedPct: 50,
+        purchasesInWindow: 25,
+        salesInWindow: 2500,
+        bySegment: [{ segment: "regular", recipients: 50, returned: 25, returnedPct: 50 }],
+        moves: [{ from: "regular", to: "regular", clients: 25 }],
       },
     ])
-    expect(r.campaignTotals).toEqual({
-      kindsMeasured: 1,
-      kindsAbove: 1,
-      extraPurchases: 15,
-      extraSales: 1500,
-    })
+    const totals = {
+      campaigns: 1,
+      deliveries: 50,
+      clients: 50,
+      returned: 25,
+      purchases: 25,
+      sales: 2500,
+    }
+    expect(r.byKind).toEqual([{ kind: "manual", ...totals, open: 0, returnedPct: 50 }])
+    expect(r.campaignTotals).toEqual(totals)
   })
 
-  it("does not compare with clients that campaigns never reach", () => {
-    const { clients, visits, ids } = hundred()
-    // Nobody but the recipients ever got a message: the rest may have no pass at all.
-    const [c] = run({ clients, visits, campaigns: [campaign(ids.slice(0, 50))] }).campaigns
-    expect(c?.bySegment[0]?.expectedFrom).toBe("history")
-  })
-
-  it("claims nothing when the difference is within chance", () => {
-    const { clients, visits, ids } = hundred()
-    const back = [
-      ...ids.slice(0, 13).map((id) => visit(id, "2026-03-10")),
-      ...ids.slice(50, 60).map((id) => visit(id, "2026-03-12")),
-    ]
-    const r = run({
-      clients,
-      visits: [...visits, ...back],
-      campaigns: [reachable(ids), campaign(ids.slice(0, 50))],
-    })
-    expect(r.campaigns[0]?.verdict).toBe("within")
-    expect(r.campaigns[0]?.extraSales).toBeNull()
-    expect(r.campaignTotals.extraSales).toBe(0)
-  })
-
-  it("is not sure about a reference where nobody came back", () => {
-    const { clients, visits, ids } = hundred()
-    // One recipient of 50 returns and none of the 50 others: that is not an effect.
-    const r = run({
-      clients,
-      visits: [...visits, visit("c000", "2026-03-10")],
-      campaigns: [reachable(ids), campaign(ids.slice(0, 50))],
-    })
-    expect(r.campaigns[0]).toMatchObject({ returned: 1, expected: 0, verdict: "within" })
-    expect(r.campaigns[0]?.margin).toBeGreaterThan(1)
-  })
-
-  it("says so when a campaign did worse than doing nothing", () => {
-    const { clients, visits, ids } = hundred()
-    const back = ids.slice(50, 80).map((id) => visit(id, "2026-03-12"))
-    const [c] = run({
-      clients,
-      visits: [...visits, ...back],
-      campaigns: [reachable(ids), campaign(ids.slice(0, 50))],
-    }).campaigns
-    expect(c?.verdict).toBe("below")
-    expect(c?.extraClients).toBe(-30)
-    expect(c?.extraSales).toBeNull()
-  })
-
-  it("falls back to the tenant's history when everybody got the campaign", () => {
+  it("shows a send to everybody like any other", () => {
     const { clients, visits, ids } = hundred()
     const back = ids.slice(0, 30).map((id) => visit(id, "2026-03-10"))
     const r = run({ clients, visits: [...visits, ...back], campaigns: [campaign(ids)] })
-    const [c] = r.campaigns
-    expect(c?.bySegment[0]?.expectedFrom).toBe("history")
-    expect(c?.returned).toBe(30)
-    expect(c?.expected).toBeGreaterThan(0)
-    // With nobody comparable left out, it is shown but not judged, and adds nothing.
-    expect(c).toMatchObject({ verdict: "no_reference", reliable: false, comparablePct: 0 })
-    expect(r.byKind).toMatchObject([{ kind: "manual", measured: 0, verdict: "no_reference" }])
-    expect(r.campaignTotals.extraSales).toBe(0)
+    expect(r.campaigns[0]).toMatchObject({ recipients: 100, returned: 30, returnedPct: 30 })
+    expect(r.byKind).toMatchObject([{ kind: "manual", clients: 100, returned: 30, sales: 3000 }])
   })
 
-  it("does not judge a campaign until its last day is over", () => {
+  it("keeps counting while the window is open, and says so", () => {
     const { clients, visits, ids } = hundred()
     const back = ids.slice(0, 25).map((id) => visit(id, "2026-03-10"))
     const at = (today: string) =>
-      run({
-        today,
-        clients,
-        visits: [...visits, ...back],
-        campaigns: [reachable(ids), campaign(ids.slice(0, 50))],
-      }).campaigns[0]
+      run({ today, clients, visits: [...visits, ...back], campaigns: [campaign(ids.slice(0, 50))] })
     // Sent on 1 Mar, 30 days: the window's last day is 31 Mar.
-    expect(at("2026-03-31")).toMatchObject({
-      verdict: "running",
-      reliable: false,
-      extraSales: null,
-    })
-    expect(at("2026-04-01")).toMatchObject({ verdict: "above", reliable: true })
+    const during = at("2026-03-31")
+    expect(during.campaigns[0]).toMatchObject({ windowComplete: false, returned: 25 })
+    expect(during.campaigns[0]?.moves).toEqual([])
+    expect(during.byKind[0]).toMatchObject({ campaigns: 1, open: 1, returned: 25 })
+    const after = at("2026-04-01")
+    expect(after.campaigns[0]).toMatchObject({ windowComplete: true, returned: 25 })
+    expect(after.byKind[0]?.open).toBe(0)
   })
 
   it("counts a purchase on the send day when it came after the message", () => {
@@ -355,8 +290,9 @@ describe("campaigns against what would have happened anyway", () => {
       visits,
       campaigns: [campaign(["late", "ghost"])],
     })
-    expect(r.campaigns[0]).toMatchObject({ recipients: 0, verdict: "empty" })
+    expect(r.campaigns[0]).toMatchObject({ recipients: 0, returned: 0, returnedPct: null })
     expect(r.byKind).toEqual([])
+    expect(r.campaignTotals).toMatchObject({ campaigns: 0, deliveries: 0, sales: 0 })
   })
 })
 
@@ -459,20 +395,15 @@ describe("one purchase, one campaign", () => {
     expect(r.campaigns.find((c) => c.id === "first")?.returned).toBe(2)
   })
 
-  it("does not judge a campaign when too many recipients got another message", () => {
-    const second = campaign(group.slice(0, 10), "2026-03-05", { id: "second" })
-    const r = run({ clients, visits: [...visits, ...back], campaigns: [first, second] })
-    const one = r.campaigns.find((c) => c.id === "first")
-    expect(one).toMatchObject({
-      handedOver: 10,
-      verdict: "overlap",
-      reliable: false,
-      extraSales: null,
-    })
+  it("gives a purchase to one send only when two went out at the same instant", () => {
+    const twin = campaign(group, "2026-03-01", { id: "twin", kind: "birthday" })
+    const r = run({ clients, visits: [...visits, ...back], campaigns: [first, twin] })
+    expect(sum(r.campaigns.map((c) => c.purchasesInWindow))).toBe(3)
+    expect(r.campaignTotals).toMatchObject({ clients: 40, returned: 2, purchases: 3 })
   })
 
-  it("never reads weekly sends to everybody as an effect", () => {
-    // Purchases by pure routine, a message to all every week: nothing to claim.
+  it("adds up weekly sends to everybody without counting a purchase twice", () => {
+    // A message to all every week for 8 weeks, and four purchases per client by pure routine.
     const weekly = Array.from({ length: 8 }, (_, i) =>
       campaign(ids, addDays("2026-03-01", i * 7), { id: `w${i}`, kind: "recurring" }),
     )
@@ -480,79 +411,77 @@ describe("one purchase, one campaign", () => {
       [0, 1, 2, 3].map((k) => visit(id, addDays("2026-03-02", (i % 7) + k * 14))),
     )
     const r = run({ clients, visits: [...visits, ...routine], campaigns: weekly })
-    expect(r.campaigns.filter((c) => c.verdict === "above")).toEqual([])
-    expect(r.campaignTotals.extraSales).toBe(0)
-  })
-
-  it("does not compare with clients somebody else wrote to", () => {
-    // Every non-recipient got another campaign inside the window: no clean comparables left.
-    const noise = campaign(ids.slice(40), "2026-03-03", { id: "noise" })
-    const r = run({ clients, visits: [...visits, ...back], campaigns: [first, noise] })
-    expect(r.campaigns.find((c) => c.id === "first")?.bySegment[0]?.expectedFrom).toBe("history")
+    // 400 purchases, each one in a single send; 100 clients, not 800.
+    expect(sum(r.campaigns.map((c) => c.purchasesInWindow))).toBe(400)
+    expect(r.byKind).toEqual([
+      {
+        kind: "recurring",
+        campaigns: 8,
+        open: 0,
+        deliveries: 800,
+        clients: 100,
+        returned: 100,
+        returnedPct: 100,
+        purchases: 400,
+        sales: 40_000,
+      },
+    ])
   })
 })
 
 describe("kinds and pressure", () => {
   const { clients, visits, ids } = hundred()
 
-  it("pools small campaigns of a kind until they can be read", () => {
-    // Four birthday sends of 10 clients: none can be read alone, together they can.
+  it("puts every send of a kind together", () => {
+    // Four birthday sends of 10 clients each; 6 of every 10 come back.
     const groups = [0, 1, 2, 3].map((g) => ids.slice(g * 10, g * 10 + 10))
     const sends = groups.map((g, i) => campaign(g, "2026-03-01", { id: `b${i}`, kind: "birthday" }))
-    const back = [
-      ...groups.flatMap((g) => g.slice(0, 6).map((id) => visit(id, "2026-03-09"))),
-      ...ids.slice(40, 46).map((id) => visit(id, "2026-03-09")),
-    ]
-    const r = run({ clients, visits: [...visits, ...back], campaigns: [reachable(ids), ...sends] })
-    expect(r.campaigns.filter((c) => c.kind === "birthday").every((c) => !c.reliable)).toBe(true)
-    expect(r.byKind).toMatchObject([
+    const back = groups.flatMap((g) => g.slice(0, 6).map((id) => visit(id, "2026-03-09")))
+    const r = run({ clients, visits: [...visits, ...back], campaigns: sends })
+    expect(r.byKind).toEqual([
       {
         kind: "birthday",
         campaigns: 4,
-        measured: 4,
-        recipients: 40,
+        open: 0,
+        deliveries: 40,
+        clients: 40,
         returned: 24,
-        expected: 4,
-        extraClients: 20,
-        extraSales: 2000,
-        verdict: "above",
-        reliable: true,
+        returnedPct: 60,
+        purchases: 24,
+        sales: 2400,
       },
     ])
-    expect(r.campaignTotals).toMatchObject({ kindsMeasured: 1, kindsAbove: 1, extraSales: 2000 })
   })
 
-  it("nets wins and losses inside a kind", () => {
-    // One send brings clients back; the other goes to clients who then come less
-    // than the ones nobody wrote to. Together the kind did not beat chance.
+  it("keeps kinds apart and adds them up in the total", () => {
     const a = ids.slice(0, 40)
     const b = ids.slice(40, 80)
-    const rest = ids.slice(80)
     const r = run({
       clients,
       visits: [
         ...visits,
         ...a.slice(0, 16).map((id) => visit(id, "2026-03-09")),
-        ...rest.slice(0, 4).map((id) => visit(id, "2026-03-09")),
-        // In May, 30 of the clients with one old purchase come back on their own; none of b.
-        ...a.slice(16).map((id) => visit(id, "2026-05-09")),
-        ...rest.slice(4, 10).map((id) => visit(id, "2026-05-09")),
+        ...b.slice(0, 4).map((id) => visit(id, "2026-03-09")),
       ],
       campaigns: [
-        reachable(ids),
-        campaign(a, "2026-03-01", { id: "win", kind: "churn" }),
-        campaign(b, "2026-05-01", { id: "loss", kind: "churn" }),
+        campaign(a, "2026-03-01", { id: "promo" }),
+        campaign(b, "2026-03-01", { id: "back", kind: "churn" }),
       ],
     })
-    const churn = r.byKind.find((k) => k.kind === "churn")
-    expect(r.campaigns.find((c) => c.id === "win")).toMatchObject({
-      verdict: "above",
-      extraSales: 1333,
+    expect(r.byKind.find((k) => k.kind === "manual")).toMatchObject({ clients: 40, returned: 16 })
+    expect(r.byKind.find((k) => k.kind === "churn")).toMatchObject({
+      clients: 40,
+      returned: 4,
+      returnedPct: 10,
     })
-    expect(r.campaigns.find((c) => c.id === "loss")?.verdict).toBe("below")
-    // Adding only the winner would claim S/ 1,333 that the kind as a whole did not earn.
-    expect(churn).toMatchObject({ measured: 2, verdict: "below", extraSales: 0 })
-    expect(r.campaignTotals.extraSales).toBe(0)
+    expect(r.campaignTotals).toEqual({
+      campaigns: 2,
+      deliveries: 80,
+      clients: 80,
+      returned: 20,
+      purchases: 20,
+      sales: 2000,
+    })
   })
 
   it("counts how many messages each client got this month", () => {
@@ -577,23 +506,19 @@ describe("kinds and pressure", () => {
 describe("the conclusion in soles", () => {
   const { clients, visits, ids } = hundred()
   // 20 clients come back once: S/ 2,000 of return-visit sales in 3 months.
-  const base = run({
+  const data = {
     today: "2026-03-31",
     clients,
     visits: [...visits, ...ids.slice(0, 20).map((id) => visit(id, "2026-03-10"))],
-  })
-  const withCampaigns = (extraPurchases: number, extraSales: number) => ({
-    ...base,
-    campaignTotals: { kindsMeasured: 1, kindsAbove: 1, extraPurchases, extraSales },
-  })
+  }
+  const base = run(data)
+  const assumptions = { factorPct: 20, marginPct: 30, monthlyFee: 100 }
 
   it("turns the return-visit sales into generated sales, profit and return", () => {
-    expect(concludeImpact(base, { factorPct: 20, marginPct: 30, monthlyFee: 100 })).toEqual({
+    expect(concludeImpact(base, assumptions)).toEqual({
       generated: 400,
       low: 200,
       high: 600,
-      fromProgram: 400,
-      fromCampaigns: 0,
       purchases: 4,
       profit: 120,
       // January (sign-ups), February and March on the bill.
@@ -603,29 +528,14 @@ describe("the conclusion in soles", () => {
     })
   })
 
-  it("adds what campaigns measured without counting it twice", () => {
-    const c = concludeImpact(withCampaigns(5, 500), {
-      factorPct: 20,
-      marginPct: 30,
-      monthlyFee: 100,
-    })
-    // 20 % of the 1,500 that campaigns do not explain, plus the 500 they do.
-    expect(c).toMatchObject({ fromProgram: 300, fromCampaigns: 500, generated: 800, purchases: 8 })
-  })
-
-  it("never claims more than what went through the card", () => {
-    const c = concludeImpact(withCampaigns(900, 90_000), {
-      factorPct: 100,
-      marginPct: 30,
-      monthlyFee: 100,
-    })
-    expect(c.generated).toBe(base.headline.sales)
-    expect(c.high).toBe(base.headline.sales)
-    expect(c.purchases).toBeLessThanOrEqual(base.headline.purchases)
+  it("adds nothing for campaigns on top of the program", () => {
+    const withSend = run({ ...data, campaigns: [campaign(ids)] })
+    expect(withSend.campaignTotals.sales).toBe(2000)
+    expect(concludeImpact(withSend, assumptions)).toEqual(concludeImpact(base, assumptions))
   })
 
   it("has no return to show when the merchant pays nothing", () => {
-    const c = concludeImpact(base, { factorPct: 20, marginPct: 30, monthlyFee: 0 })
+    const c = concludeImpact(base, { ...assumptions, monthlyFee: 0 })
     expect(c.salesPerSol).toBeNull()
     expect(c.profitPerSol).toBeNull()
   })

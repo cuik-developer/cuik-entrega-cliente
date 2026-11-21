@@ -1,4 +1,4 @@
-import type { CampaignKind, CampaignVerdict } from "./metrics"
+import type { CampaignKind } from "./metrics"
 
 /** Texts shared by the Impacto Loyalty screen and its Excel. No server imports. */
 
@@ -8,16 +8,6 @@ export const KIND_LABEL: Record<CampaignKind, string> = {
   birthday: "Cumpleaños",
   points_expiring: "Puntos por vencer",
   churn: "Recuperación",
-}
-
-export const VERDICT_LABEL: Record<CampaignVerdict, string> = {
-  above: "Superó lo normal",
-  within: "Dentro de lo normal",
-  below: "Por debajo de lo normal",
-  running: "En curso",
-  empty: "Sin clientes que medir",
-  overlap: "No medible: otros mensajes en el plazo",
-  no_reference: "No medible: no quedó con quién comparar",
 }
 
 export const ORIGIN_LABEL = {

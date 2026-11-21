@@ -5,7 +5,6 @@ import { Fragment, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import {
-  type ChipTone,
   DataTable,
   FieldList,
   Notice,
@@ -29,15 +28,9 @@ import {
 } from "@/components/ui/select"
 import { SEGMENT_LABELS } from "@/lib/loyalty/client-segments"
 import { fmtDay, fmtMonth, pctText, soles } from "@/lib/loyalty/impact/format"
-import {
-  KIND_LABEL,
-  ORIGIN_LABEL,
-  ORIGIN_NOTE,
-  VERDICT_LABEL,
-} from "@/lib/loyalty/loyalty-impact/labels"
+import { KIND_LABEL, ORIGIN_LABEL, ORIGIN_NOTE } from "@/lib/loyalty/loyalty-impact/labels"
 import {
   type CampaignImpact,
-  type CampaignVerdict,
   concludeImpact,
   type LoyaltyImpact,
   WINDOW_MAX,
@@ -60,18 +53,6 @@ const FUNNEL_LABEL: Record<LoyaltyImpact["funnel"][number]["step"], string> = {
   card: "Completaron una tarjeta",
 }
 
-const VERDICT_TONE: Record<CampaignVerdict, ChipTone> = {
-  above: "ok",
-  within: "mute",
-  below: "warn",
-  running: "info",
-  empty: "mute",
-  overlap: "mute",
-  no_reference: "mute",
-}
-
-/** Verdicts that are a judgement; the others say why there is none. */
-const JUDGED = new Set<CampaignVerdict>(["above", "within", "below"])
 const CAMPAIGN_ROWS = 80
 
 const NUMBER_INPUT =
@@ -79,7 +60,7 @@ const NUMBER_INPUT =
 const FIELD_LABEL = "block text-[11px] uppercase tracking-[0.05em] text-ent-fg-3 mb-1"
 
 const num = (n: number) => n.toLocaleString("es-PE")
-const signed = (n: number) => `${n > 0 ? "+" : ""}${n.toLocaleString("es-PE")}`
+
 const percent = (part: number, whole: number) =>
   whole > 0 ? Math.round((part / whole) * 1000) / 10 : null
 const clamp = (raw: string, min: number, max: number, fallback: number) => {
@@ -354,8 +335,7 @@ function Report({
           <div className="px-3 py-2 border-t border-ent-line text-[12px] text-ent-fg-3 leading-snug">
             Ejemplo: un cliente compra el 1 de marzo y el 15 de abril cumple 45 días sin venir.
             Desde ahí se cuentan {impact.windowDays} días más: si compra en ese plazo, volvió.
-            Incluye los días en que hubo campañas: es lo que pasa normalmente aquí, y la vara de una
-            campaña de recuperación.
+            Incluye los días en que hubo campañas: es lo que pasa normalmente aquí.
           </div>
         </Panel>
 
@@ -576,11 +556,15 @@ function Conclusion({ view }: { view: LoyaltyImpactView }) {
       <StatStrip
         className="border-0 border-t rounded-none"
         stats={[
-          { label: "Por el programa", value: soles(c.fromProgram), hint: "supuesto" },
           {
-            label: "Por campañas",
-            value: soles(c.fromCampaigns),
-            hint: `medido en ${impact.campaignTotals.kindsAbove} de ${impact.campaignTotals.kindsMeasured} tipos`,
+            label: "Venta de regreso",
+            value: soles(impact.headline.returnSales),
+            hint: `se le aplica el ${current.factorPct} %`,
+          },
+          {
+            label: "Venta tras un envío",
+            value: soles(impact.campaignTotals.sales),
+            hint: "ya está dentro de la venta con tarjeta",
           },
           { label: "Pagado a Cuik", value: soles(c.paid), hint: `${months} meses` },
           {
@@ -591,9 +575,9 @@ function Conclusion({ view }: { view: LoyaltyImpactView }) {
         ]}
       />
       <div className="px-3 py-2 border-t border-ent-line text-[12px] text-ent-fg-3 leading-snug">
-        {ORIGIN_NOTE[origin]} El rango va de la mitad a una vez y media de ese porcentaje. Lo de
-        campañas no depende del supuesto: se mide contra clientes comparables y solo suma cuando un
-        tipo de envío, con todos sus envíos juntos, supera el azar.
+        {ORIGIN_NOTE[origin]} El rango va de la mitad a una vez y media de ese porcentaje. Las
+        campañas no suman aparte: lo que se compró después de un envío es parte de la venta con
+        tarjeta, y el crédito va al programa completo.
         {current.monthlyFee === 0 && " Escribe la cuota mensual para ver el retorno."}
       </div>
     </Panel>
@@ -755,14 +739,14 @@ function MonthBars({ months }: { months: LoyaltyImpact["months"] }) {
 }
 
 function Kinds({ impact }: { impact: LoyaltyImpact }) {
+  const total = impact.campaignTotals
   return (
     <Panel>
       <PanelHeader
         title="Comunicaciones por tipo"
         actions={
           <span className="text-[11.5px] text-ent-fg-3">
-            Volvieron dentro del plazo, contra clientes del mismo segmento que no recibieron ningún
-            envío
+            Quién recibió cada tipo de envío y quién volvió dentro de los {impact.windowDays} días
           </span>
         }
       />
@@ -773,44 +757,74 @@ function Kinds({ impact }: { impact: LoyaltyImpact }) {
           <thead>
             <tr>
               <Th>Tipo</Th>
-              <Th align="right">Envíos medidos</Th>
-              <Th align="right">Clientes</Th>
-              <Th align="right">Volvieron</Th>
-              <Th align="right">Sin envío habrían vuelto</Th>
-              <Th align="right">Diferencia</Th>
-              <Th align="right">Venta extra</Th>
-              <Th>Resultado</Th>
+              <Th align="right">Envíos</Th>
+              <Th align="right">Mensajes entregados</Th>
+              <Th align="right">Clientes distintos</Th>
+              <Th align="right">Volvieron en el plazo</Th>
+              <Th align="right">%</Th>
+              <Th align="right">Compras</Th>
+              <Th align="right">Venta de esas visitas</Th>
             </tr>
           </thead>
           <tbody>
             {impact.byKind.map((k) => (
               <Tr key={k.kind}>
                 <Td>{KIND_LABEL[k.kind]}</Td>
-                <Td align="right">
-                  {num(k.measured)} de {num(k.campaigns)}
+                <Td
+                  align="right"
+                  title={
+                    k.open > 0
+                      ? `${num(k.open)} con el plazo todavía abierto: sus números pueden subir`
+                      : undefined
+                  }
+                >
+                  {num(k.campaigns)}
+                  {k.open > 0 && <span className="text-ent-fg-3"> · {num(k.open)} en curso</span>}
                 </Td>
-                <Td align="right">{num(k.recipients)}</Td>
+                <Td align="right">{num(k.deliveries)}</Td>
+                <Td align="right">{num(k.clients)}</Td>
                 <Td align="right">{num(k.returned)}</Td>
-                <Td align="right">{num(k.expected)}</Td>
-                <Td align="right">{signed(k.extraClients)}</Td>
-                <Td align="right">{k.extraSales > 0 ? soles(k.extraSales) : "—"}</Td>
-                <Td>
-                  <StatusChip tone={VERDICT_TONE[k.verdict]}>
-                    {VERDICT_LABEL[k.verdict]}
-                    {JUDGED.has(k.verdict) && !k.reliable ? " · orientativo" : ""}
-                  </StatusChip>
-                </Td>
+                <Td align="right">{pctText(k.returnedPct)}</Td>
+                <Td align="right">{num(k.purchases)}</Td>
+                <Td align="right">{soles(k.sales)}</Td>
               </Tr>
             ))}
+            {impact.byKind.length > 1 && (
+              <Tr>
+                <Td className="font-semibold">Todos los envíos</Td>
+                <Td align="right" className="font-semibold">
+                  {num(total.campaigns)}
+                </Td>
+                <Td align="right" className="font-semibold">
+                  {num(total.deliveries)}
+                </Td>
+                <Td align="right" className="font-semibold">
+                  {num(total.clients)}
+                </Td>
+                <Td align="right" className="font-semibold">
+                  {num(total.returned)}
+                </Td>
+                <Td align="right" className="font-semibold">
+                  {pctText(percent(total.returned, total.clients))}
+                </Td>
+                <Td align="right" className="font-semibold">
+                  {num(total.purchases)}
+                </Td>
+                <Td align="right" className="font-semibold">
+                  {soles(total.sales)}
+                </Td>
+              </Tr>
+            )}
           </tbody>
         </DataTable>
       )}
       <div className="px-3 py-2 border-t border-ent-line text-[12px] text-ent-fg-3 leading-snug">
-        Cada tipo junta todos sus envíos medibles, los que salieron bien y los que no. Si un cliente
-        recibió varios mensajes antes de comprar, la compra cuenta solo para el último. Un envío no
-        se mide cuando fue a todos los clientes comparables o cuando más de 1 de cada 5
-        destinatarios recibió otro mensaje dentro del plazo. Con menos de 30 clientes el resultado
-        es orientativo y no suma a la conclusión.
+        Un cliente que recibió varios envíos del mismo tipo cuenta una sola vez. Si recibió varios
+        mensajes antes de comprar, la compra cuenta solo para el último, así que las ventas de la
+        tabla se pueden sumar. Es lo que pasó después de cada envío, no una comparación con clientes
+        sin mensaje: el crédito va al programa completo, en la conclusión. Los envíos en curso
+        todavía tienen el plazo abierto y sus números pueden subir. Se cuentan los envíos de los
+        últimos 24 meses.
       </div>
     </Panel>
   )
@@ -842,10 +856,9 @@ function Campaigns({ tenantId, impact }: { tenantId: string; impact: LoyaltyImpa
               <Th>Tipo</Th>
               <Th align="right">Llegó a</Th>
               <Th align="right">Volvieron</Th>
-              <Th align="right">Sin envío</Th>
-              <Th align="right">Compraron</Th>
-              <Th align="right">Venta extra</Th>
-              <Th>Resultado</Th>
+              <Th align="right">Compras</Th>
+              <Th align="right">Venta</Th>
+              <Th>Plazo</Th>
             </tr>
           </thead>
           <tbody>
@@ -871,7 +884,7 @@ function Campaigns({ tenantId, impact }: { tenantId: string; impact: LoyaltyImpa
                     align="right"
                     title={
                       c.handedOver > 0
-                        ? `${num(c.handedOver)} recibieron otro mensaje antes de volver: aquí cuentan como que no volvieron`
+                        ? `${num(c.handedOver)} recibieron otro mensaje antes de volver: si compraron después, cuenta para ese envío`
                         : undefined
                     }
                   >
@@ -880,21 +893,21 @@ function Campaigns({ tenantId, impact }: { tenantId: string; impact: LoyaltyImpa
                   <Td align="right">
                     {c.recipients > 0 ? `${num(c.returned)} (${pctText(c.returnedPct)})` : "—"}
                   </Td>
-                  <Td align="right" title={`Azar: ± ${num(c.margin)} clientes`}>
-                    {c.recipients > 0 ? num(c.expected) : "—"}
-                  </Td>
+                  <Td align="right">{c.recipients > 0 ? num(c.purchasesInWindow) : "—"}</Td>
                   <Td align="right">{c.recipients > 0 ? soles(c.salesInWindow) : "—"}</Td>
-                  <Td align="right">{c.extraSales === null ? "—" : soles(c.extraSales)}</Td>
                   <Td>
-                    <StatusChip tone={VERDICT_TONE[c.verdict]}>
-                      {VERDICT_LABEL[c.verdict]}
-                      {JUDGED.has(c.verdict) && !c.reliable ? " · orientativo" : ""}
-                    </StatusChip>
+                    {c.recipients === 0 ? (
+                      <StatusChip tone="mute">Sin clientes</StatusChip>
+                    ) : c.windowComplete ? (
+                      <StatusChip tone="mute">Cerrado</StatusChip>
+                    ) : (
+                      <StatusChip tone="info">En curso</StatusChip>
+                    )}
                   </Td>
                 </Tr>
                 {open === c.id && (
                   <tr>
-                    <td colSpan={9} className="bg-ent-panel-2 border-b border-ent-line p-3">
+                    <td colSpan={8} className="bg-ent-panel-2 border-b border-ent-line p-3">
                       <CampaignDetail
                         tenantId={tenantId}
                         campaign={c}
@@ -963,8 +976,7 @@ function CampaignDetail({
                 <Th>Segmento al enviar</Th>
                 <Th align="right">Llegó a</Th>
                 <Th align="right">Volvieron</Th>
-                <Th align="right">Sin envío</Th>
-                <Th>Comparado con</Th>
+                <Th align="right">%</Th>
                 <Th>Dónde quedaron al cierre del plazo</Th>
               </tr>
             </thead>
@@ -974,12 +986,7 @@ function CampaignDetail({
                   <Td>{SEGMENT_LABELS[s.segment]}</Td>
                   <Td align="right">{num(s.recipients)}</Td>
                   <Td align="right">{num(s.returned)}</Td>
-                  <Td align="right">{num(s.expected)}</Td>
-                  <Td>
-                    {s.expectedFrom === "same_day"
-                      ? "Clientes iguales sin envío, ese día"
-                      : "Historia del comercio, con y sin campañas"}
-                  </Td>
+                  <Td align="right">{pctText(s.returnedPct)}</Td>
                   <Td>
                     {c.windowComplete ? movesFrom(s.segment) || "Ninguno volvió" : "Plazo en curso"}
                   </Td>
@@ -991,7 +998,8 @@ function CampaignDetail({
         {c.handedOver > 0 && (
           <div className="mt-1.5 text-[12px] text-ent-fg-3">
             {num(c.handedOver)} de los {num(c.recipients)} recibieron otro mensaje antes de volver.
-            Aquí cuentan como que no volvieron, y su compra queda en el envío posterior.
+            Aquí cuentan como que no volvieron; si compraron después, la compra queda en el envío
+            posterior.
           </div>
         )}
       </div>
