@@ -49,15 +49,12 @@ function templateVariablesFor(promotionType: PromotionType): Record<string, stri
     : { ...COMMON_VARIABLES, ...STAMPS_VARIABLES }
 }
 
-/** Check if a value is a pure template variable */
-function isTemplateVariable(value: string): boolean {
-  return value.startsWith("{{") && value.endsWith("}}")
-}
-
 const inputClass =
   "w-full px-2 py-1 rounded-md bg-white border border-gray-200 text-gray-800 text-[11px] placeholder:text-gray-400 focus:outline-none focus:border-[#0e70db] focus:ring-1 focus:ring-[#0e70db]/20 transition-colors"
 const inputErrorClass =
   "w-full px-2 py-1 rounded-md bg-white border border-red-400 text-gray-800 text-[11px] placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-red-300 transition-colors"
+
+type TextBox = HTMLInputElement | HTMLTextAreaElement
 
 function InsertVariableDropdown({
   textareaRef,
@@ -65,7 +62,7 @@ function InsertVariableDropdown({
   customVariables,
   promotionType,
 }: {
-  textareaRef: React.RefObject<HTMLTextAreaElement | null>
+  textareaRef: React.RefObject<TextBox | null>
   onInsert: (newValue: string) => void
   customVariables?: CustomVariable[]
   promotionType: PromotionType
@@ -84,9 +81,9 @@ function InsertVariableDropdown({
     const textarea = textareaRef.current
     if (!textarea) return
 
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
     const current = textarea.value
+    const start = textarea.selectionStart ?? current.length
+    const end = textarea.selectionEnd ?? start
     const newValue = current.slice(0, start) + variable + current.slice(end)
 
     onInsert(newValue)
@@ -195,14 +192,15 @@ function InsertVariableDropdown({
 function FieldGroup({
   section,
   label,
-  freeText,
+  multiline,
   showChangeMessage,
   customVariables,
   promotionType,
 }: {
   section: FieldSection
   label: string
-  freeText?: boolean
+  /** Back fields hold paragraphs; the front of the pass holds one short line. */
+  multiline?: boolean
   showChangeMessage?: boolean
   customVariables?: CustomVariable[]
   promotionType: PromotionType
@@ -242,7 +240,7 @@ function FieldGroup({
   const updateField = useEditorStore((s) => s.updateField)
   const addField = useEditorStore((s) => s.addField)
   const removeField = useEditorStore((s) => s.removeField)
-  const textareaRefs = useRef<Map<number, HTMLTextAreaElement | null>>(new Map())
+  const textareaRefs = useRef<Map<number, TextBox | null>>(new Map())
   const keyError = (key: string): string | null => {
     const k = key.trim()
     if (!k) return "Falta la clave: sin clave, Apple no muestra el campo."
@@ -263,99 +261,56 @@ function FieldGroup({
           // biome-ignore lint/suspicious/noArrayIndexKey: fields have no stable ID
           <div key={index} className="flex flex-col gap-0.5">
             <div className="flex items-start gap-1.5">
-              <div
-                className={`flex-1 ${freeText ? "flex flex-col gap-1.5" : "grid grid-cols-3 gap-1.5"}`}
-              >
-                {freeText ? (
-                  <>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <input
-                        type="text"
-                        value={field.key}
-                        onChange={(e) => updateField(section, index, { key: e.target.value })}
-                        onBlur={() => onKeyBlur(index)}
-                        placeholder="Clave"
-                        aria-invalid={error != null}
-                        className={error ? inputErrorClass : inputClass}
-                      />
-                      <input
-                        type="text"
-                        value={field.label}
-                        onChange={(e) => onLabelChange(index, e.target.value)}
-                        placeholder="Titulo"
-                        className={inputClass}
-                      />
-                    </div>
-                    <div className="flex items-start gap-1">
-                      <textarea
-                        ref={(el) => {
-                          textareaRefs.current.set(index, el)
-                        }}
-                        value={field.value}
-                        onChange={(e) => updateField(section, index, { value: e.target.value })}
-                        placeholder="Contenido (puede incluir {{variables}})"
-                        rows={2}
-                        className={`${inputClass} resize-y flex-1`}
-                      />
-                      <InsertVariableDropdown
-                        textareaRef={{ current: textareaRefs.current.get(index) ?? null }}
-                        onInsert={(newValue) => updateField(section, index, { value: newValue })}
-                        customVariables={customVariables}
-                        promotionType={promotionType}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <input
-                      type="text"
-                      value={field.key}
-                      onChange={(e) => updateField(section, index, { key: e.target.value })}
-                      onBlur={() => onKeyBlur(index)}
-                      placeholder="Clave"
-                      aria-invalid={error != null}
-                      className={error ? inputErrorClass : inputClass}
-                    />
-                    <input
-                      type="text"
-                      value={field.label}
-                      onChange={(e) => onLabelChange(index, e.target.value)}
-                      placeholder="Label"
-                      className={inputClass}
-                    />
-                    <select
-                      value={isTemplateVariable(field.value) ? field.value : ""}
+              <div className="flex-1 flex flex-col gap-1.5">
+                <div className="grid grid-cols-2 gap-1.5">
+                  <input
+                    type="text"
+                    value={field.key}
+                    onChange={(e) => updateField(section, index, { key: e.target.value })}
+                    onBlur={() => onKeyBlur(index)}
+                    placeholder="Clave"
+                    aria-invalid={error != null}
+                    className={error ? inputErrorClass : inputClass}
+                  />
+                  <input
+                    type="text"
+                    value={field.label}
+                    onChange={(e) => onLabelChange(index, e.target.value)}
+                    placeholder="Titulo"
+                    className={inputClass}
+                  />
+                </div>
+                <div className="flex items-start gap-1">
+                  {multiline ? (
+                    <textarea
+                      ref={(el) => {
+                        textareaRefs.current.set(index, el)
+                      }}
+                      value={field.value}
                       onChange={(e) => updateField(section, index, { value: e.target.value })}
-                      className={inputClass}
-                    >
-                      <option value="" disabled>
-                        Seleccionar variable
-                      </option>
-                      {Object.entries(templateVariablesFor(promotionType)).map(([key, lbl]) => (
-                        <option key={key} value={key}>
-                          {lbl}
-                        </option>
-                      ))}
-                      {/* Keep a value from the other program visible so it is not silently lost. */}
-                      {isTemplateVariable(field.value) &&
-                        !(field.value in templateVariablesFor(promotionType)) &&
-                        !(customVariables ?? []).some((cv) => cv.variable === field.value) && (
-                          <option value={field.value}>
-                            {field.value} (no aplica a este programa)
-                          </option>
-                        )}
-                      {customVariables && customVariables.length > 0 && (
-                        <optgroup label="Campos estrategicos">
-                          {customVariables.map((cv) => (
-                            <option key={cv.variable} value={cv.variable}>
-                              {cv.label}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
-                  </>
-                )}
+                      placeholder="Contenido (puede incluir {{variables}})"
+                      rows={2}
+                      className={`${inputClass} resize-y flex-1`}
+                    />
+                  ) : (
+                    <input
+                      ref={(el) => {
+                        textareaRefs.current.set(index, el)
+                      }}
+                      type="text"
+                      value={field.value}
+                      onChange={(e) => updateField(section, index, { value: e.target.value })}
+                      placeholder="Texto fijo, una variable o ambos"
+                      className={`${inputClass} flex-1`}
+                    />
+                  )}
+                  <InsertVariableDropdown
+                    textareaRef={{ current: textareaRefs.current.get(index) ?? null }}
+                    onInsert={(newValue) => updateField(section, index, { value: newValue })}
+                    customVariables={customVariables}
+                    promotionType={promotionType}
+                  />
+                </div>
               </div>
 
               {showChangeMessage && (
@@ -457,6 +412,11 @@ export function FieldsSection({
         Cada campo necesita una clave única en todo el pase (Apple descarta los campos sin clave o
         con clave repetida). En Google todos los campos aparecen en los detalles del pase.
       </p>
+      <p className="text-[10px] leading-snug text-gray-500">
+        En el frente puedes escribir texto fijo (el nombre del premio), una variable o ambos, por
+        ejemplo <span className="font-mono">{"{{stamps.remaining}} sellos"}</span>. Que sea corto:
+        el iPhone corta lo que no entra en una línea.
+      </p>
       {headerCount > APPLE_MAX_HEADER_FIELDS && (
         <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           &#9888; Hay {headerCount} campos de encabezado: el iPhone muestra como máximo{" "}
@@ -488,7 +448,7 @@ export function FieldsSection({
       <FieldGroup
         section="backFields"
         label="Back Fields (reverso del pase)"
-        freeText
+        multiline
         customVariables={customVariables}
         promotionType={promotionType}
       />
