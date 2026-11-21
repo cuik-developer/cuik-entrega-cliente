@@ -10,6 +10,8 @@ describe("moduleForPath", () => {
     expect(moduleForPath("/admin/historial")?.module.key).toBe("comercios")
     expect(moduleForPath("/admin/enlaces")?.module.key).toBe("comercios")
     expect(moduleForPath("/admin/impacto")?.module.key).toBe("loyalty")
+    expect(moduleForPath("/admin/impacto")?.item.label).toBe("Impacto con ventas")
+    expect(moduleForPath("/admin/impacto-loyalty")?.item.label).toBe("Impacto Loyalty")
     expect(moduleForPath("/admin/growth")?.module.key).toBe("growth")
     expect(moduleForPath("/admin/growth/reglas")?.item.label).toBe("Reglas por comercio")
     expect(moduleForPath("/admin/growth/conectores")?.module.key).toBe("growth")

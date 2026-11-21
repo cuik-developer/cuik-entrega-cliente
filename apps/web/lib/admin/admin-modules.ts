@@ -10,6 +10,7 @@ import {
   FileInput,
   FileOutput,
   FlaskConical,
+  Gauge,
   HandCoins,
   Handshake,
   Heart,
@@ -100,7 +101,8 @@ export const ADMIN_MODULES: AdminModule[] = [
         title: "Análisis",
         items: [
           { href: "/admin/metricas", label: "Métricas", icon: TrendingUp },
-          { href: "/admin/impacto", label: "Impacto", icon: Scale },
+          { href: "/admin/impacto-loyalty", label: "Impacto Loyalty", icon: Gauge },
+          { href: "/admin/impacto", label: "Impacto con ventas", icon: Scale },
         ],
       },
       {
