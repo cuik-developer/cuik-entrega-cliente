@@ -3,6 +3,7 @@
 import {
   Copy,
   CreditCard,
+  Forward,
   Loader2,
   Paintbrush,
   Plus,
@@ -36,7 +37,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-import { createDesign, deleteDesign, duplicateDesign, listDesigns, listTenants } from "./actions"
+import {
+  copyDesignToTenant,
+  createDesign,
+  deleteDesign,
+  duplicateDesign,
+  listDesigns,
+  listTenants,
+} from "./actions"
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -81,6 +89,11 @@ export default function PasesPage() {
   const [newTenantId, setNewTenantId] = useState("")
   const [newType, setNewType] = useState<"apple_store" | "google_loyalty">("apple_store")
   const [creating, setCreating] = useState(false)
+
+  // Copy to another merchant
+  const [copyOf, setCopyOf] = useState<DesignRow | null>(null)
+  const [copyTargetId, setCopyTargetId] = useState("")
+  const [copying, setCopying] = useState(false)
 
   const fetchDesigns = async () => {
     try {
@@ -142,6 +155,28 @@ export default function PasesPage() {
       }
     } finally {
       setDuplicatingId(null)
+    }
+  }
+
+  const handleCopy = async () => {
+    if (!copyOf || !copyTargetId) return
+    setCopying(true)
+    try {
+      const result = await copyDesignToTenant(copyOf.design.id, copyTargetId)
+      if (!result.success) {
+        toast.error(result.error)
+        return
+      }
+      const target = allTenants.find((t) => t.id === copyTargetId)?.businessName ?? "el comercio"
+      toast.success(`Copiado a ${target} como borrador`)
+      // Stay long enough to be read in the editor it opens.
+      for (const warning of result.data.warnings) toast.warning(warning, { duration: 15000 })
+      setCopyOf(null)
+      router.push(`/admin/pases/${result.data.id}/editor`)
+    } catch {
+      toast.error("No se pudo copiar el diseño")
+    } finally {
+      setCopying(false)
     }
   }
 
@@ -455,6 +490,20 @@ export default function PasesPage() {
                             <Copy className="w-3 h-3" />
                           )}
                         </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs"
+                          title="Copiar a otro comercio"
+                          aria-label="Copiar a otro comercio"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setCopyTargetId("")
+                            setCopyOf(row)
+                          }}
+                        >
+                          <Forward className="w-3 h-3" />
+                        </Button>
                         {/* Staff with "Publicar diseños" deletes drafts only (checked on the server too). */}
                         {canPublish && (isOwner || !row.design.isActive) && (
                           <Button
@@ -478,6 +527,62 @@ export default function PasesPage() {
           ))}
         </div>
       )}
+
+      <Dialog open={copyOf !== null} onOpenChange={(open) => !open && !copying && setCopyOf(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Copiar a otro comercio</DialogTitle>
+          </DialogHeader>
+          {copyOf && (
+            <div className="space-y-4 pt-2">
+              <p className="text-sm text-ent-fg-2">
+                Se crea una copia de <span className="font-semibold">{copyOf.design.name}</span> (
+                {copyOf.tenantName}) como borrador en el comercio que elijas, con sus imágenes,
+                colores, sellos y campos. No cambia nada publicado.
+              </p>
+              <div>
+                <label
+                  htmlFor="copy-target-select"
+                  className="text-sm font-medium text-gray-700 block mb-1.5"
+                >
+                  Comercio destino
+                </label>
+                <Select value={copyTargetId} onValueChange={setCopyTargetId}>
+                  <SelectTrigger id="copy-target-select">
+                    <SelectValue placeholder="Seleccionar comercio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tenantOptions
+                      .filter((t) => t.id !== copyOf.design.tenantId)
+                      .map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Notice tone="info">
+                Revisa la copia antes de publicarla: toma la promoción activa del comercio destino
+                (si tiene otra cantidad de sellos hay que reajustarlos) y los textos fijos, como el
+                nombre del premio o las direcciones, se copian tal cual.
+              </Notice>
+              <Button
+                onClick={handleCopy}
+                disabled={copying || !copyTargetId}
+                className="w-full bg-ent-accent text-white"
+              >
+                {copying ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : (
+                  <Forward className="w-4 h-4 mr-2" />
+                )}
+                Copiar y abrir el borrador
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -72,7 +72,9 @@ function targetCell(row: ProductChangeRow) {
   const name = row.targetName || "—"
   const d = detailOf(row)
   const from =
-    row.action === "duplicated" && typeof d.fromName === "string" ? ` · desde ${d.fromName}` : ""
+    row.action === "duplicated" && typeof d.fromName === "string"
+      ? ` · desde ${d.fromName}${typeof d.fromTenantName === "string" ? ` (${d.fromTenantName})` : ""}`
+      : ""
   if (row.area === "designs" && row.action !== "deleted" && row.targetId) {
     return (
       <>

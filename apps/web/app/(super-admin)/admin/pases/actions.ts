@@ -50,10 +50,11 @@ import { stampsInCycleOf } from "@/lib/loyalty/stamps"
 import { canAccess } from "@/lib/staff-permissions"
 import { apnsClientCertFor } from "@/lib/wallet/apns-client-cert"
 import { tenantBarcodeFormat } from "@/lib/wallet/barcode-format"
+import { type CardProgram, copyName, copyWarnings } from "@/lib/wallet/design-copy"
 import { GOOGLE_HERO_ASSET_TYPE, pickGoogleHeroAsset } from "@/lib/wallet/google-hero"
+import { googleMerchantLocations } from "@/lib/wallet/google-nearby"
 import { tenantStampsImage } from "@/lib/wallet/google-stamps-image-db"
 import { type StampsConfigLike, stripCompleted, stripMaxVisits } from "@/lib/wallet/strip-layout"
-import { googleMerchantLocations } from "@/lib/wallet/google-nearby"
 import { getTenantAppleConfig } from "@/lib/wallet/tenant-apple-config"
 import { getDesignById, listDesignsByTenant } from "./queries"
 
@@ -769,6 +770,132 @@ export async function duplicateDesign(designId: string): Promise<ActionResult<{ 
   })
   revalidatePath("/admin/pases")
   return { success: true, data: { id: inserted.id } }
+}
+
+/**
+ * The program a card is drawn for, as the editor previews it: the promotion
+ * the design is linked to, else the merchant's active one.
+ */
+async function cardProgramOf(
+  tenantId: string,
+  promotionId: string | null,
+  stampsConfig: unknown,
+): Promise<CardProgram> {
+  const columns = { maxVisits: promotions.maxVisits, type: promotions.type }
+  let promo: { maxVisits: number | null; type: string } | undefined
+  if (promotionId) {
+    ;[promo] = await db
+      .select(columns)
+      .from(promotions)
+      .where(eq(promotions.id, promotionId))
+      .limit(1)
+  }
+  if (!promo) {
+    ;[promo] = await db
+      .select(columns)
+      .from(promotions)
+      .where(and(eq(promotions.tenantId, tenantId), eq(promotions.active, true)))
+      .limit(1)
+  }
+  if (!promo) return null
+  return {
+    type: promo.type,
+    maxVisits: stripMaxVisits(promo, stampsConfig as StampsConfigLike | null),
+  }
+}
+
+/**
+ * Copy of a design into ANOTHER merchant, as an inactive draft: a card is
+ * worked out on the test merchant and then moved to the real one. Images,
+ * colours, stamps and fields travel; the promotion does not (it belongs to
+ * the source merchant), so the draft follows the destination's active one.
+ * The copy points at the same stored files; nothing in storage is duplicated
+ * or ever deleted. Returns what to check before publishing.
+ */
+export async function copyDesignToTenant(
+  designId: string,
+  targetTenantId: string,
+): Promise<ActionResult<{ id: string; warnings: string[] }>> {
+  const guard = await requireDesigns()
+  if (guard.error !== null) return { success: false, error: guard.error }
+  const uuid = z.string().uuid()
+  if (!uuid.safeParse(designId).success) return { success: false, error: "Diseño no encontrado" }
+  if (!uuid.safeParse(targetTenantId).success) {
+    return { success: false, error: "Elige el comercio destino" }
+  }
+
+  const [source] = await db.select().from(passDesigns).where(eq(passDesigns.id, designId)).limit(1)
+  if (!source) return { success: false, error: "Diseño no encontrado" }
+  if (source.tenantId === targetTenantId) {
+    return {
+      success: false,
+      error: 'El diseño ya es de ese comercio: usa "Duplicar como borrador".',
+    }
+  }
+  const [target] = await db
+    .select({ id: tenants.id, status: tenants.status })
+    .from(tenants)
+    .where(eq(tenants.id, targetTenantId))
+    .limit(1)
+  if (!target || target.status === "cancelled") {
+    return { success: false, error: "Comercio destino no encontrado" }
+  }
+  const [origin] = await db
+    .select({ name: tenants.name })
+    .from(tenants)
+    .where(eq(tenants.id, source.tenantId))
+    .limit(1)
+
+  const warnings = copyWarnings(
+    await cardProgramOf(source.tenantId, source.promotionId, source.stampsConfig),
+    await cardProgramOf(target.id, null, source.stampsConfig),
+  )
+
+  const name = copyName(source.name)
+  const inserted = await db.transaction(async (tx) => {
+    const [copy] = await tx
+      .insert(passDesigns)
+      .values({
+        tenantId: target.id,
+        // The source's promotion is another merchant's: the draft follows the
+        // destination's active one until it is published and linked.
+        promotionId: null,
+        name,
+        type: source.type,
+        canvasData: source.canvasData,
+        colors: source.colors,
+        fields: source.fields,
+        stampsConfig: source.stampsConfig,
+        isActive: false,
+      })
+      .returning({ id: passDesigns.id })
+
+    const assets = await tx
+      .select({ type: passAssets.type, url: passAssets.url, metadata: passAssets.metadata })
+      .from(passAssets)
+      .where(eq(passAssets.designId, source.id))
+    if (assets.length > 0) {
+      await tx.insert(passAssets).values(assets.map((a) => ({ ...a, designId: copy.id })))
+    }
+    return copy
+  })
+
+  await recordProductChange({
+    actor: guard.session,
+    tenantId: target.id,
+    area: "designs",
+    action: "duplicated",
+    targetId: inserted.id,
+    targetName: name,
+    detail: {
+      fromId: source.id,
+      fromName: source.name,
+      fromTenantId: source.tenantId,
+      fromTenantName: origin?.name ?? null,
+    },
+  })
+  revalidatePath("/admin/pases")
+  return { success: true, data: { id: inserted.id, warnings } }
 }
 
 /** Drafts an Equipo Cuik member saved that nobody published yet (owner and "Publicar diseños"). */
